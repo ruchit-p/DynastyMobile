@@ -1,0 +1,72 @@
+rules_version = '2';
+
+// Storage security rules for the Dynasty app
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Default: no public access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+    
+    // User profile pictures
+    match /profilePictures/{userId}/{fileName} {
+      // Anyone signed in can view profile pictures
+      allow read: if isSignedIn();
+      // Only the user can upload their own profile picture
+      allow write: if isOwner(userId);
+    }
+    
+    // Story media (images, videos, audio)
+    match /stories/{storyId}/{mediaType}/{fileName} {
+      // For read access, we can only check basic authentication
+      // Detailed permission checks happen in the app code and Firestore rules
+      allow read: if isSignedIn();
+      
+      // For write operations, only allow if the user is authenticated
+      // We can't verify the story author at upload time since metadata isn't provided
+      // The app handles proper verification when creating the story document
+      allow write: if isSignedIn();
+    }
+    
+    // Event cover photos and media
+    match /events/{eventId}/{fileName} {
+      // Anyone signed in can view event media
+      allow read: if isSignedIn();
+      
+      // Only authenticated users can upload event media
+      // Detailed permission checks happen in the app code
+      allow write: if isSignedIn();
+    }
+    
+    // Family tree media
+    match /familyTrees/{treeId}/{mediaType}/{fileName} {
+      // Any authenticated user can read (app enforces permissions)
+      allow read: if isSignedIn();
+      
+      // Only allow writes if user is in the metadata as authorized
+      // If metadata isn't available, we fall back to just checking authentication
+      allow write: if isSignedIn() && 
+                    (request.resource.metadata.uploadedBy == request.auth.uid || 
+                     !("metadata" in request.resource) || 
+                     !("uploadedBy" in request.resource.metadata));
+    }
+    
+    // Temporary uploads (for processing)
+    match /temp/{userId}/{fileName} {
+      // Only the user can access their temporary uploads
+      allow read, write: if isOwner(userId);
+      
+      // Auto-expire temporary files after 24 hours
+      // This requires Cloud Functions to implement properly
+    }
+  }
+} 

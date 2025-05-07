@@ -1,0 +1,168 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isFamilyTreeMember(familyTreeId) {
+      let userData = getUserData();
+      return userData != null && userData.familyTreeId == familyTreeId;
+    }
+    
+    function isFamilyTreeAdmin(familyTreeId) {
+      let treeData = get(/databases/$(database)/documents/familyTrees/$(familyTreeId)).data;
+      return treeData != null && treeData.adminUserIds.hasAny([request.auth.uid]);
+    }
+    
+    function isFamilyTreeOwner(familyTreeId) {
+      let treeData = get(/databases/$(database)/documents/familyTrees/$(familyTreeId)).data;
+      return treeData != null && treeData.ownerUserId == request.auth.uid;
+    }
+    
+    function canAccessStory(storyData) {
+      // Use ternary operators and logical expressions instead of if statements
+      return storyData.privacy == 'family' ? isFamilyTreeMember(storyData.familyTreeId) :
+             storyData.privacy == 'privateAccess' ? isOwner(storyData.authorID) :
+             storyData.privacy == 'custom' ? (
+               isOwner(storyData.authorID) || 
+               (storyData.customAccessMembers != null && 
+                storyData.customAccessMembers.hasAny([request.auth.uid]))
+             ) : 
+             false; // Default to false for unknown privacy settings
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if false; // Don't allow users to delete their profile through client
+    }
+    
+    // User settings
+    match /userSettings/{userId} {
+      allow read: if isSignedIn() && isOwner(userId);
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isSignedIn() && isOwner(userId);
+      allow delete: if isSignedIn() && isOwner(userId);
+    }
+    
+    // Family trees
+    match /familyTrees/{treeId} {
+      allow read: if isSignedIn() && 
+                    (isFamilyTreeMember(treeId) || 
+                     resource.data.isPrivate == false);
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && 
+                      (isFamilyTreeAdmin(treeId) || 
+                       isFamilyTreeOwner(treeId));
+      allow delete: if isSignedIn() && isFamilyTreeOwner(treeId);
+      
+      // Tree members permissions
+      match /members/{memberId} {
+        allow read: if isSignedIn() && isFamilyTreeMember(treeId);
+        allow create: if isSignedIn() && 
+                        (isFamilyTreeAdmin(treeId) || 
+                         isFamilyTreeOwner(treeId) || 
+                         resource.data.canAddMembers == true);
+        allow update: if isSignedIn() && 
+                        (isFamilyTreeAdmin(treeId) || 
+                         isFamilyTreeOwner(treeId) || 
+                         (resource.data.canEdit == true && isOwner(resource.data.createdBy)));
+        allow delete: if isSignedIn() && 
+                        (isFamilyTreeAdmin(treeId) || 
+                         isFamilyTreeOwner(treeId));
+      }
+    }
+    
+    // Stories
+    match /stories/{storyId} {
+      allow read: if isSignedIn() && canAccessStory(resource.data);
+      allow create: if isSignedIn() && request.resource.data.authorID == request.auth.uid;
+      allow update: if isSignedIn() && 
+                      (isOwner(resource.data.authorID) || 
+                      (resource.data.privacy == 'family' && 
+                       isFamilyTreeAdmin(resource.data.familyTreeId)));
+      allow delete: if isSignedIn() && 
+                      (isOwner(resource.data.authorID) || 
+                       isFamilyTreeOwner(resource.data.familyTreeId));
+    }
+    
+    // Invitations
+    match /invitations/{inviteId} {
+      allow read: if isSignedIn() && 
+                    (resource.data.inviterId == request.auth.uid || 
+                     resource.data.inviteeId == request.auth.uid);
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && 
+                      (resource.data.inviterId == request.auth.uid || 
+                       resource.data.inviteeId == request.auth.uid);
+      allow delete: if isSignedIn() && resource.data.inviterId == request.auth.uid;
+    }
+    
+    // Comments
+    match /comments/{commentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && 
+                      (resource.data.userId == request.auth.uid || 
+                       isFamilyTreeAdmin(resource.data.familyTreeId));
+    }
+    
+    // Story Likes
+    match /storyLikes/{likeId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Email verification tokens
+    match /emailVerificationTokens/{tokenId} {
+      allow read: if false;
+      allow write: if false; // Only allow through Cloud Functions
+    }
+    
+    // Password reset tokens
+    match /passwordResetTokens/{tokenId} {
+      allow read: if false;
+      allow write: if false; // Only allow through Cloud Functions
+    }
+    
+    // notifications
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false; // Only through Cloud Functions
+    }
+    
+    // notification preferences
+    match /notificationPreferences/{userId} {
+      allow read: if isSignedIn() && userId == request.auth.uid;
+      allow write: if isSignedIn() && userId == request.auth.uid;
+    }
+    
+    // user devices for notifications
+    match /userDevices/{deviceId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false; // Only through Cloud Functions
+    }
+    
+    // notification analytics (for tracking engagement)
+    match /notificationAnalytics/{analyticsId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false; // Only through Cloud Functions
+    }
+  }
+}
