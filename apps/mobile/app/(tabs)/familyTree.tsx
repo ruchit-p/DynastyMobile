@@ -1,6 +1,6 @@
 import React from 'react';
 import { SafeAreaView, StyleSheet, Text, View, Platform } from 'react-native';
-import RelativesTree, { type RelativeItemComponent, type RelativeItem as RelativeItemType } from 'react-native-relatives-tree';
+import RelativesTree, { type RelativeItemComponent, type RelativeItem as RelativeItemType } from '../../react-native-relatives-tree/src';
 
 // Define the Items type for your specific data structure
 type Items = RelativeItemType & {
@@ -82,12 +82,10 @@ const FamilyTreeScreen = () => {
         // childrenKey="children" // Key for children array in your data - Commented out to check linter error
         relativeItem={CustomRelativeItem} // Your custom component for rendering nodes
         cardWidth={120}       // Width of each node card
-        cardHeight={60}      // Height of each node card (adjust as needed based on CustomRelativeItem content)
         gap={20}              // Gap between nodes
         pathColor="#006400"   // Color of the connecting lines (Dynasty Green)
         strokeWidth={2}       // Width of the connecting lines
         style={styles.treeContainer} // Style for the main tree container
-        horizontal              // If you want the tree to be laid out horizontally
       />
     </SafeAreaView>
   );

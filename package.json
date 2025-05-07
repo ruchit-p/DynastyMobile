@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "web": "yarn workspace dynastyweb dev",
-    "mobile": "yarn workspace dynasty start",
+    "mobile": "yarn workspace mobile start",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "format": "prettier --write .",
     "android": "expo run:android",

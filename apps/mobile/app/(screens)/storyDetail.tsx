@@ -100,6 +100,15 @@ const StoryDetailScreen = () => {
   const [likesCount, setLikesCount] = useState(0);
 
   useEffect(() => {
+    // Set initial title to "Loading..." when storyId is present but story is not yet loaded
+    if (storyId && !story) {
+      navigation.setOptions({ 
+        title: 'Loading...',
+        headerTitleAlign: 'center', // Keep consistent alignment
+        headerRight: () => null, // Hide options menu while loading
+      });
+    }
+
     if (storyId) {
       const foundStory = mockStoriesDatabase[storyId];
       if (foundStory) {
@@ -145,9 +154,6 @@ const StoryDetailScreen = () => {
   };
 
   if (!story) {
-    useEffect(() => {
-        navigation.setOptions({ title: 'Loading...' });
-    }, [navigation]);
     return (
         <SafeAreaView style={styles.safeArea}>
             <View style={styles.loadingContainer}><Text>Loading story...</Text></View>
