@@ -57,7 +57,7 @@ export default function TabLayout() {
           fontWeight: 'bold',
           fontSize: Platform.OS === 'ios' ? 34 : 24,
           color: Colors.primary,
-          paddingBottom: Platform.OS === 'ios' ? 50 : 5,
+          paddingBottom: Platform.OS === 'ios' ? 60 : 5,
         },
         headerTitleAlign: Platform.OS === 'ios' ? 'left' : 'left', // Align title left like native iOS
         headerLeftContainerStyle: { paddingLeft: 10 },
