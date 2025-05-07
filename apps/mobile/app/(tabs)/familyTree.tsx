@@ -1,5 +1,5 @@
 import React from 'react';
-import { SafeAreaView, StyleSheet, Text, View, Platform } from 'react-native';
+import { SafeAreaView, StyleSheet, Text, View, Platform, Image } from 'react-native';
 import RelativesTree, { type RelativeItemComponent, type RelativeItem as RelativeItemType } from '../../react-native-relatives-tree/src';
 
 // Define the Items type for your specific data structure
@@ -17,59 +17,66 @@ const relatives: Items[] = [
   {
     name: 'John',
     dob: '01/05/2004',
-    avatar: 'https://via.placeholder.com/40?text=J', // Example avatar
     spouse: {
       name: 'Anne',
       dob: '04/05/2007',
-      avatar: 'https://via.placeholder.com/40?text=A', // Example avatar
     },
     children: [
       {
         name: 'Dan',
         dob: '01/05/2024',
-        avatar: 'https://via.placeholder.com/40?text=D', // Example avatar
         spouse: {
           name: 'Ella',
           dob: '04/05/2027',
-          avatar: 'https://via.placeholder.com/40?text=E', // Example avatar
         },
         children: [
           {
             name: 'Olivia',
             dob: '01/05/2044',
-            avatar: 'https://via.placeholder.com/40?text=O', // Example avatar
           },
           {
             name: 'Mary',
             dob: '01/05/2045',
-            avatar: 'https://via.placeholder.com/40?text=M', // Example avatar
           },
         ],
       },
       {
         name: 'Jack',
         dob: '01/05/2025',
-        dod: '03/03/2057', // Example of date of death
-        avatar: 'https://via.placeholder.com/40?text=Ja', // Example avatar
+        dod: '03/03/2057',
         spouse: {
           name: 'Rachel',
           dob: '04/05/2027',
-          avatar: 'https://via.placeholder.com/40?text=R', // Example avatar
         },
       },
     ],
   },
 ];
 
+// Helper function to get initials
+const getInitials = (name: string): string => {
+  if (!name) return '';
+  const nameParts = name.trim().split(' ');
+  if (nameParts.length === 1 && nameParts[0].length > 0) {
+    return nameParts[0].substring(0, Math.min(2, nameParts[0].length)).toUpperCase();
+  }
+  return (
+    (nameParts[0] ? nameParts[0][0] : '') +
+    (nameParts.length > 1 && nameParts[nameParts.length - 1] ? nameParts[nameParts.length - 1][0] : '')
+  ).toUpperCase();
+};
+
 // Custom RelativeItem component to render each node
-// You can customize this to display avatar, name, dob, etc.
 const CustomRelativeItem: RelativeItemComponent<Items> = ({ level, info, style }) => (
   <View style={[styles.itemContainer, style]}>
-    {/* <Image source={{ uri: info.avatar }} style={styles.avatar} /> Example if you add avatars */}
+    {info.avatar ? (
+      <Image source={{ uri: info.avatar }} style={styles.avatar} />
+    ) : (
+      <View style={styles.avatarPlaceholder}>
+        <Text style={styles.avatarPlaceholderText}>{getInitials(info.name)}</Text>
+      </View>
+    )}
     <Text style={styles.nameText}>{info.name}</Text>
-    <Text style={styles.dobText}>Born: {info.dob}</Text>
-    {info.dod && <Text style={styles.dodText}>Died: {info.dod}</Text>}
-    {/* <Text style={styles.levelText}>(Level: {level})</Text> */}
   </View>
 );
 
@@ -128,6 +135,20 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 15,
     marginBottom: 4,
+  },
+  avatarPlaceholder: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#B0BEC5', // A neutral placeholder color
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  avatarPlaceholderText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 12,
   },
   nameText: {
     fontSize: 12,

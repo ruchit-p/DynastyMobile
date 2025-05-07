@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useNavigation } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 
 const CreateStoryScreen = () => {
   const router = useRouter();
@@ -21,12 +22,11 @@ const CreateStoryScreen = () => {
   const [storyTitle, setStoryTitle] = useState('');
   const [storyContent, setStoryContent] = useState('');
   const [storyDate, setStoryDate] = useState(new Date()); // Default to today
-  const [location, setLocation] = useState('');
-  const [selectedImages, setSelectedImages] = useState<string[]>([]); // For multiple images
+  const [selectedImages, setSelectedImages] = useState<string[]>([]); 
 
-  // Placeholder for user avatar - in a real app, this would come from auth context or props
+  // Placeholder for user avatar/name
   const userAvatar = 'https://via.placeholder.com/40';
-  const userName = 'Current User'; // Placeholder
+  const userName = 'Current User';
 
   React.useEffect(() => {
     navigation.setOptions({
@@ -42,6 +42,10 @@ const CreateStoryScreen = () => {
         </TouchableOpacity>
       ),
       headerTitleAlign: 'center',
+      headerStyle: { backgroundColor: '#F8F8F8' }, // Consistent header style
+      headerTintColor: '#333333', // Consistent header style
+      headerTitleStyle: { fontWeight: '600' }, // Consistent header style
+      headerBackTitleVisible: false, // Consistent header style
     });
   }, [navigation, router, storyTitle, storyContent]);
 
@@ -50,100 +54,149 @@ const CreateStoryScreen = () => {
       Alert.alert('Missing Information', 'Please provide a title and content for your story.');
       return;
     }
-    // TODO: Implement actual story posting logic (e.g., API call, save to state/DB)
+    // Simulate posting
     console.log({
       title: storyTitle,
       content: storyContent,
-      date: storyDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
-      location,
+      date: storyDate.toISOString().split('T')[0], 
       images: selectedImages,
     });
-    Alert.alert('Story Posted!', 'Your story has been successfully created.');
-    router.back(); // Go back after posting
+    Alert.alert('Story Posted (Simulated)', 'Your story has been successfully created.');
+    router.back(); 
   };
 
   const handleAddMedia = async () => {
-    // TODO: Implement image/video picking
-    // For now, let's simulate adding an image
-    // const result = await ImagePicker.launchImageLibraryAsync({
-    //   mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    //   allowsEditing: true,
-    //   aspect: [4, 3],
-    //   quality: 1,
-    //   allowsMultipleSelection: true, // If you want to allow multiple images
-    // });
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Required', 'Allow access to photos to add media.');
+        return;
+      }
 
-    // if (!result.canceled) {
-    //   setSelectedImages(prevImages => [...prevImages, ...result.assets.map(asset => asset.uri)]);
-    // }
-    Alert.alert("Add Media", "Media selection will be implemented here.");
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true, 
+        quality: 0.7,
+        allowsMultipleSelection: true, 
+      });
+  
+      if (!result.canceled && result.assets) {
+        const newImageUris = result.assets.map(asset => asset.uri);
+        setSelectedImages(prevImages => [...prevImages, ...newImageUris]);
+      } else {
+        console.log('Image picking was canceled or no assets were selected.');
+      }
+    } catch (error) {
+      console.error("Error picking images: ", error);
+      Alert.alert("Image Picker Error", "Could not select images.");
+    }
   };
 
   const handleTagPeople = () => {
-    // TODO: Implement people tagging functionality
     Alert.alert("Tag People", "People tagging will be implemented here.");
   };
 
   const handleAddLocation = () => {
-    // TODO: Implement location picking or use device's current location
-    // For now, we can toggle a manual input or a map view
     Alert.alert("Add Location", "Location functionality will be implemented here.");
+    // Consider navigating to a map screen or using a simple TextInput modal
   };
 
-  // Basic DatePicker (can be replaced with a more sophisticated one)
-  // For simplicity, we'll use a text input for date for now, or a button to show a modal picker.
-  // A proper date picker like @react-native-community/datetimepicker is recommended for better UX.
+  // Helper to format Date objects for display (borrowed from createEvent)
+  const formatDate = (date: Date | null): string => {
+    if (!date) return '';
+    return date.toLocaleDateString('en-US', { 
+      // More concise format for story date?
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const inputAccessoryViewID = 'storyInputAccessory'; // Unique ID
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView 
+        style={styles.container} 
+        contentContainerStyle={styles.scrollContentContainer}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* User Info remains similar */}
         <View style={styles.userInfoSection}>
           <Image source={{ uri: userAvatar }} style={styles.avatar} />
           <Text style={styles.userNameText}>{userName}</Text>
         </View>
 
-        <TextInput
-          style={styles.titleInput}
-          placeholder="Story Title (e.g., Our Summer Vacation)"
-          value={storyTitle}
-          onChangeText={setStoryTitle}
-          placeholderTextColor="#888"
-        />
+        {/* Wrap main inputs in a form section */}
+        <View style={styles.formSection}>
+          <TextInput
+            style={styles.inputStoryTitle} // New style similar to inputEventName
+            placeholder="Story Title"
+            placeholderTextColor="#A0A0A0"
+            value={storyTitle}
+            onChangeText={setStoryTitle}
+            autoCorrect={false}
+            inputAccessoryViewID={inputAccessoryViewID}
+          />
+          
+          {/* Separator */}
+          <View style={styles.separatorThinNoMargin} /> 
 
-        <TextInput
-          style={styles.contentInput}
-          placeholder="What's your story? Share the details..."
-          value={storyContent}
-          onChangeText={setStoryContent}
-          multiline
-          textAlignVertical="top"
-          placeholderTextColor="#888"
-        />
+          <TextInput
+            style={styles.inputStoryContent} // New style for content
+            placeholder="What's your story? Share the details..."
+            placeholderTextColor="#A0A0A0"
+            value={storyContent}
+            onChangeText={setStoryContent}
+            multiline
+            textAlignVertical="top"
+            inputAccessoryViewID={inputAccessoryViewID}
+          />
 
-        {/* Date Input - Placeholder, consider using a proper date picker */}
-        <TouchableOpacity style={styles.optionButton} onPress={() => Alert.alert("Date Picker", "Date picker will be implemented here.")}>
-          <Ionicons name="calendar-outline" size={20} color="#555" style={styles.optionIcon} />
-          <Text style={styles.optionText}>Date: {storyDate.toLocaleDateString()}</Text>
-        </TouchableOpacity>
+          {/* Separator */}
+          <View style={styles.separatorThinNoMargin} /> 
 
-        {/* Selected Media Preview */}
+           {/* Date Picker Row (Optional - using Alert for now) */}
+          <TouchableOpacity 
+            style={styles.inputRow} 
+            onPress={() => Alert.alert("Date Picker", "Date picker functionality can be added here.")} 
+          >
+             <Ionicons name="calendar-outline" size={22} color={styles.inputIcon.color} style={styles.inputIcon} />
+             <Text style={styles.inputText}>Date</Text> 
+             <Text style={[styles.inputText, {color: styles.placeholderText.color, textAlign: 'right'}]}>
+               {formatDate(storyDate)}
+             </Text>
+             <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+           </TouchableOpacity>
+        </View>
+
+        {/* Selected Media Preview - Keep outside formSection or style differently */}
         {selectedImages.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mediaPreviewContainer}>
-            {selectedImages.map((uri, index) => (
-              <View key={index} style={styles.mediaPreviewItem}>
-                <Image source={{ uri }} style={styles.previewImage} />
-                <TouchableOpacity
-                  style={styles.removeMediaButton}
-                  onPress={() => setSelectedImages(prev => prev.filter((_, i) => i !== index))}
-                >
-                  <Ionicons name="close-circle" size={20} color="rgba(0,0,0,0.6)" />
-                </TouchableOpacity>
-              </View>
-            ))}
-          </ScrollView>
+          <View style={styles.mediaSection}> 
+            <Text style={styles.mediaTitle}>Media</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mediaPreviewContainer}>
+              {selectedImages.map((uri, index) => (
+                <View key={index} style={styles.mediaPreviewItem}>
+                  <Image source={{ uri }} style={styles.previewImage} />
+                  <TouchableOpacity
+                    style={styles.removeMediaButton}
+                    onPress={() => setSelectedImages(prev => prev.filter((_, i) => i !== index))}
+                  >
+                    <Ionicons name="close-circle" size={22} color="rgba(0,0,0,0.7)" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {/* Optional: Add a button here to add more media */}
+              <TouchableOpacity style={styles.addMoreMediaButton} onPress={handleAddMedia}>
+                 <Ionicons name="add" size={24} color="#555" />
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
         )}
+      
       </ScrollView>
 
+      {/* Keep bottom toolbar for actions */}
       <View style={styles.bottomToolbar}>
         <TouchableOpacity style={styles.toolbarButton} onPress={handleAddMedia}>
           <Ionicons name="images-outline" size={24} color="#1A4B44" />
@@ -154,107 +207,171 @@ const CreateStoryScreen = () => {
         <TouchableOpacity style={styles.toolbarButton} onPress={handleAddLocation}>
           <Ionicons name="location-outline" size={24} color="#1A4B44" />
         </TouchableOpacity>
-        {/* Add more tools like mood, etc. if needed */}
       </View>
     </SafeAreaView>
   );
 };
 
+// --- Styles Updated to match createEvent structure ---
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  postButtonTextNavigator: {
-    color: '#1A4B44',
-    fontSize: 17,
-    fontWeight: '600',
+    backgroundColor: '#F0F0F0', // Match createEvent background
   },
   container: {
     flex: 1,
-    backgroundColor: '#F9F9F9', // Slightly different background for content area
-    paddingHorizontal: 15,
   },
+   scrollContentContainer: {
+    paddingBottom: 80, // Space for bottom toolbar
+  },
+  postButtonTextNavigator: {
+    color: '#1A4B44', // Match header style
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  // User Info Section Styles (can remain similar)
   userInfoSection: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 15,
+    paddingHorizontal: 15, // Add horizontal padding
   },
   avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    marginRight: 10,
+    marginRight: 12, // Increased margin
   },
   userNameText: {
     fontSize: 16,
     fontWeight: '500',
     color: '#333',
   },
-  titleInput: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
-    marginBottom: 15,
+  // Form Section Styling (Adopted from createEvent)
+  formSection: {
+    marginTop: 15, // Reduced top margin
+    marginHorizontal: 15,
+    backgroundColor: '#FFFFFF', 
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05, 
+    shadowRadius: 3,
+    elevation: 2,
   },
-  contentInput: {
+  inputStoryTitle: {
+    fontSize: 22, // Slightly smaller than event name maybe?
+    fontWeight: 'bold',
+    color: '#333333',
+    paddingHorizontal: 20,
+    paddingTop: 18, // Match createEvent vertical padding
+    paddingBottom: 15, // Less bottom padding before separator
+    // Removed bottom border here, use separator component
+  },
+   inputStoryContent: {
     fontSize: 16,
     color: '#444',
     lineHeight: 24,
-    minHeight: 150, // Start with a decent height
-    paddingVertical: 10,
-    marginBottom: 20,
+    minHeight: 150, 
+    paddingHorizontal: 20,
+    paddingVertical: 15, 
+    textAlignVertical: 'top', // Keep this
   },
-  optionButton: {
+  // Input Row Styling (Adopted from createEvent)
+  inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 5,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+  },
+  inputIcon: {
+    marginRight: 15,
+    color: '#888888', 
+  },
+  inputText: { // Re-used for Date display
+    flex: 1,
+    fontSize: 16,
+    color: '#333333', 
+  },
+  placeholderText: { // Re-used for Date display if needed
+    flex: 1,
+    fontSize: 16,
+    color: '#999999', 
+  },
+  // Separator Styling (Adopted from createEvent)
+  separatorThin: {
+    height: 0.5,
+    backgroundColor: '#E0E0E0',
+    marginLeft: 20 + 22 + 15, // Aligns with icon + margin
+  },
+  separatorThinNoMargin: { // Separator directly under inputs
+    height: 0.5,
+    backgroundColor: '#E0E0E0',
+  },
+  // Media Section Styles (New/Adjusted)
+  mediaSection: {
+     marginTop: 20,
+     marginHorizontal: 15,
+     // Can add background/border/padding if desired
+  },
+   mediaTitle: {
+    fontSize: 14,
+    color: '#555',
+    fontWeight: '600',
     marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  optionIcon: {
-    marginRight: 10,
-  },
-  optionText: {
-    fontSize: 15,
-    color: '#333',
+    textTransform: 'uppercase',
+    paddingLeft: 5, // Small indent
   },
   mediaPreviewContainer: {
     flexDirection: 'row',
     paddingVertical: 10,
-    marginBottom: 10,
+    paddingLeft: 5, // Align with title indent
   },
   mediaPreviewItem: {
-    marginRight: 10,
+    marginRight: 12, // Increased spacing
     position: 'relative',
   },
   previewImage: {
-    width: 80,
-    height: 80,
+    width: 90, // Slightly larger preview
+    height: 90,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#DDD',
+    backgroundColor: '#eee', // Background for loading/error
+  },
+   addMoreMediaButton: {
+    width: 90,
+    height: 90,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#CCC',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8F8F8',
+    marginLeft: 5, // Spacing after last image
   },
   removeMediaButton: {
     position: 'absolute',
-    top: -5,
-    right: -5,
+    top: -7, // Adjusted position
+    right: -7, // Adjusted position
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 12, // Make it circular
+    padding: 1, // Add padding for easier touch
+    shadowColor: '#000', // Add shadow for visibility
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
   },
+  // Bottom Toolbar Styles (Keep as is)
   bottomToolbar: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingVertical: Platform.OS === 'ios' ? 15 : 10, // More padding for iOS bottom bar
-    paddingBottom: Platform.OS === 'ios' ? 30 : 10, // Extra padding for home indicator on iOS
+    paddingVertical: Platform.OS === 'ios' ? 15 : 10,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 10,
     borderTopWidth: 1,
     borderTopColor: '#E0E0E0',
     backgroundColor: '#FFFFFF',
@@ -262,6 +379,7 @@ const styles = StyleSheet.create({
   toolbarButton: {
     padding: 10,
   },
+  // Removed old titleInput, contentInput, optionButton styles
 });
 
-export default CreateStoryScreen; 
+export default CreateStoryScreen;
