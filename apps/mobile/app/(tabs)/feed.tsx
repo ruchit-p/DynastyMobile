@@ -1,90 +1,177 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, SafeAreaView, Platform, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, Text, ScrollView, SafeAreaView, Platform, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+// import { auth, db } from '../../src/lib/firebase'; // Commented out Firebase
+// import { collection, query, orderBy, limit, getDocs, Timestamp, doc, getDoc } from 'firebase/firestore'; // Commented out Firebase
 
-// Define a more specific type for feed items, assuming they are stories or could be events
-interface FeedItemType {
-  id: string; // Crucial for navigation to detail views
-  type: 'story' | 'event'; // To differentiate if feed shows mixed content
-  userAvatar: string;
-  userName: string;
-  timestamp: string;
-  date: string;
-  content: string;
-  image?: string;
+// Define the structure for a Post fetched from Firestore
+interface Post {
+  id: string;
+  authorId: string;
+  createdAt: Date; // Converted from Timestamp
+  text?: string;
+  imageUrl?: string;
   location?: string;
-  commentsCount: number;
-  // Add other type-specific fields or make them optional
-  // For story specific navigation, ensure 'id' is the storyId
+  // Denormalized author data (optional but improves performance)
+  authorName?: string; 
+  authorAvatar?: string;
+  // Add other fields like likesCount, commentsCount if stored directly
+  commentsCount?: number;
 }
-
-const mockFeedItems: FeedItemType[] = [
-    // Example Story item (ensure 'id' can be used for storyDetail)
-    {
-        id: 'story123', // This ID should match a story in mockStoriesDatabase for storyDetail to work
-        type: 'story',
-        userAvatar: 'https://via.placeholder.com/40/FFD700/000000?Text=M',
-        userName: 'Grandma Millie',
-        timestamp: '3h ago',
-        date: 'Oct 26',
-        content: 'Shared her childhood memories on the farm. Tap to read more...',
-        image: 'https://via.placeholder.com/600x400/E6E6FA/000000?Text=Farm+View',
-        location: 'Sunny Meadows Farm',
-        commentsCount: 23,
-    },
-    // Example Event item (navigation for event detail would be different)
-    // {
-    //     id: 'eventABC',
-    //     type: 'event',
-    //     userAvatar: 'https://via.placeholder.com/40/ADD8E6/000000?Text=J',
-    //     userName: 'Community Group',
-    //     timestamp: 'Upcoming',
-    //     date: 'Nov 5',
-    //     content: 'Family Reunion BBQ - All are welcome! Click for details.',
-    //     image: 'https://via.placeholder.com/600x400/B0E0E6/000000?Text=BBQ+Flyer',
-    //     location: 'Central Park Pavilion',
-    //     commentsCount: 5, // Or use participantCount for events
-    // },
-];
 
 const FeedScreen = () => {
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const router = useRouter();
 
-  const handleFeedItemPress = (item: FeedItemType) => {
-    if (item.type === 'story') {
-      router.push({ pathname: '/(screens)/storyDetail', params: { storyId: item.id } });
-    } else if (item.type === 'event') {
-      // TODO: Implement navigation to EventDetailScreen if it exists
-      // router.push({ pathname: '/(screens)/eventDetail', params: { eventId: item.id } });
-      alert(`Navigate to Event ID: ${item.id}`);
-    }
+  // const [feedPosts, setFeedPosts] = useState<Post[]>([]); // State for posts // Commented out
+  // const [isLoadingFeed, setIsLoadingFeed] = useState<boolean>(true); // Loading state // Commented out
+
+  // Initialize with mock data
+  const [feedPosts, setFeedPosts] = useState<Post[]>([
+    {
+      id: '1',
+      authorId: 'user123',
+      createdAt: new Date(Date.now() - 3600 * 1000 * 2), // 2 hours ago
+      text: 'Just enjoyed a beautiful sunset! #nofilter',
+      imageUrl: 'https://via.placeholder.com/600x400.png/FFD700/000000?Text=Sunset+View',
+      location: 'Beach Front',
+      authorName: 'Alice Wonderland',
+      authorAvatar: 'https://via.placeholder.com/40/FFC0CB/000000?Text=A', 
+      commentsCount: 15,
+    },
+    {
+      id: '2',
+      authorId: 'user456',
+      createdAt: new Date(Date.now() - 3600 * 1000 * 24 * 3), // 3 days ago
+      text: 'Exploring the city and found this amazing mural. So much talent! This is a longer piece of text to see how it wraps and if the numberOfLines property is working as expected. We hope it looks good on all devices. More text just to make it longer.',
+      imageUrl: 'https://via.placeholder.com/600x400.png/ADD8E6/000000?Text=City+Mural',
+      location: 'Downtown Arts District',
+      authorName: 'Bob The Builder',
+      authorAvatar: 'https://via.placeholder.com/40/ADD8E6/000000?Text=B',
+      commentsCount: 8,
+    },
+    {
+        id: '3',
+        authorId: 'user789',
+        createdAt: new Date(Date.now() - 3600 * 1000 * 5), // 5 hours ago
+        text: 'My new puppy is just the cutest! Look at that face.',
+        imageUrl: 'https://via.placeholder.com/600x400.png/90EE90/000000?Text=Cute+Puppy',
+        authorName: 'Charlie Brown',
+        authorAvatar: 'https://via.placeholder.com/40/90EE90/000000?Text=C', 
+        commentsCount: 32,
+    },
+  ]);
+  const [isLoadingFeed, setIsLoadingFeed] = useState<boolean>(false); // Set to false
+
+  // Fetch feed posts
+  useFocusEffect(
+    React.useCallback(() => {
+      // const fetchPosts = async () => { // Firebase fetching logic commented out
+        // setIsLoadingFeed(true);
+        // try {
+          // const postsRef = collection(db, "posts"); // Assuming collection name is 'posts'
+          // // TODO: Add filtering logic (e.g., fetch posts from connections only)
+          // // TODO: Implement pagination (e.g., using limit() and startAfter())
+          // const q = query(postsRef, orderBy("createdAt", "desc"), limit(20)); // Fetch latest 20
+          
+          // const querySnapshot = await getDocs(q);
+          // const fetchedPosts: Post[] = [];
+          
+          // // Optional: Fetch author details if not denormalized
+          // // This can be inefficient, consider denormalization or backend aggregation
+          // for (const postDoc of querySnapshot.docs) {
+          //     const data = postDoc.data();
+          //     let authorName = data.authorName || 'Unknown User';
+          //     let authorAvatar = data.authorAvatar; // Use placeholder if null/undefined
+
+          //     // If author data is not denormalized, fetch it (EXAMPLE - can be slow)
+          //     // if (!authorName && data.authorId) {
+          //     //   try {
+          //     //     const userDocRef = doc(db, "users", data.authorId);
+          //     //     const userDocSnap = await getDoc(userDocRef);
+          //     //     if (userDocSnap.exists()) {
+          //     //       authorName = userDocSnap.data().name || `${userDocSnap.data().firstName || ''} ${userDocSnap.data().lastName || ''}`.trim() || 'User';
+          //     //       authorAvatar = userDocSnap.data().profilePicture;
+          //     //     }
+          //     //   } catch (userError) {
+          //     //     console.error("Error fetching author data for post:", postDoc.id, userError);
+          //     //   }
+          //     // }
+
+          //     fetchedPosts.push({
+          //       id: postDoc.id,
+          //       ...data,
+          //       createdAt: (data.createdAt as Timestamp)?.toDate(),
+          //       authorName: authorName, 
+          //       authorAvatar: authorAvatar,
+          //     } as Post);
+          // }
+          // setFeedPosts(fetchedPosts);
+        // } catch (error) {
+        //   console.error("Error fetching feed posts: ", error);
+        //   Alert.alert("Error", "Could not fetch feed.");
+        // } finally {
+        //   setIsLoadingFeed(false);
+        // }
+      // }; // Firebase fetching logic commented out
+      // fetchPosts(); // Firebase fetching logic commented out
+      setIsLoadingFeed(false); // Using mock data, so set loading to false
+    }, [])
+  );
+
+  const handleFeedItemPress = (item: Post) => {
+    // Assuming posts are stories for now, adjust if feed contains other types
+    router.push({ pathname: '/(screens)/storyDetail', params: { storyId: item.id } });
   };
+
+  // Helper function to format timestamp
+  const formatTimestamp = (date: Date | null): string => {
+    if (!date) return '';
+    // Simple relative time or absolute date (implement more robust logic as needed)
+    const now = new Date();
+    const diffSeconds = Math.round((now.getTime() - date.getTime()) / 1000);
+    if (diffSeconds < 60) return `${diffSeconds}s ago`;
+    const diffMinutes = Math.round(diffSeconds / 60);
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    const diffHours = Math.round(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  if (isLoadingFeed) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#0A5C36" />
+          <Text style={styles.loadingText}>Loading Feed...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container}>
-        {mockFeedItems.length === 0 ? (
+        {feedPosts.length === 0 ? (
           <View style={styles.emptyStateContainer}>
             <Ionicons name="newspaper-outline" size={60} color="#CCC" />
             <Text style={styles.emptyStateText}>Your feed is empty.</Text>
             <Text style={styles.emptyStateSubText}>
-              Create your first story or event to see it here!
+              Create your first story or connect with family!
             </Text>
           </View>
         ) : (
-          mockFeedItems.map((item) => (
+          feedPosts.map((item) => (
             <TouchableOpacity key={item.id} onPress={() => handleFeedItemPress(item)} style={styles.feedItemContainer}>
                 <View style={styles.feedItem}>
                 <View style={styles.itemHeader}>
-                    <Image source={{ uri: item.userAvatar }} style={styles.avatar} />
+                    <Image source={{ uri: item.authorAvatar || '../../assets/images/avatar-placeholder.png' }} style={styles.avatar} />
                     <View style={styles.userInfo}>
-                    <Text style={styles.userName}>{item.userName}</Text>
+                    <Text style={styles.userName}>{item.authorName || 'User'}</Text>
                     <View style={styles.timestampContainer}>
-                        <Text style={styles.timestamp}>{item.timestamp}</Text>
-                        <View style={styles.dotSeparator} />
-                        <Text style={styles.datePill}>{item.date}</Text>
+                        <Text style={styles.timestamp}>{formatTimestamp(item.createdAt)}</Text>
+                        {/* Removed Date Pill - can be added back if needed */}
                     </View>
                     </View>
                     <TouchableOpacity style={styles.moreOptionsButton} onPress={(e) => {e.stopPropagation(); alert('More options for ' + item.id);}}>
@@ -92,8 +179,8 @@ const FeedScreen = () => {
                     </TouchableOpacity>
                 </View>
 
-                <Text style={styles.feedContent} numberOfLines={3}>{item.content}</Text>
-                {item.image && <Image source={{ uri: item.image }} style={styles.feedImage} />}
+                {item.text && <Text style={styles.feedContent} numberOfLines={3}>{item.text}</Text>}
+                {item.imageUrl && <Image source={{ uri: item.imageUrl }} style={styles.feedImage} />}
                 {item.location && (
                     <View style={styles.locationContainer}>
                     <Ionicons name="location-sharp" size={16} color="#555" />
@@ -104,11 +191,10 @@ const FeedScreen = () => {
                 <View style={styles.feedStats}>
                     <View style={styles.statItem}>
                         <Ionicons name="chatbubbles-outline" size={16} color="#555" />
-                        <Text style={styles.statText}>{item.commentsCount} Comments</Text>
+                        <Text style={styles.statText}>{item.commentsCount || 0} Comments</Text>
                     </View>
-                    {/* Add other stats like likes if available in FeedItemType */}
+                    {/* Add other stats like likes */}
                 </View>
-                {/* Removed individual Like/Comment pills from feed item, assumed tap navigates to detail */}
                 </View>
             </TouchableOpacity>
           ))
@@ -309,6 +395,17 @@ const styles = StyleSheet.create({
   fabMenuItemText: {
     fontSize: 16,
     color: '#1A4B44',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F4F4F4',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#555',
   },
 });
 

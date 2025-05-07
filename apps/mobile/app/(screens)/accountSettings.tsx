@@ -1,126 +1,96 @@
-import React from 'react';
-import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
-  SafeAreaView,
-  Platform,
-  TouchableOpacity,
-  Alert,
-  Image
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Alert } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { signOut } from 'firebase/auth';
+import { auth } from '../../src/lib/firebase';
+import ListItem, { ListItemProps } from '../../components/ListItem'; // Import shared ListItem
 
-interface SettingsItem {
-  id: string;
-  title: string;
-  icon: React.ReactNode;
-  onPress: () => void;
-  isDestructive?: boolean;
-}
+// Reusable ListItem component - REMOVED
+// interface ListItemProps { ... }
+// const ListItem: React.FC<ListItemProps> = ({ icon, text, onPress }) => { ... };
 
 const AccountSettingsScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
 
-  const userData = {
-    name: 'Ruchit Patel',
-    email: 'user@example.com',
-    avatarUrl: 'https://via.placeholder.com/80',
-    bio: 'Lover of family history and connecting with relatives.'
-  };
-
-  React.useEffect(() => {
+  useEffect(() => {
     navigation.setOptions({
       title: 'Account Settings',
-      headerTitleAlign: 'center',
+      headerStyle: { backgroundColor: '#F8F8F8' },
+      headerTintColor: '#333333',
+      headerTitleStyle: { fontWeight: '600' },
+      headerBackTitleVisible: false,
     });
   }, [navigation]);
 
-  const settingsItems: SettingsItem[] = [
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      router.replace('/login');
+    } catch (error) {
+      console.error("Logout error:", error);
+      Alert.alert("Logout Failed", error instanceof Error ? error.message : "An unexpected error occurred.");
+    }
+  };
+
+  const settingsOptions: ListItemProps[] = [
     {
-      id: 'editProfile',
-      title: 'Edit Profile',
-      icon: <Ionicons name="person-circle-outline" size={24} color="#1A4B44" />,
-      onPress: () => router.push('/(screens)/editProfile'),
+        icon: 'person-circle-outline',
+        text: 'Edit Profile',
+        onPress: () => router.push('/(screens)/editProfile'),
     },
     {
-      id: 'privacy',
-      title: 'Privacy Settings',
-      icon: <Ionicons name="lock-closed-outline" size={24} color="#1A4B44" />,
-      onPress: () => router.push('/(screens)/privacySecuritySettings'),
+        icon: 'lock-closed-outline',
+        text: 'Privacy Settings',
+        onPress: () => router.push('/(screens)/privacySettings'),
     },
     {
-      id: 'notifications',
-      title: 'Notification Preferences',
-      icon: <Ionicons name="notifications-outline" size={24} color="#1A4B44" />,
-      onPress: () => router.push('/(screens)/notificationSettings'),
+        icon: 'notifications-outline',
+        text: 'Notification Preferences',
+        onPress: () => router.push('/(screens)/notificationPreferences'),
     },
     {
-      id: 'security',
-      title: 'Account Security',
-      icon: <Ionicons name="shield-checkmark-outline" size={24} color="#1A4B44" />,
-      onPress: () => router.push('/(screens)/privacySecuritySettings'),
+        icon: 'shield-checkmark-outline',
+        text: 'Account Security',
+        onPress: () => router.push('/(screens)/accountSecurity'),
     },
     {
-      id: 'help',
-      title: 'Help & Support',
-      icon: <Ionicons name="help-circle-outline" size={24} color="#1A4B44" />,
-      onPress: () => router.push('/(screens)/helpSupport'),
+        icon: 'help-circle-outline',
+        text: 'Help & Support',
+        onPress: () => router.push('/(screens)/helpAndSupport'),
     },
     {
-      id: 'about',
-      title: 'About Dynasty',
-      icon: <Ionicons name="information-circle-outline" size={24} color="#1A4B44" />,
-      onPress: () => router.push('/(screens)/aboutScreen'),
+        icon: 'information-circle-outline',
+        text: 'About Dynasty',
+        onPress: () => router.push('/(screens)/aboutDynasty'),
     },
     {
-      id: 'logout',
-      title: 'Logout',
-      icon: <Ionicons name="log-out-outline" size={24} color="#D32F2F" />,
-      onPress: () => {
-        Alert.alert(
-          'Logout',
-          'Are you sure you want to logout?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Logout', onPress: () => console.log('User logged out'), style: 'destructive' },
-          ]
-        );
-      },
-      isDestructive: true,
+        icon: 'log-out-outline',
+        text: 'Logout',
+        onPress: handleLogout,
     },
   ];
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.container}>
-        <View style={styles.profileHeader}>
-          <Image source={{ uri: userData.avatarUrl }} style={styles.avatar} />
-          <Text style={styles.userName}>{userData.name}</Text>
-          <Text style={styles.userEmail}>{userData.email}</Text>
-        </View>
-
-        {settingsItems.map((item) => (
-          <TouchableOpacity 
-            key={item.id} 
-            style={styles.settingsItem}
-            onPress={item.onPress}
-          >
-            <View style={styles.itemIcon}>{item.icon}</View>
-            <Text style={[styles.settingsItemText, item.isDestructive && styles.destructiveText]}>
-              {item.title}
-            </Text>
-            <Ionicons name="chevron-forward" size={20} color="#B0B0B0" />
-          </TouchableOpacity>
-        ))}
-        
-        <View style={styles.footer}>
+      <FlatList
+        data={settingsOptions}
+        keyExtractor={(item) => item.text}
+        renderItem={({ item }) => <ListItem {...item} />}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ListHeaderComponent={() => (
+          // Optional: Add user info header if needed, like in screenshot
+          <View style={styles.userInfoHeader}>
+            <Text style={styles.userName}>Ruchit Patel</Text>
+            <Text style={styles.userEmail}>user@example.com</Text>
+          </View>
+        )}
+        ListFooterComponent={() => (
             <Text style={styles.footerText}>Dynasty App v1.0.0</Text>
-        </View>
-      </ScrollView>
+        )}
+        style={styles.listContainer}
+      />
     </SafeAreaView>
   );
 };
@@ -128,65 +98,40 @@ const AccountSettingsScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F0F0F0',
   },
-  container: {
-    flex: 1,
-    backgroundColor: '#F4F4F4',
+  listContainer: {
+      flex: 1,
   },
-  profileHeader: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 20,
-    paddingHorizontal: 15,
+  userInfoHeader: {
+    paddingVertical: 30,
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
-    marginBottom: 10,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginBottom: 10,
+    backgroundColor: '#FFFFFF', // White background for this section
+    marginBottom: 20, // Space before the list items
   },
   userName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+      fontSize: 22,
+      fontWeight: 'bold',
+      color: '#333',
+      marginBottom: 5,
   },
   userEmail: {
-    fontSize: 14,
-    color: '#777',
-    marginTop: 2,
+      fontSize: 16,
+      color: '#777',
   },
-  settingsItem: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  itemIcon: {
-    marginRight: 15,
-  },
-  settingsItemText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-  },
-  destructiveText: {
-    color: '#D32F2F',
-  },
-  footer: {
-    paddingVertical: 20,
-    alignItems: 'center',
+  separator: {
+    height: StyleSheet.hairlineWidth, // Use hairline for subtle separator
+    backgroundColor: '#E0E0E0',
+    marginLeft: 15 + 24 + 15, // Align with text
   },
   footerText: {
-    fontSize: 12,
-    color: '#999',
-  },
+      textAlign: 'center',
+      paddingVertical: 20,
+      fontSize: 14,
+      color: '#999',
+  }
 });
 
 export default AccountSettingsScreen; 

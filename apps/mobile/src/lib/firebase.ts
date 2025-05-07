@@ -1,30 +1,26 @@
-import { initializeApp, getApp, getApps } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getFunctions } from 'firebase/functions';
-import { getStorage } from 'firebase/storage';
+import firebase from '@react-native-firebase/app';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import functions from '@react-native-firebase/functions';
+import storage from '@react-native-firebase/storage';
 
-const firebaseConfig = {
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID, // Optional, for Analytics
-};
+// For React Native Firebase, the native configuration (GoogleService-Info.plist / google-services.json)
+// is typically used for initialization, and explicit initializeApp(config) in JS is not needed
+// for the default app. The @react-native-firebase/app plugin in app.json handles this.
 
-let app;
+// Get the default app instance
+const appInstance = firebase.app();
 
-if (!getApps().length) {
-  app = initializeApp(firebaseConfig);
-} else {
-  app = getApp();
-}
+// Get service instances
+const authInstance = auth();
+const dbInstance = firestore();
+const functionsInstance = functions();
+const storageInstance = storage();
 
-const auth = getAuth(app);
-const db = getFirestore(app);
-const functionsInstance = getFunctions(app);
-const storage = getStorage(app);
-
-export { app, auth, db, functionsInstance as functions, storage }; 
+export {
+  appInstance as app,
+  authInstance as auth,
+  dbInstance as db,
+  functionsInstance as functions, // Retaining 'functions' alias for consistency
+  storageInstance as storage
+}; 

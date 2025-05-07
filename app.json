@@ -1,4 +1,7 @@
 {
+  "expo": {
+    "entryPoint": "./apps/mobile/index.js"
+  },
   "ios": {
     "bundleIdentifier": "com.ruchitp79.dynasty-monorepo"
   }

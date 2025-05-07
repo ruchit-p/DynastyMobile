@@ -11,11 +11,13 @@ module.exports = (async () => {
   
   // Customize the config further if needed
   // For example, for monorepo support:
-  // defaultConfig.watchFolders = [require('path').resolve(__dirname, '../..')]; 
-  // defaultConfig.resolver.nodeModulesPaths = [
-  //   require('path').resolve(__dirname, 'node_modules'),
-  //   require('path').resolve(__dirname, '../../node_modules'),
-  // ];
+  defaultConfig.watchFolders = [
+    require('path').resolve(__dirname, '../..') // Point to the monorepo root
+  ]; 
+  defaultConfig.resolver.nodeModulesPaths = [
+    require('path').resolve(__dirname, 'node_modules'), // Mobile app's node_modules
+    require('path').resolve(__dirname, '../../node_modules'), // Monorepo root node_modules
+  ];
 
   return defaultConfig;
 })(); 
