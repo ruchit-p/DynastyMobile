@@ -1,0 +1,114 @@
+---
+description: Guidelines for writing Next.js Server Actions with 'use server
+globs: **/*.ts, **/*.tsx, **/*.js, **/*.jsx
+alwaysApply: true
+---
+# Specify the following for Cursor rules
+description: Guidelines for writing Next.js Server Actions with 'use server'
+globs: "**/*.ts, **/*.tsx, **/*.js, **/*.jsx"
+---
+
+# Next.js Server Actions with 'use server'
+
+## Overview
+
+Server Actions allow you to run asynchronous code directly on the server without creating an API endpoint. The `'use server'` directive marks a function or file to be executed on the server.
+
+## 🚨 CRITICAL RULES 🚨
+
+When using the `'use server'` directive, you MUST follow these rules:
+
+1. All exports from a 'use server' file MUST be async functions
+2. DO NOT export non-function values from 'use server' files
+3. DO NOT forget the 'async' keyword in your function definition
+
+## File-level vs. Function-level Directive
+
+### File-level Directive
+
+When placed at the top of a file, all exported functions in the file become Server Actions:
+
+```typescript
+'use server';
+
+// ✅ CORRECT: async function
+export async function handleSubmit(formData: FormData) {
+  // Server-side code here
+  return { success: true };
+}
+
+// ❌ INCORRECT: Missing async keyword
+export function brokenFunction() {
+  return 'This will cause an error';
+}
+
+// ❌ INCORRECT: Non-function export
+export const config = { 
+  // This will cause an error
+};
+```
+
+### Function-level Directive
+
+When placed inside a Client Component, it marks a specific function as a Server Action:
+
+```typescript
+'use client';
+
+import { useState } from 'react';
+
+export default function Form() {
+  const [message, setMessage] = useState('');
+  
+  // ✅ CORRECT: Function-level server action
+  async function handleSubmit(formData: FormData) {
+    'use server';
+    
+    // Server-side code here
+    setMessage('Form submitted!');
+  }
+  
+  return (
+    <form action={handleSubmit}>
+      {/* Form elements */}
+    </form>
+  );
+}
+```
+
+## Common Error Messages and Fixes
+
+### "Only async functions are allowed to be exported in a 'use server' file"
+
+This error occurs when:
+- You export a non-function value
+- You export a function without the `async` keyword
+
+To fix:
+```typescript
+// ❌ INCORRECT
+'use server';
+export const value = 1;
+export function getData() { return 'data'; }
+
+// ✅ CORRECT
+'use server';
+export async function getData() { return 'data'; }
+```
+
+## Best Practices
+
+1. Keep Server Actions focused on server-side operations
+2. Return minimal data to reduce serialization overhead
+3. Always handle errors properly
+4. Use form validation on both client and server
+5. Be careful with TypeScript types that can't be serialized
+
+## Security Considerations
+
+1. Validate all input data
+2. Use CSRF protection (built into Next.js)
+3. Don't expose sensitive information
+4. Apply proper authentication and authorization checks
+
+Remember that Server Actions are powerful but should be used responsibly to maintain security and performance. 

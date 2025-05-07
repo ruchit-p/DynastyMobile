@@ -1,0 +1,62 @@
+/* Prevent text selection and image dragging in carousels */
+.dynasty-carousel-container {
+  /* Disable text selection */
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  height: 100%;
+}
+
+.dynasty-carousel-container * {
+  /* Disable text selection for all children */
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+}
+
+.dynasty-carousel-container img {
+  /* Prevent image dragging */
+  pointer-events: none;
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+}
+
+/* Fix for carousel dot indicators - ensure they remain interactive */
+.dynasty-carousel-container .carousel .control-dots {
+  pointer-events: auto;
+}
+
+/* Fix for carousel arrows - ensure they remain interactive */
+.dynasty-carousel-container button {
+  pointer-events: auto;
+}
+
+/* Override react-responsive-carousel's slide styles */
+.dynasty-carousel-container .slide {
+  touch-action: pan-y; /* Allow vertical scrolling but horizontal swipes will be for the carousel */
+  height: 100%;
+}
+
+/* Responsive styling */
+@media (max-width: 768px) {
+  .dynasty-carousel-container .carousel-root {
+    height: 100%;
+  }
+  
+  .dynasty-carousel-container .carousel {
+    height: 100%;
+  }
+  
+  .dynasty-carousel-container .carousel .slider-wrapper {
+    height: 100%;
+  }
+  
+  .dynasty-carousel-container .carousel .slider {
+    height: 100%;
+  }
+} 

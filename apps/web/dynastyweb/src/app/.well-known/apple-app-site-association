@@ -1,0 +1,19 @@
+{
+    "applinks": {
+        "apps": [],
+        "details": [
+            {
+                "appID": "UYC9467JJK.com.mydynastyapp.dynasty",
+                "paths": [ "/auth" ],
+                "components": [
+                    {
+                        "/": "/auth",
+                        "?": {
+                            "token": "*"
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

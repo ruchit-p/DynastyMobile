@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "Dynasty - The Family Social Media App",
+    "slug": "dynastyapp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/dynasty.png",
+    "scheme": "dynasty",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dynasty.app",
+      "googleServicesFile": "./GoogleService-Info.plist"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/dynasty.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.dynasty.app",
+      "googleServicesFile": "./google-services.json"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/dynasty.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/dynastysplash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0A3A2D"
+        }
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}

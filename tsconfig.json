@@ -1,0 +1,47 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    "lib": [
+      "esnext"
+    ],
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "moduleResolution": "node",
+    "baseUrl": ".",
+    "paths": {
+      "ui": [
+        "packages/ui/src"
+      ],
+      "ui/*": [
+        "packages/ui/src/*"
+      ],
+      "utils": [
+        "packages/utils/src"
+      ],
+      "utils/*": [
+        "packages/utils/src/*"
+      ],
+      "@/*": [
+        "apps/mobile/*"
+      ]
+    }
+  },
+  "exclude": [
+    "node_modules",
+    "**/node_modules",
+    "**/.*/",
+    "apps/web/.next",
+    "apps/web/out",
+    "apps/mobile/.expo",
+    "apps/mobile/dist"
+  ],
+  "extends": "expo/tsconfig.base"
+}

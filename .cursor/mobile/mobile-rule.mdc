@@ -1,0 +1,43 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+\
+# AI Coding Assistant Rules for Mobile (Expo/React Native) - `apps/mobile`
+
+These rules apply when working on the Expo/React Native mobile application located in `apps/mobile`.
+Always refer to the general rules in `.cursor/general/README.md` as well.
+
+## Key Technologies & Patterns
+- **Expo**: Utilize Expo SDK features and managed workflow where possible. Be mindful of `app.json` configurations.
+- **React Native**: Use React Native core components and APIs. For platform-specific code, prefer using platform-agnostic abstractions from `packages/ui` or by creating `.native.tsx` / `.ios.tsx` / `.android.tsx` files if absolutely necessary.
+- **Expo Router**: File-based routing is configured using `expo-router`. Structure new screens and layouts within the `apps/mobile/app` directory following its conventions.
+- **TypeScript**: Adhere to strong typing. Use types/interfaces from shared packages where applicable.
+- **State Management**: Identify the existing state management solution (e.g., React Context, Zustand, Redux) and use it consistently. For server state, prefer React Query or SWR if in use.
+- **Styling**: Primarily use React Native `StyleSheet.create({})`. Components from `packages/ui` should be styled in a cross-platform manner. If a specific styling library (e.g., Tailwind RN, Restyle) is in use, follow its patterns.
+- **Navigation**: Use `expo-router` for navigation. Understand stack, tab, and drawer navigators if they are part of the app structure.
+
+## Shared Code Usage
+- **UI Components**: Import from `ui` (e.g., `import { Button } from 'ui';`). These are React Native components and should work directly.
+- **Utilities/Hooks**: Import from `utils` (e.g., `import { useAuth } from 'utils';`).
+
+## Backend Interaction
+- The primary backend is Firebase, located in `apps/firebase`.
+- API calls to Firebase services (Auth, Firestore, Functions, Storage) should be encapsulated, possibly in `packages/utils/api` or `apps/mobile/hooks/api`.
+
+## Configuration
+- `package.json`: Note dependencies; workspace dependencies `ui` and `utils` are linked.
+- `babel.config.js`: Standard Expo Babel setup, likely using `metro-react-native-babel-preset`. Ensure it correctly transpiles shared packages from `node_modules` (where linked workspaces appear).
+- `tsconfig.json`: Extends the root `tsconfig.json` and has path aliases like `@/*` for `apps/mobile/*`.
+- **Metro Bundler**: Be aware of Metro specificities. If imports from shared packages fail, suggest clearing the Metro cache (`expo start -c` or `yarn mobile --clear`).
+
+## Native Modules
+- If new native functionality is required, first check if an Expo SDK package or a well-maintained community package can provide it.
+- If custom native modules are necessary, clearly document their setup for both iOS and Android.
+
+## Build & Deployment
+- EAS Build and EAS Update are likely used for building and deploying. Be mindful of configurations related to these services if making changes that affect the native build or OTA updates.
+
+## Linting and Formatting
+- ESLint and Prettier are set up. Adhere to their rules.

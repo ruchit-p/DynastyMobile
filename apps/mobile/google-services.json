@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "613996380558",
+    "project_id": "dynasty-eba63",
+    "storage_bucket": "dynasty-eba63.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:613996380558:android:b5600404fb3a269968e4df",
+        "android_client_info": {
+          "package_name": "com.mydynastyapp.dynasty"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "613996380558-8u6sub7prcm6e0dh4q5hc2pkpk1vaefp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAfcP9Zyiez7q1I9Yam0suq5v02WZutRcg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "613996380558-8u6sub7prcm6e0dh4q5hc2pkpk1vaefp.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "613996380558-kp446m62ugqkoum9jvf173qrbu0onful.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mydynastyapp.dynasty"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,40 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# AI Coding Assistant Rules for Web (Next.js) - `apps/web/dynastyweb`
+
+These rules apply when working on the Next.js web application located in `apps/web/dynastyweb`.
+Always refer to the general rules in `.cursor/general/README.md` as well.
+
+## Key Technologies & Patterns
+- **Next.js**: Utilize App Router conventions (`app/` directory, `page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`, Route Handlers).
+    - Clearly distinguish between Server Components and Client Components (`'use client';`). Explain why a component needs to be a client component.
+    - Leverage Next.js built-in optimizations (Image component, font optimization, script optimization).
+- **React Native Web**: Shared UI components from `packages/ui` are written using React Native primitives. They are rendered on the web using `react-native-web`.
+    - Ensure webpack aliases for `react-native` to `react-native-web` are respected (configured in `apps/web/dynastyweb/next.config.js`).
+    - Style components in `packages/ui` in a way that is compatible with both web and native (e.g., StyleSheet API, or a cross-platform styling library if adopted).
+- **TypeScript**: Adhere to strong typing. Use types/interfaces from shared packages where applicable.
+- **State Management**: Identify the existing state management solution (e.g., React Context, Zustand, Redux) and use it consistently. For server state, prefer React Query or SWR if in use, or Next.js\'s data fetching mechanisms.
+- **Styling**: Check for `tailwind.config.js` or other styling setup (e.g., CSS Modules, Styled Components) and follow existing patterns. The `dynasty_theme.mdc` file (now in this folder) might contain theme details.
+- **Forms**: Use a consistent approach for form handling and validation (e.g., React Hook Form with Zod).
+## Shared Code Usage
+- **UI Components**: Import from `ui` (e.g., `import { Button } from 'ui';`).
+- **Utilities/Hooks**: Import from `utils` (e.g., `import { useAuth } from 'utils';`).
+
+## Backend Interaction
+- The primary backend is Firebase, located in `apps/firebase`.
+- API calls to Firebase services (Auth, Firestore, Functions, Storage) should be encapsulated, possibly in `packages/utils/api` or `apps/web/dynastyweb/src/lib/api`.
+- If using Next.js API Routes (Route Handlers in `app/api/...`) for BFF (Backend-for-Frontend) patterns, ensure they are lean and primarily delegate to Firebase services.
+
+## Configuration
+- `next.config.js`: Contains configurations for `react-native-web` alias and `transpilePackages: ['ui', 'utils']`. Be mindful of this when working with shared packages.
+- `tsconfig.json`: Extends the root `tsconfig.json` and has path aliases like `@/*` for `apps/web/dynastyweb/src/*`.
+
+## Linting and Formatting
+- ESLint and Prettier are set up. Adhere to their rules (can be run via root `package.json` scripts or IDE integrations).
+
+## Specific File Context
+- `nextjs_use_server.mdc`: (Now in this folder) This file likely contains guidance on using Next.js server features. Refer to it for server-side logic.
+- `dynasty_theme.mdc`: (Now in this folder) Contains project theme information. Use these values for consistent styling. 

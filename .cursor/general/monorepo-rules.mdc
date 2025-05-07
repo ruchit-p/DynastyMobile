@@ -1,0 +1,75 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# General AI Coding Assistant Rules for Dynasty Monorepo
+
+These rules apply to all interactions within the Dynasty Monorepo.
+
+## Core Philosophy
+- **Efficiency First**: Write concise code without sacrificing readability or maintainability.
+- **Think Like a Pro**: Approach tasks with the mindset of a senior developer or a 10x engineer.
+- **Complete the Task**: Do not stop working until the user request is fully complete and satisfies all requirements.
+- **Thorough Analysis**:
+    - Fully describe the request and all available options.
+    - Reason through all options by weighing pros and cons.
+    - Choose the best solution based on a well-thought-out analysis.
+    - **DO NOT JUMP TO CONCLUSIONS**. Systematically analyze the problem and the existing codebase.
+
+## Monorepo Structure Awareness
+- This is a Yarn Workspaces monorepo.
+- **Shared Code**:
+    - UI components are in `packages/ui`. These are React Native components, usable in web via `react-native-web`.
+    - Utilities, hooks, API clients are in `packages/utils`.
+- **Applications**:
+    - Web app (Next.js) is in `apps/web/dynastyweb`.
+    - Mobile app (Expo/React Native) is in `apps/mobile`.
+    - Firebase backend is in `apps/firebase`.
+- Always consider if new functionality can be placed in shared packages.
+
+## Code Standards
+- **Organization**:
+    - Use `// MARK:` to organize sections of code, especially in larger files.
+    - Maintain and preserve existing comments unless they are outdated or trivial.
+    - Document complex logic and business rules explicitly.
+- **Documentation**:
+    - Use `///` for documentation comments for public interfaces (functions, classes, types).
+    - Include parameter and return descriptions for all public methods.
+- **Inline Comments**:
+    - Use inline comments (`//`) to explain complex logic and highlight significant decisions.
+    - Clearly document business rules and reasoning.
+- **Special Comments**:
+    - Use `// TODO:` for areas requiring future improvements, with a brief explanation.
+    - Use `// FIXME:` for known issues or temporary workarounds, with a brief explanation.
+
+## Error Handling & Testing
+- **Error Handling**:
+    - Include proper error handling mechanisms (e.g., try-catch blocks, input validation, discriminated unions for return types).
+    - Explicitly document potential errors and edge cases.
+- **Testing**:
+    - Provide basic unit test examples for critical functions or logic using the project\'s testing framework (assume Jest or Vitest if not specified, check existing tests).
+    - Include mock data or test cases to facilitate integration and verification.
+## Security
+- **Secure Code Practices**:
+    - Avoid exposing sensitive information in code (e.g., API keys, tokens). Use environment variables.
+    - Highlight and mitigate potential security risks (e.g., XSS, CSRF, data exposure).
+- **Data Privacy**:
+    - Adhere to user data protection standards. Avoid storing or processing sensitive user data unnecessarily.
+
+## Scalability & Performance
+- **Scalable Solutions**: Design code to handle future growth in data and usage.
+- **Performance Optimization**: Use efficient algorithms and data structures. Optimize database queries, API calls, and rendering performance.
+
+## Workflow & Communication
+- **Gather Context**: Analyze the existing file structure, `package.json` files, and relevant code before generating new code. Use available tools to gather context.
+- **Clarity**: Clearly explain the purpose and functionality of the code. Highlight any assumptions made.
+- **Options & Feedback**: Provide options for ambiguous requirements and seek user confirmation if necessary. Incorporate user feedback.
+- **Step-by-Step Thinking**: For complex tasks, outline your plan or thinking process before generating code.
+- **Thorough Research**: If unsure about best practices for a specific technology or pattern, state this and suggest performing a search or refer to official documentation.
+
+## Version Control
+- **Commit Messages**: Suggest appropriate, conventional commit messages (e.g., `feat: ...`, `fix: ...`, `chore: ...`).
+- **Logical Commits**: Indicate logical separation of commits.
+
+Remember to consult platform-specific rules in `.cursor/web/README.md`, `.cursor/mobile/README.md`, and `.cursor/backend/README.md` when working within those contexts. 

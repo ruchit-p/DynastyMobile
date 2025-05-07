@@ -1,0 +1,178 @@
+---
+description: Guidelines for creating and organizing Cursor rules
+globs: **/*.mdc
+alwaysApply: false
+---
+# Specify the following for Cursor rules
+description: Guidelines for creating and organizing Cursor rules
+globs: "**/*.mdc"
+---
+
+# Cursor Rules Guide
+
+## Overview
+
+Cursor rules are configuration files that provide AI-assisted coding guidance for specific technologies, frameworks, and patterns in your codebase. Properly structured rules enable the AI to follow your project's standards and best practices consistently.
+
+## 🚨 CRITICAL REQUIREMENTS 🚨
+
+1. All rules **MUST** be stored in the `.cursor/rules/` directory with the `.mdc` extension
+2. All rules **MUST** include the proper frontmatter (metadata at the top)
+3. Rules **MUST** use descriptive filenames that match their purpose (e.g., `nextjs_middleware.mdc`)
+4. All rules **MUST** specify the correct file globs to target relevant files
+
+## Rule File Structure
+
+Every rule file must follow this structure:
+
+```markdown
+# Specify the following for Cursor rules
+description: Brief explanation of what the rule covers
+globs: "glob patterns for files to which this rule applies"
+---
+
+# Title of the Rule
+
+## Overview
+
+A brief introduction explaining the purpose and importance of this rule.
+
+## 🚨 CRITICAL RULES 🚨
+
+List the most important guidelines that must be followed.
+
+## Sections with Examples
+
+Add relevant sections with code examples.
+
+## Best Practices
+
+List recommended practices.
+
+## Common Patterns/Anti-Patterns
+
+Show proper usage patterns and things to avoid.
+```
+
+## Creating Rule Files
+
+### Step 1: Rule Naming and Location
+
+1. Create your rule files in the `.cursor/rules/` directory
+2. Name your rule according to what it covers, using the following format:
+   - Framework/technology followed by feature (e.g., `nextjs_authentication.mdc`)
+   - Use lowercase and underscores
+   - Make names clear and specific
+
+### Step 2: Frontmatter (Required)
+
+Every rule must begin with properly formatted frontmatter:
+
+```markdown
+# Specify the following for Cursor rules
+description: One-line description of the rule's purpose
+globs: "**/*.ts, **/*.tsx, **/*.js, **/*.jsx"
+---
+```
+
+The `globs` field defines which files this rule applies to. Example glob patterns:
+- `"**/*.ts, **/*.tsx"` - All TypeScript files
+- `"src/components/**/*.tsx"` - Only TypeScript components in the components directory
+- `"app/**/page.tsx"` - Only Next.js page components
+
+### Step 3: Structure the Content
+
+Organize your rule content with these recommended sections:
+
+1. **Title**: Main heading that names the rule
+2. **Overview**: Brief explanation of what the rule covers
+3. **Critical Rules**: Most important guidelines (marked with 🚨)
+4. **Examples**: Code examples showing proper implementation
+5. **Best Practices**: Recommended approaches
+6. **Common Patterns**: Typical usage patterns
+
+### Step 4: Format Code Examples
+
+Use proper Markdown code blocks with language specifiers:
+
+````markdown
+```typescript
+// Example code here
+function example() {
+  return true;
+}
+```
+````
+
+## Best Practices for Rule Creation
+
+1. **Be specific and clear** in your guidelines
+2. **Include practical examples** that demonstrate proper usage
+3. **Highlight critical rules** that should never be broken
+4. **Use consistent formatting** across all rules
+5. **Keep rules focused** on a single topic or concern
+6. **Update rules** when best practices change
+7. **Reference official documentation** where appropriate
+
+## Rule Organization
+
+When you have multiple rules in the `.cursor/rules/` directory, organize them by technology or framework:
+
+- `nextjs_*.mdc` - Next.js specific rules
+- `react_*.mdc` - React specific rules
+- `typescript_*.mdc` - TypeScript specific rules
+
+This naming scheme helps maintain clarity when you have many rules.
+
+## Testing Your Rules
+
+After creating a rule:
+
+1. Ensure it's in the `.cursor/rules/` directory
+2. Verify the frontmatter is correctly formatted
+3. Check that the glob patterns target the intended files
+4. Ask your AI assistant to fetch the rule to confirm it works
+
+## Example of a Complete Rule
+
+Here's a minimal example of a properly formatted rule:
+
+```markdown
+# Specify the following for Cursor rules
+description: Guidelines for React component naming conventions
+globs: "**/*.tsx, **/*.jsx"
+---
+
+# React Component Naming
+
+## Overview
+
+Consistent component naming is essential for maintainable React applications.
+
+## 🚨 CRITICAL RULES 🚨
+
+1. Component names MUST use PascalCase
+2. Component filenames MUST match the component name
+
+## Examples
+
+```tsx
+// Good: Button.tsx
+export default function Button() {
+  return <button>Click me</button>;
+}
+
+// Bad: button.tsx
+export default function button() {
+  return <button>Click me</button>;
+}
+```
+
+## Best Practices
+
+1. Use descriptive names that indicate the component's purpose
+2. Prefix form components with "Form" (e.g., FormInput)
+3. Use consistent naming patterns across the codebase
+```
+
+Remember that well-crafted rules make your AI assistant more effective at following your project's specific standards and requirements. 

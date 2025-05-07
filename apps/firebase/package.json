@@ -1,0 +1,11 @@
+{
+  "name": "dynasty-firebase",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "emulator:start": "firebase emulators:start --import=./emulator-data --export-on-exit",
+    "emulator:export": "firebase emulators:export ./emulator-data",
+    "emulator:clean": "rm -rf ./emulator-data",
+    "dev": "npm run emulator:start"
+  }
+} 

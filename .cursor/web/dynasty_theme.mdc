@@ -1,0 +1,39 @@
+---
+description: Dynasty's Color Profile and Them
+globs: *.tsx,*.ts,*.js,*.jsx
+alwaysApply: true
+---
+Dynasty's Color Profile and Theme
+
+Primary Colors
+Deep Forest Green (
+#0A5C36): The dominant brand color used for:
+
+The logo text
+Primary buttons and actions
+Section accents and highlights
+Icons and interactive elements
+Gold/Amber (
+#C4A55C): A complementary accent color used for:
+
+Secondary buttons
+Special highlights and accents
+Theme Characteristics
+Nature-Inspired: The forest green primary color evokes growth, heritage, and connection to roots - perfect for a family history/genealogy application.
+
+Elegant and Traditional: The combination of deep green with gold accents creates a sense of heritage, tradition, and timelessness - appropriate for an application focused on preserving family history.
+
+Clean Interface: The app uses:
+
+White backgrounds (for cards and primary content areas)
+Light gray (
+#F9FAFB) for page backgrounds
+Gray text for secondary information
+The green and gold for emphasis and interaction points
+Design Language:
+
+Rounded corners (border radius variables)
+Subtle shadows for depth
+Consistent spacing
+Thoughtful typography with clear hierarchy
+Responsive Design: The UI adapts gracefully to different screen sizes while maintaining the color scheme.

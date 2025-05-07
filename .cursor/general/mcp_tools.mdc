@@ -1,0 +1,126 @@
+---
+description: Guidelines for using MCP server tools for problem-solving and data retrieval
+globs: **/*.ts, **/*.tsx, **/*.js, **/*.jsx
+alwaysApply: true
+---
+# Specify the following for Cursor rules
+description: Guidelines for using MCP server tools for problem-solving and data retrieval
+globs: "**/*.ts, **/*.tsx, **/*.js, **/*.jsx"
+---
+
+# MCP Server Tools Usage
+
+## Overview
+
+The Model Context Protocol (MCP) servers provide powerful tools for accessing databases, searching the web, implementing sequential thinking methodology, and performing filesystem operations. This rule provides guidelines for effectively using these tools when solving problems or generating solutions.
+
+## MCP Servers Available
+
+### 1. Sequential Thinking
+
+The Sequential Thinking tool helps break down complex problems into manageable steps through a structured thinking process.
+
+#### When to Use:
+- For complex problem-solving tasks
+- When designing system architecture
+- When planning implementation strategies
+- When debugging complex issues
+- When you need to maintain context over multiple reasoning steps
+
+#### Key Features:
+- Breaks problems into sequential steps
+- Allows for revising previous thoughts
+- Maintains context throughout the reasoning process
+- Enables branching into alternative solutions
+- Helps generate and verify hypotheses
+
+### 4. Browser Tools MCP
+
+The Browser Tools MCP server provides direct access to browser functionality, allowing you to interact with the browser environment, inspect elements, capture screenshots, and monitor console activity. All screenshots are automatically saved in the `/debugging` folder for reference and documentation.
+
+#### When to Use:
+- When debugging UI issues and layout problems
+- To capture screenshots of the current browser state
+- To inspect DOM elements and their properties
+- To check console logs and errors
+- To monitor network activity
+
+## Start server command: 
+- npx @agentdeskai/browser-tools-server
+
+#### Key Features:
+- **mcp__takeScreenshot**: Captures the current browser view and saves it to the /debugging folder
+- **mcp__getConsoleLogs**: Retrieves console logs for debugging
+- **mcp__getConsoleErrors**: Retrieves console error messages
+- **mcp__getNetworkErrorLogs**: Monitors network error responses
+- **mcp__getNetworkSuccessLogs**: Monitors successful network responses
+- **mcp__getSelectedElement**: Retrieves information about the currently selected DOM element
+- **mcp__wipeLogs**: Clears console and log data
+
+#### Usage Example:
+```javascript
+// Take a screenshot of the current browser view (saved in /debugging folder)
+mcp__takeScreenshot("screenshot_name")
+
+// Get browser console errors
+mcp__getConsoleErrors("error_check")
+
+// Get the currently selected DOM element
+mcp__getSelectedElement("element_check")
+```
+```
+
+You should also update the "Best Practices" and "When Debugging" sections to include these references:
+
+```markdown
+4. **Leverage Browser Tools for UI Debugging**:
+   - Take screenshots to document the current UI state (saved in /debugging folder)
+   - Use console logs to track runtime behavior
+   - Inspect selected elements to understand layout issues
+   - Monitor network activity to identify API call issues
+```
+
+```markdown
+4. **Leverage Browser Tools for UI Debugging**:
+   - Take screenshots to document the current UI state (saved in /debugging folder)
+   - Use console logs to track runtime behavior
+   - Inspect selected elements to understand layout issues
+   - Monitor network activity to identify API call issues
+```
+
+
+
+## Best Practices
+
+1. **Start with Database Understanding**:
+   - Before implementing features, query the relevant database schemas to understand data structure
+   - Use the results to inform your implementation decisions
+
+2. **Enhance with Current Information**:
+   - Use brave_web_search to get the most current information on technologies and best practices
+   - Verify that your implementation aligns with latest standards
+
+3. **Apply Structured Problem-Solving**:
+   - For complex tasks, use sequentialthinking to break down the problem
+   - Start with an outline of steps
+   - Revise thinking as you gather more information
+   - Generate alternative approaches when needed
+
+4. **Leverage Filesystem Access**:
+   - Use file search to find patterns across the codebase
+   - Read files to understand implementation details without interrupting the workflow
+   - Analyze project structure to better understand architecture
+
+5. **Combine Tools for Comprehensive Solutions**:
+   - Query database → Research with Brave → Apply sequential thinking → Analyze filesystem → Implement solution
+   - Use database queries to inform your web searches
+   - Use web search results to refine your sequential thinking
+   - Use filesystem analysis to guide implementation
+
+6. **When Debugging**:
+   - Query database to understand the current state
+   - Use sequential thinking to trace through the problem
+   - Search for similar issues and solutions online
+   - Examine related files to understand code context
+
+7. **UI Validation**: Take screenshots to document changes (saved to /debugging folder)

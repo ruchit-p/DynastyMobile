@@ -1,0 +1,536 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    
+    /* Dynasty theme colors */
+    --dynasty-green: 145 78% 20%; /* #0A5C36 - Deep Forest Green */
+    --dynasty-gold: #ffb81f; /* #ffb81f - Gold/Amber */
+    --dynasty-bg-light: 220 14% 98%; /* #F9FAFB - Light gray background */
+    
+    /* Updated primary colors to match Dynasty theme */
+    --primary: 145 78% 20%; /* #0A5C36 - Deep Forest Green */
+    --primary-foreground: 0 0% 100%; /* White text on primary */
+    --secondary-foreground: 0 0% 20%; /* Dark text on secondary */
+    
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent-foreground: 0 0% 20%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 145 78% 20%; /* Deep Forest Green for focus rings */
+    --radius: 0.5rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 145 78% 20%; /* Deep Forest Green for sidebar primary */
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 145 78% 20%; /* Deep Forest Green for sidebar ring */
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    
+    /* Dynasty theme colors - dark mode adjustments */
+    --dynasty-green: 145 65% 15%; /* Darker Deep Forest Green for dark mode */
+    --dynasty-gold: 42 38% 46%; /* Darker Gold/Amber for dark mode */
+    --dynasty-bg-light: 220 14% 10%; /* Dark background */
+    
+    --primary: 145 65% 15%; /* Darker Deep Forest Green for dark mode */
+    --primary-foreground: 0 0% 98%;
+    --secondary: 42 38% 46%; /* Darker Gold/Amber for dark mode */
+    --secondary-foreground: 0 0% 98%;
+    
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 42 38% 46%; /* Dark Gold accent */
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 145 60% 25%; /* Adjusted ring color for dark mode */
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 145 60% 25%; /* Adjusted sidebar primary for dark mode */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 145 60% 25%; /* Adjusted sidebar ring for dark mode */
+  }
+}
+
+/* MARK: - CSS Reset & Base Styles */
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  color: var(--text-color);
+  background: var(--background-color);
+}
+
+/* MARK: - Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 0.5em;
+}
+
+p {
+  line-height: 1.6;
+  margin-bottom: 1em;
+}
+
+/* MARK: - Links */
+a {
+  color: var(--primary-color);
+  text-decoration: none;
+  transition: color var(--transition-speed) ease;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* MARK: - Utility Classes */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.gap-2 {
+  gap: 0.5rem;
+}
+
+.gap-4 {
+  gap: 1rem;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.rounded {
+  border-radius: var(--border-radius);
+}
+
+.shadow {
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+}
+
+.transition {
+  transition: all var(--transition-speed) ease;
+}
+
+/* MARK: - Custom Family Tree Styles */
+.family-tree-container {
+  padding: 2rem;
+  overflow: auto;
+  min-height: 100vh;
+  background: #ffffff;
+  display: flex;
+  justify-content: center;
+  overscroll-behavior: none; /* Prevent pull-to-refresh */
+  -webkit-overscroll-behavior: none; /* For iOS Safari */
+}
+
+.tree-wrapper {
+  margin: 2rem auto;
+  padding: 1rem;
+  touch-action: none; /* Disable browser handling of all panning and zooming gestures */
+}
+
+/* Mobile touch optimization */
+@media (max-width: 768px) {
+  body.family-tree-page {
+    overscroll-behavior: none;
+    touch-action: manipulation; /* Improve touch responsiveness */
+    height: 100%;
+    position: fixed;
+    width: 100%;
+  }
+  
+  .family-tree-container {
+    padding: 1rem;
+    touch-action: manipulation;
+  }
+}
+
+.family-node {
+  position: absolute;
+  cursor: pointer;
+  transition: all var(--transition-speed) ease;
+}
+
+.node-card {
+  width: 100%;
+  height: 100%;
+  padding: 0.75rem;
+  border-radius: 4px;
+  background: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: all var(--transition-speed) ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+}
+
+.node-card.male {
+  background: #ebf5ff;
+  border-color: #bfdbfe;
+}
+
+.node-card.female {
+  background: #fdf2f8;
+  border-color: #fbcfe8;
+}
+
+.node-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.25rem;
+}
+
+.node-id {
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: var(--text-color);
+}
+
+.node-gender {
+  font-size: 0.75rem;
+  color: var(--secondary-color);
+}
+
+.node-subtree-indicator {
+  font-size: 0.75rem;
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.family-node:hover .node-card {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* MARK: - Responsive Design */
+@media (max-width: 768px) {
+  .container {
+    padding: 0 0.5rem;
+  }
+  
+  html {
+    font-size: 14px;
+  }
+}
+
+/* MARK: - Accessibility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Hide Firebase emulator warning bar */
+.firebase-emulator-warning {
+  display: none !important;
+}
+
+/* Also hide any elements with text containing "Running in emulator mode" that aren't our custom indicator */
+div[style*="position: fixed"][style*="bottom: 0"] {
+  display: none !important;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* MARK: - Landing Page Animations */
+/* Landing page section padding */
+.section-padding {
+  padding-top: 5rem;
+  padding-bottom: 5rem;
+}
+
+@media (min-width: 768px) {
+  .section-padding {
+    padding-top: 6rem;
+    padding-bottom: 6rem;
+  }
+}
+
+/* Animation classes */
+.animate-fade-in {
+  animation: fadeIn 0.8s ease forwards;
+}
+
+.animate-slide-up {
+  opacity: 0;
+  transform: translateY(30px);
+  animation: slideUp 0.8s ease forwards;
+}
+
+.animate-slide-down {
+  opacity: 0;
+  transform: translateY(-30px);
+  animation: slideDown 0.8s ease forwards;
+}
+
+.animate-scale-in {
+  opacity: 0;
+  transform: scale(0.90);
+  animation: scaleIn 0.6s ease forwards;
+}
+
+/* Card hover effect */
+.card-hover {
+  transition: all 0.3s ease-in-out;
+}
+
+.card-hover:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+  border-color: rgba(10, 92, 54, 0.2);
+}
+
+/* Animation keyframes */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.90);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Dynasty custom color classes */
+.text-dynasty-green {
+  color: #0A5C36;
+}
+
+.bg-dynasty-green {
+  background-color: #0A5C36;
+}
+
+.text-dynasty-gold {
+  color: #C4A55C;
+}
+
+.bg-dynasty-gold {
+  background-color: #C4A55C;
+}
+
+.text-dynasty-neutral-dark {
+  color: #4B5563;
+}
+
+.text-dynasty-neutral-light {
+  color: #E5E7EB;
+}
+
+.bg-dynasty-neutral-lightest {
+  background-color: #F9FAFB;
+}
+
+.bg-dynasty-neutral-darkest {
+  background-color: #111827;
+}
+
+.border-dynasty-neutral {
+  border-color: #E5E7EB;
+}
+
+.text-dynasty-neutral-darkest {
+  color: #111827;
+}
+
+.text-dynasty-neutral {
+  color: #9CA3AF;
+}
+
+.bg-dynasty-green-light {
+  background-color: rgba(10, 92, 54, 0.05);
+}
+
+.text-dynasty-green-dark {
+  color: #074326;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.bg-dynasty-gold-light {
+  background-color: rgba(196, 165, 92, 0.1);
+}
+
+.text-dynasty-gold-dark {
+  color: #A38449;
+}
+
+/* Message area custom scrollbar */
+.message-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.message-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.message-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+}
+
+.message-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Message bubble animations */
+@keyframes message-appear {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-bubble {
+  animation: message-appear 0.3s ease-out;
+}
+
+/* Typing indicator animation */
+@keyframes typing-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-4px);
+  }
+}
+
+.typing-dot:nth-child(1) {
+  animation: typing-dot 1.5s infinite 0s;
+}
+
+.typing-dot:nth-child(2) {
+  animation: typing-dot 1.5s infinite 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation: typing-dot 1.5s infinite 0.4s;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .conversation-slide-enter {
+    transform: translateX(100%);
+  }
+
+  .conversation-slide-enter-active {
+    transform: translateX(0);
+    transition: transform 0.3s ease-out;
+  }
+
+  .conversation-slide-exit {
+    transform: translateX(0);
+  }
+
+  .conversation-slide-exit-active {
+    transform: translateX(100%);
+    transition: transform 0.3s ease-in;
+  }
+} 
