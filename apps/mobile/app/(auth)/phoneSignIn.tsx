@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   StyleSheet,
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   SafeAreaView,
   Platform,
@@ -15,71 +14,51 @@ import { useRouter, Link, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
-import { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import RNPhoneInput from 'react-native-phone-number-input';
 
 // It's good practice to use a library for phone number input and formatting
 // For simplicity, using a basic TextInput here. Consider `react-native-phone-number-input`.
 
 const dynastyLogo = require('../../assets/images/dynasty.png');
 
+// Explicitly cast the component type
+const PhoneInput = RNPhoneInput as any;
+
 export default function PhoneSignInScreen() {
   const router = useRouter();
   const { signInWithPhoneNumber, isLoading } = useAuth();
-  const [phoneNumber, setPhoneNumber] = useState(''); // E.g., ' +1 650-555-3434'
+  const [value, setValue] = useState("");
+  const [formattedValue, setFormattedValue] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
+  const phoneInputRef = useRef<RNPhoneInput>(null);
 
   const handleSendOtp = async () => {
     setError(null);
-    if (!phoneNumber.trim()) {
-      setError('Please enter your phone number.');
+    const checkValid = phoneInputRef.current?.isValidNumber(value);
+    if (!checkValid) {
+      setError('Please enter a valid phone number.');
       return;
-    }
-    // Basic validation: ensure it starts with + and has some digits. 
-    // A proper library would handle this much better.
-    if (!phoneNumber.startsWith('+') || phoneNumber.length < 10) {
-        setError('Please enter a valid phone number with country code (e.g., +1 XXX-XXX-XXXX).');
-        return;
     }
 
     try {
-      const confirmationResult = await signInWithPhoneNumber(phoneNumber);
+      const confirmationResult = await signInWithPhoneNumber(formattedValue);
       if (confirmationResult) {
-        // Navigate to OTP screen, passing the confirmation object is tricky with expo-router params directly.
-        // One way is to store it temporarily in context (less ideal) or use a more robust state management.
-        // For now, we rely on the AuthContext to hold it if it chose to do so, or we manage it via screen props in a stack if not using AuthContext state for this.
-        // Since we removed it from context state, we should pass what's necessary or re-fetch if that's the pattern.
-        // Let's assume for now router can pass simple params, and for complex objects, alternative state management needed.
-        // For this flow, `signInWithPhoneNumber` in context returns confirmation, but it's better for the OTP screen to get it.
-        // A common pattern is for `signInWithPhoneNumber` to return the confirmation, and then this screen navigates with it.
-        // To simplify, we'll navigate and the OTP screen will have to re-trigger or get it. This is not ideal but fits current context structure.
-        // router.push({ pathname: '/(auth)/verifyOtp', params: { phoneNumber } }); // Pass phone number to OTP screen.
-
-        // A better approach if confirmation object is complex: It needs to be available to the next screen.
-        // For this example, let's assume the AuthContext can hold the confirmation object or we manage it.
-        // If the confirmation object is to be passed, it CANNOT be directly in router.push params as it's a complex object.
-        // Instead, we can make the confirmation object available via a temporary state in AuthContext or another global state.
-
-        // For now, let's use the fact that `signInWithPhoneNumber` returns the confirmation object.
-        // We need a way for `verifyOtp.tsx` to access this `confirmationResult`.
-        // The easiest way *without* global state for *this specific object* is to pass it if router supports it, otherwise, manage in parent or context.
-        // Expo Router can pass serializable params. `FirebaseAuthTypes.ConfirmationResult` is NOT serializable.
-
-        // Option 1: Store confirmation in a temporary state accessible by VerifyOtpScreen (e.g., parent component or a new context)
-        // Option 2: The AuthContext can have a field `currentPhoneAuthConfirmation` (we removed this direct approach earlier for cleanliness)
-        // Option 3: Re-architect slightly. For now, let's proceed simply by navigating and the verify screen will prompt for OTP.
-        // The `confirmPhoneCode` function in AuthContext takes the confirmation result. This means it must be available.
-        
-        // Let's go with storing it in AuthContext temporarily. We need to re-add that state to AuthContext.
-        // (Going back to add `phoneConfirmation` state and `setPhoneConfirmation` to AuthContext value for this flow)
-        // Then the VerifyOtp screen can retrieve it.
-        router.push({ pathname: '/(auth)/verifyOtp', params: { phoneNumberSent: phoneNumber } });
-
+        router.push({ pathname: '/(auth)/verifyOtp', params: { phoneNumberSent: formattedValue } });
       } else {
         setError("Could not initiate phone sign-in. Please try again.");
       }
     } catch (e: any) {
       console.error("Phone Sign-In failed from screen:", e);
-      setError(e.message || "Failed to send OTP.");
+      if (e.code === 'auth/invalid-phone-number') {
+        setError('The phone number is not valid. Please check and try again.');
+      } else if (e.message.includes('TOO_SHORT')) {
+        setError('The phone number is too short. Please enter a valid number.');
+      }
+      else {
+        setError(e.message || "Failed to send OTP. Please try again.");
+      }
     }
   };
 
@@ -87,24 +66,39 @@ export default function PhoneSignInScreen() {
     <SafeAreaView style={styles.safeArea}>
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar style={Platform.OS === 'ios' ? 'dark' : 'light'} />
+
+      <TouchableOpacity 
+        onPress={() => router.back()} 
+        style={[styles.backButton, { top: insets.top + 5 }]}
+      >
+        <Ionicons name="arrow-back" size={28} color="#1A4B44" />
+      </TouchableOpacity>
+
       <View style={styles.container}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1A4B44" />
-        </TouchableOpacity>
         <Image source={dynastyLogo} style={styles.logo} resizeMode="contain" />
         <Text style={styles.title}>Enter Your Phone Number</Text>
-        <Text style={styles.subtitle}>We'll send you a verification code.</Text>
+        <Text style={styles.subtitle}>We&apos;ll send you a verification code.</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Phone Number (e.g., +14155552671)"
-          placeholderTextColor="#888"
-          value={phoneNumber}
-          onChangeText={setPhoneNumber}
-          keyboardType="phone-pad"
-          autoComplete="tel"
-          textContentType="telephoneNumber"
-        />
+        <PhoneInput
+            ref={phoneInputRef}
+            defaultValue={value}
+            defaultCode="US"
+            layout="first"
+            onChangeText={(text: string) => {
+              setValue(text);
+            }}
+            onChangeFormattedText={(text: string) => {
+              setFormattedValue(text);
+            }}
+            containerStyle={styles.phoneInputContainer}
+            textContainerStyle={styles.phoneInputTextContainer}
+            textInputStyle={styles.phoneInputTextInput}
+            codeTextStyle={styles.phoneInputCodeText}
+            flagButtonStyle={styles.phoneInputFlagButton}
+            withDarkTheme={false}
+            withShadow
+            autoFocus
+          />
 
         {error && <Text style={styles.errorText}>{error}</Text>}
 
@@ -150,9 +144,9 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 40,
-    left: 25,
+    left: 20,
     zIndex: 1,
+    padding: 10,
   },
   logo: {
     width: 100, 
@@ -172,16 +166,33 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     textAlign: 'center',
   },
-  input: {
+  phoneInputContainer: {
     width: '100%',
     height: 50,
     backgroundColor: '#F0F0F0',
     borderRadius: 8,
-    paddingHorizontal: 15,
-    fontSize: 16,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: '#E0E0E0',
+  },
+  phoneInputTextContainer: {
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    borderRadius: 8,
+  },
+  phoneInputTextInput: {
+    height: 48,
+    fontSize: 16,
+    color: '#000000',
+  },
+  phoneInputCodeText: {
+    fontSize: 16,
+  },
+  phoneInputFlagButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 60,
   },
   button: {
     width: '100%',

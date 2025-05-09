@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
 import { auth, functions, db } from '../../src/lib/firebase'; // Added db for Firestore
 import RNAuth, { FirebaseAuthTypes } from '@react-native-firebase/auth'; // Import default for auth providers
 import { useRouter, useSegments } from 'expo-router';
@@ -36,6 +36,7 @@ interface AuthContextType {
   signInWithPhoneNumber: (phoneNumber: string) => Promise<FirebaseAuthTypes.ConfirmationResult | null>;
   confirmPhoneCode: (phoneNumber: string, code: string) => Promise<void>;
   phoneAuthConfirmation: FirebaseAuthTypes.ConfirmationResult | null;
+  setPhoneAuthConfirmation: React.Dispatch<React.SetStateAction<FirebaseAuthTypes.ConfirmationResult | null>>;
   resendVerificationEmail: () => Promise<void>;
   confirmEmailVerificationLink: (uid: string, token: string) => Promise<void>;
   refreshUser: () => Promise<void>; // Added for manual refresh
@@ -331,45 +332,51 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signInWithPhoneNumber = async (phoneNumber: string): Promise<FirebaseAuthTypes.ConfirmationResult | null> => {
     setIsLoading(true);
+    console.log(`AuthContext: Initiating phone sign-in for ${phoneNumber}`);
     try {
-      console.log(`Requesting OTP for phone number: ${phoneNumber}`);
-      const confirmation = await auth.signInWithPhoneNumber(phoneNumber);
+      const confirmation = await RNAuth().signInWithPhoneNumber(phoneNumber);
       setPhoneAuthConfirmation(confirmation);
-      console.log('OTP Sent, confirmation result stored in context.');
+      console.log(`AuthContext: OTP Sent to ${phoneNumber}. Confirmation pending.`);
+      setIsLoading(false);
       return confirmation;
     } catch (error: any) {
-      console.error('Error sending OTP:', error);
+      console.error("AuthContext: Error during signInWithPhoneNumber", error);
       setPhoneAuthConfirmation(null);
-      throw error;
-    } finally {
       setIsLoading(false);
+      throw error;
     }
   };
 
   const confirmPhoneCode = async (phoneNumber: string, code: string) => {
-    if (!phoneAuthConfirmation) {
-      console.error('No phone auth confirmation available to verify code.');
-      throw new Error('Verification process not initiated or expired. Please try sending OTP again.');
-    }
     setIsLoading(true);
+    console.log(`AuthContext: Confirming OTP ${code} for ${phoneNumber}`);
+    if (!phoneAuthConfirmation) {
+      setIsLoading(false);
+      console.error("AuthContext: phoneAuthConfirmation is null. Cannot confirm code.");
+      throw new Error("Verification session expired or not found. Please request a new OTP.");
+    }
+
     try {
       const userCredential = await phoneAuthConfirmation.confirm(code);
-      setPhoneAuthConfirmation(null);
+      console.log(`AuthContext: Phone OTP confirmed. Firebase User UID: ${userCredential?.user?.uid}`);
 
       if (userCredential && userCredential.user) {
         const firebaseUser = userCredential.user;
+        console.log(`AuthContext: Calling handlePhoneSignIn cloud function for UID: ${firebaseUser.uid}`);
         const handlePhoneSignInFn = functions.httpsCallable('handlePhoneSignIn');
-        await handlePhoneSignInFn({
-          uid: firebaseUser.uid,
-          phoneNumber: phoneNumber,
-        });
-        console.log('handlePhoneSignIn cloud function called successfully.');
+        
+        const result = await handlePhoneSignInFn({ uid: firebaseUser.uid, phoneNumber: phoneNumber });
+        console.log('AuthContext: handlePhoneSignIn cloud function result:', result.data);
+
+        await fetchFirestoreUserData(firebaseUser.uid);
+      } else {
+        throw new Error("Failed to confirm OTP: No user credential received.");
       }
+      setPhoneAuthConfirmation(null);
     } catch (error: any) {
-      console.error('Error confirming OTP:', error);
-      throw error;
-    } finally {
+      console.error("AuthContext: Error during confirmPhoneCode", error);
       setIsLoading(false);
+      throw error;
     }
   };
 
@@ -384,6 +391,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       signInWithPhoneNumber,
       confirmPhoneCode,
       phoneAuthConfirmation,
+      setPhoneAuthConfirmation,
       resendVerificationEmail,
       confirmEmailVerificationLink,
       refreshUser
