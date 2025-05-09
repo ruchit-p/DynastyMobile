@@ -1,8 +1,25 @@
 {
   "expo": {
-    "entryPoint": "./apps/mobile/index.js"
-  },
-  "ios": {
-    "bundleIdentifier": "com.ruchitp79.dynasty-monorepo"
+    "name": "DynastyMobileApp",
+    "slug": "dynastymobileapp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "entryPoint": "./apps/mobile/index.js",
+    "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-google-signin/google-signin"
+    ],
+    "ios": {
+      "bundleIdentifier": "com.ruchitp79.dynasty-monorepo",
+      "googleServicesFile": "./apps/mobile/GoogleService-Info.plist",
+      "supportsTablet": true
+    },
+    "android": {
+      "googleServicesFile": "./apps/mobile/google-services.json",
+      "package": "com.ruchitp79.dynastymonorepo"
+    }
   }
 }

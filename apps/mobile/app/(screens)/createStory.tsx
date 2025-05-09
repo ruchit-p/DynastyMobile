@@ -11,8 +11,8 @@ import {
   Image,
   Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useNavigation } from 'expo-router';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter, useNavigation, Stack } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 
 const CreateStoryScreen = () => {
@@ -116,6 +116,27 @@ const CreateStoryScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <Stack.Screen
+        options={{
+          title: 'Create Story',
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: Platform.OS === 'ios' ? 10 : 0, padding: 5 }}>
+              <Ionicons name="arrow-back" size={28} color="#1A4B44" />
+            </TouchableOpacity>
+          ),
+          headerRight: () => (
+            <TouchableOpacity onPress={handlePostStory} style={{ marginRight: 15 }}>
+              <Text style={styles.postButtonTextNavigator}>Post</Text>
+            </TouchableOpacity>
+          ),
+          headerTitleAlign: 'center',
+          headerStyle: { backgroundColor: '#FFFFFF' }, // White background for header
+          headerTintColor: '#1A4B44', // Dark green for title and items
+          headerTitleStyle: { fontWeight: '600', fontSize: 18, color: '#1A4B44' },
+          headerBackTitleVisible: false,
+          headerShadowVisible: false, // Remove header shadow
+        }}
+      />
       <ScrollView 
         style={styles.container} 
         contentContainerStyle={styles.scrollContentContainer}
@@ -132,11 +153,11 @@ const CreateStoryScreen = () => {
           <TextInput
             style={styles.inputStoryTitle} // New style similar to inputEventName
             placeholder="Story Title"
-            placeholderTextColor="#A0A0A0"
+            placeholderTextColor="#B0B0B0" // Lighter placeholder
             value={storyTitle}
             onChangeText={setStoryTitle}
             autoCorrect={false}
-            inputAccessoryViewID={inputAccessoryViewID}
+            // inputAccessoryViewID={inputAccessoryViewID} // Can be removed if not using custom accessory view
           />
           
           {/* Separator */}
@@ -145,12 +166,12 @@ const CreateStoryScreen = () => {
           <TextInput
             style={styles.inputStoryContent} // New style for content
             placeholder="What's your story? Share the details..."
-            placeholderTextColor="#A0A0A0"
+            placeholderTextColor="#B0B0B0" // Lighter placeholder
             value={storyContent}
             onChangeText={setStoryContent}
             multiline
             textAlignVertical="top"
-            inputAccessoryViewID={inputAccessoryViewID}
+            // inputAccessoryViewID={inputAccessoryViewID} // Can be removed
           />
 
           {/* Separator */}
@@ -161,12 +182,14 @@ const CreateStoryScreen = () => {
             style={styles.inputRow} 
             onPress={() => Alert.alert("Date Picker", "Date picker functionality can be added here.")} 
           >
-             <Ionicons name="calendar-outline" size={22} color={styles.inputIcon.color} style={styles.inputIcon} />
-             <Text style={styles.inputText}>Date</Text> 
-             <Text style={[styles.inputText, {color: styles.placeholderText.color, textAlign: 'right'}]}>
-               {formatDate(storyDate)}
-             </Text>
-             <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+             <MaterialCommunityIcons name="calendar-month-outline" size={24} color={styles.inputIcon.color} style={styles.inputIcon} />
+             <Text style={styles.inputRowText}>Date</Text> 
+             <View style={styles.inputRowValueContainer}>
+                <Text style={styles.inputRowValueText}>
+                {formatDate(storyDate)}
+                </Text>
+                <Ionicons name="chevron-forward" size={22} color="#C7C7CC" style={styles.inputRowChevron}/>
+             </View>
            </TouchableOpacity>
         </View>
 
@@ -195,19 +218,6 @@ const CreateStoryScreen = () => {
         )}
       
       </ScrollView>
-
-      {/* Keep bottom toolbar for actions */}
-      <View style={styles.bottomToolbar}>
-        <TouchableOpacity style={styles.toolbarButton} onPress={handleAddMedia}>
-          <Ionicons name="images-outline" size={24} color="#1A4B44" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.toolbarButton} onPress={handleTagPeople}>
-          <Ionicons name="pricetags-outline" size={24} color="#1A4B44" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.toolbarButton} onPress={handleAddLocation}>
-          <Ionicons name="location-outline" size={24} color="#1A4B44" />
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 };
@@ -216,16 +226,16 @@ const CreateStoryScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F0F0F0', // Match createEvent background
+    backgroundColor: '#FFFFFF', // Changed to white for a cleaner look
   },
   container: {
     flex: 1,
   },
    scrollContentContainer: {
-    paddingBottom: 80, // Space for bottom toolbar
+    paddingBottom: 20, // Removed extra padding for bottom toolbar, some padding remains
   },
   postButtonTextNavigator: {
-    color: '#1A4B44', // Match header style
+    color: '#1A4B44', // Dynasty Green
     fontSize: 17,
     fontWeight: '600',
   },
@@ -249,55 +259,63 @@ const styles = StyleSheet.create({
   },
   // Form Section Styling (Adopted from createEvent)
   formSection: {
-    marginTop: 15, // Reduced top margin
+    marginTop: 20,
     marginHorizontal: 15,
     backgroundColor: '#FFFFFF', 
-    borderRadius: 12,
+    borderRadius: 10,
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05, 
     shadowRadius: 3,
     elevation: 2,
   },
   inputStoryTitle: {
-    fontSize: 22, // Slightly smaller than event name maybe?
-    fontWeight: 'bold',
-    color: '#333333',
-    paddingHorizontal: 20,
-    paddingTop: 18, // Match createEvent vertical padding
-    paddingBottom: 15, // Less bottom padding before separator
-    // Removed bottom border here, use separator component
+    fontSize: 18, // Slightly larger for title
+    paddingHorizontal: 18,
+    paddingVertical: 18, // Increased padding
+    color: '#222222',
+    fontWeight: '500',
   },
    inputStoryContent: {
     fontSize: 16,
-    color: '#444',
-    lineHeight: 24,
-    minHeight: 150, 
-    paddingHorizontal: 20,
-    paddingVertical: 15, 
-    textAlignVertical: 'top', // Keep this
+    paddingHorizontal: 18,
+    paddingVertical: 15,
+    color: '#333333',
+    minHeight: 150, // Good starting height for story content
+    lineHeight: 22,
   },
   // Input Row Styling (Adopted from createEvent)
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 18, // Consistent padding
+    backgroundColor: '#FFFFFF', // Ensure it's white if formSection isn't or if it's the last item
   },
   inputIcon: {
     marginRight: 15,
-    color: '#888888', 
+    color: '#1A4B44', // Dynasty Green for icons
   },
-  inputText: { // Re-used for Date display
-    flex: 1,
+  inputRowText: { // For "Date" label
     fontSize: 16,
-    color: '#333333', 
+    color: '#222222', // Darker text for label
+    flex: 1, // Allow label to take available space
   },
-  placeholderText: { // Re-used for Date display if needed
-    flex: 1,
+  inputRowValueContainer: { // To group date text and chevron
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  inputRowValueText: { // For the actual date value
     fontSize: 16,
-    color: '#999999', 
+    color: '#555555', // Medium gray for value
+  },
+  inputRowChevron: {
+    marginLeft: 8,
+    color: '#C7C7CC', // Standard iOS chevron color
+  },
+  placeholderText: { // No longer directly used, placeholderTextColor handles it
+    color: '#B0B0B0',
   },
   // Separator Styling (Adopted from createEvent)
   separatorThin: {
@@ -306,8 +324,8 @@ const styles = StyleSheet.create({
     marginLeft: 20 + 22 + 15, // Aligns with icon + margin
   },
   separatorThinNoMargin: { // Separator directly under inputs
-    height: 0.5,
-    backgroundColor: '#E0E0E0',
+    height: 1,
+    backgroundColor: '#EFEFF4', // Lighter separator
   },
   // Media Section Styles (New/Adjusted)
   mediaSection: {
@@ -365,21 +383,6 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 3,
   },
-  // Bottom Toolbar Styles (Keep as is)
-  bottomToolbar: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingVertical: Platform.OS === 'ios' ? 15 : 10,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 10,
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-    backgroundColor: '#FFFFFF',
-  },
-  toolbarButton: {
-    padding: 10,
-  },
-  // Removed old titleInput, contentInput, optionButton styles
 });
 
 export default CreateStoryScreen;
