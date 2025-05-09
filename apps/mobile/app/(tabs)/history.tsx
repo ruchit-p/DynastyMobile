@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, SafeAreaView, Platform, TouchableOpacity, Image } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/FloatingActionMenu';
 
 // Define a type for History items (assuming they are essentially stories)
 interface HistoryItemType {
@@ -35,8 +36,18 @@ const mockHistoryItems: HistoryItemType[] = [
 ];
 
 const HistoryScreen = () => {
-  const [isMenuVisible, setIsMenuVisible] = useState(false);
   const router = useRouter();
+
+  // MARK: - Define Menu Items for History Screen
+  const historyMenuItems: FabMenuItemAction[] = [
+    {
+      id: 'writeStory',
+      text: 'Write Story',
+      iconName: 'create-outline',
+      iconLibrary: 'Ionicons',
+      onPress: () => router.push('/(screens)/createStory'),
+    },
+  ];
 
   const handleHistoryItemPress = (item: HistoryItemType) => {
     // Assuming history items are stories and navigate to StoryDetailScreen
@@ -96,24 +107,8 @@ const HistoryScreen = () => {
         )}
       </ScrollView>
 
-      {isMenuVisible && (
-        <View style={styles.fabMenu}>
-          <TouchableOpacity 
-            style={styles.fabMenuItem} 
-            onPress={() => { 
-              setIsMenuVisible(false); 
-              router.push('/(screens)/createStory');
-            }}
-          >
-            <Ionicons name="create-outline" size={20} color="#1A4B44" style={styles.fabMenuItemIcon} />
-            <Text style={styles.fabMenuItemText}>Write Story</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <TouchableOpacity style={styles.fab} onPress={() => setIsMenuVisible(!isMenuVisible)}>
-        <Ionicons name="add" size={30} color="#FFFFFF" />
-      </TouchableOpacity>
+      {/* MARK: - Add Reusable FAB Menu */}
+      <FloatingActionMenu menuItems={historyMenuItems} />
     </SafeAreaView>
   );
 };
@@ -251,49 +246,6 @@ const styles = StyleSheet.create({
     color: '#777',
     marginTop: 5,
     textAlign: 'center',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 30, 
-    right: 30,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#1A4B44', 
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 5,
-  },
-  fabMenu: {
-    position: 'absolute',
-    bottom: 100, 
-    right: 30,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingVertical: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 }, 
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 5,
-    minWidth: 150, 
-  },
-  fabMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-  },
-  fabMenuItemIcon: {
-    marginRight: 10,
-  },
-  fabMenuItemText: {
-    fontSize: 16,
-    color: '#1A4B44',
   },
 });
 

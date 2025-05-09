@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 // import { auth, db } from '../../src/lib/firebase'; // Commented out Firebase
 // import { collection, query, orderBy, limit, getDocs, Timestamp, doc, getDoc } from 'firebase/firestore'; // Commented out Firebase
+import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/FloatingActionMenu';
 
 // Define the structure for a Post fetched from Firestore
 interface Post {
@@ -21,7 +22,6 @@ interface Post {
 }
 
 const FeedScreen = () => {
-  const [isMenuVisible, setIsMenuVisible] = useState(false);
   const router = useRouter();
 
   // const [feedPosts, setFeedPosts] = useState<Post[]>([]); // State for posts // Commented out
@@ -63,6 +63,24 @@ const FeedScreen = () => {
     },
   ]);
   const [isLoadingFeed, setIsLoadingFeed] = useState<boolean>(false); // Set to false
+
+  // MARK: - Define Menu Items for Feed Screen
+  const feedMenuItems: FabMenuItemAction[] = [
+    {
+      id: 'createStory',
+      text: 'Create Story',
+      iconName: 'create-outline',
+      iconLibrary: 'Ionicons',
+      onPress: () => router.push('/(screens)/createStory'),
+    },
+    {
+      id: 'createEvent',
+      text: 'Create Event',
+      iconName: 'calendar-outline',
+      iconLibrary: 'Ionicons',
+      onPress: () => router.push('/(screens)/createEvent'),
+    },
+  ];
 
   // Fetch feed posts
   useFocusEffect(
@@ -201,22 +219,8 @@ const FeedScreen = () => {
         )}
       </ScrollView>
 
-      {isMenuVisible && (
-        <View style={styles.fabMenu}>
-          <TouchableOpacity style={styles.fabMenuItem} onPress={() => { setIsMenuVisible(false); router.push('/(screens)/createStory'); }}>
-            <Ionicons name="create-outline" size={20} color="#1A4B44" style={styles.fabMenuItemIcon} />
-            <Text style={styles.fabMenuItemText}>Create Story</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.fabMenuItem} onPress={() => { setIsMenuVisible(false); router.push('/(screens)/createEvent'); }}>
-            <Ionicons name="calendar-outline" size={20} color="#1A4B44" style={styles.fabMenuItemIcon} />
-            <Text style={styles.fabMenuItemText}>Create Event</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <TouchableOpacity style={styles.fab} onPress={() => setIsMenuVisible(!isMenuVisible)}>
-        <Ionicons name="add" size={30} color="#FFFFFF" />
-      </TouchableOpacity>
+      {/* MARK: - Add Reusable FAB Menu */}
+      <FloatingActionMenu menuItems={feedMenuItems} />
     </SafeAreaView>
   );
 };
@@ -352,49 +356,6 @@ const styles = StyleSheet.create({
     color: '#777',
     marginTop: 5,
     textAlign: 'center',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 30,
-    right: 30,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#1A4B44',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 5,
-  },
-  fabMenu: {
-    position: 'absolute',
-    bottom: 100,
-    right: 30,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingVertical: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 5,
-    minWidth: 150,
-  },
-  fabMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-  },
-  fabMenuItemIcon: {
-    marginRight: 10,
-  },
-  fabMenuItemText: {
-    fontSize: 16,
-    color: '#1A4B44',
   },
   loadingContainer: {
     flex: 1,
