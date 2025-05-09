@@ -2093,3 +2093,64 @@ export const registerDeviceTokenForAPNS = onCall({
     throw new Error(error instanceof Error ? error.message : "Failed to register device token");
   }
 });
+
+// MARK: - Sign Out
+/**
+ * Handles user sign-out.
+ * Revokes refresh tokens and clears device tokens.
+ */
+export const handleSignOut = onCall({
+  region: DEFAULT_REGION,
+  memory: "256MiB", // Adjusted memory, can be lower for this op
+  timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+}, async (request) => {
+  const uid = request.auth?.uid;
+
+  if (!uid) {
+    logger.error("Sign out request without authenticated user.");
+    throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
+  }
+
+  logger.info(`Starting sign-out process for user ${uid}`);
+
+  try {
+    const auth = getAuth();
+    const db = getFirestore();
+    const batch = db.batch();
+
+    // 1. Revoke refresh tokens
+    await auth.revokeRefreshTokens(uid);
+    logger.info(`Successfully revoked refresh tokens for user ${uid}`);
+
+    // 2. Find and delete device tokens from the 'deviceTokens' collection
+    const deviceTokensQuery = db.collection("deviceTokens").where("userId", "==", uid);
+    const deviceTokensSnapshot = await deviceTokensQuery.get();
+
+    if (!deviceTokensSnapshot.empty) {
+      deviceTokensSnapshot.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      logger.info(`Scheduled deletion for ${deviceTokensSnapshot.size} device token(s) from collection for user ${uid}`);
+    }
+
+    // 3. Clear device token fields on the user document
+    const userRef = db.collection("users").doc(uid);
+    batch.update(userRef, {
+      deviceToken: null,
+      deviceType: null,
+      deviceTokenUpdatedAt: null, // Or new Date() if preferred for logging last update
+      updatedAt: new Date(),
+    });
+    logger.info(`Scheduled clearing of device token fields on user document for user ${uid}`);
+
+    // Commit all batched operations
+    await batch.commit();
+    logger.info(`Successfully completed sign-out process for user ${uid}`);
+
+    return {success: true};
+  } catch (error) {
+    logger.error("Error in handleSignOut:", error);
+    const message = error instanceof Error ? error.message : "Failed to sign out.";
+    throw new functions.https.HttpsError("internal", message, error);
+  }
+});

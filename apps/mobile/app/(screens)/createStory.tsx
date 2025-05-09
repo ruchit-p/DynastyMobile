@@ -133,8 +133,6 @@ const CreateStoryScreen = () => {
           headerStyle: { backgroundColor: '#FFFFFF' }, // White background for header
           headerTintColor: '#1A4B44', // Dark green for title and items
           headerTitleStyle: { fontWeight: '600', fontSize: 18, color: '#1A4B44' },
-          headerBackTitleVisible: false,
-          headerShadowVisible: false, // Remove header shadow
         }}
       />
       <ScrollView 
@@ -142,11 +140,7 @@ const CreateStoryScreen = () => {
         contentContainerStyle={styles.scrollContentContainer}
         keyboardShouldPersistTaps="handled"
       >
-        {/* User Info remains similar */}
-        <View style={styles.userInfoSection}>
-          <Image source={{ uri: userAvatar }} style={styles.avatar} />
-          <Text style={styles.userNameText}>{userName}</Text>
-        </View>
+
 
         {/* Wrap main inputs in a form section */}
         <View style={styles.formSection}>

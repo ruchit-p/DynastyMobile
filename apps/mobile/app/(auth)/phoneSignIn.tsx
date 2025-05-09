@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   Image
 } from 'react-native';
-import { useRouter, Link } from 'expo-router';
+import { useRouter, Link, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -85,6 +85,7 @@ export default function PhoneSignInScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <Stack.Screen options={{ headerShown: false }} />
       <StatusBar style={Platform.OS === 'ios' ? 'dark' : 'light'} />
       <View style={styles.container}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>

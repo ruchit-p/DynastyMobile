@@ -16,6 +16,7 @@ import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-ic
 import { useRouter, useFocusEffect } from 'expo-router';
 // import { auth, db } from '../../src/lib/firebase'; // Commented out Firebase
 // import { collection, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore'; // Commented out Firebase
+import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/FloatingActionMenu'; // MARK: - Import
 
 // Define Event interface for type safety
 interface Event {
@@ -115,7 +116,6 @@ const SegmentedControl: React.FC<SegmentedControlProps> = ({ segments, currentIn
 const EventsScreen = () => {
   const [currentSegment, setCurrentSegment] = useState(0);
   const [searchText, setSearchText] = useState('');
-  const [isMenuVisible, setIsMenuVisible] = useState(false);
   const segments = ['Upcoming', 'Past Events', 'My Events'];
   const router = useRouter();
 
@@ -173,6 +173,24 @@ const EventsScreen = () => {
   ];
   const [allEvents, setAllEvents] = useState<Event[]>(mockEventsData);
   const [isLoadingEvents, setIsLoadingEvents] = useState<boolean>(false); // Set to false
+
+  // MARK: - Define Menu Items for Events Screen
+  const eventMenuItems: FabMenuItemAction[] = [
+    {
+      id: 'createStory',
+      text: 'Create Story',
+      iconName: 'pencil-outline', // MaterialCommunityIcons
+      iconLibrary: 'MaterialCommunityIcons',
+      onPress: () => router.push('/(screens)/createStory'),
+    },
+    {
+      id: 'createEvent',
+      text: 'Create Event',
+      iconName: 'calendar-plus', // MaterialCommunityIcons
+      iconLibrary: 'MaterialCommunityIcons',
+      onPress: () => router.push('/(screens)/createEvent'),
+    },
+  ];
 
   // Fetch events from Firestore
   useFocusEffect(
@@ -304,34 +322,8 @@ const EventsScreen = () => {
         )}
       </ScrollView>
 
-      {isMenuVisible && (
-        <View style={styles.fabMenu}>
-          <TouchableOpacity
-            style={styles.fabMenuItem}
-            onPress={() => {
-              setIsMenuVisible(false);
-              router.push('/(screens)/createStory'); // Correct navigation
-            }}
-          >
-            <MaterialCommunityIcons name='pencil-outline' size={22} style={styles.fabMenuItemIcon} />
-            <Text style={styles.fabMenuItemText}>Create Story</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.fabMenuItem}
-            onPress={() => {
-              setIsMenuVisible(false);
-              router.push('/(screens)/createEvent');
-            }}
-          >
-            <MaterialCommunityIcons name='calendar-plus' size={22} style={styles.fabMenuItemIcon} />
-            <Text style={styles.fabMenuItemText}>Create Event</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <TouchableOpacity style={styles.fab} onPress={() => setIsMenuVisible(!isMenuVisible)}>
-        <MaterialCommunityIcons name="plus" size={30} color="#FFFFFF" />
-      </TouchableOpacity>
+      {/* MARK: - Add Reusable FAB Menu */}
+      <FloatingActionMenu menuItems={eventMenuItems} fabIconName="plus" fabIconLibrary="MaterialCommunityIcons" />
 
     </SafeAreaView>
   );
@@ -529,55 +521,6 @@ const styles = StyleSheet.create({
     color: '#555555', // Darker gray for details
     marginLeft: 10,
     flexShrink: 1,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 30,
-    right: 30,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#1A4B44', // App theme green
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0,
-    shadowRadius: 4,
-    elevation: 0,
-    zIndex: 10,
-  },
-  fabMenu: {
-    position: 'absolute',
-    bottom: 95, // Adjusted to be closer to FAB
-    right: 30,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12, // More rounded corners
-    paddingVertical: 10, // Adjusted padding
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 }, // Adjusted shadow
-    shadowOpacity: 0.15, // Adjusted shadow
-    shadowRadius: 5, // Adjusted shadow
-    elevation: 8, // Adjusted elevation for Android shadow
-    minWidth: 200, // Adjusted minWidth to fit content
-    zIndex: 20,
-    // borderWidth: 1, // Removed border
-    // borderColor: '#E0E0E0', // Removed border
-  },
-  fabMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 15, // Increased padding for better spacing
-    paddingHorizontal: 20, // Adjusted horizontal padding
-  },
-  fabMenuItemIcon: {
-    marginRight: 15, // Slightly increased margin
-    color: '#333333', // Neutral dark gray for icon
-  },
-  fabMenuItemText: {
-    fontSize: 16,
-    color: '#333333', // Dark text for menu items
-    fontWeight: '500',
   },
   loadingContainer: {
     flex: 1,

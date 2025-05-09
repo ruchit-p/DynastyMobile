@@ -157,8 +157,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           }
         } else { // Onboarding is completed
           if (inAuthGroup || isLandingPage || isVerifyEmailScreen || isConfirmEmailScreen || inOnboardingGroup) {
-            console.log('Redirecting to /(tabs)/home - User verified, onboarded, but on restricted page');
-            router.replace('/(tabs)/home');
+            console.log('Redirecting to /(tabs)/feed - User verified, onboarded, but on restricted page');
+            router.replace('/(tabs)/feed');
           }
         }
       }
