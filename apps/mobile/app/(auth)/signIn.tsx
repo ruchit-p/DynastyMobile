@@ -14,7 +14,7 @@ import {
 import { useRouter, Link, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons'; // For Google icon
 import { StatusBar } from 'expo-status-bar';
-import { useAuth } from '../context/AuthContext'; // Import useAuth
+import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- Add this import
 
 const dynastyLogo = require('../../assets/images/dynasty.png'); // Adjust path if logo moves
@@ -66,10 +66,7 @@ export default function SignInScreen() {
   };
 
   const handlePhoneSignIn = () => {
-    // TODO: Implement Firebase Phone Sign In
-    // This might navigate to a separate phone number input screen
     router.push('/(auth)/phoneSignIn'); // Example, create this screen later
-    Alert.alert("Phone Sign-In", "Phone Sign-in logic not yet implemented.");
   };
 
   return (
@@ -108,10 +105,6 @@ export default function SignInScreen() {
             onChangeText={setPassword}
             secureTextEntry
           />
-
-          <TouchableOpacity onPress={() => router.push('/(auth)/forgotPassword')} style={styles.forgotPasswordButton}>
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-          </TouchableOpacity>
 
           {error && <Text style={styles.errorText}>{error}</Text>}
 
@@ -157,6 +150,11 @@ export default function SignInScreen() {
               </TouchableOpacity>
             </Link>
           </View>
+
+          <TouchableOpacity onPress={() => router.push('/(auth)/forgotPassword')} style={styles.movedForgotPasswordButton}>
+            <Text style={styles.linkText}>Forgot Password?</Text>
+          </TouchableOpacity>
+
         </View>
       </SafeAreaView>
     </>
@@ -280,13 +278,7 @@ const styles = StyleSheet.create({
     padding: 10, // Increase touchable area
     zIndex: 10, // Ensure it's on top
   },
-  forgotPasswordButton: {
-    alignSelf: 'flex-end',
-    marginBottom: 15, // Space before Sign In button
-  },
-  forgotPasswordText: {
-    color: '#0A5C36',
-    fontSize: 14,
-    fontWeight: '500',
+  movedForgotPasswordButton: {
+    marginTop: 15, // Add some space above it
   },
 }); 

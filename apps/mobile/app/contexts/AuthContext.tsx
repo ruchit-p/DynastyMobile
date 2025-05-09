@@ -71,7 +71,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const userDocRef = db.collection('users').doc(uid);
       const docSnap = await userDocRef.get();
-      if (docSnap.exists) {
+      if (docSnap.exists()) {
         console.log("AuthContext: Fetched Firestore user data:", docSnap.data());
         setFirestoreUser(docSnap.data() as { onboardingCompleted?: boolean });
         return docSnap.data() as { onboardingCompleted?: boolean };
@@ -124,47 +124,70 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   useEffect(() => {
+    // If a phone auth confirmation is active, HMGLogNav('Phone auth active, returning early from nav logic') and do not redirect, allow OTP entry
+    if (phoneAuthConfirmation) {
+      console.log('Auth Nav Logic: Phone auth confirmation is active. INTENTIONALLY SKIPPING further nav logic to allow OTP flow.');
+      return;
+    }
+
     if (isLoading || isFetchingFirestoreUser) return; // Wait for both auth and Firestore data
 
+    const currentRoute = segments.join('/') || 'index'; // Treat empty segments as index
     const inAuthGroup = segments[0] === '(auth)';
-    const isVerifyEmailScreen = segments.join('/') === '(auth)/verifyEmail';
-    const isConfirmEmailScreen = segments.join('/') === '(auth)/confirmEmailVerification';
+    const isVerifyEmailScreen = currentRoute === '(auth)/verifyEmail';
+    const isConfirmEmailScreen = currentRoute === '(auth)/confirmEmailVerification';
     const inOnboardingGroup = segments[0] === '(onboarding)';
-    const isLandingPage = segments.length === 0 || (segments.length === 1 && segments[0] === 'index');
+    
+    let isLandingPageEquivalent = false;
+    if (segments.length <= 0) isLandingPageEquivalent = true; // Absolute root
+    if (segments.length === 1 && segments[0] && ['', 'index'].includes(segments[0])) isLandingPageEquivalent = true; // e.g. app/index.tsx
+    
+    const landingPageRoutes = ['', 'index', '(auth)/signIn', '(auth)/signUp', '(auth)/phoneSignIn'];
+    if (landingPageRoutes.includes(currentRoute)) {
+        // These are considered okay for an unauthenticated user to be on, so effectively landing pages for unauth user.
+        // This doesn't directly set isLandingPageEquivalent = true for all, but influences the condition below.
+    }
 
     console.log(
       'Auth Nav Logic - User:', user?.uid,
       'Email Verified:', user?.emailVerified,
       'OnboardingComplete:', firestoreUser?.onboardingCompleted,
       'Segments:', segments.join('/'),
+      'CurrentRoute:', currentRoute,
+      'inAuthGroup:', inAuthGroup,
+      'isLandingPageEquivalent:', isLandingPageEquivalent,
+      'phoneAuthConfirmation:', !!phoneAuthConfirmation
     );
 
     if (!user) {
-      if (!inAuthGroup && !isLandingPage && !isConfirmEmailScreen) {
-        console.log('Redirecting to / (landing page) - No user');
+      // If nobody is signed-in AND phone auth is NOT active AND we are NOT in (auth) group 
+      // AND it's not a page an unauthenticated user should be on (like index or signIn) -> go home
+      const canBeOnPageWithoutAuth = inAuthGroup || isLandingPageEquivalent || isConfirmEmailScreen || currentRoute === '(auth)/signIn' || currentRoute === '(auth)/signUp' || currentRoute === '(auth)/phoneSignIn';
+      if (!phoneAuthConfirmation && !canBeOnPageWithoutAuth) {
+        console.log(`Redirecting to / (landing page) - No user, not in auth flow, not on a public auth page. Current route: ${currentRoute}`);
         router.replace('/');
       }
     } else { // User exists
-      if (!user.emailVerified) {
+      if (user.email && !user.emailVerified) { 
         if (!isVerifyEmailScreen && !isConfirmEmailScreen && !inAuthGroup && !inOnboardingGroup) {
           console.log('Redirecting to verifyEmail. User email:', user.email);
-          router.replace({ pathname: '/(auth)/verifyEmail', params: { email: user.email || '' } });
+          router.replace({ pathname: '/(auth)/verifyEmail', params: { email: user.email } });
         }
-      } else { // Email is verified
+      } else { // Email is verified (or no email to verify, e.g. phone-only user)
         if (!firestoreUser?.onboardingCompleted) {
           if (!inOnboardingGroup && !inAuthGroup) { // Don't redirect if already in onboarding or auth
             console.log('Redirecting to onboarding/profileSetup');
             router.replace('/(onboarding)/profileSetup');
           }
         } else { // Onboarding is completed
-          if (inAuthGroup || isLandingPage || isVerifyEmailScreen || isConfirmEmailScreen || inOnboardingGroup) {
+          if (inAuthGroup || isLandingPageEquivalent || isVerifyEmailScreen || isConfirmEmailScreen || inOnboardingGroup) {
             console.log('Redirecting to /(tabs)/feed - User verified, onboarded, but on restricted page');
             router.replace('/(tabs)/feed');
           }
         }
       }
     }
-  }, [user, firestoreUser, isLoading, isFetchingFirestoreUser, segments, router]);
+  }, [user, firestoreUser, isLoading, isFetchingFirestoreUser, segments, router, phoneAuthConfirmation]);
 
   const signIn = async (email: string, pass: string) => {
     setIsLoading(true);
@@ -258,10 +281,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signOut = async () => {
     setIsLoading(true);
     try {
-      const isSignedIn = await (GoogleSignin.isSignedIn as () => Promise<boolean>)();
-      if (isSignedIn) {
-        await GoogleSignin.signOut();
-        console.log('Google user signed out');
+      // Using type casting to work around the typing issue
+      try {
+        // Cast to any to bypass TypeScript error
+        const isSignedIn = await (GoogleSignin as any).isSignedIn();
+        if (isSignedIn) { 
+          await GoogleSignin.signOut();
+          console.log('Google user signed out');
+        }
+      } catch (googleError) {
+        console.error("Google sign out error:", googleError);
       }
       await auth.signOut();
     } catch (error: any) {

@@ -11,7 +11,7 @@
     "logs": "firebase functions:log",
     "dev": "cross-env NODE_ENV=development npm run serve",
     "prod": "cross-env NODE_ENV=production npm run serve"
-  },
+    },
   "engines": {
     "node": "22"
   },

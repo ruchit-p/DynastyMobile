@@ -43,50 +43,44 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: Colors.white,
         },
-        headerShown: true, // Enable headers globally for tabs
-        headerStyle: {
-          backgroundColor: Colors.white,
-          elevation: Platform.OS === 'android' ? 4 : 0, // Shadow for Android
-          shadowOpacity: Platform.OS === 'ios' ? 0.1 : 0, // Subtle shadow for iOS
-          shadowOffset: { width: 0, height: 1 },
-          shadowRadius: 2,
-          borderBottomWidth: Platform.OS === 'android' ? 0 : 0.5, // Thinner border for iOS
-          borderBottomColor: Colors.lightGray,
-        },
-        headerTitleStyle: {
-          fontWeight: 'bold',
-          fontSize: Platform.OS === 'ios' ? 34 : 24,
-          color: Colors.primary,
-          paddingBottom: Platform.OS === 'ios' ? 60 : 5,
-        },
-        headerTitleAlign: Platform.OS === 'ios' ? 'left' : 'left', // Align title left like native iOS
-        headerLeftContainerStyle: { paddingLeft: 10 },
-        headerRightContainerStyle: { paddingRight: 15 },
+        // headerShown: true, // This was enabling headers globally
+        // Default header styling is removed as each screen will have its own AppHeader
+        // headerStyle: {
+        //   backgroundColor: Colors.white,
+        //   elevation: Platform.OS === 'android' ? 4 : 0, 
+        //   shadowOpacity: Platform.OS === 'ios' ? 0.1 : 0, 
+        //   shadowOffset: { width: 0, height: 1 },
+        //   shadowRadius: 2,
+        //   borderBottomWidth: Platform.OS === 'android' ? 0 : 0.5, 
+        //   borderBottomColor: Colors.lightGray,
+        // },
+        // headerTitleStyle: {
+        //   fontWeight: 'bold',
+        //   fontSize: Platform.OS === 'ios' ? 34 : 24,
+        //   color: Colors.primary,
+        //   paddingBottom: Platform.OS === 'ios' ? 60 : 5,
+        // },
+        // headerTitleAlign: Platform.OS === 'ios' ? 'left' : 'left', 
+        // headerLeftContainerStyle: { paddingLeft: 10 },
+        // headerRightContainerStyle: { paddingRight: 15 },
       }}
     >
       <Tabs.Screen
         name="feed"
         options={{
           title: 'Feed',
+          headerShown: false, // Use custom AppHeader in screen file
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? "home" : "home-outline"} size={size} color={color} /> 
           ),
-          headerRight: () => (
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <TouchableOpacity onPress={navigateToNotifications} style={{ paddingHorizontal: 10 }}>
-                <Ionicons name="notifications-outline" size={26} color={Colors.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={navigateToMessages} style={{ paddingHorizontal: 10 }}>
-                <Ionicons name="chatbubbles-outline" size={26} color={Colors.primary} />
-              </TouchableOpacity>
-            </View>
-          ),
+          // headerRight is now handled by AppHeader instance in feed.tsx
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
           title: 'History',
+          headerShown: false, // Use custom AppHeader in screen file
           tabBarIcon: ({ color, size, focused }) => (
             <MaterialCommunityIcons name={focused ? "book-open-page-variant" : "book-open-page-variant-outline"} size={size} color={color} /> 
           ),
@@ -96,29 +90,11 @@ export default function TabLayout() {
         name="familyTree"
         options={{
           title: 'Family Tree',
+          headerShown: false, // Use custom AppHeader in screen file
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? "people" : "people-outline"} color={color} size={size} />
           ),
-          headerRight: () => (
-            <TouchableOpacity 
-              onPress={() => {
-                Alert.alert(
-                  "Family Tree Options",
-                  "",
-                  [
-                    { text: "Add new member", onPress: () => console.log("Add new member pressed") },
-                    { text: "Family tree settings", onPress: () => console.log("Family tree settings pressed") },
-                    { text: "Invite members", onPress: () => console.log("Invite members pressed") },
-                    { text: "Cancel", style: "cancel" }
-                  ],
-                  { cancelable: true }
-                );
-              }}
-              style={{ marginRight: 15 }}
-            >
-              <Ionicons name="ellipsis-vertical" size={24} color={Colors.primary} />
-            </TouchableOpacity>
-          ),
+          // headerRight is now handled by AppHeader instance in familyTree.tsx
           tabBarLabel: ({ focused, color }) => (
             <Text style={{
               color,
@@ -142,6 +118,7 @@ export default function TabLayout() {
         name="events"
         options={{
           title: 'Events',
+          headerShown: false, // Use custom AppHeader in screen file
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? "calendar" : "calendar-outline"} size={size} color={color} /> 
           ),
@@ -151,6 +128,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
+          headerShown: false, // Use custom AppHeader in screen file
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? "person-circle" : "person-circle-outline"} size={size} color={color} />
           ),

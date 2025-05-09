@@ -14,7 +14,7 @@ import {
 import { useRouter, Stack, Link } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../context/AuthContext'; // Assuming sendPasswordResetEmail might be added here
+import { useAuth } from '../contexts/AuthContext'; // Assuming sendPasswordResetEmail might be added here
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 

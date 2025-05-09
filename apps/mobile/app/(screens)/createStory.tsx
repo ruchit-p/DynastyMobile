@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,62 +10,126 @@ import {
   TextInput,
   Image,
   Alert,
+  Modal,
+  Button,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useNavigation, Stack } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+
+// MARK: - Types
+type BlockType = "text" | "image" | "video" | "audio";
+
+interface StoryBlock {
+  id: string;
+  type: BlockType;
+  content: any; // string for text, ImagePicker.ImagePickerAsset[] for media, etc.
+}
+
+interface Location {
+  latitude: number;
+  longitude: number;
+  address?: string;
+}
 
 const CreateStoryScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
 
+  // MARK: - State Variables
   const [storyTitle, setStoryTitle] = useState('');
-  const [storyContent, setStoryContent] = useState('');
-  const [storyDate, setStoryDate] = useState(new Date()); // Default to today
-  const [selectedImages, setSelectedImages] = useState<string[]>([]); 
+  
+  const [showDate, setShowDate] = useState(true); // Date is shown by default initially
+  const [storyDate, setStoryDate] = useState<Date | null>(new Date());
+  
+  const [showSubtitle, setShowSubtitle] = useState(false);
+  const [subtitle, setSubtitle] = useState('');
 
-  // Placeholder for user avatar/name
-  const userAvatar = 'https://via.placeholder.com/40';
-  const userName = 'Current User';
+  const [showLocation, setShowLocation] = useState(false);
+  const [location, setLocation] = useState<Location | null>(null);
 
+  const [privacy, setPrivacy] = useState<'family' | 'personal' | 'custom'>('family');
+  // const [customAccessMembers, setCustomAccessMembers] = useState<string[]>([]); // For custom privacy
+  const [taggedMembers, setTaggedMembers] = useState<string[]>([]); // Placeholder
+
+  const [blocks, setBlocks] = useState<StoryBlock[]>([]);
+  
+  const [isAddDetailsModalVisible, setAddDetailsModalVisible] = useState(false);
+  const [isAddContentModalVisible, setAddContentModalVisible] = useState(false);
+
+  // Placeholder for user avatar/name - can be removed if not used
+  // const userAvatar = 'https://via.placeholder.com/40';
+  // const userName = 'Current User';
+
+  // MARK: - Navigation Setup
   React.useEffect(() => {
     navigation.setOptions({
-      title: 'Create Story',
+      title: 'Create Story', // Image shows "Edit Story", can be adapted
       headerLeft: () => (
         <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: Platform.OS === 'ios' ? 15 : 10 }}>
           <Ionicons name="arrow-back" size={26} color="#1A4B44" />
         </TouchableOpacity>
       ),
       headerRight: () => (
-        <TouchableOpacity onPress={handlePostStory} style={{ marginRight: 15 }}>
-          <Text style={styles.postButtonTextNavigator}>Post</Text>
+        <TouchableOpacity onPress={handleSaveStory} style={{ marginRight: 15 }}>
+          <Text style={styles.saveButtonTextNavigator}>Save</Text>
         </TouchableOpacity>
       ),
       headerTitleAlign: 'center',
-      headerStyle: { backgroundColor: '#F8F8F8' }, // Consistent header style
-      headerTintColor: '#333333', // Consistent header style
-      headerTitleStyle: { fontWeight: '600' }, // Consistent header style
-      headerBackTitleVisible: false, // Consistent header style
+      headerStyle: { backgroundColor: '#F8F8F8' },
+      headerTintColor: '#333333',
+      headerTitleStyle: { fontWeight: '600' },
+      headerBackTitleVisible: false,
     });
-  }, [navigation, router, storyTitle, storyContent]);
+  }, [navigation, router, storyTitle, blocks, storyDate, subtitle, location, privacy]); // Add dependencies
 
-  const handlePostStory = () => {
-    if (!storyTitle.trim() || !storyContent.trim()) {
-      Alert.alert('Missing Information', 'Please provide a title and content for your story.');
+  // MARK: - Handlers
+  const handleSaveStory = () => {
+    if (!storyTitle.trim()) {
+      Alert.alert('Missing Title', 'Please provide a title for your story.');
       return;
     }
-    // Simulate posting
+    if (blocks.length === 0) {
+      Alert.alert('Missing Content', 'Please add some content to your story.');
+      return;
+    }
+    
     console.log({
       title: storyTitle,
-      content: storyContent,
-      date: storyDate.toISOString().split('T')[0], 
-      images: selectedImages,
+      subtitle: showSubtitle ? subtitle : undefined,
+      date: showDate ? storyDate?.toISOString().split('T')[0] : undefined,
+      location: showLocation ? location : undefined,
+      privacy,
+      taggedMembers,
+      blocks,
     });
-    Alert.alert('Story Posted (Simulated)', 'Your story has been successfully created.');
+    Alert.alert('Story Saved (Simulated)', 'Your story has been successfully saved.');
     router.back(); 
   };
 
-  const handleAddMedia = async () => {
+  const addBlock = (type: BlockType) => {
+    const newBlock: StoryBlock = {
+      id: Math.random().toString(36).substr(2, 9),
+      type,
+      content: type === 'text' ? '' : [],
+    };
+    setBlocks(prevBlocks => [...prevBlocks, newBlock]);
+    setAddContentModalVisible(false);
+  };
+
+  const removeBlock = (id: string) => {
+    setBlocks(prevBlocks => prevBlocks.filter(block => block.id !== id));
+  };
+
+  const updateBlockContent = (id: string, newContent: any) => {
+    setBlocks(prevBlocks => 
+      prevBlocks.map(block => 
+        block.id === id ? { ...block, content: newContent } : block
+      )
+    );
+  };
+  
+  const handleSelectMediaForBlock = async (blockId: string) => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
@@ -74,46 +138,108 @@ const CreateStoryScreen = () => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true, 
+        mediaTypes: ImagePicker.MediaTypeOptions.Images, // For now, only images. Can be expanded.
+        allowsEditing: false, // To allow multiple selection easily. Editing can be per image.
         quality: 0.7,
         allowsMultipleSelection: true, 
       });
   
       if (!result.canceled && result.assets) {
-        const newImageUris = result.assets.map(asset => asset.uri);
-        setSelectedImages(prevImages => [...prevImages, ...newImageUris]);
-      } else {
-        console.log('Image picking was canceled or no assets were selected.');
+        updateBlockContent(blockId, result.assets);
       }
     } catch (error) {
-      console.error("Error picking images: ", error);
+      console.error("Error picking images for block: ", error);
       Alert.alert("Image Picker Error", "Could not select images.");
     }
   };
 
   const handleTagPeople = () => {
-    Alert.alert("Tag People", "People tagging will be implemented here.");
+    Alert.alert("Tag People", "People tagging functionality will be implemented here.");
   };
 
   const handleAddLocation = () => {
-    Alert.alert("Add Location", "Location functionality will be implemented here.");
-    // Consider navigating to a map screen or using a simple TextInput modal
+    // Placeholder for map integration
+    Alert.alert("Add Location", "Apple Maps integration for location selection will be implemented here.");
+    // For now, let's simulate selecting a location
+    // setLocation({ latitude: 37.78825, longitude: -122.4324, address: "San Francisco, CA" });
+    // setShowLocation(true); // Or toggle it from the details modal
   };
 
-  // Helper to format Date objects for display (borrowed from createEvent)
+  // MARK: - Date Formatting
   const formatDate = (date: Date | null): string => {
-    if (!date) return '';
+    if (!date) return 'Select Date';
     return date.toLocaleDateString('en-US', { 
-      // More concise format for story date?
       month: 'short', 
       day: 'numeric',
       year: 'numeric'
     });
   };
 
-  const inputAccessoryViewID = 'storyInputAccessory'; // Unique ID
+  // MARK: - Render Methods for Modals
+  const renderAddDetailsModal = () => (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={isAddDetailsModalVisible}
+      onRequestClose={() => setAddDetailsModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Add Story Details</Text>
+          <TouchableOpacity style={styles.modalOption} onPress={() => { setShowSubtitle(!showSubtitle); setAddDetailsModalVisible(false); }}>
+            <Text>{showSubtitle ? "Remove Subtitle" : "Add Subtitle"}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.modalOption} onPress={() => { setShowDate(!showDate); setAddDetailsModalVisible(false); }}>
+            <Text>{showDate ? "Remove Date" : "Add Date"}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.modalOption} onPress={() => { 
+            if (showLocation) {
+              setShowLocation(false);
+              setLocation(null);
+            } else {
+              setShowLocation(true);
+              // Trigger actual location picking flow here eventually
+              handleAddLocation(); 
+            }
+            setAddDetailsModalVisible(false); 
+          }}>
+            <Text>{showLocation ? "Remove Location" : "Add Location"}</Text>
+          </TouchableOpacity>
+          <Button title="Close" onPress={() => setAddDetailsModalVisible(false)} />
+        </View>
+      </View>
+    </Modal>
+  );
 
+  const renderAddContentModal = () => (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={isAddContentModalVisible}
+      onRequestClose={() => setAddContentModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Add Content Block</Text>
+          <TouchableOpacity style={styles.modalOption} onPress={() => addBlock('text')}>
+            <MaterialCommunityIcons name="format-text" size={20} color="#333" style={{marginRight: 10}} />
+            <Text>Add Text</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.modalOption} onPress={() => addBlock('image')}>
+             <MaterialIcons name="photo-library" size={20} color="#333" style={{marginRight: 10}} />
+            <Text>Add Media (Images/Videos)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.modalOption} onPress={() => addBlock('audio')}>
+            <MaterialIcons name="audiotrack" size={20} color="#333" style={{marginRight: 10}} />
+            <Text>Add Audio</Text>
+          </TouchableOpacity>
+          <Button title="Close" onPress={() => setAddContentModalVisible(false)} />
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // MARK: - Main Render
   return (
     <SafeAreaView style={styles.safeArea}>
       <Stack.Screen
@@ -125,13 +251,13 @@ const CreateStoryScreen = () => {
             </TouchableOpacity>
           ),
           headerRight: () => (
-            <TouchableOpacity onPress={handlePostStory} style={{ marginRight: 15 }}>
-              <Text style={styles.postButtonTextNavigator}>Post</Text>
+            <TouchableOpacity onPress={handleSaveStory} style={{ marginRight: 15 }}>
+              <Text style={styles.saveButtonTextNavigator}>Save</Text>
             </TouchableOpacity>
           ),
           headerTitleAlign: 'center',
-          headerStyle: { backgroundColor: '#FFFFFF' }, // White background for header
-          headerTintColor: '#1A4B44', // Dark green for title and items
+          headerStyle: { backgroundColor: '#FFFFFF' },
+          headerTintColor: '#1A4B44',
           headerTitleStyle: { fontWeight: '600', fontSize: 18, color: '#1A4B44' },
         }}
       />
@@ -140,242 +266,355 @@ const CreateStoryScreen = () => {
         contentContainerStyle={styles.scrollContentContainer}
         keyboardShouldPersistTaps="handled"
       >
-
-
-        {/* Wrap main inputs in a form section */}
-        <View style={styles.formSection}>
+        {/* Story Details Section */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Story Details</Text>
+          
           <TextInput
-            style={styles.inputStoryTitle} // New style similar to inputEventName
-            placeholder="Story Title"
-            placeholderTextColor="#B0B0B0" // Lighter placeholder
+            style={styles.inputStoryTitle}
+            placeholder="Story Title *"
+            placeholderTextColor="#B0B0B0"
             value={storyTitle}
             onChangeText={setStoryTitle}
-            autoCorrect={false}
-            // inputAccessoryViewID={inputAccessoryViewID} // Can be removed if not using custom accessory view
           />
-          
-          {/* Separator */}
-          <View style={styles.separatorThinNoMargin} /> 
+          <View style={styles.separatorThinNoMargin} />
 
-          <TextInput
-            style={styles.inputStoryContent} // New style for content
-            placeholder="What's your story? Share the details..."
-            placeholderTextColor="#B0B0B0" // Lighter placeholder
-            value={storyContent}
-            onChangeText={setStoryContent}
-            multiline
-            textAlignVertical="top"
-            // inputAccessoryViewID={inputAccessoryViewID} // Can be removed
-          />
+          {showSubtitle && (
+            <>
+              <TextInput
+                style={styles.inputField}
+                placeholder="Subtitle"
+                placeholderTextColor="#B0B0B0"
+                value={subtitle}
+                onChangeText={setSubtitle}
+              />
+              <View style={styles.separatorThinNoMargin} />
+            </>
+          )}
 
-          {/* Separator */}
-          <View style={styles.separatorThinNoMargin} /> 
-
-           {/* Date Picker Row (Optional - using Alert for now) */}
-          <TouchableOpacity 
-            style={styles.inputRow} 
-            onPress={() => Alert.alert("Date Picker", "Date picker functionality can be added here.")} 
-          >
-             <MaterialCommunityIcons name="calendar-month-outline" size={24} color={styles.inputIcon.color} style={styles.inputIcon} />
-             <Text style={styles.inputRowText}>Date</Text> 
-             <View style={styles.inputRowValueContainer}>
+          {showDate && (
+            <TouchableOpacity 
+              style={styles.inputRow} 
+              // onPress={() => Alert.alert("Date Picker", "Date picker functionality will be added here.")} // Replace with actual date picker
+            >
+              <MaterialCommunityIcons name="calendar-month-outline" size={24} color={styles.inputIcon.color} style={styles.inputIcon} />
+              <Text style={styles.inputRowText}>Story Date</Text> 
+              <View style={styles.inputRowValueContainer}>
                 <Text style={styles.inputRowValueText}>
-                {formatDate(storyDate)}
+                  {formatDate(storyDate)}
                 </Text>
-                <Ionicons name="chevron-forward" size={22} color="#C7C7CC" style={styles.inputRowChevron}/>
+                {/* Simple remove button for date */}
+                 <TouchableOpacity onPress={() => setShowDate(false)} style={{ marginLeft: 10 }}>
+                    <Ionicons name="remove-circle-outline" size={22} color="red" />
+                 </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          )}
+           <View style={styles.separatorThinNoMargin} />
+
+          {showLocation && (
+             <View style={styles.inputRow}>
+                <MaterialIcons name="location-pin" size={24} color={styles.inputIcon.color} style={styles.inputIcon} />
+                <Text style={styles.inputRowText}>Location</Text>
+                <View style={styles.inputRowValueContainer}>
+                    <Text style={styles.inputRowValueText} numberOfLines={1}>
+                    {location?.address || "No location set"}
+                    </Text>
+                    {/* <Ionicons name="chevron-forward" size={22} color="#C7C7CC" style={styles.inputRowChevron}/> */}
+                </View>
              </View>
-           </TouchableOpacity>
+          )}
+           <View style={styles.separatorThinNoMargin} />
+
+
+          <TouchableOpacity style={styles.addButton} onPress={() => setAddDetailsModalVisible(true)}>
+            <Ionicons name="add-circle-outline" size={22} color="#1A4B44" style={{marginRight: 5}} />
+            <Text style={styles.addButtonText}>Add Additional Details</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Selected Media Preview - Keep outside formSection or style differently */}
-        {selectedImages.length > 0 && (
-          <View style={styles.mediaSection}> 
-            <Text style={styles.mediaTitle}>Media</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mediaPreviewContainer}>
-              {selectedImages.map((uri, index) => (
-                <View key={index} style={styles.mediaPreviewItem}>
-                  <Image source={{ uri }} style={styles.previewImage} />
-                  <TouchableOpacity
-                    style={styles.removeMediaButton}
-                    onPress={() => setSelectedImages(prev => prev.filter((_, i) => i !== index))}
-                  >
-                    <Ionicons name="close-circle" size={22} color="rgba(0,0,0,0.7)" />
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {/* Optional: Add a button here to add more media */}
-              <TouchableOpacity style={styles.addMoreMediaButton} onPress={handleAddMedia}>
-                 <Ionicons name="add" size={24} color="#555" />
+        {/* Privacy Section */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Privacy</Text>
+          <View style={styles.privacyOptionsContainer}>
+            {['family', 'personal', 'custom'].map((option) => (
+              <TouchableOpacity 
+                key={option}
+                style={[styles.privacyOptionButton, privacy === option && styles.privacyOptionSelected]}
+                onPress={() => setPrivacy(option as 'family' | 'personal' | 'custom')}
+              >
+                <Text style={[styles.privacyOptionText, privacy === option && styles.privacyOptionTextSelected]}>
+                  {option.charAt(0).toUpperCase() + option.slice(1)}
+                </Text>
               </TouchableOpacity>
-            </ScrollView>
+            ))}
           </View>
-        )}
+          {privacy === 'custom' && (
+            <Text style={styles.comingSoonText}>Custom member selection coming soon.</Text>
+          )}
+        </View>
+
+        {/* Tag People Section */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Tag People Involved</Text>
+          <TouchableOpacity style={styles.addButton} onPress={handleTagPeople}>
+            <Ionicons name="person-add-outline" size={22} color="#1A4B44" style={{marginRight: 5}} />
+            <Text style={styles.addButtonText}>Tag People</Text>
+          </TouchableOpacity>
+        </View>
+        
+        {/* Story Content Section */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Story Content</Text>
+          {blocks.map((block) => (
+            <View key={block.id} style={styles.blockContainer}>
+              <View style={{flex: 1}}>
+                {block.type === 'text' && (
+                  <TextInput
+                    style={styles.textBlockInput}
+                    placeholder="Start writing your story block..."
+                    multiline
+                    value={block.content}
+                    onChangeText={(text) => updateBlockContent(block.id, text)}
+                  />
+                )}
+                {block.type === 'image' && (
+                  <View>
+                    <TouchableOpacity onPress={() => handleSelectMediaForBlock(block.id)} style={styles.mediaUploadButton}>
+                      <Ionicons name="images-outline" size={24} color="#1A4B44" />
+                      <Text style={{color: "#1A4B44", marginLeft: 5}}>
+                        {block.content && block.content.length > 0 ? `${block.content.length} media selected` : "Add Images/Videos"}
+                      </Text>
+                    </TouchableOpacity>
+                    {block.content && block.content.length > 0 && (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mediaPreviewContainer}>
+                        {block.content.map((asset: ImagePicker.ImagePickerAsset, index: number) => (
+                          <Image key={index} source={{ uri: asset.uri }} style={styles.previewImage} />
+                        ))}
+                      </ScrollView>
+                    )}
+                  </View>
+                )}
+                {block.type === 'audio' && (
+                  <TouchableOpacity onPress={() => Alert.alert("Add Audio", "Audio recording/upload coming soon.")} style={styles.mediaUploadButton}>
+                    <MaterialIcons name="audiotrack" size={24} color="#1A4B44" />
+                    <Text style={{color: "#1A4B44", marginLeft: 5}}>Add Audio</Text>
+                  </TouchableOpacity>
+                )}
+                 {/* Video block can be similar to image or have specific handling */}
+                 {block.type === 'video' && (
+                    <TouchableOpacity onPress={() => handleSelectMediaForBlock(block.id)} style={styles.mediaUploadButton}>
+                      <Ionicons name="film-outline" size={24} color="#1A4B44" />
+                      <Text style={{color: "#1A4B44", marginLeft: 5}}>
+                        {block.content && block.content.length > 0 ? `${block.content.length} video(s) selected` : "Add Videos"}
+                      </Text>
+                    </TouchableOpacity>
+                 )}
+              </View>
+              <TouchableOpacity onPress={() => removeBlock(block.id)} style={styles.removeBlockButton}>
+                <Ionicons name="remove-circle" size={24} color="red" />
+              </TouchableOpacity>
+            </View>
+          ))}
+          <TouchableOpacity style={styles.addButton} onPress={() => setAddContentModalVisible(true)}>
+             <Ionicons name="add-circle" size={22} color="#1A4B44" style={{marginRight: 5}} />
+            <Text style={styles.addButtonText}>Add Content Block</Text>
+          </TouchableOpacity>
+        </View>
+
+        {renderAddDetailsModal()}
+        {renderAddContentModal()}
       
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-// --- Styles Updated to match createEvent structure ---
+// MARK: - Styles
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF', // Changed to white for a cleaner look
+    backgroundColor: '#F0F0F0', // Light gray background for the whole screen
   },
   container: {
     flex: 1,
   },
-   scrollContentContainer: {
-    paddingBottom: 20, // Removed extra padding for bottom toolbar, some padding remains
+  scrollContentContainer: {
+    paddingBottom: 30, 
   },
-  postButtonTextNavigator: {
+  saveButtonTextNavigator: {
     color: '#1A4B44', // Dynasty Green
     fontSize: 17,
     fontWeight: '600',
   },
-  // User Info Section Styles (can remain similar)
-  userInfoSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 15, // Add horizontal padding
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12, // Increased margin
-  },
-  userNameText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  // Form Section Styling (Adopted from createEvent)
-  formSection: {
-    marginTop: 20,
-    marginHorizontal: 15,
+  sectionContainer: {
+    marginTop: 10,
+    marginHorizontal: 10,
     backgroundColor: '#FFFFFF', 
-    borderRadius: 10,
-    overflow: 'hidden',
+    borderRadius: 8,
+    padding: 15,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, 
-    shadowRadius: 3,
+    shadowOpacity: 0.1, 
+    shadowRadius: 2,
     elevation: 2,
   },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333333',
+    marginBottom: 15,
+  },
   inputStoryTitle: {
-    fontSize: 18, // Slightly larger for title
-    paddingHorizontal: 18,
-    paddingVertical: 18, // Increased padding
+    fontSize: 20, 
+    paddingVertical: 12,
     color: '#222222',
     fontWeight: '500',
   },
-   inputStoryContent: {
+  inputField: { // Generic input field style
     fontSize: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 15,
+    paddingVertical: 12,
     color: '#333333',
-    minHeight: 150, // Good starting height for story content
-    lineHeight: 22,
   },
-  // Input Row Styling (Adopted from createEvent)
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 18, // Consistent padding
-    backgroundColor: '#FFFFFF', // Ensure it's white if formSection isn't or if it's the last item
+    paddingVertical: 12,
   },
   inputIcon: {
-    marginRight: 15,
-    color: '#1A4B44', // Dynasty Green for icons
+    marginRight: 12,
+    color: '#1A4B44', 
   },
-  inputRowText: { // For "Date" label
+  inputRowText: { 
     fontSize: 16,
-    color: '#222222', // Darker text for label
-    flex: 1, // Allow label to take available space
+    color: '#222222', 
+    flex: 1, 
   },
-  inputRowValueContainer: { // To group date text and chevron
+  inputRowValueContainer: { 
     flexDirection: 'row',
     alignItems: 'center',
   },
-  inputRowValueText: { // For the actual date value
+  inputRowValueText: { 
     fontSize: 16,
-    color: '#555555', // Medium gray for value
+    color: '#555555', 
   },
-  inputRowChevron: {
+  inputRowChevron: { // Kept for potential future use
     marginLeft: 8,
-    color: '#C7C7CC', // Standard iOS chevron color
+    color: '#C7C7CC', 
   },
-  placeholderText: { // No longer directly used, placeholderTextColor handles it
-    color: '#B0B0B0',
-  },
-  // Separator Styling (Adopted from createEvent)
-  separatorThin: {
-    height: 0.5,
-    backgroundColor: '#E0E0E0',
-    marginLeft: 20 + 22 + 15, // Aligns with icon + margin
-  },
-  separatorThinNoMargin: { // Separator directly under inputs
+  separatorThinNoMargin: { 
     height: 1,
-    backgroundColor: '#EFEFF4', // Lighter separator
+    backgroundColor: '#EFEFF4', 
+    marginVertical: 5,
   },
-  // Media Section Styles (New/Adjusted)
-  mediaSection: {
-     marginTop: 20,
-     marginHorizontal: 15,
-     // Can add background/border/padding if desired
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 10,
+    backgroundColor: '#E8F5E9', // Light green tint
+    borderRadius: 8,
   },
-   mediaTitle: {
-    fontSize: 14,
-    color: '#555',
-    fontWeight: '600',
+  addButtonText: {
+    fontSize: 16,
+    color: '#1A4B44',
+    fontWeight: '500',
+  },
+  // Privacy Styles
+  privacyOptionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
     marginBottom: 10,
-    textTransform: 'uppercase',
-    paddingLeft: 5, // Small indent
+  },
+  privacyOptionButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#1A4B44',
+  },
+  privacyOptionSelected: {
+    backgroundColor: '#1A4B44',
+  },
+  privacyOptionText: {
+    color: '#1A4B44',
+    fontWeight: '500',
+  },
+  privacyOptionTextSelected: {
+    color: '#FFFFFF',
+  },
+  comingSoonText: {
+    textAlign: 'center',
+    color: '#777',
+    fontStyle: 'italic',
+    marginTop: 5,
+  },
+  // Block Styles
+  blockContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F9F9F9',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  textBlockInput: {
+    fontSize: 16,
+    color: '#333333',
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  mediaUploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 5,
+    justifyContent: 'center',
   },
   mediaPreviewContainer: {
-    flexDirection: 'row',
-    paddingVertical: 10,
-    paddingLeft: 5, // Align with title indent
-  },
-  mediaPreviewItem: {
-    marginRight: 12, // Increased spacing
-    position: 'relative',
+    marginTop: 10,
   },
   previewImage: {
-    width: 90, // Slightly larger preview
-    height: 90,
+    width: 80, 
+    height: 80,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#DDD',
-    backgroundColor: '#eee', // Background for loading/error
+    marginRight: 10,
   },
-   addMoreMediaButton: {
-    width: 90,
-    height: 90,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: '#CCC',
-    borderStyle: 'dashed',
+  removeBlockButton: {
+    paddingLeft: 10, // Space from content to button
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8F8F8',
-    marginLeft: 5, // Spacing after last image
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  removeMediaButton: {
-    position: 'absolute',
-    top: -7, // Adjusted position
-    right: -7, // Adjusted position
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12, // Make it circular
-    padding: 1, // Add padding for easier touch
-    shadowColor: '#000', // Add shadow for visibility
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 3,
+  modalContent: {
+    width: '80%',
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    width: '100%',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
   },
 });
 

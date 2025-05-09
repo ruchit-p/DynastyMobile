@@ -32,7 +32,7 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/dynastysplash.png",
-          "resizeMode": "fill",
+          "resizeMode": "contain",
           "backgroundColor": "#0A3A2D"
         }
       ],

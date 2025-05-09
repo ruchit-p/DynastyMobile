@@ -11,7 +11,7 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 
 interface ChatListItem {
   id: string;
@@ -23,46 +23,11 @@ interface ChatListItem {
   isOnline?: boolean;
 }
 
-const mockChatList: ChatListItem[] = [
-  {
-    id: 'chat1',
-    userName: 'Alice Wonderland',
-    lastMessage: 'See you tomorrow for tea!',
-    timestamp: '10:30 AM',
-    avatarUrl: 'https://via.placeholder.com/50/FFA07A/000000?Text=A',
-    unreadCount: 2,
-    isOnline: true,
-  },
-  {
-    id: 'chat2',
-    userName: 'Bob The Builder',
-    lastMessage: 'Can we fix it? Yes, we can!',
-    timestamp: 'Yesterday',
-    avatarUrl: 'https://via.placeholder.com/50/ADD8E6/000000?Text=B',
-  },
-  {
-    id: 'chat3',
-    userName: 'Charlie Brown',
-    lastMessage: 'Good grief! Snoopy is at it again.',
-    timestamp: 'Mon',
-    avatarUrl: 'https://via.placeholder.com/50/FFFFE0/000000?Text=C',
-    unreadCount: 0,
-    isOnline: false,
-  },
-  {
-    id: 'chat4',
-    userName: 'Diana Prince',
-    lastMessage: 'Duty calls! Saving the world.',
-    timestamp: 'Sun',
-    avatarUrl: 'https://via.placeholder.com/50/FFC0CB/000000?Text=D',
-    isOnline: true,
-  },
-];
-
 const ChatListScreen = () => {
   const router = useRouter();
+  const navigation = useNavigation();
   const [searchText, setSearchText] = useState('');
-  const [chats, setChats] = useState<ChatListItem[]>(mockChatList);
+  const [chats, setChats] = useState<ChatListItem[]>([]);
 
   const filteredChats = chats.filter(chat => 
     chat.userName.toLowerCase().includes(searchText.toLowerCase()) ||
@@ -72,6 +37,30 @@ const ChatListScreen = () => {
   const handleChatItemPress = (chatId: string, userName: string) => {
     router.push({ pathname: '/(screens)/chatDetail', params: { chatId, userName } });
   };
+
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      title: 'Messages',
+      headerTitleAlign: 'center',
+      headerStyle: { backgroundColor: '#FFFFFF' },
+      headerTintColor: '#1A4B44',
+      headerTitleStyle: { fontWeight: '600', fontSize: 18, color: '#1A4B44' },
+      headerLeft: () => (
+        <TouchableOpacity 
+          onPress={() => router.canGoBack() ? router.back() : router.push('/(tabs)/')} 
+          style={{ marginLeft: Platform.OS === 'ios' ? 15 : 10, padding: 5 }}
+        >
+          <Ionicons name="arrow-back" size={28} color="#1A4B44" />
+        </TouchableOpacity>
+      ),
+      headerRight: () => (
+        <TouchableOpacity onPress={() => router.push('/(screens)/newChat')} style={{ marginRight: 15 }}>
+          <Ionicons name="add" size={30} color="#1A4B44" />
+        </TouchableOpacity>
+      ),
+      headerBackTitleVisible: false,
+    });
+  }, [navigation, router]);
 
   const renderChatItem = ({ item }: { item: ChatListItem }) => (
     <TouchableOpacity style={styles.chatItem} onPress={() => handleChatItemPress(item.id, item.userName)}>
@@ -98,16 +87,6 @@ const ChatListScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Stack.Screen 
-        options={{
-          title: 'Messages',
-          headerRight: () => (
-            <TouchableOpacity onPress={() => router.push('/(screens)/newChat')} style={{ marginRight: 15 }}>
-              <Ionicons name="add-circle-outline" size={28} color="#1A4B44" />
-            </TouchableOpacity>
-          ),
-        }} 
-      />
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
         <TextInput
