@@ -832,9 +832,14 @@ export const handleSignUp = onCall({
       success: true,
       userId,
     };
-  } catch (error) {
+  } catch (error: any) {
     logger.error("Error in handleSignUp:", error);
-    throw new Error(error instanceof Error ? error.message : "Failed to complete signup process");
+    if (error instanceof functions.https.HttpsError) {
+      throw error; // Re-throw HttpsError instances as is
+    }
+    // For other types of errors, throw a generic HttpsError
+    const message = error?.message || "Failed to complete signup process";
+    throw new functions.https.HttpsError("internal", message, error);
   }
 });
 
@@ -1546,9 +1551,14 @@ export const handleInvitedSignUp = onCall({
       userId,
       familyTreeId: invitation.familyTreeId,
     };
-  } catch (error) {
+  } catch (error: any) {
     logger.error("Error in handleInvitedSignUp:", error);
-    throw new Error(error instanceof Error ? error.message : "Failed to complete signup process");
+    if (error instanceof functions.https.HttpsError) {
+      throw error; // Re-throw HttpsError instances as is
+    }
+    // For other types of errors, throw a generic HttpsError
+    const message = error?.message || "Failed to complete signup process";
+    throw new functions.https.HttpsError("internal", message, error);
   }
 });
 
@@ -1565,14 +1575,14 @@ export const handleLogin = onCall({
 
   try {
     // Validate email
-    if (!isValidEmail(email)) {
-      throw new Error("Please enter a valid email address");
+    if (!email || typeof email !== "string" || !isValidEmail(email)) {
+      throw new functions.https.HttpsError("invalid-argument", "Please enter a valid email address");
     }
 
-    // Validate password format
-    const passwordValidation = isValidPassword(password);
-    if (!passwordValidation.isValid) {
-      throw new Error("Invalid password format");
+    // Validate password
+    if (!password || typeof password !== "string") {
+      logger.error(`Password not provided or not a string in handleLogin for email: ${email}`);
+      throw new functions.https.HttpsError("invalid-argument", "Password is required and must be a string.");
     }
 
     const auth = getAuth();
