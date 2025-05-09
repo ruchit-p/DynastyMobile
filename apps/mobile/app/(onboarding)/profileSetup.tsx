@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useAuth } from '../context/AuthContext'; // Adjust path as needed
+import { useAuth } from '../contexts/AuthContext'; // Adjust path as needed
 import { functions } from '../../src/lib/firebase'; // For calling cloud functions
 // You might want a date picker component
 // import DateTimePicker from '@react-native-community/datetimepicker';

@@ -1,0 +1,46 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Header Consistency Rules
+
+This document outlines the rules for implementing consistent headers across the Dynasty Mobile application. Adhering to these guidelines will ensure a uniform user experience.
+
+## 1. Header Component Usage
+
+- **Centralized Header Component**: If a common header component exists (e.g., `apps/mobile/components/ui/AppHeader.tsx` or similar), it **MUST** be used for all screens that require a standard header.
+    - *Rationale*: Promotes reusability and ensures that updates to header style or functionality are applied globally.
+- **Custom Headers**: If a screen requires a significantly different header, the reasons **MUST** be documented, and efforts should be made to incorporate common elements (like title styling, back button behavior) from the standard header.
+
+## 2. Header Title
+
+- **Font and Styling**: Header titles should use a consistent font family, size, and weight. Refer to [styling-guidelines.mdc](mdc:.cursor/rules/styling-guidelines.mdc) for font definitions.
+- **Capitalization**: Use title case for header titles (e.g., "User Profile", "Settings Page").
+- **Length**: Keep titles concise and descriptive. Avoid overly long titles that might truncate on smaller screens.
+
+## 3. Navigation Elements
+
+- **Back Button**:
+    - A consistent back button icon and behavior **MUST** be used.
+    - It should typically be present on the left side of the header for screens that are not top-level tabs.
+- **Action Buttons**:
+    - Icons for common actions (e.g., settings, add, search) should be consistent across the app.
+    - Placement of action buttons (usually on the right) should be uniform.
+    - Limit the number of action buttons in the header to avoid clutter.
+
+## 4. Styling
+
+- **Background Color**: Header background color should be consistent, potentially derived from a central theme file (e.g., `apps/mobile/constants/Colors.ts` or `apps/mobile/constants/Theme.ts`).
+- **Border/Shadow**: If headers use a bottom border or shadow, this style should be applied uniformly.
+
+## 5. Accessibility
+
+- **Readable Text**: Ensure sufficient contrast between header text and background.
+- **Touchable Area**: Navigation icons and action buttons must have an adequate touchable area.
+
+## Example File Structure References:
+
+- Check for a centralized header component in: `[components/ui/](mdc:apps/mobile/components/ui)`
+- Refer to theme/constants in: `[constants/](mdc:apps/mobile/constants)`
+- Observe header usage in screen files: `[app/(screens)/](mdc:apps/mobile/app/(screens)/)` and `[app/(tabs)/](mdc:apps/mobile/app/(tabs)/)`

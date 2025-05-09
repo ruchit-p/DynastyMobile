@@ -6,6 +6,7 @@
     "emulator:start": "firebase emulators:start --import=./emulator-data --export-on-exit",
     "emulator:export": "firebase emulators:export ./emulator-data",
     "emulator:clean": "rm -rf ./emulator-data",
-    "dev": "npm run emulator:start"
+    "dev": "npm run emulator:start",
+    "stop:emulators": "(kill $(lsof -t -i:4000) || true) && (kill $(lsof -t -i:5000) || true) && (kill $(lsof -t -i:5001) || true) && (kill $(lsof -t -i:8080) || true) && (kill $(lsof -t -i:9000) || true) && (kill $(lsof -t -i:9099) || true) && (kill $(lsof -t -i:9199) || true) && (kill $(lsof -t -i:8085) || true) && (kill $(lsof -t -i:8086) || true)"
   }
 } 

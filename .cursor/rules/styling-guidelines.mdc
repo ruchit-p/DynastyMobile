@@ -1,0 +1,62 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# General Styling Guidelines
+
+This document provides general styling guidelines for the Dynasty Mobile application to ensure a cohesive and maintainable codebase.
+
+## 1. Theming and Constants
+
+- **Centralized Theme**: Colors, fonts, spacing units, and other style-related constants **MUST** be defined in a central location (e.g., `apps/mobile/constants/Theme.ts`, `apps/mobile/constants/Colors.ts`, `apps/mobile/constants/Fonts.ts`).
+    - *Rationale*: Facilitates easy updates and maintains consistency. Avoid hardcoding style values directly in components.
+- **Usage**: Always import and use these predefined constants in your stylesheets.
+
+## 2. StyleSheet API
+
+- **`StyleSheet.create`**: Always use `StyleSheet.create` from `react-native` to define styles.
+    - *Rationale*: Performance benefits (sends styles over the bridge only once) and helps keep styling separate from render logic.
+- **Naming Conventions**: Use clear and descriptive names for style objects and properties (e.g., `container`, `titleText`, `inputField`).
+
+## 3. Component-Specific Styles
+
+- **Colocation**: Styles specific to a single component should ideally be defined within the component's file or in an adjacent `*.styles.ts` file.
+- **Reusability**: If a set of styles is used by multiple components, consider extracting it into a shared style utility or a theme constant.
+
+## 4. Layout
+
+- **Flexbox**: Utilize Flexbox for layout as it's the primary layout system in React Native. Understand its properties well (`flexDirection`, `justifyContent`, `alignItems`, `flex`, etc.).
+- **Spacing**: Use predefined spacing units from the theme for margins, paddings, and gaps to maintain visual consistency.
+- **Responsiveness**: Design layouts to be responsive to different screen sizes and orientations. Avoid fixed pixel values for widths and heights where possible; prefer percentages or `flex` properties.
+
+## 5. Typography
+
+- **Font Definitions**: All font families, sizes, and weights used in the app **MUST** be defined in the theme constants.
+- **Hierarchy**: Establish a clear visual hierarchy for text using different font sizes, weights, and colors (e.g., main titles, subtitles, body text, captions).
+- **Platform-Specific Fonts**: Be mindful of default system fonts if not using custom fonts, or ensure custom fonts are correctly linked for both iOS and Android.
+
+## 6. Colors
+
+- **Color Palette**: Adhere to the defined color palette in the theme constants.
+- **Semantic Colors**: Define and use semantic color names (e.g., `primary`, `accent`, `error`, `success`, `textPrimary`, `textSecondary`, `background`) rather than raw hex codes directly in components.
+- **Accessibility**: Ensure sufficient color contrast for text and UI elements to meet accessibility standards (WCAG AA as a minimum).
+
+## 7. Images and Icons
+
+- **Optimization**: Optimize images for mobile to reduce app size and loading times.
+- **Icon Library**: If an icon library (e.g., `expo-vector-icons` or custom SVGs) is used, ensure consistency in icon style and size.
+- **Placeholders**: Use appropriate placeholders for images while they are loading.
+
+## 8. File Structure for Styling Assets:
+
+- Theme and constants: `[constants/](mdc:apps/mobile/constants)` (e.g., `Colors.ts`, `Fonts.ts`, `Theme.ts`, `Layout.ts`)
+- Shared UI components with their styles: `[components/ui/](mdc:apps/mobile/components/ui)`
+- Font assets: `[assets/fonts/](mdc:apps/mobile/assets/fonts)`
+- Image assets: `[assets/images/](mdc:apps/mobile/assets/images)`
+
+## 9. Comments
+
+- **Complex Styles**: Add comments to explain complex or non-obvious styling logic.
+
+By following these guidelines, we can ensure that the application's styling is consistent, maintainable, and scalable.

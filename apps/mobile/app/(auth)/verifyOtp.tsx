@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Link } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 
 const dynastyLogo = require('../../assets/images/dynasty.png');
@@ -40,7 +40,7 @@ export default function VerifyOtpScreen() {
   }, [phoneAuthConfirmation, isLoading, router]);
 
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setTimeout>; // Correct type for setTimeout timer ID
     if (resendDisabled && countdown > 0) {
       timer = setTimeout(() => setCountdown(countdown - 1), 1000);
     } else if (countdown === 0) {

@@ -13,7 +13,7 @@ import {
 import { useRouter, useLocalSearchParams, Link, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { useAuth } from '../context/AuthContext'; // Assuming this path
+import { useAuth } from '../contexts/AuthContext'; // Assuming this path
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const dynastyLogo = require('../../assets/images/dynasty.png');

@@ -54,7 +54,7 @@ const FloatingActionMenu: React.FC<FloatingActionMenuProps> = ({
 
   const renderMenuItemIcon = (item: FabMenuItemAction) => {
     const IconComponent = item.iconLibrary === 'MaterialCommunityIcons' ? MaterialCommunityIcons : Ionicons;
-    return <IconComponent name={item.iconName as any} size={22} style={styles.fabMenuItemIcon} />;
+    return <IconComponent name={item.iconName as any} size={22} color="#333333" style={styles.fabMenuItemIcon} />;
   };
 
   return (
@@ -72,6 +72,7 @@ const FloatingActionMenu: React.FC<FloatingActionMenuProps> = ({
                 setIsMenuVisible(false);
                 item.onPress();
               }}
+              accessibilityLabel={item.text}
             >
               {renderMenuItemIcon(item)}
               <Text style={styles.fabMenuItemText}>{item.text}</Text>
@@ -80,7 +81,11 @@ const FloatingActionMenu: React.FC<FloatingActionMenuProps> = ({
         </View>
       )}
 
-      <TouchableOpacity style={styles.fab} onPress={() => setIsMenuVisible(!isMenuVisible)}>
+      <TouchableOpacity 
+        style={styles.fab} 
+        onPress={() => setIsMenuVisible(!isMenuVisible)}
+        accessibilityLabel={isMenuVisible ? "Close menu" : "Open menu"}
+      >
         {renderFabIcon()}
       </TouchableOpacity>
     </>

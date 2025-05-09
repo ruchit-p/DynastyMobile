@@ -13,7 +13,7 @@ import {
 import { useRouter, Link, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import RNPhoneInput from 'react-native-phone-number-input';
 

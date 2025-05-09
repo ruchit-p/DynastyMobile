@@ -10,7 +10,7 @@ import {
   Platform
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { useAuth } from '../context/AuthContext'; // Assuming this path
+import { useAuth } from '../contexts/AuthContext'; // Assuming this path
 import { StatusBar } from 'expo-status-bar';
 
 const dynastyLogo = require('../../assets/images/dynasty.png');

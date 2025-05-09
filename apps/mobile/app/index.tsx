@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
 // Assuming the logo is in assets/images. Adjust path if necessary.
-const dynastyLogo = require('../assets/images/dynasty.png'); 
+const dynastyLogo = require('@/assets/images/dynasty.png'); 
 
 export default function LandingScreen() {
   const router = useRouter();

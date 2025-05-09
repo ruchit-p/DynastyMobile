@@ -15,7 +15,7 @@ import {
 import { useRouter, Link, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const dynastyLogo = require('../../assets/images/dynasty.png');
@@ -63,9 +63,7 @@ export default function SignUpScreen() {
   };
 
   const handlePhoneSignUp = () => {
-    // TODO: Implement Firebase Phone Sign Up (Navigates to common phone input screen)
     router.push('/(auth)/phoneSignIn'); // Changed from phoneSignUp to phoneSignIn
-    // Alert.alert("Phone Sign-Up", "Phone Sign-up logic not yet implemented."); // Remove alert, navigation handles it
   };
 
   return (

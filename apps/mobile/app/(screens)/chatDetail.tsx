@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -24,50 +24,64 @@ interface Message {
   avatarUrl?: string; // Optional
 }
 
-// Mock messages - in a real app, fetch based on chatId
-const getMockMessages = (chatId: string): Message[] => {
-  if (chatId === 'chat1') {
-    return [
-      { id: 'm1', text: 'Hey Alice, how are you?', timestamp: '10:25 AM', senderId: 'otherUser', userName: 'Bob', avatarUrl: 'https://via.placeholder.com/30/ADD8E6/000000?Text=B' },
-      { id: 'm2', text: 'Hi Bob! I am good, thanks for asking. Excited for tea tomorrow!', timestamp: '10:28 AM', senderId: 'currentUser', userName: 'Alice', avatarUrl: 'https://via.placeholder.com/30/FFA07A/000000?Text=A' },
-      { id: 'm3', text: 'Me too! See you then.', timestamp: '10:29 AM', senderId: 'otherUser', userName: 'Bob', avatarUrl: 'https://via.placeholder.com/30/ADD8E6/000000?Text=B' },
-      { id: 'm4', text: 'See you tomorrow for tea!', timestamp: '10:30 AM', senderId: 'currentUser', userName: 'Alice', avatarUrl: 'https://via.placeholder.com/30/FFA07A/000000?Text=A' },
-    ];
-  }
-  return [
-      { id: 'm_default1', text: 'Hello there!', timestamp: '09:00 AM', senderId: 'otherUser', userName: 'Some User'},
-      { id: 'm_default2', text: 'Hi! How can I help?', timestamp: '09:01 AM', senderId: 'currentUser', userName: 'Me'},
-  ];
-};
+// Mock messages - will be removed/commented
+// const getMockMessages = (chatId: string): Message[] => {
+//   if (chatId === 'chat1') {
+//     return [
+//       { id: 'm1', text: 'Hey Alice, how are you?', timestamp: '10:25 AM', senderId: 'otherUser', userName: 'Bob', avatarUrl: 'https://via.placeholder.com/30/ADD8E6/000000?Text=B' },
+//       { id: 'm2', text: 'Hi Bob! I am good, thanks for asking. Excited for tea tomorrow!', timestamp: '10:28 AM', senderId: 'currentUser', userName: 'Alice', avatarUrl: 'https://via.placeholder.com/30/FFA07A/000000?Text=A' },
+//       { id: 'm3', text: 'Me too! See you then.', timestamp: '10:29 AM', senderId: 'otherUser', userName: 'Bob', avatarUrl: 'https://via.placeholder.com/30/ADD8E6/000000?Text=B' },
+//       { id: 'm4', text: 'See you tomorrow for tea!', timestamp: '10:30 AM', senderId: 'currentUser', userName: 'Alice', avatarUrl: 'https://via.placeholder.com/30/FFA07A/000000?Text=A' },
+//     ];
+//   }
+//   return [
+//       { id: 'm_default1', text: 'Hello there!', timestamp: '09:00 AM', senderId: 'otherUser', userName: 'Some User'},
+//       { id: 'm_default2', text: 'Hi! How can I help?', timestamp: '09:01 AM', senderId: 'currentUser', userName: 'Me'},
+//   ];
+// };
 
 const ChatDetailScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
-  const params = useLocalSearchParams<{ chatId: string; userName?: string }>();
-  const { chatId, userName = 'Chat' } = params;
+  const params = useLocalSearchParams<{ chatId: string; userName?: string; userAvatar?: string }>();
+  const { chatId, userName = 'Chat', userAvatar } = params;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const flatListRef = useRef<FlatList>(null);
 
-  useEffect(() => {
-    // Set navigator header options
+  useLayoutEffect(() => {
     navigation.setOptions({
       title: userName,
+      headerTitleAlign: 'center',
+      headerStyle: { backgroundColor: '#FFFFFF' },
+      headerTintColor: '#1A4B44',
+      headerTitleStyle: { fontWeight: '600', fontSize: 18, color: '#1A4B44' },
+      headerLeft: () => (
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerLeftButton}>
+          <Ionicons name="arrow-back" size={28} color="#1A4B44" />
+          <Text style={styles.headerLeftButtonText}>Messages</Text>
+        </TouchableOpacity>
+      ),
       headerRight: () => (
         <TouchableOpacity onPress={() => Alert.alert("Chat Info", "Navigate to chat info/settings screen")} style={{ paddingHorizontal: 15 }}>
           <Ionicons name="ellipsis-vertical" size={22} color="#1A4B44" />
         </TouchableOpacity>
       ),
+      headerBackTitleVisible: false,
     });
   }, [navigation, userName, router]);
 
   useEffect(() => {
     // Fetch or load messages for the given chatId
+    // This is where you would typically fetch messages from a backend or local storage.
+    // For now, it will remain empty since mock data is removed.
     if (chatId) {
-      setMessages(getMockMessages(chatId as string));
+      // Example: fetchMessages(chatId).then(setMessages);
+      console.log(`Attempting to load messages for chatId: ${chatId}, userName: ${userName}`);
+      // setMessages(getMockMessages(chatId as string)); // Mock data removed
     }
-  }, [chatId]);
+  }, [chatId, userName]);
 
   useEffect(() => {
     // Scroll to bottom when messages change
@@ -84,7 +98,7 @@ const ChatDetailScreen = () => {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       senderId: 'currentUser',
       userName: 'Me', // Replace with actual current user name
-      // avatarUrl: currentUserAvatar // Replace with actual current user avatar
+      // avatarUrl: currentUser?.avatarUrl // Replace with actual current user avatar
     };
     setMessages(prevMessages => [...prevMessages, newMessage]);
     setInputText('');
@@ -93,15 +107,19 @@ const ChatDetailScreen = () => {
 
   const renderMessageItem = ({ item }: { item: Message }) => {
     const isCurrentUser = item.senderId === 'currentUser';
+    // Use passed userAvatar for the other user if item.avatarUrl is not present
+    const messageAvatar = isCurrentUser ? undefined /* or currentUser.avatar */ : item.avatarUrl || userAvatar;
+
     return (
       <View style={[styles.messageRow, isCurrentUser ? styles.currentUserMessageRow : styles.otherUserMessageRow]}>
-        {!isCurrentUser && item.avatarUrl && <Image source={{uri: item.avatarUrl}} style={styles.avatarSmall} />}
+        {!isCurrentUser && messageAvatar && <Image source={{uri: messageAvatar}} style={styles.avatarSmall} />}
         <View style={[styles.messageBubble, isCurrentUser ? styles.currentUserBubble : styles.otherUserBubble]}>
           {!isCurrentUser && item.userName && <Text style={styles.messageSenderName}>{item.userName}</Text>}
           <Text style={isCurrentUser ? styles.currentUserMessageText : styles.otherUserMessageText}>{item.text}</Text>
           <Text style={isCurrentUser ? styles.currentUserTimestamp : styles.otherUserTimestamp}>{item.timestamp}</Text>
         </View>
-        {isCurrentUser && item.avatarUrl && <Image source={{uri: item.avatarUrl}} style={styles.avatarSmall} /> }
+        {/* Current user avatar could be on the right, if desired and available */}
+        {/* {isCurrentUser && currentUserAvatar && <Image source={{uri: currentUserAvatar}} style={styles.avatarSmall} /> } */}
       </View>
     );
   };
@@ -145,6 +163,17 @@ const ChatDetailScreen = () => {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
+  headerLeftButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: Platform.OS === 'ios' ? 10 : 10, 
+    paddingVertical: 5,
+  },
+  headerLeftButtonText: {
+    color: '#1A4B44',
+    fontSize: 17, 
+    marginLeft: Platform.OS === 'ios' ? 6 : 8,
+  },
   keyboardAvoidingContainer: { flex: 1 }, 
   messagesList: { flex: 1, backgroundColor: '#F4F4F4' },
   messageRow: {
