@@ -66,7 +66,7 @@ const FamilyTreeScreen = () => {
   const [selectedNode, setSelectedNode] = useState<Items | null>(null);
   const [isNodeActionMenuVisible, setIsNodeActionMenuVisible] = useState(false);
   const [isHeaderMenuVisible, setIsHeaderMenuVisible] = useState(false);
-  const { user } = useAuth();
+  const { user, firestoreUser } = useAuth();
   const [relativesData, setRelativesData] = useState<Items[]>([]);
 
   useLayoutEffect(() => {
@@ -103,12 +103,16 @@ const FamilyTreeScreen = () => {
               spouse = buildItem(spouseMember);
             }
           }
+          // Determine avatar: use provided profilePicture, otherwise for current user fall back to auth or firestore picture
+          const attributeAvatar = member.attributes?.profilePicture;
+          const isCurrentUser = member.id === user.uid;
+          const fallbackAvatar = isCurrentUser ? (user.photoURL || firestoreUser?.profilePictureUrl) : undefined;
           return {
             id: member.id,
             name: member.attributes?.displayName || '',
             dob: '', // Map dateOfBirth if available
             dod: undefined,
-            avatar: member.attributes?.profilePicture,
+            avatar: attributeAvatar ?? fallbackAvatar,
             spouse,
             children,
           };
@@ -119,7 +123,7 @@ const FamilyTreeScreen = () => {
         }
       })
       .catch((error) => console.error('Error fetching family tree:', error));
-  }, [user]);
+  }, [user, firestoreUser]);
 
   const openHeaderMenu = () => {
     setIsHeaderMenuVisible(true);

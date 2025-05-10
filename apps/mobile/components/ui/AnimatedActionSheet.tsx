@@ -107,13 +107,13 @@ const AnimatedActionSheet: React.FC<AnimatedActionSheetProps> = ({
       onRequestClose={onClose}
       testID={testID}
     >
-      <TouchableOpacity
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={onClose}
-        accessibilityRole="button"
-        accessibilityLabel="Close action sheet"
-      >
+      <View style={styles.modalOverlay} pointerEvents="box-none">
+        {/* Background touchable to close the sheet on taps outside content */}
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={onClose}
+        />
         <SafeAreaView style={styles.safeAreaForCancel} pointerEvents="box-none">
           <Animated.View
             style={[
@@ -121,12 +121,14 @@ const AnimatedActionSheet: React.FC<AnimatedActionSheetProps> = ({
               { transform: [{ translateY: slideAnim }] },
               containerStyle
             ]}
-            onStartShouldSetResponder={() => true}
+            // Allow touch events to bubble to children
+            pointerEvents="box-none"
           >
+            {/* Action sheet content captures touches via TouchableOpacity on buttons */}
             <View style={[
               styles.actionsGroup,
               { backgroundColor, borderColor }
-            ]}>
+            ]} pointerEvents="box-none">
               {(title || message) && (
                 <View style={[styles.titleContainer, { borderBottomColor: borderColor }]}>
                   {title && (
@@ -209,7 +211,7 @@ const AnimatedActionSheet: React.FC<AnimatedActionSheetProps> = ({
             )}
           </Animated.View>
         </SafeAreaView>
-      </TouchableOpacity>
+      </View>
     </Modal>
   );
 };

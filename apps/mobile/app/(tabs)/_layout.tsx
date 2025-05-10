@@ -137,8 +137,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? "lock-closed" : "lock-closed-outline"} size={size} color={color} />
           ),
-          headerShown: true, // Use AppHeader for consistency
-          header: (props) => <AppHeader title={props.options.title || 'Vault'} />,
+          headerShown: false, // Let VaultScreen render its own header
         }}
       />
       {/* End Vault Tab */}
