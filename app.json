@@ -17,6 +17,19 @@
     "plugins": [
       "@react-native-firebase/app",
       "@react-native-google-signin/google-signin",
+      "./apps/mobile/plugins/withFirebaseAuthFix",
+      "@react-native-firebase/auth",
+      "@react-native-firebase/firestore",
+      "@react-native-firebase/storage",
+      "@react-native-firebase/functions",
+      [
+        "@react-native-firebase/messaging",
+        {
+          "presentationOptions": ["badge", "sound", "alert"]
+        }
+      ],
+      "expo-av",
+      "expo-sharing",
       [
         "expo-location",
         {
@@ -27,7 +40,12 @@
     "ios": {
       "bundleIdentifier": "com.mydynastyapp.dynasty",
       "googleServicesFile": "./apps/mobile/GoogleService-Info.plist",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      }
     },
     "android": {
       "googleServicesFile": "./apps/mobile/google-services.json",

@@ -17,3 +17,5 @@ android
 .expo-env.d.ts.map
 .expo-env.d.ts.map.gz
 
+
+**/.claude/settings.local.json

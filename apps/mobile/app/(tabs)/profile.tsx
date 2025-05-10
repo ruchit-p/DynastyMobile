@@ -1,34 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  SafeAreaView,
-  Platform,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
 // import { auth, db } from '../../src/lib/firebase'; // Commented out Firebase
-import ListItem, { ListItemProps } from '../../components/ListItem';
-import { useAuth } from '../contexts/AuthContext'; // Added AuthContext
-// AppHeader might not be needed here if the _layout.tsx handles it for the 'profile' tab.
-// However, if this screen can be pushed onto the stack independently, it might need its own header call.
-// For now, let's assume _layout.tsx handles the primary tab header.
+import { useAuth } from '../../src/contexts/AuthContext';
 
-interface UserProfile { // This interface might become partially redundant or could be augmented by FirebaseUser
-  name: string; // This will come from user.displayName
-  email: string; // This will come from user.email
+// Import design system components
+import Screen from '../../components/ui/Screen';
+import ThemedText from '../../components/ThemedText';
+import Card from '../../components/ui/Card';
+import Button from '../../components/ui/Button';
+import Avatar from '../../components/ui/Avatar';
+import EmptyState from '../../components/ui/EmptyState';
+import ListItem from '../../components/ListItem';
+
+// Import design tokens
+import { Spacing } from '../../constants/Spacing';
+import { useTextColor, useBorderColor } from '../../hooks/useThemeColor';
+
+interface UserProfile {
+  name: string;
+  email: string;
   phoneNumber?: string;
   bio?: string;
   joinDate?: string;
   connections?: number;
   stories?: number;
-  profilePicture?: string | null;
+  profilePicture?: string | null | undefined;
   firstName?: string;
   lastName?: string;
   createdAt?: any;
@@ -36,28 +34,27 @@ interface UserProfile { // This interface might become partially redundant or co
 
 const ProfileScreen = () => {
   const router = useRouter();
-  const navigation = useNavigation();
-  const { user, isLoading: authIsLoading, firestoreUser } = useAuth(); // Use AuthContext
-
-  // isLoading state can now primarily rely on authIsLoading
+  const { user, isLoading: authIsLoading, firestoreUser } = useAuth();
   const [isLoading, setIsLoading] = useState<boolean>(true);
-
-  // This local userProfile state can be derived from auth context's user and firestoreUser
   const [userProfileData, setUserProfileData] = useState<UserProfile | null>(null);
+  
+  // Get theme colors
+  const borderColor = useBorderColor();
+  const secondaryTextColor = useTextColor('secondary');
+  const tertiaryTextColor = useTextColor('tertiary');
 
   useEffect(() => {
     setIsLoading(authIsLoading);
     if (user) {
-      // Combine Firebase Auth user data with Firestore user data
+      // Building user profile data from auth context
       const profile: UserProfile = {
         name: user.displayName || `${firestoreUser?.firstName || ''} ${firestoreUser?.lastName || ''}`.trim() || 'User',
         email: user.email || 'No email',
         phoneNumber: user.phoneNumber || firestoreUser?.phoneNumber,
         bio: firestoreUser?.bio,
-        joinDate: user.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleString('default', { month: 'long', year: 'numeric' }) : (firestoreUser?.createdAt ? new Date(firestoreUser.createdAt.toDate()).toLocaleString('default', { month: 'long', year: 'numeric' }) : 'N/A'),
-        // connections and stories would typically come from Firestore or a dedicated backend
-        connections: firestoreUser?.connectionsCount || 0, // Example, assuming this field exists in firestoreUser
-        stories: firestoreUser?.storiesCount || 0,       // Example
+        joinDate: user.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleString('default', { month: 'long', year: 'numeric' }) : 'N/A',
+        connections: firestoreUser?.connectionsCount || 0,
+        stories: firestoreUser?.storiesCount || 0,
         profilePicture: user.photoURL || firestoreUser?.profilePictureUrl,
         firstName: firestoreUser?.firstName || user.displayName?.split(' ')[0],
         lastName: firestoreUser?.lastName || user.displayName?.split(' ').slice(1).join(' '),
@@ -69,235 +66,193 @@ const ProfileScreen = () => {
     }
   }, [user, firestoreUser, authIsLoading]);
 
-  // Fetch user profile data and listen for real-time updates
-  // useFocusEffect can be used to refresh data if necessary, but AuthContext should provide live updates.
-  // The existing useFocusEffect logic related to Firebase direct calls is removed as AuthContext handles it.
-
-  // useEffect(() => {
-  //   navigation.setOptions({
-  //     title: 'Profile', // This is handled by _layout.tsx for the tab
-  //     // AppHeader should be used via _layout.tsx for consistency
-  //   });
-  // }, [navigation]);
-
   const handleEditProfile = () => {
-    router.push('/(screens)/editProfile');
+    router.push('/(screens)/editProfile' as any);
   };
 
-  const menuItems: ListItemProps[] = [
+  const menuItems = [
     {
-      icon: 'settings-outline',
+      icon: 'settings-outline' as keyof typeof Ionicons.glyphMap,
       text: 'Account Settings',
-      onPress: () => router.push('/(screens)/accountSettings'), // TODO: Create this screen
+      onPress: () => router.push('/(screens)/accountSettings' as any),
     },
     {
-      icon: 'book-outline',
-      text: 'Story Settings', // Updated Text
-      onPress: () => router.push('/(screens)/storySettings'), // TODO: Create this screen
+      icon: 'book-outline' as keyof typeof Ionicons.glyphMap,
+      text: 'Story Settings',
+      onPress: () => router.push('/(screens)/storySettings' as any),
     },
     {
-      icon: 'calendar-outline',
-      text: 'Events Settings', // Updated Text
-      onPress: () => router.push('/(screens)/eventSettings'), // TODO: Create this screen
+      icon: 'calendar-outline' as keyof typeof Ionicons.glyphMap,
+      text: 'Events Settings',
+      onPress: () => router.push('/(screens)/eventSettings' as any),
     },
     {
-      icon: 'people-outline',
+      icon: 'people-outline' as keyof typeof Ionicons.glyphMap,
       text: 'Family Management',
-      onPress: () => router.push('/(screens)/familyManagement'), // TODO: Create this screen
+      onPress: () => router.push('/(screens)/familyManagement' as any),
     },
     {
-      icon: 'help-circle-outline',
+      icon: 'help-circle-outline' as keyof typeof Ionicons.glyphMap,
       text: 'Help & Support',
-      onPress: () => router.push('/(screens)/helpAndSupport'), // TODO: Create this screen
+      onPress: () => router.push('/(screens)/helpAndSupport' as any),
     },
   ];
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <Screen>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#0A5C36" />
-          <Text style={styles.loadingText}>Loading profile...</Text>
+          <ThemedText variant="bodyMedium" color="secondary" style={styles.loadingText}>
+            Loading profile...
+          </ThemedText>
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
-  if (!userProfileData && !isLoading) { // Check userProfileData derived from context
+  if (!userProfileData) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.loadingContainer}>
-          <Ionicons name="alert-circle-outline" size={40} color="#888" />
-          <Text style={styles.loadingText}>Could not load profile.</Text>
-        </View>
-      </SafeAreaView>
+      <Screen>
+        <EmptyState
+          icon="alert-circle-outline"
+          title="Could not load profile"
+          description="There was a problem loading your profile information"
+          actionLabel="Try Again"
+          onAction={() => setIsLoading(true)}
+        />
+      </Screen>
     );
   }
-
-  // Display actual user data
-  const displayName = userProfileData?.name || 'User';
-  const displayEmailOrPhone = userProfileData?.email || userProfileData?.phoneNumber || 'No contact info';
-  
-  // Ensure joinDate is formatted correctly if it comes from a different source
-  let displayJoinDate = 'Not available';
-  if (userProfileData?.joinDate) {
-    displayJoinDate = userProfileData.joinDate;
-  } else if (userProfileData?.createdAt) { // Fallback to createdAt if joinDate is not present
-    try {
-        const date = userProfileData.createdAt.toDate ? userProfileData.createdAt.toDate() : new Date(userProfileData.createdAt);
-        displayJoinDate = date.toLocaleString('default', { month: 'long', year: 'numeric' });
-    } catch (e) {
-        console.warn("Could not parse createdAt for join date:", userProfileData.createdAt);
-    }
-  }
-
-  const displayProfilePic = userProfileData?.profilePicture;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.container}>
+    <Screen scroll padding>
+      <Card variant="elevated" style={styles.profileCard}>
         <View style={styles.profileHeader}>
-          <TouchableOpacity onPress={handleEditProfile} style={styles.profilePicContainer}>
-            <Image 
-              source={displayProfilePic ? { uri: displayProfilePic } : require('../../assets/images/avatar-placeholder.png')} 
-              style={styles.profilePic} 
-            />
-            <View style={styles.editIconOverlay}>
-              <Ionicons name="pencil-outline" size={18} color="#FFFFFF" />
-            </View>
-          </TouchableOpacity>
-          <Text style={styles.profileName}>{displayName}</Text>
-          <Text style={styles.profileEmail}>{displayEmailOrPhone}</Text>
-          <Text style={styles.profileJoinDate}>Joined {displayJoinDate}</Text>
-          <View style={styles.statsContainer}>
+          <Avatar
+            source={userProfileData.profilePicture || undefined}
+            size="xl"
+            editable
+            onPress={handleEditProfile}
+          />
+          
+          <ThemedText variant="h3" style={styles.profileName}>
+            {userProfileData.name}
+          </ThemedText>
+          
+          <ThemedText variant="bodyMedium" color="secondary" style={styles.profileEmail}>
+            {userProfileData.email || userProfileData.phoneNumber}
+          </ThemedText>
+          
+          <ThemedText variant="caption" color="tertiary" style={styles.profileJoinDate}>
+            Joined {userProfileData.joinDate}
+          </ThemedText>
+          
+          <View style={[styles.statsContainer, { borderTopColor: borderColor }]}>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{userProfileData?.connections || 0}</Text>
-              <Text style={styles.statLabel}>Family Members</Text>
+              <ThemedText variant="h5" style={styles.statNumber}>
+                {userProfileData.connections || 0}
+              </ThemedText>
+              <ThemedText variant="caption" color="secondary" style={styles.statLabel}>
+                Family Members
+              </ThemedText>
             </View>
-            <View style={styles.statSeparator} />
+            
+            <View style={[styles.statSeparator, { backgroundColor: borderColor }]} />
+            
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{userProfileData?.stories || 0}</Text>
-              <Text style={styles.statLabel}>Stories</Text>
+              <ThemedText variant="h5" style={styles.statNumber}>
+                {userProfileData.stories || 0}
+              </ThemedText>
+              <ThemedText variant="caption" color="secondary" style={styles.statLabel}>
+                Stories
+              </ThemedText>
             </View>
           </View>
         </View>
+      </Card>
 
-        <View style={styles.menuContainer}>
-          {menuItems.map((item, index) => (
-            <React.Fragment key={item.text}>
-              <ListItem icon={item.icon} text={item.text} onPress={item.onPress} />
-              {index < menuItems.length - 1 && <View style={styles.separator} />}
-            </React.Fragment>
-          ))}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      <Card variant="outlined" noPadding style={styles.menuCard}>
+        {menuItems.map((item, index) => (
+          <React.Fragment key={item.text}>
+            <ListItem icon={item.icon} text={item.text} onPress={item.onPress} />
+            {index < menuItems.length - 1 && (
+              <View style={[styles.separator, { backgroundColor: borderColor }]} />
+            )}
+          </React.Fragment>
+        ))}
+      </Card>
+      
+      <Button
+        title="Explore Style Guide"
+        onPress={() => router.push('/(screens)/StyleGuide' as any)}
+        variant="text"
+        leftIcon={'color-palette-outline' as keyof typeof Ionicons.glyphMap}
+        style={styles.styleGuideButton}
+      />
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  loadingContainer: {
     flex: 1,
-    backgroundColor: '#F4F4F4',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  container: {
-    flex: 1,
+  loadingText: {
+    marginTop: Spacing.sm,
+  },
+  profileCard: {
+    marginBottom: Spacing.md,
+    paddingVertical: Spacing.lg,
   },
   profileHeader: {
     alignItems: 'center',
-    paddingVertical: 30,
-    paddingHorizontal: 20,
-    backgroundColor: '#FFFFFF', // White background for profile header section
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  profilePicContainer: {
-    position: 'relative', // Needed for icon overlay
-    marginBottom: 15,
-  },
-  profilePic: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 3,
-    borderColor: '#E0E0E0',
-  },
-  editIconOverlay: {
-    position: 'absolute',
-    bottom: 5,
-    right: 5,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    padding: 8,
-    borderRadius: 15,
   },
   profileName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
+    marginTop: Spacing.md,
   },
   profileEmail: {
-    fontSize: 16,
-    color: '#777',
-    marginBottom: 15,
+    marginTop: Spacing.xs,
   },
   profileJoinDate: {
-      fontSize: 14,
-      color: '#999',
-      marginBottom: 20,
+    marginTop: Spacing.sm,
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '80%',
-    paddingTop: 15,
+    marginTop: Spacing.lg,
+    paddingTop: Spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#EFEFEF',
   },
   statItem: {
     alignItems: 'center',
   },
   statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    textAlign: 'center',
   },
   statLabel: {
-    fontSize: 14,
-    color: '#777',
-    marginTop: 4,
+    marginTop: Spacing.xs,
+    textAlign: 'center',
   },
   statSeparator: {
-      width: 1,
-      height: '70%',
-      backgroundColor: '#EFEFEF',
-      alignSelf: 'center',
+    width: 1,
+    height: '70%',
+    alignSelf: 'center',
   },
-  menuContainer: {
-    marginTop: 20,
-    marginHorizontal: 10, // Add some horizontal margin
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    overflow: 'hidden', // Clip separator lines
-    borderWidth: 1, // Optional: Add border around the menu block
-    borderColor: '#E0E0E0',
+  menuCard: {
+    marginBottom: Spacing.md,
   },
   separator: {
     height: 1,
-    backgroundColor: '#EFEFEF',
-    marginLeft: 15 + 24 + 15, // padding + icon width + margin
+    marginLeft: 15 + 24 + 15,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F0F0F0',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#555',
+  styleGuideButton: {
+    alignSelf: 'center',
+    marginVertical: Spacing.md,
   },
 });
 
-export default ProfileScreen; 
+export default ProfileScreen;

@@ -1,25 +1,17 @@
 import React from 'react';
 import { createStackNavigator, StackNavigationProp } from '@react-navigation/stack';
-import { TouchableOpacity, View, Text, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import CalendarScreen from '../(screens)/CalendarScreen';
-import EventListScreen from '../(screens)/EventListScreen';
-import { Colors as ImportedColors } from '../../constants/Colors';
+import { View } from 'react-native';
 import { RouteProp } from '@react-navigation/native';
 
-// Fallback colors in case ImportedColors is not loaded correctly
-const fallbackColors = {
-  light: {
-    primary: '#1A4B44',
-    text: '#11181C',
-    background: '#FFFFFF',
-    icon: '#687076',
-  },
-  dynastyGreen: '#1A4B44',
-};
+// Import screens
+import CalendarScreen from '../(screens)/CalendarScreen';
+import EventListScreen from '../(screens)/EventListScreen';
 
-// Use imported colors with a fallback mechanism
-const Colors = ImportedColors || fallbackColors;
+// Import design system components and utilities
+import IconButton from '../../components/ui/IconButton';
+import Button from '../../components/ui/Button';
+import { Colors } from '../../constants/Colors';
+import { useBackgroundColor, useTextColor } from '../../hooks/useThemeColor';
 
 export type EventsStackParamList = {
   CalendarHome: { scrollToToday?: string };
@@ -33,28 +25,27 @@ interface CalendarHeaderRightProps {
 const Stack = createStackNavigator<EventsStackParamList>();
 
 const CalendarHeaderRight = ({ navigation }: CalendarHeaderRightProps) => {
-  const theme = 'light';
-  // Defensive access to colors
-  const currentThemeSet = (Colors && Colors[theme]) ? Colors[theme] : fallbackColors[theme];
-  const headerColor = currentThemeSet.primary || fallbackColors.dynastyGreen;
+  const primaryColor = Colors.palette.dynastyGreen.dark;
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: Platform.OS === 'ios' ? 10 : 15 }}>
-      <TouchableOpacity
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <Button
+        title="Today"
+        variant="text"
+        size="small"
         onPress={() => {
           navigation.setParams({ scrollToToday: new Date().toISOString() });
-          console.log('Today button pressed, setting params');
         }}
-        style={{ paddingHorizontal: 10 }}
-      >
-        <Text style={{ color: headerColor, fontSize: 16 }}>Today</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
+        style={{ marginRight: 8 }}
+      />
+      
+      <IconButton
+        iconName="list-outline"
+        size={24}
+        color={primaryColor}
         onPress={() => navigation.navigate('EventList')}
-        style={{ paddingLeft: 10 }}
-      >
-        <Ionicons name="list-outline" size={24} color={headerColor} />
-      </TouchableOpacity>
+        accessibilityLabel="View events list"
+      />
     </View>
   );
 };
@@ -65,23 +56,21 @@ interface CalendarHomeScreenOptionsProps {
 }
 
 const EventsStackNavigator = () => {
-  const theme = 'light';
-  // Defensive access to colors
-  const currentThemeSet = (Colors && Colors[theme]) ? Colors[theme] : fallbackColors[theme];
-  const headerColor = currentThemeSet.primary || fallbackColors.dynastyGreen;
-  const headerTitleColor = currentThemeSet.text || fallbackColors.light.text;
-  const headerBgColor = currentThemeSet.background || fallbackColors.light.background;
+  // Get theme colors
+  const backgroundColor = useBackgroundColor('primary');
+  const textColor = useTextColor('primary');
+  const primaryColor = Colors.palette.dynastyGreen.dark;
 
   return (
     <Stack.Navigator 
       initialRouteName="CalendarHome"
       screenOptions={{
         headerStyle: {
-          backgroundColor: headerBgColor,
+          backgroundColor: backgroundColor,
         },
-        headerTintColor: headerColor,
+        headerTintColor: primaryColor,
         headerTitleStyle: {
-          color: headerTitleColor,
+          color: textColor,
           fontWeight: 'bold',
         },
       }}
@@ -106,4 +95,4 @@ const EventsStackNavigator = () => {
   );
 };
 
-export default EventsStackNavigator; 
+export default EventsStackNavigator;

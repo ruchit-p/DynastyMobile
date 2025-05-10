@@ -6,9 +6,12 @@
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
-    "ios": "expo run:ios",
+    "ios": "npx expo prebuild && node ./scripts/fix-app-delegate.js && expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "postinstall": "patch-package",
+    "fix-swift": "node ./scripts/fix-app-delegate.js",
+    "postprebuild": "node ./scripts/fix-app-delegate.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
@@ -28,6 +31,7 @@
     "@react-navigation/native": "^7.1.8",
     "@react-navigation/stack": "^7.3.1",
     "expo": "~53.0.7",
+    "expo-av": "~15.1.4",
     "expo-blur": "~14.1.4",
     "expo-build-properties": "~0.14.6",
     "expo-constants": "~17.1.5",
@@ -39,6 +43,7 @@
     "expo-linking": "~7.1.4",
     "expo-location": "~18.1.4",
     "expo-router": "~5.0.5",
+    "expo-sharing": "^13.1.5",
     "expo-splash-screen": "~0.30.8",
     "expo-status-bar": "~2.2.3",
     "expo-symbols": "~0.4.4",
@@ -65,6 +70,7 @@
     "@types/react": "~19.0.10",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~9.2.0",
+    "patch-package": "^8.0.0",
     "typescript": "~5.8.3"
   },
   "private": true
