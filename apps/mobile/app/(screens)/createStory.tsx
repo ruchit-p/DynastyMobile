@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -14,10 +14,11 @@ import {
   Button,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useNavigation, Stack } from 'expo-router';
+import { useRouter, useNavigation, Stack, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import AnimatedActionSheet, { ActionSheetAction } from '../../components/ui/AnimatedActionSheet';
+import PrivacySegmentedControl from '../../components/ui/PrivacySegmentedControl';
 
 // MARK: - Types
 type BlockType = "text" | "image" | "video" | "audio";
@@ -37,15 +38,18 @@ interface Location {
 const CreateStoryScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
+  const params = useLocalSearchParams(); // Get potential returned params
 
   // MARK: - State Variables
   const [storyTitle, setStoryTitle] = useState('');
   
-  const [showDate, setShowDate] = useState(true); // Date is shown by default initially
+  const [showDate, setShowDate] = useState(false); // Date hidden by default, added via Additional Details
   const [storyDate, setStoryDate] = useState<Date | null>(new Date());
   
   const [showSubtitle, setShowSubtitle] = useState(false);
   const [subtitle, setSubtitle] = useState('');
+
+  const [coverPhoto, setCoverPhoto] = useState<ImagePicker.ImagePickerAsset | null>(null);
 
   const [showLocation, setShowLocation] = useState(false);
   const [location, setLocation] = useState<Location | null>(null);
@@ -53,20 +57,21 @@ const CreateStoryScreen = () => {
   const [privacy, setPrivacy] = useState<'family' | 'personal' | 'custom'>('family');
   // const [customAccessMembers, setCustomAccessMembers] = useState<string[]>([]); // For custom privacy
   const [taggedMembers, setTaggedMembers] = useState<string[]>([]); // Placeholder
+  const [customSelectedViewers, setCustomSelectedViewers] = useState<string[]>([]); // For custom privacy viewers
 
   const [blocks, setBlocks] = useState<StoryBlock[]>([]);
   
   const [isAddDetailsModalVisible, setAddDetailsModalVisible] = useState(false);
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const [isDetailsActionSheetVisible, setDetailsActionSheetVisible] = useState(false);
-  const [isAddContentModalVisible, setAddContentModalVisible] = useState(false);
+  const [isAddContentActionSheetVisible, setAddContentActionSheetVisible] = useState(false);
 
   // Placeholder for user avatar/name - can be removed if not used
   // const userAvatar = 'https://via.placeholder.com/40';
   // const userName = 'Current User';
 
-  // MARK: - Navigation Setup
-  React.useEffect(() => {
+  // MARK: - Navigation Setup & Data Return Handling
+  useEffect(() => {
     navigation.setOptions({
       title: 'Create Story', // Image shows "Edit Story", can be adapted
       headerLeft: () => (
@@ -85,7 +90,36 @@ const CreateStoryScreen = () => {
       headerTitleStyle: { fontWeight: '600' },
       headerBackTitleVisible: false,
     });
-  }, [navigation, router, storyTitle, blocks, storyDate, subtitle, location, privacy]); // Add dependencies
+  }, [navigation, router, storyTitle, blocks, storyDate, subtitle, location, privacy, customSelectedViewers, taggedMembers]); // Add dependencies
+
+  useEffect(() => {
+    // Listener for when the screen comes into focus
+    const unsubscribe = navigation.addListener('focus', () => {
+      // Check for returned parameters from selectMembersScreen
+      const returnedPurpose = params?.returnedPurpose as string | undefined;
+      const returnedSelectedIds = params?.selectedIds as string | undefined;
+
+      if (returnedSelectedIds) {
+        try {
+          const idsArray = JSON.parse(returnedSelectedIds);
+          if (Array.isArray(idsArray)) {
+            if (returnedPurpose === 'viewers') {
+              setCustomSelectedViewers(idsArray);
+            } else if (returnedPurpose === 'tagging') {
+              setTaggedMembers(idsArray);
+            }
+            // Clear params after use to avoid re-processing, though Expo Router might handle this
+            // For robustness, you might manage this more explicitly if issues arise.
+            // router.setParams({ returnedPurpose: undefined, selectedIds: undefined }); 
+          }
+        } catch (e) {
+          console.error("Error processing returned member IDs:", e);
+        }
+      }
+    });
+
+    return unsubscribe; // Cleanup listener on unmount
+  }, [navigation, params]);
 
   // MARK: - Handlers
   const handleSaveStory = () => {
@@ -103,8 +137,10 @@ const CreateStoryScreen = () => {
       subtitle: showSubtitle ? subtitle : undefined,
       date: showDate ? storyDate?.toISOString().split('T')[0] : undefined,
       location: showLocation ? location : undefined,
+      coverPhoto: coverPhoto ? coverPhoto.uri : undefined,
       privacy,
       taggedMembers,
+      customViewers: privacy === 'custom' ? customSelectedViewers : undefined,
       blocks,
     });
     Alert.alert('Story Saved (Simulated)', 'Your story has been successfully saved.');
@@ -118,11 +154,12 @@ const CreateStoryScreen = () => {
       content: type === 'text' ? '' : [],
     };
     setBlocks(prevBlocks => [...prevBlocks, newBlock]);
-    setAddContentModalVisible(false);
+    setAddContentActionSheetVisible(false);
   };
 
   const removeBlock = (id: string) => {
     setBlocks(prevBlocks => prevBlocks.filter(block => block.id !== id));
+    setDetailsActionSheetVisible(false);
   };
 
   const updateBlockContent = (id: string, newContent: any) => {
@@ -131,6 +168,7 @@ const CreateStoryScreen = () => {
         block.id === id ? { ...block, content: newContent } : block
       )
     );
+    setDetailsActionSheetVisible(false);
   };
   
   const handleSelectMediaForBlock = async (blockId: string) => {
@@ -184,15 +222,54 @@ const CreateStoryScreen = () => {
   const hideDatePicker = () => setDatePickerVisibility(false);
   const handleDateConfirm = (date: Date) => { setStoryDate(date); hideDatePicker(); };
 
+  // MARK: - Cover Photo Handler
+  const handleSelectCoverPhoto = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Required', 'Allow access to photos to add a cover image.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+        aspect: [16, 9], // Optional: set aspect ratio for cover photos
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setCoverPhoto(result.assets[0]);
+      }
+    } catch (error) {
+      console.error("Error picking cover image: ", error);
+      Alert.alert("Image Picker Error", "Could not select a cover image.");
+    }
+    setDetailsActionSheetVisible(false);
+  };
+
   // MARK: - Additional Details Action Sheet Actions
   const detailsActions: ActionSheetAction[] = [
     { title: showSubtitle ? 'Remove Subtitle' : 'Add Subtitle', onPress: () => { setShowSubtitle(!showSubtitle); setDetailsActionSheetVisible(false); } },
     { title: showDate ? 'Remove Date' : 'Add Date', onPress: () => { setShowDate(!showDate); setDetailsActionSheetVisible(false); } },
-    { title: showLocation ? 'Remove Location' : 'Add Location', onPress: () => {
-        if (showLocation) { setShowLocation(false); setLocation(null); } else { setShowLocation(true); }
+    { title: coverPhoto ? 'Remove Cover Photo' : 'Add Cover Photo', onPress: () => {
+        if (coverPhoto) { setCoverPhoto(null); } else { handleSelectCoverPhoto(); }
         setDetailsActionSheetVisible(false);
       }
     },
+    { title: showLocation ? 'Remove Location' : 'Add Location', onPress: () => {
+        if (showLocation) { setShowLocation(false); setLocation(null); } else { setShowLocation(true); handleAddLocation(); }
+        setDetailsActionSheetVisible(false);
+      }
+    },
+    { title: 'Cancel', onPress: () => setDetailsActionSheetVisible(false), style: 'cancel' },
+  ];
+
+  // MARK: - Add Content Action Sheet Actions
+  const addContentActions: ActionSheetAction[] = [
+    { title: 'Add Text', onPress: () => addBlock('text') },
+    { title: 'Add Media (Images/Videos)', onPress: () => addBlock('image') }, // For now, image block handles media
+    { title: 'Add Audio', onPress: () => addBlock('audio') },
     { title: 'Cancel', onPress: () => {}, style: 'cancel' },
   ];
 
@@ -232,34 +309,6 @@ const CreateStoryScreen = () => {
     </Modal>
   );
 
-  const renderAddContentModal = () => (
-    <Modal
-      animationType="slide"
-      transparent={true}
-      visible={isAddContentModalVisible}
-      onRequestClose={() => setAddContentModalVisible(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Add Content Block</Text>
-          <TouchableOpacity style={styles.modalOption} onPress={() => addBlock('text')}>
-            <MaterialCommunityIcons name="format-text" size={20} color="#333" style={{marginRight: 10}} />
-            <Text>Add Text</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.modalOption} onPress={() => addBlock('image')}>
-             <MaterialIcons name="photo-library" size={20} color="#333" style={{marginRight: 10}} />
-            <Text>Add Media (Images/Videos)</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.modalOption} onPress={() => addBlock('audio')}>
-            <MaterialIcons name="audiotrack" size={20} color="#333" style={{marginRight: 10}} />
-            <Text>Add Audio</Text>
-          </TouchableOpacity>
-          <Button title="Close" onPress={() => setAddContentModalVisible(false)} />
-        </View>
-      </View>
-    </Modal>
-  );
-
   // MARK: - Main Render
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -291,6 +340,19 @@ const CreateStoryScreen = () => {
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Story Details</Text>
           
+          {/* Cover Photo */}
+          {coverPhoto && (
+            <View style={styles.coverPhotoContainer}>
+              <Image source={{ uri: coverPhoto.uri }} style={styles.coverPhoto} />
+              <TouchableOpacity 
+                style={styles.removeCoverPhotoButton}
+                onPress={() => setCoverPhoto(null)}
+              >
+                <Ionicons name="close-circle" size={30} color="white" />
+              </TouchableOpacity>
+            </View>
+          )}
+
           <TextInput
             style={styles.inputStoryTitle}
             placeholder="Story Title *"
@@ -309,44 +371,49 @@ const CreateStoryScreen = () => {
                 value={subtitle}
                 onChangeText={setSubtitle}
               />
+              <View style={styles.inputRowValueContainer}>
+                <TouchableOpacity onPress={() => setShowSubtitle(false)} style={{ marginLeft: 10 }}>
+                  <Ionicons name="remove-circle-outline" size={22} color="red" />
+                </TouchableOpacity>
+              </View>
               <View style={styles.separatorThinNoMargin} />
             </>
           )}
 
           {showDate && (
-            <TouchableOpacity 
-              style={styles.inputRow} 
-              onPress={showDatePicker}
-            >
-              <MaterialCommunityIcons name="calendar-month-outline" size={24} color={styles.inputIcon.color} style={styles.inputIcon} />
-              <Text style={styles.inputRowText}>Story Date</Text> 
-              <View style={styles.inputRowValueContainer}>
-                <Text style={styles.inputRowValueText}>
-                  {formatDate(storyDate)}
-                </Text>
-                {/* Simple remove button for date */}
-                 <TouchableOpacity onPress={() => setShowDate(false)} style={{ marginLeft: 10 }}>
+            <>
+              <TouchableOpacity
+                style={styles.inputRow}
+                onPress={showDatePicker}
+              >
+                <MaterialCommunityIcons name="calendar-month-outline" size={24} color={styles.inputIcon.color} style={styles.inputIcon} />
+                <Text style={styles.inputRowText}>Story Date</Text>
+                <View style={styles.inputRowValueContainer}>
+                  <Text style={styles.inputRowValueText}>{formatDate(storyDate)}</Text>
+                  <TouchableOpacity onPress={() => setShowDate(false)} style={{ marginLeft: 10 }}>
                     <Ionicons name="remove-circle-outline" size={22} color="red" />
-                 </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+              <View style={styles.separatorThinNoMargin} />
+            </>
           )}
-           <View style={styles.separatorThinNoMargin} />
-
+          
           {showLocation && (
-             <View style={styles.inputRow}>
+            <>
+              <View style={styles.inputRow}>
                 <MaterialIcons name="location-pin" size={24} color={styles.inputIcon.color} style={styles.inputIcon} />
                 <Text style={styles.inputRowText}>Location</Text>
                 <View style={styles.inputRowValueContainer}>
-                    <Text style={styles.inputRowValueText} numberOfLines={1}>
-                    {location?.address || "No location set"}
-                    </Text>
-                    {/* <Ionicons name="chevron-forward" size={22} color="#C7C7CC" style={styles.inputRowChevron}/> */}
+                  <Text style={styles.inputRowValueText} numberOfLines={1}>{location?.address || 'No location set'}</Text>
+                  <TouchableOpacity onPress={() => { setShowLocation(false); setLocation(null); }} style={{ marginLeft: 10 }}>
+                    <Ionicons name="remove-circle-outline" size={22} color="red" />
+                  </TouchableOpacity>
                 </View>
-             </View>
+              </View>
+              <View style={styles.separatorThinNoMargin} />
+            </>
           )}
-           <View style={styles.separatorThinNoMargin} />
-
 
           <TouchableOpacity style={styles.addButton} onPress={() => setDetailsActionSheetVisible(true)}>
             <Ionicons name="add-circle-outline" size={22} color="#1A4B44" style={{marginRight: 5}} />
@@ -357,30 +424,42 @@ const CreateStoryScreen = () => {
         {/* Privacy Section */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Privacy</Text>
-          <View style={styles.privacyOptionsContainer}>
-            {['family', 'personal', 'custom'].map((option) => (
-              <TouchableOpacity 
-                key={option}
-                style={[styles.privacyOptionButton, privacy === option && styles.privacyOptionSelected]}
-                onPress={() => setPrivacy(option as 'family' | 'personal' | 'custom')}
-              >
-                <Text style={[styles.privacyOptionText, privacy === option && styles.privacyOptionTextSelected]}>
-                  {option.charAt(0).toUpperCase() + option.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <PrivacySegmentedControl 
+            options={[
+              { label: 'Family', value: 'family' },
+              { label: 'Personal', value: 'personal' },
+              { label: 'Custom', value: 'custom' },
+            ]}
+            selectedValue={privacy}
+            onValueChange={setPrivacy}
+          />
           {privacy === 'custom' && (
-            <Text style={styles.comingSoonText}>Custom member selection coming soon.</Text>
+            <TouchableOpacity 
+                style={[styles.addButton, styles.selectViewersButton]} 
+                onPress={() => router.push({
+                  pathname: '/selectMembersScreen',
+                  params: { purpose: 'viewers', preSelected: JSON.stringify(customSelectedViewers) }
+                } as any ) 
+            }
+            >
+                <Ionicons name="people-outline" size={22} color="#1A4B44" style={{marginRight: 5}} />
+                <Text style={styles.addButtonText}>Select Viewers ({customSelectedViewers.length})</Text>
+            </TouchableOpacity>
           )}
         </View>
 
         {/* Tag People Section */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Tag People Involved</Text>
-          <TouchableOpacity style={styles.addButton} onPress={handleTagPeople}>
+          <TouchableOpacity 
+            style={styles.addButton} 
+            onPress={() => router.push({
+              pathname: '/selectMembersScreen',
+              params: { purpose: 'tagging', preSelected: JSON.stringify(taggedMembers) }
+            } as any )
+          }>
             <Ionicons name="person-add-outline" size={22} color="#1A4B44" style={{marginRight: 5}} />
-            <Text style={styles.addButtonText}>Tag People</Text>
+            <Text style={styles.addButtonText}>Tag People ({taggedMembers.length})</Text>
           </TouchableOpacity>
         </View>
         
@@ -437,20 +516,27 @@ const CreateStoryScreen = () => {
               </TouchableOpacity>
             </View>
           ))}
-          <TouchableOpacity style={styles.addButton} onPress={() => setAddContentModalVisible(true)}>
+          <TouchableOpacity style={styles.addButton} onPress={() => setAddContentActionSheetVisible(true)}>
              <Ionicons name="add-circle" size={22} color="#1A4B44" style={{marginRight: 5}} />
             <Text style={styles.addButtonText}>Add Content Block</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Details action sheet instead of modal */}
+        {/* Details action sheet */}
         <AnimatedActionSheet
           isVisible={isDetailsActionSheetVisible}
           onClose={() => setDetailsActionSheetVisible(false)}
           actions={detailsActions}
           title="Additional Details"
         />
-        {renderAddContentModal()}
+        
+        {/* Add Content action sheet */}
+        <AnimatedActionSheet
+          isVisible={isAddContentActionSheetVisible}
+          onClose={() => setAddContentActionSheetVisible(false)}
+          actions={addContentActions}
+          title="Add Content Block"
+        />
       
       </ScrollView>
       {/* Date picker modal for story date */}
@@ -556,6 +642,10 @@ const styles = StyleSheet.create({
     color: '#1A4B44',
     fontWeight: '500',
   },
+  selectViewersButton: {
+    marginTop: 15,
+    backgroundColor: '#E0F2F1', // A slightly different shade for distinction or same as addButton
+  },
   // Privacy Styles
   privacyOptionsContainer: {
     flexDirection: 'row',
@@ -650,6 +740,26 @@ const styles = StyleSheet.create({
     width: '100%',
     borderBottomWidth: 1,
     borderBottomColor: '#EEE',
+  },
+  coverPhotoContainer: {
+    height: 150,
+    width: '100%',
+    borderRadius: 8,
+    marginBottom: 15,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  coverPhoto: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  removeCoverPhotoButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 15,
   },
 });
 
