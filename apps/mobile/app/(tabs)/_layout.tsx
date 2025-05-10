@@ -1,10 +1,12 @@
 import React from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Platform, TouchableOpacity, View, Text, Alert } from 'react-native';
+import { Platform, View, Text, Alert, StyleSheet } from 'react-native';
 // import { Colors } from '../../constants/Colors'; // Corrected import - Assuming this path is correct or Colors are defined elsewhere
+import AppHeader from '../../components/ui/AppHeader'; // Import the new AppHeader
+import IconButton, { IconSet } from '../../components/ui/IconButton'; // Import the new IconButton
 
-// Define a placeholder for Colors if not imported
+// Define a placeholder for Colors if not imported (used for tab bar, not header anymore for Profile)
 const Colors = {
   primary: '#1A4B44', // Dynasty primary color
   secondary: '#007AFF', // iOS blue as an example
@@ -18,8 +20,8 @@ const useHeaderActions = () => {
   const router = useRouter();
   return {
     // navigateToNewChat: () => router.push('/(screens)/newChat'), // Kept for potential future use, but not for Feed header direct action
-    navigateToNotifications: () => router.navigate('/(screens)/notifications'),
-    navigateToMessages: () => router.navigate('/(screens)/chat'),
+    navigateToNotifications: () => router.push('/(screens)/notifications'), // Updated path and removed 'as any'
+    navigateToMessages: () => router.navigate('/(screens)/chat' as any), // Temp fix for type error
     // Placeholder for actual notification actions if needed directly in header
     // handleMarkAllNotificationsRead: () => console.log("Mark all as read"), 
     // handleClearReadNotifications: () => console.log("Clear read notifications"), 
@@ -35,6 +37,50 @@ export default function TabLayout() {
     // handleClearReadNotifications // Removed from direct use here
   } = useHeaderActions();
 
+  // Define headerRight components to pass to AppHeader
+  const feedHeaderRight = () => (
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <IconButton
+        iconName="notifications-outline"
+        size={26}
+        color={Colors.primary}
+        onPress={navigateToNotifications}
+        style={styles.headerIcon}
+        accessibilityLabel="View notifications"
+      />
+      <IconButton
+        iconName="chatbubbles-outline"
+        size={26}
+        color={Colors.primary}
+        onPress={navigateToMessages}
+        style={styles.headerIcon}
+        accessibilityLabel="View messages"
+      />
+    </View>
+  );
+
+  const familyTreeHeaderRight = () => (
+    <IconButton
+      iconName="ellipsis-vertical"
+      size={24}
+      color={Colors.primary}
+      onPress={() => {
+        Alert.alert(
+          "Family Tree Options",
+          "",
+          [
+            { text: "Add new member", onPress: () => console.log("Add new member pressed") },
+            { text: "Family tree settings", onPress: () => console.log("Family tree settings pressed") },
+            { text: "Invite members", onPress: () => console.log("Invite members pressed") },
+            { text: "Cancel", style: "cancel" }
+          ],
+          { cancelable: true }
+        );
+      }}
+      accessibilityLabel="Family tree options"
+    />
+  );
+
   return (
     <Tabs
       screenOptions={{
@@ -43,97 +89,76 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: Colors.white,
         },
-        // headerShown: true, // This was enabling headers globally
-        // Default header styling is removed as each screen will have its own AppHeader
-        // headerStyle: {
-        //   backgroundColor: Colors.white,
-        //   elevation: Platform.OS === 'android' ? 4 : 0, 
-        //   shadowOpacity: Platform.OS === 'ios' ? 0.1 : 0, 
-        //   shadowOffset: { width: 0, height: 1 },
-        //   shadowRadius: 2,
-        //   borderBottomWidth: Platform.OS === 'android' ? 0 : 0.5, 
-        //   borderBottomColor: Colors.lightGray,
-        // },
-        // headerTitleStyle: {
-        //   fontWeight: 'bold',
-        //   fontSize: Platform.OS === 'ios' ? 34 : 24,
-        //   color: Colors.primary,
-        //   paddingBottom: Platform.OS === 'ios' ? 60 : 5,
-        // },
-        // headerTitleAlign: Platform.OS === 'ios' ? 'left' : 'left', 
-        // headerLeftContainerStyle: { paddingLeft: 10 },
-        // headerRightContainerStyle: { paddingRight: 15 },
+        headerShown: false, // Important: We use custom header for all screens via options.header
       }}
     >
       <Tabs.Screen
         name="feed"
         options={{
           title: 'Feed',
-          headerShown: false, // Use custom AppHeader in screen file
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? "home" : "home-outline"} size={size} color={color} /> 
           ),
-          // headerRight is now handled by AppHeader instance in feed.tsx
+          headerShown: true, // Must be true to use custom header
+          header: (props) => <AppHeader title={props.options.title || 'Feed'} headerRight={feedHeaderRight} />,
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
           title: 'History',
-          headerShown: false, // Use custom AppHeader in screen file
           tabBarIcon: ({ color, size, focused }) => (
             <MaterialCommunityIcons name={focused ? "book-open-page-variant" : "book-open-page-variant-outline"} size={size} color={color} /> 
           ),
+          headerShown: true,
+          header: (props) => <AppHeader title={props.options.title || 'History'} />,
         }}
       />
       <Tabs.Screen
         name="familyTree"
         options={{
           title: 'Family Tree',
-          headerShown: false, // Use custom AppHeader in screen file
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? "people" : "people-outline"} color={color} size={size} />
           ),
-          // headerRight is now handled by AppHeader instance in familyTree.tsx
           tabBarLabel: ({ focused, color }) => (
-            <Text style={{
-              color,
-              fontSize: 10,
-              textAlign: 'center',
-              // Ensure enough height for two lines, adjust as needed
-              // lineHeight might also be useful if specific spacing is desired
-              // flexWrap: 'wrap', // Not standard for Text, height and textAlign usually suffice
-            }}>
+            <Text style={{ color, fontSize: 10, textAlign: 'center' }}>
               Family Tree
             </Text>
           ),
-          tabBarLabelStyle: { // Keep this for general styling, but custom component gives more control
-            fontSize: 10, 
-            // height: Platform.OS === 'ios' ? 'auto' : 35, // Let height be auto or adjust based on content
-            // lineHeight: 12, // Adjust if needed
-          }
+          tabBarLabelStyle: { fontSize: 10 },
+          headerShown: true,
+          header: (props) => <AppHeader title={props.options.title || 'Family Tree'} headerRight={familyTreeHeaderRight} />,
         }}
       />
       <Tabs.Screen
         name="events"
         options={{
           title: 'Events',
-          headerShown: false, // Use custom AppHeader in screen file
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? "calendar" : "calendar-outline"} size={size} color={color} /> 
           ),
+          headerShown: true,
+          header: (props) => <AppHeader title={props.options.title || 'Events'} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          headerShown: false, // Use custom AppHeader in screen file
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? "person-circle" : "person-circle-outline"} size={size} color={color} />
           ),
+          headerShown: true,
+          header: (props) => <AppHeader title={props.options.title || 'Profile'} />,
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  headerIcon: {
+    paddingHorizontal: 10, // Preserving original horizontal padding for feed icons
+  },
+});

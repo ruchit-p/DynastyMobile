@@ -4,7 +4,7 @@ import {
   View,
   Text,
   ScrollView,
-  // SafeAreaView, // AppHeader now handles safe area for the top
+  SafeAreaView,
   Platform,
   TouchableOpacity,
   TextInput,
@@ -12,11 +12,8 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'; // Added MaterialCommunityIcons back
+import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
-import AppHeader from '../../components/ui/AppHeader'; // Import the new AppHeader
-import { Colors } from '../../constants/Colors'; // Import Colors for styling if needed locally
-import useColorScheme from '../../hooks/useColorScheme'; // For local color scheme if needed
 // import { auth, db } from '../../src/lib/firebase'; // Commented out Firebase
 // import { collection, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore'; // Commented out Firebase
 import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/FloatingActionMenu'; // MARK: - Import
@@ -121,8 +118,6 @@ const EventsScreen = () => {
   const [searchText, setSearchText] = useState('');
   const segments = ['Upcoming', 'Past Events', 'My Events'];
   const router = useRouter();
-  const colorScheme = useColorScheme() ?? 'light';
-  const currentColors = Colors[colorScheme];
 
   // const [allEvents, setAllEvents] = useState<Event[]>([]); // Commented out
   // const [isLoadingEvents, setIsLoadingEvents] = useState<boolean>(true); // Commented out
@@ -135,18 +130,11 @@ const EventsScreen = () => {
   // MARK: - Define Menu Items for Events Screen
   const eventMenuItems: FabMenuItemAction[] = [
     {
-      id: 'createStory',
-      text: 'Create Story',
-      iconName: 'pencil-outline', // MaterialCommunityIcons
-      iconLibrary: 'MaterialCommunityIcons',
-      onPress: () => router.push('/(screens)/createStory' as any), // Added 'as any' to bypass strict typing for now
-    },
-    {
       id: 'createEvent',
       text: 'Create Event',
       iconName: 'calendar-plus', // MaterialCommunityIcons
       iconLibrary: 'MaterialCommunityIcons',
-      onPress: () => router.push('/(screens)/createEvent' as any), // Added 'as any' to bypass strict typing for now
+      onPress: () => router.push('/(screens)/createEvent'),
     },
   ];
 
@@ -220,33 +208,31 @@ const EventsScreen = () => {
 
   const displayedEvents = getEventsForSegment();
 
-  // MARK: - Render
   if (isLoadingEvents) {
     return (
-      <View style={[styles.safeArea, { backgroundColor: currentColors.background, flex: 1}]}>
-        <AppHeader title="Events" />
+      <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={currentColors.primary} />
-          <Text style={[styles.loadingText, { color: currentColors.text }]}>Loading events...</Text>
+          <ActivityIndicator size="large" color="#0A5C36" />
+          <Text style={styles.loadingText}>Loading events...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[styles.safeArea, { backgroundColor: currentColors.background, flex: 1 }]}>
-      <AppHeader title="Events" />
+    <SafeAreaView style={styles.safeArea}>
+      {/* Custom pageHeader View removed */}
       
       <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color={currentColors.textSecondary} style={styles.searchIcon} />
+          <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
           <TextInput
-            style={[styles.searchInput, { color: currentColors.text, borderColor: currentColors.border }]}
+            style={styles.searchInput}
             placeholder="Search events..."
-            placeholderTextColor={currentColors.textSecondary}
+            placeholderTextColor="#888"
             value={searchText}
             onChangeText={setSearchText}
           />
-      </View>
+        </View>
 
       <SegmentedControl
         segments={segments}
@@ -254,108 +240,168 @@ const EventsScreen = () => {
         onChange={setCurrentSegment}
       />
 
-      <ScrollView 
-        style={styles.container}
-        contentContainerStyle={styles.scrollContentContainer}
-      >
-        {displayedEvents.length > 0 ? (
-          displayedEvents.map(event => (
-            <EventCard key={event.id} event={event} onPress={() => router.push(`/(screens)/eventDetails/${event.id}` as any)} />
-          ))
-        ) : (
-          <View style={styles.emptyStateContainer}>
-            <MaterialCommunityIcons name="calendar-remove-outline" size={60} color={currentColors.textSecondary} />
-            <Text style={[styles.emptyStateTitle, { color: currentColors.text }]}>No events found</Text>
-            <Text style={[styles.emptyStateSubtitle, { color: currentColors.textSecondary }]}>
-              You don't have any {segments[currentSegment].toLowerCase()} events.
+      <ScrollView style={styles.container}>
+        {displayedEvents.length === 0 ? (
+          <View style={styles.noEventsContainer}>
+            <MaterialCommunityIcons name="calendar-remove-outline" size={70} color="#D0D0D0" />
+            <Text style={styles.noEventsText}>No events found</Text>
+            <Text style={styles.noEventsSubText}>
+              {currentSegment === 0 && "You don't have any upcoming events."}
+              {currentSegment === 1 && "There are no past events to show."}
+              {currentSegment === 2 && "You haven't created or been added to any events yet."}
             </Text>
-            {currentSegment === 0 && (
-              <TouchableOpacity 
-                style={[styles.createEventButton, { backgroundColor: currentColors.primary }]} 
-                onPress={() => router.push('/(screens)/createEvent' as any)}
-              >
-                <Text style={[styles.createEventButtonText, { color: currentColors.headerBackground }]}>+ Create New Event</Text>
-              </TouchableOpacity>
-            )}
           </View>
+        ) : (
+          displayedEvents.map((event: Event) => (
+            <EventCard 
+              key={event.id} 
+              event={event} 
+              onPress={() => router.push({ pathname: '/(screens)/eventDetail', params: { eventId: event.id } })} 
+            />
+          ))
         )}
       </ScrollView>
-      <FloatingActionMenu menuItems={eventMenuItems} />
-    </View>
+
+      {/* MARK: - Add Reusable FAB Menu */}
+      <FloatingActionMenu menuItems={eventMenuItems} fabIconName="plus" fabIconLibrary="MaterialCommunityIcons" />
+
+    </SafeAreaView>
   );
 };
 
-// MARK: - Styles
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    // backgroundColor is now set dynamically
+    backgroundColor: '#F4F4F4', // Consistent light gray background
   },
-  container: {
-    flex: 1,
+  // pageHeader and pageTitle styles removed
+  subHeaderTitle: { // This style might be re-evaluated or removed if not needed
+    fontSize: 14,
+    color: '#555',
+    // textAlign: 'center', // Let it align left below the main title, or keep centered if preferred
+    paddingHorizontal: 15, // Align with pageHeader horizontal padding
+    paddingBottom: 10,      // Space before segmented control
+    backgroundColor: '#FFFFFF',
+    // borderBottomWidth: 1, // Removing this border, segmented control has its own top border visually
+    // borderBottomColor: '#E0E0E0',
   },
-  scrollContentContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 80, // Space for FAB
-  },
-  // Custom pageHeader View styles removed as AppHeader is used
-  searchContainer: {
+  actionButton: { 
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    marginVertical: 12,
-    // backgroundColor dynamically from theme if needed, or keep default
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: 8,
-    borderWidth: 1,
-    // borderColor: '#E0E0E0', // Use theme border color
+    justifyContent: 'center',
   },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    height: 40,
+  actionButtonText: { 
+    color: '#FFFFFF',
+    marginLeft: 8,
     fontSize: 16,
-    // color: '#333', // Use theme text color
+    fontWeight: '600',
   },
   segmentedControlContainer: {
     flexDirection: 'row',
-    marginHorizontal: 16,
-    marginBottom: 12,
-    backgroundColor: '#EEEEEE', // Consider theming this background
-    borderRadius: 8,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#DDDDDD', // Consider theming
+    backgroundColor: '#F0F0F0', // Match safeArea background or slightly different light shade
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#DCDCDC', // Lighter border
+    marginTop: 0, 
   },
   segmentButton: {
     flex: 1,
     paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 8,
+    marginHorizontal: 5,
+    backgroundColor: '#FFFFFF', // White inactive button
+    borderWidth: 1, // Add border to inactive buttons for definition
+    borderColor: '#DCDCDC',
   },
   segmentButtonActive: {
-    backgroundColor: Colors.light.dynastyGreen, // Use dynastyGreen directly or from theme
-    // No, this should use currentColors.primary or similar
+    backgroundColor: '#1A4B44', // Changed to app theme green
+    borderColor: '#1A4B44', // Changed to app theme green
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
   },
   segmentButtonText: {
     fontSize: 14,
-    color: Colors.light.textSecondary, // Use dynastyGreen or similar
+    color: '#333333', // Dark text for light background
   },
   segmentButtonTextActive: {
-    color: Colors.light.background, // White text on active green segment
+    color: '#FFFFFF', // White text for active button
     fontWeight: 'bold',
   },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF', // White search bar
+    paddingHorizontal: 15,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
+    marginHorizontal: 15, 
+    borderRadius: 10,
+    marginTop: 15,
+    marginBottom: 10, 
+    borderWidth: 1, 
+    borderColor: '#E0E0E0', // Light border for search bar
+  },
+  searchIcon: {
+    marginRight: 10,
+    color: '#888888', // Medium gray icon
+  },
+  searchInput: {
+    flex: 1,
+    height: Platform.OS === 'ios' ? 28 : 40, 
+    fontSize: 16,
+    color: '#333333', // Dark text for input
+  },
+  container: {
+    flex: 1,
+    // backgroundColor: '#F0F0F0', // Set at safeArea
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    marginTop: 50,
+  },
+  emptyStateIcon: { // Added for consistency if MaterialIcons is used
+      color: '#B0B0B0', // Lighter gray for empty state icon
+  },
+  emptyStateText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#555555', // Darker gray text
+    marginTop: 20,
+  },
+  emptyStateSubText: {
+    fontSize: 16,
+    color: '#777777', // Medium gray subtext
+    marginTop: 10,
+    textAlign: 'center',
+    marginBottom: 25,
+  },
+  createEventButtonEmptyState: {
+    backgroundColor: '#1A4B44', // Changed to app theme green
+    paddingHorizontal: 30, 
+    marginTop: 10, 
+    borderRadius: 25,
+    paddingVertical: 15,
+  },
   eventCard: {
-    backgroundColor: 'white', // Consider Colors.light.surface
+    backgroundColor: '#FFFFFF', // White card background
     borderRadius: 12,
-    marginBottom: 16,
-    overflow: 'hidden',
+    marginHorizontal: 15,
+    marginVertical: 10,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08, // Softer shadow for light theme
+    shadowRadius: 5,
     elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
+    overflow: 'hidden', 
   },
   eventImage: {
     width: '100%',
@@ -363,94 +409,89 @@ const styles = StyleSheet.create({
   },
   statusBadge: {
     position: 'absolute',
-    top: 10,
-    left: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    zIndex: 1, // Ensure it's above the image
+    top: 12,
+    left: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16, 
+    zIndex: 1,
+    borderWidth: 0.5,
+    // For light theme, badge colors might need more opacity or different shades
+    // borderColor: 'rgba(0, 0, 0, 0.1)', // Optional subtle border
   },
   statusGoing: {
-    backgroundColor: 'rgba(0, 128, 0, 0.7)', // Green with opacity
+    backgroundColor: '#1A4B44', // Changed to app theme green (can revert if needed)
+    borderColor: '#1A4B44', // Changed to app theme green
   },
   statusInvited: {
-    backgroundColor: 'rgba(255, 165, 0, 0.7)', // Orange with opacity
+    backgroundColor: '#2196F3', // Kept blue (can be changed)
+    borderColor: '#2196F3',
   },
   statusText: {
-    color: 'white',
-    fontSize: 12,
+    color: '#FFFFFF', 
+    fontSize: 13,
     fontWeight: 'bold',
   },
   eventInfoContainer: {
-    padding: 12,
+    padding: 15,
   },
   eventOrganizerText: {
-    fontSize: 12,
-    color: '#757575', // Consider Colors.light.textSecondary
-    marginBottom: 4,
+    fontSize: 13,
+    color: '#666666', // Medium gray for secondary text
+    marginBottom: 5, 
+    fontWeight: '500',
   },
   eventNameText: {
-    fontSize: 18,
+    fontSize: 18, // Slightly smaller to fit cards well
     fontWeight: 'bold',
-    // color: '#333', // Consider Colors.light.text
-    marginBottom: 8,
+    color: '#222222', // Very dark gray / black for title
+    marginBottom: 10,
+    lineHeight: 22,
   },
   eventDetailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  eventDetailIcon: {
-    // color: '#555', // Consider Colors.light.icon or textSecondary
-    // This is just an example, color will be directly applied to Icon component
-    color: Colors.light.textSecondary, // Defaulting to a theme color
+  eventDetailIcon: { 
+      color: '#888888' // Medium gray for icons
   },
   eventDetailText: {
     fontSize: 14,
-    // color: '#555', // Consider Colors.light.textSecondary
-    marginLeft: 8,
-  },
-  emptyStateContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    marginTop: 50, // Give some space from header/controls
-  },
-  emptyStateTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    // color: '#333',
-    marginTop: 16,
-    textAlign: 'center',
-  },
-  emptyStateSubtitle: {
-    fontSize: 14,
-    // color: '#666',
-    marginTop: 8,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  createEventButton: {
-    // backgroundColor: '#0A5C36', // Use theme primary
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 25,
-  },
-  createEventButtonText: {
-    // color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: '#555555', // Darker gray for details
+    marginLeft: 10,
+    flexShrink: 1,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F4F4F4',
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    // color: '#333',
+    color: '#555',
+  },
+  noEventsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    marginTop: 50,
+  },
+  noEventsText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#555555', // Darker gray text
+    marginTop: 20,
+  },
+  noEventsSubText: {
+    fontSize: 16,
+    color: '#777777', // Medium gray subtext
+    marginTop: 10,
+    textAlign: 'center',
+    marginBottom: 25,
   },
 });
 

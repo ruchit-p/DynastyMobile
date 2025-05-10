@@ -6,16 +6,15 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  SafeAreaView,
   Platform,
   Alert,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useFocusEffect } from 'expo-router';
-import AppHeader from '../../components/ui/AppHeader';
+import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
+// import { auth, db } from '../../src/lib/firebase'; // Commented out Firebase
 import ListItem, { ListItemProps } from '../../components/ListItem';
-import { Colors } from '../../constants/Colors';
-import { useColorScheme } from '../../hooks/useColorScheme';
 
 interface UserProfile {
   name: string;
@@ -33,110 +32,165 @@ interface UserProfile {
 
 const ProfileScreen = () => {
   const router = useRouter();
-  const scheme = useColorScheme();
-  const colorScheme: 'light' | 'dark' = scheme === 'dark' ? 'dark' : 'light';
-  const currentColors = Colors[colorScheme];
+  const navigation = useNavigation();
+  // const [userProfile, setUserProfile] = useState<UserProfile | null>(null); // Commented out
+  // const [isLoading, setIsLoading] = useState<boolean>(true); // Commented out
 
+  // Initialize with mock data
   const [userProfile, setUserProfile] = useState<UserProfile | null>({
     name: 'Jane Doe',
     email: 'jane.doe@example.com',
     joinDate: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
     connections: 150,
     stories: 25,
-    profilePicture: null,
+    profilePicture: null, // Or a placeholder image URI
     firstName: 'Jane',
     lastName: 'Doe',
     createdAt: new Date(),
     phoneNumber: '123-456-7890',
   });
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false); // Set to false as we are using mock data
 
+  // Fetch user profile data and listen for real-time updates
   useFocusEffect(
     React.useCallback(() => {
+      // Firebase data fetching logic commented out
+      /*
+      if (!auth.currentUser) {
+        setIsLoading(false);
+        setUserProfile(null); // Explicitly set to null
+        return;
+      }
+
+      setIsLoading(true);
+      const userId = auth.currentUser.uid;
+      const userDocRef = db.collection('users').doc(userId); // CHANGED: RNFB style
+
+      const unsubscribe = userDocRef.onSnapshot((docSnap) => { // CHANGED: RNFB style
+        if (docSnap.exists) { // RNFB uses .exists as a boolean property
+          const data = docSnap.data() as UserProfile;
+          let joinDateString = 'N/A';
+          // RNFB Timestamps are objects with toDate() method, no need to check for its existence if data.createdAt is a Firestore Timestamp
+          if (data.createdAt && data.createdAt.toDate) {
+            joinDateString = data.createdAt.toDate().toLocaleDateString('en-US', {
+              year: 'numeric', month: 'long'
+            });
+          }
+          setUserProfile({ ...data, joinDate: joinDateString, email: auth.currentUser?.email || data.email });
+        } else {
+          console.log("No such user document!");
+          setUserProfile(null);
+        }
+        setIsLoading(false);
+      }, (error) => {
+        console.error("Error fetching user profile:", error);
+        setIsLoading(false);
+        Alert.alert("Error", "Could not fetch profile data.");
+      });
+
+      return () => unsubscribe();
+      */
+      // Simulate loading finished for mock data
       setIsLoading(false);
+      // If you want to simulate a user not being "logged in" for UI testing:
+      // setUserProfile(null); 
     }, [])
   );
 
+  // Update header dynamically - Assuming Profile is a main tab, might not need back button
+  // Or if it's presented modally sometimes?
+  useEffect(() => {
+    navigation.setOptions({
+      title: 'Profile', // Set title for the tab screen header
+      headerStyle: {
+        backgroundColor: '#F8F8F8',
+      },
+      headerTintColor: '#333333',
+      headerLargeTitle: true, // Use large title style like iOS settings
+      headerLargeTitleStyle: {
+          fontWeight: 'bold',
+      },
+      headerShadowVisible: false, // Remove shadow for cleaner look
+    });
+  }, [navigation]);
+
   const handleEditProfile = () => {
-    router.push('/(screens)/editProfile' as any);
+    router.push('/(screens)/editProfile');
   };
 
   const menuItems: ListItemProps[] = [
     {
       icon: 'settings-outline',
       text: 'Account Settings',
-      onPress: () => router.push('/(screens)/accountSettings' as any),
+      onPress: () => router.push('/(screens)/accountSettings'), // TODO: Create this screen
     },
     {
       icon: 'book-outline',
-      text: 'Story Settings',
-      onPress: () => router.push('/(screens)/storySettings' as any),
+      text: 'Story Settings', // Updated Text
+      onPress: () => router.push('/(screens)/storySettings'), // TODO: Create this screen
     },
     {
       icon: 'calendar-outline',
-      text: 'Events Settings',
-      onPress: () => router.push('/(screens)/eventSettings' as any),
+      text: 'Events Settings', // Updated Text
+      onPress: () => router.push('/(screens)/eventSettings'), // TODO: Create this screen
     },
     {
       icon: 'people-outline',
       text: 'Family Management',
-      onPress: () => router.push('/(screens)/familyManagement' as any),
+      onPress: () => router.push('/(screens)/familyManagement'), // TODO: Create this screen
     },
     {
       icon: 'help-circle-outline',
       text: 'Help & Support',
-      onPress: () => router.push('/(screens)/helpAndSupport' as any),
+      onPress: () => router.push('/(screens)/helpAndSupport'), // TODO: Create this screen
     },
   ];
 
   if (isLoading) {
     return (
-      <View style={[styles.safeArea, { backgroundColor: currentColors.background }]}>
-        <AppHeader title="Profile" />
+      <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={currentColors.primary} />
-          <Text style={[styles.loadingText, { color: currentColors.text }]}>Loading profile...</Text>
+          <ActivityIndicator size="large" color="#0A5C36" />
+          <Text style={styles.loadingText}>Loading profile...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (!userProfile && !isLoading) {
     return (
-      <View style={[styles.safeArea, { backgroundColor: currentColors.background }]}>
-        <AppHeader title="Profile" />
+      <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
-          <Ionicons name="alert-circle-outline" size={40} color={currentColors.textSecondary} />
-          <Text style={[styles.loadingText, { color: currentColors.text }]}>Could not load profile.</Text>
+          <Ionicons name="alert-circle-outline" size={40} color="#888" />
+          <Text style={styles.loadingText}>Could not load profile.</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
+  // Display actual user data
   const displayName = userProfile?.name || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'User';
   const displayEmailOrPhone = userProfile?.email || userProfile?.phoneNumber || 'No contact info';
   
+  // Ensure joinDate is formatted correctly if it comes from a different source
   let displayJoinDate = 'May 2025';
   if (userProfile?.joinDate) {
+    // Assuming joinDate might sometimes be a full date string or a Date object from backend
     try {
       const date = new Date(userProfile.joinDate);
-      if (!isNaN(date.getTime())) {
-        displayJoinDate = date.toLocaleString('default', { month: 'long', year: 'numeric' });
-      } else if (typeof userProfile.joinDate === 'string') {
-        displayJoinDate = userProfile.joinDate; 
-      }
+      displayJoinDate = date.toLocaleString('default', { month: 'long', year: 'numeric' });
     } catch (e) {
-      if (typeof userProfile.joinDate === 'string') { 
+      // If it's already formatted as "Month Year", use as is
+      if (typeof userProfile.joinDate === 'string' && userProfile.joinDate.split(' ').length === 2) {
         displayJoinDate = userProfile.joinDate;
       }
-      console.warn("Could not parse joinDate:", userProfile.joinDate);
+      // Otherwise, it keeps 'Not available' or the original problematic string if not caught by string check
     }
-  } else if (userProfile?.createdAt) {
+  } else if (userProfile?.createdAt) { // Fallback to createdAt if joinDate is not present
     try {
+        // Assuming createdAt could be a Firestore Timestamp or a parsable date string
         const date = userProfile.createdAt.toDate ? userProfile.createdAt.toDate() : new Date(userProfile.createdAt);
-        if (!isNaN(date.getTime())) {
-           displayJoinDate = date.toLocaleString('default', { month: 'long', year: 'numeric' });
-        }
+        displayJoinDate = date.toLocaleString('default', { month: 'long', year: 'numeric' });
     } catch (e) {
         console.warn("Could not parse createdAt for join date:", userProfile.createdAt);
     }
@@ -145,143 +199,149 @@ const ProfileScreen = () => {
   const displayProfilePic = userProfile?.profilePicture;
 
   return (
-    <View style={[styles.safeArea, { backgroundColor: currentColors.background }]}>
-      <AppHeader title="Profile" />
+    <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container}>
-        <View style={[styles.profileHeader, { backgroundColor: currentColors.surface }]}>
+        <View style={styles.profileHeader}>
           <TouchableOpacity onPress={handleEditProfile} style={styles.profilePicContainer}>
             <Image 
               source={displayProfilePic ? { uri: displayProfilePic } : require('../../assets/images/avatar-placeholder.png')} 
               style={styles.profilePic} 
             />
             <View style={styles.editIconOverlay}>
-              <Ionicons name="pencil-outline" size={18} color={Colors.light.background} />
+              <Ionicons name="pencil-outline" size={18} color="#FFFFFF" />
             </View>
           </TouchableOpacity>
-          <Text style={[styles.profileName, { color: currentColors.text }]}>{displayName}</Text>
-          <Text style={[styles.profileEmail, { color: currentColors.textSecondary }]}>{displayEmailOrPhone}</Text>
-          <Text style={[styles.profileJoinDate, { color: currentColors.textSecondary }]}>Joined {displayJoinDate}</Text>
+          <Text style={styles.profileName}>{displayName}</Text>
+          <Text style={styles.profileEmail}>{displayEmailOrPhone}</Text>
+          <Text style={styles.profileJoinDate}>Joined {displayJoinDate}</Text>
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
-              <Text style={[styles.statNumber, { color: currentColors.text }]}>{userProfile?.connections || 0}</Text>
-              <Text style={[styles.statLabel, { color: currentColors.textSecondary }]}>Family Members</Text>
+              <Text style={styles.statNumber}>{userProfile?.connections || 0}</Text>
+              <Text style={styles.statLabel}>Family Members</Text>
             </View>
-            <View style={[styles.statSeparator, { backgroundColor: currentColors.border }]} />
+            <View style={styles.statSeparator} />
             <View style={styles.statItem}>
-              <Text style={[styles.statNumber, { color: currentColors.text }]}>{userProfile?.stories || 0}</Text>
-              <Text style={[styles.statLabel, { color: currentColors.textSecondary }]}>Stories</Text>
+              <Text style={styles.statNumber}>{userProfile?.stories || 0}</Text>
+              <Text style={styles.statLabel}>Stories</Text>
             </View>
           </View>
         </View>
 
-        <View style={[styles.menuContainer, { backgroundColor: currentColors.surface }]}>
+        <View style={styles.menuContainer}>
           {menuItems.map((item, index) => (
             <React.Fragment key={item.text}>
-              <ListItem 
-                icon={item.icon} 
-                text={item.text} 
-                onPress={item.onPress} 
-                iconColor={currentColors.primary}
-                textColor={currentColors.text}
-              />
-              {index < menuItems.length - 1 && <View style={[styles.separator, { backgroundColor: currentColors.border }]} />}
+              <ListItem icon={item.icon} text={item.text} onPress={item.onPress} />
+              {index < menuItems.length - 1 && <View style={styles.separator} />}
             </React.Fragment>
           ))}
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+    backgroundColor: '#F4F4F4',
   },
   container: {
     flex: 1,
+  },
+  profileHeader: {
+    alignItems: 'center',
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF', // White background for profile header section
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  profilePicContainer: {
+    position: 'relative', // Needed for icon overlay
+    marginBottom: 15,
+  },
+  profilePic: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: '#E0E0E0',
+  },
+  editIconOverlay: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: 8,
+    borderRadius: 15,
+  },
+  profileName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  profileEmail: {
+    fontSize: 16,
+    color: '#777',
+    marginBottom: 15,
+  },
+  profileJoinDate: {
+      fontSize: 14,
+      color: '#999',
+      marginBottom: 20,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '80%',
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#EFEFEF',
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#777',
+    marginTop: 4,
+  },
+  statSeparator: {
+      width: 1,
+      height: '70%',
+      backgroundColor: '#EFEFEF',
+      alignSelf: 'center',
+  },
+  menuContainer: {
+    marginTop: 20,
+    marginHorizontal: 10, // Add some horizontal margin
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    overflow: 'hidden', // Clip separator lines
+    borderWidth: 1, // Optional: Add border around the menu block
+    borderColor: '#E0E0E0',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#EFEFEF',
+    marginLeft: 15 + 24 + 15, // padding + icon width + margin
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F0F0F0',
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-  },
-  profileHeader: {
-    alignItems: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 15,
-  },
-  profilePicContainer: {
-    marginBottom: 15,
-    position: 'relative',
-  },
-  profilePic: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 2,
-    borderColor: Colors.light.primary,
-  },
-  editIconOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: Colors.light.primary,
-    borderRadius: 15,
-    padding: 6,
-    borderWidth: 2,
-    borderColor: Colors.light.background,
-  },
-  profileName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  profileEmail: {
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  profileJoinDate: {
-    fontSize: 12,
-    marginBottom: 15,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    maxWidth: 300,
-    paddingVertical: 10,
-  },
-  statItem: {
-    alignItems: 'center',
-    paddingHorizontal: 10,
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  statLabel: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  statSeparator: {
-    width: 1,
-    marginHorizontal: 10,
-  },
-  menuContainer: {
-    marginTop: 10,
-    borderRadius: 8,
-    marginHorizontal: 10,
-    marginBottom: 10,
-    overflow: 'hidden',
-    borderWidth: 1,
-  },
-  separator: {
-    height: 1,
-    marginLeft: 58,
+    color: '#555',
   },
 });
 

@@ -1,21 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import {
-  // SafeAreaView, // AppHeader handles top safe area
-  StyleSheet,
-  Text,
-  View,
-  Platform,
-  Image,
-  TouchableOpacity,
-  Alert // Keep Alert for moreOptionsButton
-} from 'react-native';
-import RelativesTree, { type RelativeItemComponent, type RelativeItem as RelativeItemType, type RelativeItemProps } from '../../react-native-relatives-tree/src';
+import { SafeAreaView, StyleSheet, Text, View, Platform, Image, TouchableOpacity } from 'react-native';
+import RelativesTree, { type RelativeItemComponent, type RelativeItem as RelativeItemType } from '../../react-native-relatives-tree/src';
 import { useRouter } from 'expo-router';
-import AppHeader from '../../components/ui/AppHeader'; // Import AppHeader
-import { Colors } from '../../constants/Colors'; // Import Colors
-import { useColorScheme } from 'react-native'; // Changed from '../../hooks/useColorScheme'
 import AnimatedActionSheet, { type ActionSheetAction } from '../../components/ui/AnimatedActionSheet';
-import { Ionicons } from '@expo/vector-icons'; // For headerRight icon
 
 // Define the Items type for your specific data structure
 type Items = RelativeItemType & {
@@ -90,88 +77,28 @@ const getInitials = (name: string): string => {
   ).toUpperCase();
 };
 
-// NodeDisplayComponent: Renders each node in the tree.
-// This component is now a standard React.FC and receives themeColors for styling.
-const NodeDisplayComponent: React.FC<
-  RelativeItemProps<Items> & { // Includes info, style, level from the library
-    onItemPress: (item: Items) => void;
-    isItemSelected: boolean;
-    themeColors: typeof Colors.light; 
-  }
-> = ({ info, style, onItemPress, isItemSelected, themeColors, level }) => {
-  // Dynamic styles using themeColors
-  const nodeStyles = StyleSheet.create({
-    itemContainer: {
-      padding: 8,
-      alignItems: 'center',
-      backgroundColor: themeColors.card, 
-      borderRadius: 8, // Consistent rounding
-      borderWidth: 1,
-      borderColor: themeColors.border,
-      minWidth: 90, // Ensure a minimum width for content
-    },
-    selectedItemContainer: {
-      borderColor: themeColors.primary,
-      borderWidth: 2, // Make selection more prominent
-      shadowColor: themeColors.primary, // Use theme primary for shadow
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.4,
-      shadowRadius: 4,
-      elevation: 6, 
-    },
-    avatar: {
-      width: 50,
-      height: 50,
-      borderRadius: 25,
-      marginBottom: 6, // Adjusted spacing
-      backgroundColor: themeColors.imagePlaceholder, // Use theme color for placeholder bg
-    },
-    avatarPlaceholder: {
-      width: 50,
-      height: 50,
-      borderRadius: 25,
-      backgroundColor: themeColors.primary, 
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 6,
-    },
-    avatarPlaceholderText: {
-      color: themeColors.headerText, // Use a color that contrasts well with primary
-      fontWeight: 'bold',
-      fontSize: 18,
-    },
-    nameText: {
-      fontSize: 14,
-      color: themeColors.text, 
-      textAlign: 'center',
-      fontWeight: '500', // Slightly bolder name
-    },
-  });
-
-  return (
-    <TouchableOpacity
-      onPress={() => onItemPress(info)}
-      // The `style` prop from RelativeItemProps contains positioning styles from the library.
-      // Apply it first, then our custom styles.
-      style={[nodeStyles.itemContainer, style, isItemSelected && nodeStyles.selectedItemContainer]}
-    >
-      {info.avatar ? (
-        <Image source={{ uri: info.avatar }} style={nodeStyles.avatar} />
-      ) : (
-        <View style={nodeStyles.avatarPlaceholder}>
-          <Text style={nodeStyles.avatarPlaceholderText}>{getInitials(info.name)}</Text>
-        </View>
-      )}
-      <Text style={nodeStyles.nameText} numberOfLines={2} ellipsizeMode="tail">{info.name}</Text>
-    </TouchableOpacity>
-  );
-};
+// Custom RelativeItem component to render each node
+const CustomRelativeItem: RelativeItemComponent<Items, { onPress: (item: Items) => void; isSelected: boolean }> = ({
+  level,
+  info,
+  style,
+  onPress,
+  isSelected,
+}) => (
+  <TouchableOpacity onPress={() => onPress(info)} style={[styles.itemContainer, style, isSelected && styles.selectedItemContainer]}>
+    {info.avatar ? (
+      <Image source={{ uri: info.avatar }} style={styles.avatar} />
+    ) : (
+      <View style={styles.avatarPlaceholder}>
+        <Text style={styles.avatarPlaceholderText}>{getInitials(info.name)}</Text>
+      </View>
+    )}
+    <Text style={styles.nameText}>{info.name}</Text>
+  </TouchableOpacity>
+);
 
 const FamilyTreeScreen = () => {
   const router = useRouter();
-  const colorScheme = useColorScheme() ?? 'light';
-  const currentColors = Colors[colorScheme as 'light' | 'dark']; // Explicit cast
-
   const [selectedNode, setSelectedNode] = useState<Items | null>(null);
   const [isActionMenuVisible, setIsActionMenuVisible] = useState(false);
 
@@ -185,10 +112,9 @@ const FamilyTreeScreen = () => {
   };
 
   const onAddMember = (relationType: 'parent' | 'spouse' | 'child') => {
-    handleCloseMenu(); // Close menu first
     if (selectedNode) {
       router.push({
-        pathname: '/(screens)/addFamilyMember' as any,
+        pathname: '/(screens)/addFamilyMember',
         params: {
           selectedNodeId: selectedNode.id,
           relationType: relationType,
@@ -196,98 +122,63 @@ const FamilyTreeScreen = () => {
         }
       });
     } else {
-      // This case should ideally not be reached if actions are only shown when a node is selected.
-      Alert.alert("Error", "No node selected for adding member.");
+      console.warn("No node selected for adding member.");
     }
   };
 
   const onViewProfile = () => {
-    handleCloseMenu();
     if (selectedNode) {
-      // TODO: Implement actual navigation to a ViewProfileScreen if it exists
-      Alert.alert("View Profile", `Viewing profile for ${selectedNode.name} (ID: ${selectedNode.id})`);
-      // router.push({ pathname: '/(screens)/viewProfile', params: { userId: selectedNode.id } });
+      console.log(`View profile for ${selectedNode.name} (ID: ${selectedNode.id})`);
     } else {
-      Alert.alert("Error", "No node selected for viewing profile.");
-    }
-  };
-  
-  const onEditMember = () => {
-    handleCloseMenu();
-    if (selectedNode) {
-        Alert.alert("Edit Member", `Editing member ${selectedNode.name} (ID: ${selectedNode.id})`);
-        // router.push({ pathname: '/(screens)/editFamilyMember', params: { memberId: selectedNode.id } });
-    } else {
-        Alert.alert("Error", "No node selected for editing.");
+      console.warn("No node selected for viewing profile.");
     }
   };
 
+  // Prepare actions for the ActionSheet
   let dynamicActions: ActionSheetAction[] = [];
   if (selectedNode) {
     dynamicActions = [
-      { title: 'View Profile', onPress: onViewProfile }, // Removed icon
-      { title: 'Edit Member', onPress: onEditMember }, // Removed icon
-      { title: 'Add Parent', onPress: () => onAddMember('parent') }, // Removed icon
-      { title: 'Add Spouse', onPress: () => onAddMember('spouse') }, // Removed icon
-      { title: 'Add Child', onPress: () => onAddMember('child') }, // Removed icon
-      { title: 'Cancel', onPress: handleCloseMenu, style: 'cancel' }, // Removed icon
+      {
+        title: 'View Profile',
+        onPress: onViewProfile,
+      },
+      {
+        title: 'Add Parent',
+        onPress: () => onAddMember('parent'),
+      },
+      {
+        title: 'Add Spouse',
+        onPress: () => onAddMember('spouse'),
+      },
+      {
+        title: 'Add Child',
+        onPress: () => onAddMember('child'),
+      },
+      {
+        title: 'Cancel',
+        onPress: handleCloseMenu,
+        style: 'cancel',
+      },
     ];
   }
-  
-  // Header Right Action (previously in _layout.tsx)
-  const headerRightFamilyTree = (
-    <TouchableOpacity 
-      onPress={() => {
-        // This could open a different action sheet for general tree options
-        // For now, directly triggering an alert as in _layout.tsx example
-        Alert.alert(
-          "Family Tree Options",
-          "",
-          [
-            { text: "Add new member (root)", onPress: () => router.push('/(screens)/addFamilyMember' as any) }, // For adding a new root
-            { text: "Family tree settings", onPress: () => router.push('/(screens)/familyTreeSettings' as any) },
-            { text: "Invite members", onPress: () => router.push('/(screens)/inviteMembers' as any) },
-            { text: "Cancel", style: "cancel" }
-          ],
-          { cancelable: true }
-        );
-      }}
-      style={{ marginRight: 0 }} // AppHeader handles padding
-    >
-      <Ionicons name="ellipsis-vertical" size={24} color={currentColors.primary} />
-    </TouchableOpacity>
-  );
-
-  // renderTreeItem: Function passed to RelativesTree to render each node.
-  // It uses NodeDisplayComponent and provides necessary props from the FamilyTreeScreen scope.
-  const renderTreeItem: RelativeItemComponent<Items> = (libProvidedProps) => {
-    const { info, style, level } = libProvidedProps; // Destructure from library props
-    const isSelected = selectedNode?.id === info.id;
-
-    return (
-      <NodeDisplayComponent
-        info={info}
-        style={style} // Pass style from libProvidedProps (for positioning)
-        level={level} // Pass level
-        onItemPress={handleNodePress} // Use handleNodePress from FamilyTreeScreen's scope
-        isItemSelected={isSelected}   // Use isSelected state from FamilyTreeScreen's scope
-        themeColors={currentColors}   // Pass current theme colors
-      />
-    );
-  };
 
   return (
-    <View style={[styles.safeArea, { backgroundColor: currentColors.background }]}>
-      <AppHeader title="Family Tree" rightActions={headerRightFamilyTree} />
+    <SafeAreaView style={styles.safeArea}>
       <RelativesTree
-        data={relatives} // Replace with your actual data source
+        data={relatives}
         spouseKey="spouse"
-        relativeItem={renderTreeItem} // Use the new render function
-        cardWidth={100} // Adjusted for potentially smaller text/avatar
-        gap={30} // Increased gap slightly
-        pathColor={currentColors.primary} // Use theme color
+        relativeItem={(props) => (
+          <CustomRelativeItem
+            {...props}
+            onPress={handleNodePress}
+            isSelected={selectedNode?.id === props.info.id}
+          />
+        )}
+        cardWidth={120}
+        gap={20}
+        pathColor="#006400"
         strokeWidth={2}
-        style={[styles.treeContainer, { backgroundColor: currentColors.surface }]} // Theme background
+        style={styles.treeContainer}
       />
 
       {selectedNode && (
@@ -296,43 +187,84 @@ const FamilyTreeScreen = () => {
           onClose={handleCloseMenu}
           title={`Actions for ${selectedNode.name}`}
           actions={dynamicActions}
-          // Pass currentColors to AnimatedActionSheet if it needs theming for its internal elements
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 };
 
-// Updated styles to use theme colors
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    // backgroundColor: currentColors.background, // Set in component
+    backgroundColor: '#FFFFFF',
+  },
+  pageHeader: {
+    paddingHorizontal: 15,
+    paddingTop: Platform.OS === 'ios' ? 15 : 40,
+    paddingBottom: 10,
+    backgroundColor: '#FFFFFF',
+  },
+  pageTitle: {
+    fontSize: 34,
+    fontWeight: 'bold',
+    color: '#000000',
   },
   treeContainer: {
     flex: 1,
-    // backgroundColor: currentColors.surface, // Set in component
+    backgroundColor: '#F4F4F4',
     padding: 10,
   },
-  // Styles for NodeDisplayComponent are now defined within that component
-  // to make them dynamically themeable.
-  // itemContainer, selectedItemContainer, avatar, avatarPlaceholder, 
-  // avatarPlaceholderText, nameText are removed from here.
-
-  // Add any other styles specific to FamilyTreeScreen itself here, using currentColors if needed
-  // For example, if there was a loading indicator or empty state message specific to this screen.
-  loadingContainer: {
-    flex: 1,
+  itemContainer: {
+    borderWidth: 1,
+    borderColor: '#1A4B44',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E8F5E9',
+    padding: 5,
+  },
+  selectedItemContainer: {
+    borderColor: '#C4A55C',
+    borderWidth: 2,
+    backgroundColor: '#FFFDE7',
+  },
+  avatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    marginBottom: 4,
+  },
+  avatarPlaceholder: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#B0BEC5',
     justifyContent: 'center',
     alignItems: 'center',
-    // backgroundColor: currentColors.background, // Not needed if set on safeArea
+    marginBottom: 4,
   },
-  emptyStateText: {
-    fontSize: 16,
-    // color: currentColors.textMuted,
-    textAlign: 'center',
-    marginTop: 20,
-  }
+  avatarPlaceholderText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  nameText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1A4B44',
+  },
+  dobText: {
+    fontSize: 10,
+    color: '#555',
+  },
+  dodText: {
+    fontSize: 10,
+    color: '#888',
+  },
+  levelText: {
+    fontSize: 9,
+    color: '#777',
+  },
 });
 
 export default FamilyTreeScreen; 

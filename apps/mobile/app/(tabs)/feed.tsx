@@ -5,9 +5,6 @@ import { useRouter, useFocusEffect } from 'expo-router';
 // import { auth, db } from '../../src/lib/firebase'; // Commented out Firebase
 // import { collection, query, orderBy, limit, getDocs, Timestamp, doc, getDoc } from 'firebase/firestore'; // Commented out Firebase
 import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/FloatingActionMenu';
-import AppHeader from '../../components/ui/AppHeader'; // Import AppHeader
-import { Colors } from '../../constants/Colors'; // Import Colors
-import { useColorScheme } from '../../hooks/useColorScheme'; // Import useColorScheme
 
 // Define the structure for a Post fetched from Firestore
 interface Post {
@@ -26,8 +23,6 @@ interface Post {
 
 const FeedScreen = () => {
   const router = useRouter();
-  const colorScheme = useColorScheme() ?? 'light';
-  const currentColors = Colors[colorScheme];
 
   // const [feedPosts, setFeedPosts] = useState<Post[]>([]); // State for posts // Commented out
   // const [isLoadingFeed, setIsLoadingFeed] = useState<boolean>(true); // Loading state // Commented out
@@ -43,14 +38,14 @@ const FeedScreen = () => {
       text: 'Create Story',
       iconName: 'create-outline',
       iconLibrary: 'Ionicons',
-      onPress: () => router.push('/(screens)/createStory' as any),
+      onPress: () => router.push('/(screens)/createStory'),
     },
     {
       id: 'createEvent',
       text: 'Create Event',
       iconName: 'calendar-outline',
       iconLibrary: 'Ionicons',
-      onPress: () => router.push('/(screens)/createEvent' as any),
+      onPress: () => router.push('/(screens)/createEvent'),
     },
   ];
 
@@ -112,7 +107,7 @@ const FeedScreen = () => {
 
   const handleFeedItemPress = (item: Post) => {
     // Assuming posts are stories for now, adjust if feed contains other types
-    router.push({ pathname: '/(screens)/storyDetail', params: { storyId: item.id } } as any);
+    router.push({ pathname: '/(screens)/storyDetail', params: { storyId: item.id } });
   };
 
   // Helper function to format timestamp
@@ -129,81 +124,59 @@ const FeedScreen = () => {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  // Define headerRight actions (previously in _layout.tsx)
-  const headerRightActions = (
-    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-      <TouchableOpacity onPress={() => router.push('/(screens)/notifications' as any)} style={{ paddingHorizontal: 10 }}>
-        <Ionicons name="notifications-outline" size={26} color={currentColors.primary} />
-      </TouchableOpacity>
-      <TouchableOpacity onPress={() => router.push('/(screens)/chat' as any)} style={{ paddingHorizontal: 10 }}>
-        <Ionicons name="chatbubbles-outline" size={26} color={currentColors.primary} />
-      </TouchableOpacity>
-    </View>
-  );
-
   if (isLoadingFeed) {
     return (
-      <View style={[styles.safeArea, { backgroundColor: currentColors.background }]}>
-        <AppHeader title="Feed" rightActions={headerRightActions} />
+      <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={currentColors.primary} />
-          <Text style={[styles.loadingText, { color: currentColors.text }]}>Loading Feed...</Text>
+          <ActivityIndicator size="large" color="#0A5C36" />
+          <Text style={styles.loadingText}>Loading Feed...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[styles.safeArea, { backgroundColor: currentColors.background }]}>
-      <AppHeader title="Feed" rightActions={headerRightActions} />
-      <ScrollView style={[styles.container, { backgroundColor: currentColors.surface }]}>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView style={styles.container}>
         {feedPosts.length === 0 ? (
           <View style={styles.emptyStateContainer}>
-            <Ionicons name="newspaper-outline" size={60} color={currentColors.textSecondary} />
-            <Text style={[styles.emptyStateText, { color: currentColors.text }]}>Your feed is empty.</Text>
-            <Text style={[styles.emptyStateSubText, { color: currentColors.textSecondary }]}>
+            <Ionicons name="newspaper-outline" size={60} color="#CCC" />
+            <Text style={styles.emptyStateText}>Your feed is empty.</Text>
+            <Text style={styles.emptyStateSubText}>
               Create your first story or connect with family!
             </Text>
           </View>
         ) : (
           feedPosts.map((item) => (
-            <TouchableOpacity key={item.id} onPress={() => handleFeedItemPress(item)} style={[styles.feedItemContainer, { backgroundColor: currentColors.background }]}>
+            <TouchableOpacity key={item.id} onPress={() => handleFeedItemPress(item)} style={styles.feedItemContainer}>
                 <View style={styles.feedItem}>
                 <View style={styles.itemHeader}>
-                    <Image 
-                        source={{ uri: item.authorAvatar || '../../assets/images/avatar-placeholder.png' }} 
-                        style={[styles.avatar, { backgroundColor: currentColors.border }]}
-                    />
+                    <Image source={{ uri: item.authorAvatar || '../../assets/images/avatar-placeholder.png' }} style={styles.avatar} />
                     <View style={styles.userInfo}>
-                    <Text style={[styles.userName, { color: currentColors.text }]}>{item.authorName || 'User'}</Text>
+                    <Text style={styles.userName}>{item.authorName || 'User'}</Text>
                     <View style={styles.timestampContainer}>
-                        <Text style={[styles.timestamp, { color: currentColors.textSecondary }]}>{formatTimestamp(item.createdAt)}</Text>
+                        <Text style={styles.timestamp}>{formatTimestamp(item.createdAt)}</Text>
                         {/* Removed Date Pill - can be added back if needed */}
                     </View>
                     </View>
                     <TouchableOpacity style={styles.moreOptionsButton} onPress={(e) => {e.stopPropagation(); alert('More options for ' + item.id);}}>
-                    <Ionicons name="ellipsis-horizontal" size={24} color={currentColors.textSecondary} />
+                    <Ionicons name="ellipsis-horizontal" size={24} color="#888" />
                     </TouchableOpacity>
                 </View>
 
-                {item.text && <Text style={[styles.feedContent, { color: currentColors.text }]} numberOfLines={3}>{item.text}</Text>}
-                {item.imageUrl && 
-                    <Image 
-                        source={{ uri: item.imageUrl }} 
-                        style={[styles.feedImage, { backgroundColor: currentColors.border }]}
-                    />
-                }
+                {item.text && <Text style={styles.feedContent} numberOfLines={3}>{item.text}</Text>}
+                {item.imageUrl && <Image source={{ uri: item.imageUrl }} style={styles.feedImage} />}
                 {item.location && (
                     <View style={styles.locationContainer}>
-                    <Ionicons name="location-sharp" size={16} color={currentColors.textSecondary} />
-                    <Text style={[styles.locationText, { color: currentColors.textSecondary }]}>{item.location}</Text>
+                    <Ionicons name="location-sharp" size={16} color="#555" />
+                    <Text style={styles.locationText}>{item.location}</Text>
                     </View>
                 )}
 
-                <View style={[styles.feedStats, { borderTopColor: currentColors.border }]}>
+                <View style={styles.feedStats}>
                     <View style={styles.statItem}>
-                        <Ionicons name="chatbubbles-outline" size={16} color={currentColors.textSecondary} />
-                        <Text style={[styles.statText, { color: currentColors.textSecondary }]}>{item.commentsCount || 0} Comments</Text>
+                        <Ionicons name="chatbubbles-outline" size={16} color="#555" />
+                        <Text style={styles.statText}>{item.commentsCount || 0} Comments</Text>
                     </View>
                     {/* Add other stats like likes */}
                 </View>
@@ -215,30 +188,21 @@ const FeedScreen = () => {
 
       {/* MARK: - Add Reusable FAB Menu */}
       <FloatingActionMenu menuItems={feedMenuItems} />
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    // backgroundColor is dynamic
+    backgroundColor: '#FFFFFF',
   },
   container: {
     flex: 1,
-    // backgroundColor: '#F4F4F4', // now dynamic (surface color)
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
+    backgroundColor: '#F4F4F4',
   },
   feedItemContainer: {
-    // backgroundColor: '#FFFFFF', // now dynamic (background color)
+    backgroundColor: '#FFFFFF',
     borderRadius: 8,
     marginVertical: 8,
     marginHorizontal: 10,
@@ -262,8 +226,6 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     marginRight: 10,
-    // Add a backgroundColor for placeholder effect if image is transparent or loading
-    // backgroundColor: currentColors.border, // Removed from here
   },
   userInfo: {
     flex: 1,
@@ -271,7 +233,7 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: 'bold',
-    // color: '#333',
+    color: '#333',
   },
   timestampContainer: {
     flexDirection: 'row',
@@ -280,7 +242,7 @@ const styles = StyleSheet.create({
   },
   timestamp: {
     fontSize: 12,
-    // color: '#777',
+    color: '#777',
   },
   dotSeparator: {
     width: 3,
@@ -299,67 +261,79 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   moreOptionsButton: {
-    padding: 5, // Make it easier to tap
+    padding: 5,
   },
   feedContent: {
     fontSize: 15,
+    color: '#444',
     lineHeight: 22,
-    // color: '#444',
     marginBottom: 10,
   },
   feedImage: {
     width: '100%',
-    height: 250, // Adjust as needed or make dynamic
+    height: 200,
     borderRadius: 8,
+    marginTop: 5,
     marginBottom: 10,
-    // backgroundColor: currentColors.border, // Removed from here
   },
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
+    marginTop: 5,
   },
   locationText: {
     fontSize: 13,
-    // color: '#555',
+    color: '#555',
     marginLeft: 5,
   },
   feedStats: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 10,
+    alignItems: 'center',
     borderTopWidth: 1,
-    // borderTopColor: currentColors.border, // Removed from here
+    borderTopColor: '#EEE',
+    paddingVertical: 10,
+    marginTop: 10,
   },
   statItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginRight: 15,
   },
   statText: {
-    fontSize: 12,
-    // color: '#555',
-    marginLeft: 5,
+    marginLeft: 4,
+    fontSize: 13,
+    color: '#555',
   },
   emptyStateContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    minHeight: 300, // Ensure it takes some space
+    marginTop: 50,
   },
   emptyStateText: {
     fontSize: 18,
     fontWeight: '600',
-    // color: '#555',
+    color: '#555',
     marginTop: 15,
-    textAlign: 'center',
   },
   emptyStateSubText: {
     fontSize: 14,
-    // color: '#777',
-    marginTop: 8,
+    color: '#777',
+    marginTop: 5,
     textAlign: 'center',
-    paddingHorizontal: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F4F4F4',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#555',
   },
 });
 
