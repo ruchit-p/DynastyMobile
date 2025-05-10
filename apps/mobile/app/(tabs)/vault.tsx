@@ -508,9 +508,14 @@ const VaultScreen = () => {
   const getHeaderLeft = () => {
     if (pathHistory.length > 1) {
       return (
-        <TouchableOpacity onPress={navigateBack} style={styles.backButton as any /* Temp fix for style prop type */}>
-          <Ionicons name="arrow-back" size={24} color={Colors.light?.primary || '#007AFF'} />
-        </TouchableOpacity>
+        <IconButton
+          iconName="arrow-back"
+          size={24}
+          color={Colors.palette.dynastyGreen.dark}
+          onPress={navigateBack}
+          style={styles.backButton}
+          accessibilityLabel="Go back to previous folder"
+        />
       );
     }
     return null; // No back button at root
@@ -621,82 +626,47 @@ const VaultScreen = () => {
 
 // MARK: - Styles
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.light?.background?.primary || '#FFFFFF',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.light?.background?.primary || '#FFFFFF',
-  },
-  inlineLoadingContainer: {
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: Fonts.size?.medium || 16,
-    fontFamily: Fonts.type?.base || 'System',
-    color: Colors.light?.text?.primary || '#000000',
-  },
   customHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between', // Distribute space
-    paddingHorizontal: 15,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 12, // Adjust padding for platform
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Platform.OS === 'ios' ? Spacing.sm : Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.light?.icon?.primary || '#C7C7CC', // Use a subtle border color
-    backgroundColor: Colors.light?.background?.primary || '#FFFFFF', // Match SafeArea
+    borderBottomColor: Colors.palette.neutral.lighter,
+    backgroundColor: Colors.palette.neutral.white,
   },
   backButton: {
-    padding: 5, // Make it easier to tap
-    marginRight: 10,
+    padding: Spacing.xs,
+    marginRight: Spacing.sm,
   },
   pathText: {
-    flex: 1, // Allow text to take available space
-    textAlign: 'center', // Center the text
-    fontSize: Fonts.size?.regular || 17,
-    fontFamily: Fonts.type?.bold || 'System', // Make path more prominent
-    color: Colors.light?.text?.primary || '#000000',
-  },
-  scrollView: {
     flex: 1,
+    textAlign: 'center',
+    fontWeight: 'bold',
+  },
+  contentContainer: {
+    flex: 1,
+  },
+  inlineLoadingContainer: {
+    paddingVertical: Spacing.sm,
+    alignItems: 'center',
+  },
+  inlineEmptyState: {
+    padding: Spacing.sm,
   },
   scrollContentContainer: {
     paddingBottom: 80, // Ensure space for FAB
   },
-  itemContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 15,
+  listItem: {
     borderBottomWidth: 1,
-    borderBottomColor: Colors.light?.icon?.primary || '#EFEFF4', // Lighter border for items
+    borderBottomColor: Colors.palette.neutral.lighter,
   },
-  itemIcon: {
-    marginRight: 15,
-  },
-  itemTextContainer: {
+  emptyStateCustom: {
     flex: 1,
-  },
-  itemName: {
-    fontSize: Fonts.size?.medium || 16,
-    fontFamily: Fonts.type?.base || 'System',
-    color: Colors.light?.text?.primary || '#000000',
-  },
-  itemSize: {
-    fontSize: Fonts.size?.small || 12,
-    fontFamily: Fonts.type?.base || 'System',
-    color: Colors.light?.icon?.secondary || '#8E8E93', // A lighter text color for secondary info
-    marginTop: 2,
-  },
-  emptyStateCustom: { 
-    flex: 1, // Make empty state take full space if no items
     justifyContent: 'center',
     alignItems: 'center',
+    paddingBottom: 60, // Give space for the FAB
   }
 });
 

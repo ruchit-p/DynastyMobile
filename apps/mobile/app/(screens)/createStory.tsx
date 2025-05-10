@@ -19,6 +19,10 @@ import * as ImagePicker from 'expo-image-picker';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import AnimatedActionSheet, { ActionSheetAction } from '../../components/ui/AnimatedActionSheet';
 import PrivacySegmentedControl from '../../components/ui/PrivacySegmentedControl';
+import SelectViewers from '../../components/ui/SelectViewers';
+import TagPeopleButton from '../../components/ui/TagPeopleButton';
+import AddDetailsButton from '../../components/ui/AddDetailsButton';
+import AddContentButton from '../../components/ui/AddContentButton';
 
 // MARK: - Types
 type BlockType = "text" | "image" | "video" | "audio";
@@ -415,10 +419,7 @@ const CreateStoryScreen = () => {
             </>
           )}
 
-          <TouchableOpacity style={styles.addButton} onPress={() => setDetailsActionSheetVisible(true)}>
-            <Ionicons name="add-circle-outline" size={22} color="#1A4B44" style={{marginRight: 5}} />
-            <Text style={styles.addButtonText}>Add Additional Details</Text>
-          </TouchableOpacity>
+          <AddDetailsButton onPress={() => setDetailsActionSheetVisible(true)} />
         </View>
 
         {/* Privacy Section */}
@@ -434,33 +435,26 @@ const CreateStoryScreen = () => {
             onValueChange={setPrivacy}
           />
           {privacy === 'custom' && (
-            <TouchableOpacity 
-                style={[styles.addButton, styles.selectViewersButton]} 
-                onPress={() => router.push({
-                  pathname: '/selectMembersScreen',
-                  params: { purpose: 'viewers', preSelected: JSON.stringify(customSelectedViewers) }
-                } as any ) 
-            }
-            >
-                <Ionicons name="people-outline" size={22} color="#1A4B44" style={{marginRight: 5}} />
-                <Text style={styles.addButtonText}>Select Viewers ({customSelectedViewers.length})</Text>
-            </TouchableOpacity>
+            <SelectViewers
+              selectedCount={customSelectedViewers.length}
+              onPress={() => router.push({
+                pathname: '/selectMembersScreen',
+                params: { purpose: 'viewers', preSelected: JSON.stringify(customSelectedViewers) }
+              } as any)}
+            />
           )}
         </View>
 
         {/* Tag People Section */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Tag People Involved</Text>
-          <TouchableOpacity 
-            style={styles.addButton} 
+          <TagPeopleButton
+            selectedCount={taggedMembers.length}
             onPress={() => router.push({
               pathname: '/selectMembersScreen',
               params: { purpose: 'tagging', preSelected: JSON.stringify(taggedMembers) }
-            } as any )
-          }>
-            <Ionicons name="person-add-outline" size={22} color="#1A4B44" style={{marginRight: 5}} />
-            <Text style={styles.addButtonText}>Tag People ({taggedMembers.length})</Text>
-          </TouchableOpacity>
+            } as any)}
+          />
         </View>
         
         {/* Story Content Section */}
@@ -516,10 +510,7 @@ const CreateStoryScreen = () => {
               </TouchableOpacity>
             </View>
           ))}
-          <TouchableOpacity style={styles.addButton} onPress={() => setAddContentActionSheetVisible(true)}>
-             <Ionicons name="add-circle" size={22} color="#1A4B44" style={{marginRight: 5}} />
-            <Text style={styles.addButtonText}>Add Content Block</Text>
-          </TouchableOpacity>
+          <AddContentButton onPress={() => setAddContentActionSheetVisible(true)} />
         </View>
 
         {/* Details action sheet */}
