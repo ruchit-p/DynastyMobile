@@ -6,7 +6,8 @@ import {
   TouchableOpacity, 
   Image, 
   Alert,
-  Platform
+  Platform,
+  RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -298,8 +299,6 @@ const HistoryScreen = () => {
           icon="newspaper-outline"
           title="Your History Book is Empty"
           description="Start by writing your first story or add events to build your family timeline."
-          actionLabel="Write a Story"
-          onAction={() => router.push('/(screens)/createStory')}
         />
         
         <FloatingActionMenu menuItems={historyMenuItems} />
@@ -321,8 +320,14 @@ const HistoryScreen = () => {
         <ScrollView 
           style={styles.postsScrollViewContainer}
           showsVerticalScrollIndicator={false}
-          refreshing={isRefreshing}
-          onRefresh={handleRefresh}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              colors={[Colors.palette.dynastyGreen.medium]}
+              tintColor={Colors.palette.dynastyGreen.medium}
+            />
+          }
         >
           <View style={styles.feedContainer}>
             {historyItems.map((item) => (

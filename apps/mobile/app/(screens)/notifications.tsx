@@ -30,54 +30,12 @@ interface Notification {
   type: 'like' | 'comment' | 'follow' | 'event_reminder' | 'new_post'; // Example types
 }
 
-// Mock Data
-const MOCK_NOTIFICATIONS: Notification[] = [
-  {
-    id: '1',
-    user: { name: 'Alice Wonderland' },
-    text: 'liked your recent story about the Mad Hatter.',
-    timestamp: new Date(Date.now() - 3600000 * 2), // 2 hours ago
-    isRead: false,
-    navigateTo: '/(screens)/storyDetail', // Example route
-    params: { storyId: 'story123' },
-    type: 'like',
-  },
-  {
-    id: '2',
-    user: { name: 'Bob The Builder' },
-    text: 'commented: "Can we fix it? Yes, we can!"',
-    timestamp: new Date(Date.now() - 3600000 * 5), // 5 hours ago
-    isRead: true,
-    navigateTo: '/(screens)/storyDetail', // Example route
-    params: { storyId: 'story456', commentId: 'comment789' },
-    type: 'comment',
-  },
-  {
-    id: '3',
-    user: { name: 'Charlie Chaplin' },
-    text: 'started following you.',
-    timestamp: new Date(Date.now() - 3600000 * 24), // 1 day ago
-    isRead: false,
-    navigateTo: '/(screens)/ViewProfileScreen', // Example route
-    params: { userId: 'charlieC' },
-    type: 'follow',
-  },
-  {
-    id: '4',
-    user: { name: 'Dynasty System' },
-    text: 'Reminder: Family Reunion event is tomorrow!',
-    timestamp: new Date(Date.now() - 3600000 * 48), // 2 days ago
-    isRead: true,
-    navigateTo: '/(screens)/eventDetail',
-    params: { eventId: 'eventXYZ' },
-    type: 'event_reminder',
-  },
-];
+// No mock data - to be replaced with real data from API
 
 const NotificationsScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
-  const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const handleMarkAllAsRead = () => {
     setNotifications([]); // Clear all notifications
@@ -105,15 +63,15 @@ const NotificationsScreen = () => {
               iconName="checkmark-done" // Using Ionicons' double checkmark
               iconSet={IconSet.Ionicons}
               size={28}
-              color={Colors.primary}
-              onPress={handleMarkAllAsRead}
+              color={notifications.length > 0 ? Colors.primary : Colors.gray}
+              onPress={notifications.length > 0 ? handleMarkAllAsRead : () => {}}
               accessibilityLabel="Mark all notifications as read"
             />
           )}
         />
       ),
     });
-  }, [navigation, notifications]); // Re-render header if notifications change (e.g. to disable button if all read)
+  }, [navigation, notifications, router]); // Added router to dependencies
 
   const handleNotificationPress = (item: Notification) => {
     if (!item.isRead) {
@@ -173,8 +131,11 @@ const NotificationsScreen = () => {
       <View style={styles.container}>
         <View style={styles.emptyContainer}>
           <Ionicons name="notifications-off-outline" size={60} color={Colors.gray} />
-          <Text style={styles.emptyText}>No notifications yet.</Text>
-          <Text style={styles.emptySubText}>Check back later for updates!</Text>
+          <Text style={styles.emptyText}>No Notifications</Text>
+          <Text style={styles.emptySubText}>
+            When you have new interactions like comments, likes, or family updates, 
+            they'll appear here.
+          </Text>
         </View>
       </View>
     );

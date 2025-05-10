@@ -16,6 +16,8 @@ import {
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useNavigation, Stack } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
+import AnimatedActionSheet, { ActionSheetAction } from '../../components/ui/AnimatedActionSheet';
 
 // MARK: - Types
 type BlockType = "text" | "image" | "video" | "audio";
@@ -55,6 +57,8 @@ const CreateStoryScreen = () => {
   const [blocks, setBlocks] = useState<StoryBlock[]>([]);
   
   const [isAddDetailsModalVisible, setAddDetailsModalVisible] = useState(false);
+  const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
+  const [isDetailsActionSheetVisible, setDetailsActionSheetVisible] = useState(false);
   const [isAddContentModalVisible, setAddContentModalVisible] = useState(false);
 
   // Placeholder for user avatar/name - can be removed if not used
@@ -174,6 +178,23 @@ const CreateStoryScreen = () => {
       year: 'numeric'
     });
   };
+
+  // MARK: - Date Picker Handlers
+  const showDatePicker = () => setDatePickerVisibility(true);
+  const hideDatePicker = () => setDatePickerVisibility(false);
+  const handleDateConfirm = (date: Date) => { setStoryDate(date); hideDatePicker(); };
+
+  // MARK: - Additional Details Action Sheet Actions
+  const detailsActions: ActionSheetAction[] = [
+    { title: showSubtitle ? 'Remove Subtitle' : 'Add Subtitle', onPress: () => { setShowSubtitle(!showSubtitle); setDetailsActionSheetVisible(false); } },
+    { title: showDate ? 'Remove Date' : 'Add Date', onPress: () => { setShowDate(!showDate); setDetailsActionSheetVisible(false); } },
+    { title: showLocation ? 'Remove Location' : 'Add Location', onPress: () => {
+        if (showLocation) { setShowLocation(false); setLocation(null); } else { setShowLocation(true); }
+        setDetailsActionSheetVisible(false);
+      }
+    },
+    { title: 'Cancel', onPress: () => {}, style: 'cancel' },
+  ];
 
   // MARK: - Render Methods for Modals
   const renderAddDetailsModal = () => (
@@ -295,7 +316,7 @@ const CreateStoryScreen = () => {
           {showDate && (
             <TouchableOpacity 
               style={styles.inputRow} 
-              // onPress={() => Alert.alert("Date Picker", "Date picker functionality will be added here.")} // Replace with actual date picker
+              onPress={showDatePicker}
             >
               <MaterialCommunityIcons name="calendar-month-outline" size={24} color={styles.inputIcon.color} style={styles.inputIcon} />
               <Text style={styles.inputRowText}>Story Date</Text> 
@@ -327,7 +348,7 @@ const CreateStoryScreen = () => {
            <View style={styles.separatorThinNoMargin} />
 
 
-          <TouchableOpacity style={styles.addButton} onPress={() => setAddDetailsModalVisible(true)}>
+          <TouchableOpacity style={styles.addButton} onPress={() => setDetailsActionSheetVisible(true)}>
             <Ionicons name="add-circle-outline" size={22} color="#1A4B44" style={{marginRight: 5}} />
             <Text style={styles.addButtonText}>Add Additional Details</Text>
           </TouchableOpacity>
@@ -422,10 +443,24 @@ const CreateStoryScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {renderAddDetailsModal()}
+        {/* Details action sheet instead of modal */}
+        <AnimatedActionSheet
+          isVisible={isDetailsActionSheetVisible}
+          onClose={() => setDetailsActionSheetVisible(false)}
+          actions={detailsActions}
+          title="Additional Details"
+        />
         {renderAddContentModal()}
       
       </ScrollView>
+      {/* Date picker modal for story date */}
+      <DateTimePickerModal
+        isVisible={isDatePickerVisible}
+        mode="date"
+        onConfirm={handleDateConfirm}
+        onCancel={hideDatePicker}
+        date={storyDate || new Date()}
+      />
     </SafeAreaView>
   );
 };

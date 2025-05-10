@@ -14,6 +14,7 @@ import {
 import { useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { commonHeaderOptions } from '../../constants/headerConfig'; // Added import
 // import { auth, db } from '../../src/lib/firebase'; // Commented out Firebase
 // import { doc, setDoc } from "firebase/firestore"; // Commented out Firebase
 // import { useImageUpload } from '../../hooks/useImageUpload'; // Commented out Firebase image upload
@@ -91,11 +92,12 @@ const EditProfileScreen = () => {
 
   useEffect(() => {
     navigation.setOptions({
+      ...commonHeaderOptions, // Spread common options
       title: 'Edit Profile',
-      headerStyle: { backgroundColor: '#F8F8F8' },
-      headerTintColor: '#333333',
-      headerTitleStyle: { fontWeight: '600' },
-      headerBackTitleVisible: false,
+      // headerStyle: { backgroundColor: '#F8F8F8' }, // Replaced by commonHeaderOptions
+      // headerTintColor: '#333333', // Replaced by commonHeaderOptions
+      // headerTitleStyle: { fontWeight: '600' }, // Replaced by commonHeaderOptions
+      // headerBackTitleVisible: false, // Replaced by commonHeaderOptions (if different)
       headerRight: () => (
         <TouchableOpacity onPress={handleSaveChanges} disabled={isSavingProfile || isUploadingImage} style={{ marginRight: 15 }}>
           <Text style={{ color: (isSavingProfile || isUploadingImage) ? '#B0B0B0' : '#007AFF', fontSize: 17, fontWeight: '600' }}>
