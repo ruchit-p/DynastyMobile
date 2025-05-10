@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Link } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../src/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 
 const dynastyLogo = require('../../assets/images/dynasty.png');

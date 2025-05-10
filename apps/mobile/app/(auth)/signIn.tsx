@@ -14,7 +14,7 @@ import {
 import { useRouter, Link, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons'; // For Google icon
 import { StatusBar } from 'expo-status-bar';
-import { useAuth } from '../contexts/AuthContext'; // Import useAuth
+import { useAuth } from '../../src/contexts/AuthContext'; // Updated path
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- Add this import
 
 const dynastyLogo = require('../../assets/images/dynasty.png'); // Adjust path if logo moves

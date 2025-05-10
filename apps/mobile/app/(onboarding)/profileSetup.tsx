@@ -13,8 +13,9 @@ import {
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useAuth } from '../contexts/AuthContext'; // Adjust path as needed
+import { useAuth } from '../../src/contexts/AuthContext'; // Adjust path as needed
 import { functions } from '../../src/lib/firebase'; // For calling cloud functions
+import * as ImagePicker from 'expo-image-picker';
 // You might want a date picker component
 // import DateTimePicker from '@react-native-community/datetimepicker';
 // You might want a gender picker component (e.g., dropdown)

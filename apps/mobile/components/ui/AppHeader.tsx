@@ -1,106 +1,106 @@
 import React from 'react';
-import { View, Text, StyleSheet, Platform, type ViewStyle, type TextStyle } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../../constants/Colors'; // Assuming Colors.ts is two levels up in constants
-import { useColorScheme } from '../../hooks/useColorScheme'; // Corrected import
+// Removed import { Colors } from '../../constants/Colors';
 
-// MARK: - Types
+// Define specific colors used for the header, matching _layout.tsx
+const AppHeaderColors = {
+  primary: '#1A4B44', // Dynasty primary color from _layout.tsx
+  white: '#FFFFFF',   // White from _layout.tsx
+  lightGray: '#CCC', // Light gray for border from _layout.tsx
+};
+
 interface AppHeaderProps {
   title: string;
-  rightActions?: React.ReactNode;
-  style?: ViewStyle;
-  titleStyle?: TextStyle;
+  headerLeft?: () => React.ReactNode; // New prop for left-side content
+  headerRight?: () => React.ReactNode; // New prop for right-side content
 }
 
-// MARK: - AppHeader Component
-const AppHeader: React.FC<AppHeaderProps> = ({ title, rightActions, style, titleStyle }) => {
+const AppHeader: React.FC<AppHeaderProps> = ({ title, headerLeft, headerRight }) => {
   const insets = useSafeAreaInsets();
-  const scheme = useColorScheme(); // Get the scheme which can be 'light', 'dark', or null
-  const colorScheme: 'light' | 'dark' = scheme === 'dark' ? 'dark' : 'light'; // Ensure it's strictly 'light' or 'dark'
-
-  const currentColors = Colors[colorScheme]; // Now indexing with a guaranteed 'light' or 'dark'
-
-  // Specific styling from (tabs)/_layout.tsx
-  const headerBaseStyle: ViewStyle = {
-    paddingTop: insets.top, // Apply top inset for status bar
-    backgroundColor: currentColors.headerBackground,
-    flexDirection: 'row',
-    alignItems: 'flex-end', // Align items to the bottom for the large title effect
-    justifyContent: 'space-between',
-    paddingHorizontal: 15, // General horizontal padding
-    paddingBottom: 10, // Padding at the very bottom of the header
-    minHeight: (Platform.OS === 'ios' ? 96 : 56) + insets.top, // Approximate base height + inset
-    // Shadow/Elevation
-    ...(Platform.OS === 'android'
-      ? { elevation: 4 }
-      : {
-          shadowColor: Colors.light.border, // Using a generic shadow color
-          shadowOpacity: 0.1,
-          shadowOffset: { width: 0, height: 1 },
-          shadowRadius: 2,
-        }),
-    // Border
-    borderBottomWidth: Platform.OS === 'ios' ? 0.5 : 0, // Thinner border for iOS
-    borderBottomColor: currentColors.border,
-  };
-
-  // The title itself should be positioned lower in this container
-  // The large paddingBottom on headerTitleStyle in _layout.tsx might have been for the container
-  // holding the title, to push the title text down.
-  // Let's try to achieve the "large title pushed down" effect.
-  // The height of the header is influenced by minHeight, paddingTop (insets.top), and paddingBottom.
-  // The title's vertical position within this space is key.
-  const titleBaseStyle: TextStyle = {
-    fontWeight: 'bold',
-    fontSize: Platform.OS === 'ios' ? 34 : 28, // Adjusted Android for better balance
-    color: currentColors.headerText,
-    textAlign: 'left',
-    // The title needs to appear lower. Flexbox on the parent helps.
-    // No specific paddingBottom here, alignment handles it.
-  };
-  
-  // The actual height of the header from screenshots looks to be around 90-100pt on iOS.
-  // The title "Events" in the screenshot appears quite large and occupies a significant portion of this.
-  // Let's adjust minHeight to be more explicit if needed, or control through paddings.
-  // The original _layout.tsx had `headerTitleStyle: { paddingBottom: Platform.OS === 'ios' ? 60 : 5 }`
-  // This paddingBottom was on the *title text component style itself* which is unusual.
-  // It's more common to have a taller header container and align the title within it.
-  // My current `headerBaseStyle` uses `alignItems: 'flex-end'` and `paddingBottom: 10`.
-  // The title text also has its font size.
 
   return (
-    <View style={[styles.headerContainer, headerBaseStyle, style]}>
-      <View style={styles.titleContainer}>
-        <Text style={[styles.title, titleBaseStyle, titleStyle]} numberOfLines={1} ellipsizeMode="tail">
-          {title}
-        </Text>
+    // The paddingTop for status bar is handled by the SafeAreaProvider or Tab.Screen options
+    // if we set translucent: true or similar on the status bar.
+    // For a custom header component used in Tab.Screen's 'header' option,
+    // it often replaces the entire header area, including status bar padding.
+    // Thus, applying insets.top here is correct.
+    <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
+      <View style={styles.headerContent}>
+        {headerLeft && (
+          <View style={styles.leftContainer}>{headerLeft()}</View>
+        )}
+        <View style={styles.titleContainer}>
+          <Text style={styles.headerTitle}>{title}</Text>
+        </View>
+        {headerRight && (
+          <View style={styles.rightContainer}>{headerRight()}</View>
+        )}
       </View>
-      {rightActions && <View style={styles.actionsContainer}>{rightActions}</View>}
     </View>
   );
 };
 
-// MARK: - Styles
 const styles = StyleSheet.create({
   headerContainer: {
-    // Base styles are applied dynamically
+    backgroundColor: AppHeaderColors.white,
+    // Shadow properties from _layout.tsx
+    ...Platform.select({
+      ios: {
+        shadowOpacity: 0.1,
+        shadowOffset: { width: 0, height: 1 },
+        shadowRadius: 2,
+        borderBottomWidth: 0.5,
+        borderBottomColor: AppHeaderColors.lightGray,
+      },
+      android: {
+        elevation: 4, // This was 4 in _layout.tsx
+      },
+    }),
+    // No specific height here, it's determined by headerContent + paddingTop
+  },
+  headerContent: {
+    // This height is for the content part of the header, excluding status bar area.
+    // From screenshots, headers look fairly standard.
+    // Events title: "Events" - large font. Profile title: "Profile" - also large.
+    // Let's try to match the fontSize and overall feel from _layout.tsx more closely,
+    // but within a container that makes sense for a custom component.
+    // The paddingBottom: 60 for iOS in _layout was for headerTitleStyle, which might be an internal expo-router way to handle large titles.
+    // For a custom component, we control height and padding directly.
+    // Let's use a reasonable height and then ensure the title style matches.
+    height: Platform.OS === 'ios' ? 50 : 56, // A more typical content height, adjust if needed.
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15, // From headerRightContainerStyle/headerLeftContainerStyle in _layout (approx)
   },
   titleContainer: {
-    flex: 1, // Allow title to take available space
-    justifyContent: 'flex-end', // Push title to the bottom of its container
-     // marginRight to prevent overlap if rightActions are present
-    marginRight: 10,
+    flex: 1, // Allows title to take available space, pushing rightContainer
+    alignItems: 'flex-start', // Keep title to the left
   },
-  title: {
-    // Dynamic styles are applied
-    // Ensure the title is not pushed out of view by large font size or paddings.
-    // The height of the header and the alignment will dictate its final position.
+  headerTitle: {
+    // Matching headerTitleStyle from _layout.tsx
+    fontWeight: 'bold',
+    fontSize: Platform.OS === 'ios' ? 30 : 22, // Adjusted to better match screenshot appearance
+                                                // while keeping it large, from original 34/24.
+    color: AppHeaderColors.primary,
+    // paddingBottom: Platform.OS === 'ios' ? 60 : 5, // This was in headerTitleStyle, not directly applicable here
+    // Instead, we manage alignment and padding within headerContent.
+    // marginLeft: 0, // Title is typically at the start of the content unless there's a back button.
+                     // headerTitleAlign: 'left' was in _layout.
   },
-  actionsContainer: {
-    justifyContent: 'flex-end', // Align actions with the bottom of the header
-    paddingBottom: Platform.OS === 'ios' ? 2 : 0, // Minor adjustment for iOS icon alignment
-    // paddingRight is handled by headerBaseStyle's paddingHorizontal
-    // marginLeft: 10, // Ensure some space from title
+  rightContainer: {
+    // Sits to the right of the titleContainer
+    // paddingHorizontal from headerContent will provide spacing from edge
+    // If specific positioning is needed beyond flex, can adjust here.
+    // For now, flexbox should handle it.
+    marginLeft: 10, // Add some margin if both left and right are present
+    flexDirection: 'row', // If headerRight returns multiple items in a View
+    alignItems: 'center',
+  },
+  leftContainer: { // New style for the left container
+    marginRight: 10, // Add some margin if both left and title are present
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });
 

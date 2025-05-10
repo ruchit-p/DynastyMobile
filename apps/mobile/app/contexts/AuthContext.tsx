@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
-import { auth, functions, db } from '../lib/firebase'; // Updated path
+import { auth, functions, db } from '../../src/lib/firebase'; // Added db for Firestore
 import { doc } from '@react-native-firebase/firestore'; // Added doc import
 import RNAuth, { FirebaseAuthTypes } from '@react-native-firebase/auth'; // Import default for auth providers
 import { useRouter, useSegments } from 'expo-router';

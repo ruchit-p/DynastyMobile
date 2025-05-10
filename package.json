@@ -27,11 +27,12 @@
     "cliui": "^7.0.4"
   },
   "dependencies": {
-    "react-native-relatives-tree": "^0.1.1",
-    "react-native-svg": "^15.11.2",
     "expo": "~53.0.8",
+    "expo-location": "~18.1.4",
     "react": "19.0.0",
-    "react-native": "0.79.2"
+    "react-native": "0.79.2",
+    "react-native-relatives-tree": "^0.1.1",
+    "react-native-svg": "^15.11.2"
   },
   "version": "1.0.0"
 }

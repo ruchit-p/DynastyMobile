@@ -16,7 +16,13 @@
     "entryPoint": "./apps/mobile/index.js",
     "plugins": [
       "@react-native-firebase/app",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
+        }
+      ]
     ],
     "ios": {
       "bundleIdentifier": "com.mydynastyapp.dynasty",
