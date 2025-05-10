@@ -27,9 +27,24 @@ interface GoogleUserDetails {
   givenName: string | null;
 }
 
+// Define FirestoreUserType
+export interface FirestoreUserType {
+  onboardingCompleted?: boolean;
+  firstName?: string;
+  lastName?: string;
+  bio?: string;
+  phoneNumber?: string;
+  profilePictureUrl?: string;
+  connectionsCount?: number;
+  storiesCount?: number;
+  createdAt?: any; // Or a more specific Firebase Timestamp type if available
+  [key: string]: any; // Keep this for flexibility if other fields exist
+}
+
 interface AuthContextType {
   user: FirebaseUser | null;
   isLoading: boolean;
+  firestoreUser: FirestoreUserType | null;
   signIn: (email: string, pass: string) => Promise<void>;
   signUp: (email: string, pass: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -60,7 +75,7 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [firestoreUser, setFirestoreUser] = useState<{ onboardingCompleted?: boolean, [key: string]: any } | null>(null);
+  const [firestoreUser, setFirestoreUser] = useState<FirestoreUserType | null>(null);
   const [isFetchingFirestoreUser, setIsFetchingFirestoreUser] = useState(false);
   const router = useRouter();
   const segments = useSegments();
@@ -74,8 +89,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const docSnap = await userDocRef.get();
       if (docSnap.exists()) {
         console.log("AuthContext: Fetched Firestore user data:", docSnap.data());
-        setFirestoreUser(docSnap.data() as { onboardingCompleted?: boolean });
-        return docSnap.data() as { onboardingCompleted?: boolean };
+        setFirestoreUser(docSnap.data() as FirestoreUserType);
+        return docSnap.data() as FirestoreUserType;
       } else {
         console.log("AuthContext: No Firestore user document found for UID:", uid);
         setFirestoreUser(null); // Or a default state like { onboardingCompleted: false }
@@ -414,6 +429,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     <AuthContext.Provider value={{
       user,
       isLoading,
+      firestoreUser,
       signIn,
       signUp,
       signOut,

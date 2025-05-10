@@ -1,6 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, StyleSheet, ViewStyle, StyleProp, TextStyle } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Spacing } from '../../constants/Spacing';
 
 // Define an enum for supported icon sets
 export enum IconSet {
@@ -18,17 +19,25 @@ interface IconButtonProps {
   style?: StyleProp<ViewStyle>; // Optional custom styles for the TouchableOpacity
   iconStyle?: StyleProp<TextStyle>; // Optional custom styles for the Icon itself
   accessibilityLabel?: string; // Accessibility label for the button
+  testID?: string; // Test ID for testing
 }
 
+/**
+ * IconButton Component
+ * 
+ * A button that displays an icon and triggers an action when pressed.
+ * Supports multiple icon libraries and customization options.
+ */
 const IconButton: React.FC<IconButtonProps> = ({
   iconName,
-  iconSet = IconSet.Ionicons, // Default to Ionicons
+  iconSet = IconSet.Ionicons,
   size,
   color,
   onPress,
   style,
   iconStyle,
   accessibilityLabel,
+  testID,
 }) => {
   const renderIcon = () => {
     const commonProps = { name: iconName, size, color, style: iconStyle };
@@ -38,7 +47,6 @@ const IconButton: React.FC<IconButtonProps> = ({
       case IconSet.MaterialCommunityIcons:
         return <MaterialCommunityIcons {...commonProps} />;
       default:
-        // Fallback or error for unsupported icon set
         console.warn(`Unsupported icon set: ${iconSet}. Defaulting to Ionicons.`);
         return <Ionicons {...commonProps} />;
     }
@@ -49,7 +57,9 @@ const IconButton: React.FC<IconButtonProps> = ({
       onPress={onPress}
       style={[styles.button, style]}
       accessibilityLabel={accessibilityLabel || `Icon button ${iconName}`}
-      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} // Improves touchability
+      accessibilityRole="button"
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      testID={testID}
     >
       {renderIcon()}
     </TouchableOpacity>
@@ -58,10 +68,10 @@ const IconButton: React.FC<IconButtonProps> = ({
 
 const styles = StyleSheet.create({
   button: {
-    padding: 5, // Default padding, can be overridden by `style` prop
+    padding: Spacing.xs,
     justifyContent: 'center',
     alignItems: 'center',
   },
 });
 
-export default IconButton; 
+export default IconButton;

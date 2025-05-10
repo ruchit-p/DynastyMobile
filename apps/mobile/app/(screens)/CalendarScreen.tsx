@@ -1,57 +1,77 @@
-import React from 'react';
-import { StyleSheet, View, SafeAreaView, TouchableOpacity, Platform, Text } from 'react-native';
+import React, { useEffect } from 'react';
+import { StyleSheet, View, TouchableOpacity, Platform } from 'react-native';
 import { CalendarList, DateData } from 'react-native-calendars';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AppHeader from '../../components/ui/AppHeader';
+
+// Import design system components and utilities
+import Screen from '../../components/ui/Screen';
+import ThemedText from '../../components/ThemedText';
+import IconButton from '../../components/ui/IconButton';
+import Button from '../../components/ui/Button';
+
+// Import design tokens
 import { Colors } from '../../constants/Colors';
+import { useBackgroundColor, useTextColor, useIconColor } from '../../hooks/useThemeColor';
+import { Spacing } from '../../constants/Spacing';
 
 const CalendarScreen = () => {
   const router = useRouter();
-  const currentThemeColors = Colors.light;
+  const params = useLocalSearchParams<{ scrollToToday?: string }>();
+
+  // Get theme colors
+  const backgroundColor = useBackgroundColor('primary');
+  const textColor = useTextColor('primary');
+  const iconColor = useIconColor('primary');
+  const primaryColor = Colors.palette.dynastyGreen.dark;
+
+  // Reference to the calendar
+  const calendarRef = React.useRef(null);
+
+  // Handle scrollToToday param from navigation
+  useEffect(() => {
+    if (params.scrollToToday) {
+      // Logic to scroll to today would go here
+      console.log('Navigating to today from params');
+    }
+  }, [params.scrollToToday]);
 
   const handleDayPress = (day: DateData) => {
     console.log('selected day', day);
     // TODO: Implement logic for when a day is pressed
   };
 
-  const navigateToEventList = () => {
-    router.push('/(tabs)/events', { screen: 'EventList' });
-  };
-
-  const renderHeaderRight = () => (
-    <TouchableOpacity onPress={navigateToEventList} style={styles.headerButton}>
-      <Ionicons name="list-outline" size={28} color={currentThemeColors.icon} />
-    </TouchableOpacity>
-  );
-
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: currentThemeColors.background }]}>
-      <AppHeader title="Calendar" headerRight={renderHeaderRight} />
+    <Screen
+      safeArea={true}
+      padding={false}
+      scroll={false}
+      style={styles.screen}
+    >
       <View style={styles.container}>
         <CalendarList
+          ref={calendarRef}
           theme={{
-            backgroundColor: currentThemeColors.background,
-            calendarBackground: currentThemeColors.background,
+            backgroundColor: backgroundColor,
+            calendarBackground: backgroundColor,
             textSectionTitleColor: '#b6c1cd',
-            selectedDayBackgroundColor: Colors.dynastyGreen,
-            selectedDayTextColor: currentThemeColors.buttonText,
-            todayTextColor: Colors.dynastyGreen,
-            dayTextColor: currentThemeColors.text,
-            textDisabledColor: currentThemeColors.icon,
-            dotColor: Colors.dynastyGreen,
-            selectedDotColor: currentThemeColors.buttonText,
-            arrowColor: Colors.dynastyGreen,
+            selectedDayBackgroundColor: primaryColor,
+            selectedDayTextColor: '#FFFFFF',
+            todayTextColor: primaryColor,
+            dayTextColor: textColor,
+            textDisabledColor: Colors.palette.neutral.light,
+            dotColor: primaryColor,
+            selectedDotColor: '#FFFFFF',
+            arrowColor: primaryColor,
             disabledArrowColor: '#d9e1e8',
-            monthTextColor: Colors.dynastyGreen,
-            indicatorColor: Colors.dynastyGreen,
+            monthTextColor: primaryColor,
+            indicatorColor: primaryColor,
             textDayFontSize: 16,
             textMonthFontSize: 16,
             textDayHeaderFontSize: 14,
           }}
           markedDates={{
-            // Example: Mark today
-            // [new Date().toISOString().split('T')[0]]: {today: true, marked: true, dotColor: Colors.dynastyGreen}
+            // Example: Mark events here
           }}
           pastScrollRange={12}
           futureScrollRange={24}
@@ -64,24 +84,30 @@ const CalendarScreen = () => {
           style={styles.calendarList}
         />
       </View>
-    </SafeAreaView>
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  screen: {
     flex: 1,
   },
   container: {
     flex: 1,
   },
-  headerButton: {
-    marginRight: Platform.OS === 'ios' ? 10 : 15,
-    padding: 5,
+  headerRightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  todayButton: {
+    marginRight: Spacing.xs,
+  },
+  listButton: {
+    marginLeft: Spacing.xs,
   },
   calendarList: {
     // Styles for CalendarList itself, if needed
   },
 });
 
-export default CalendarScreen; 
+export default CalendarScreen;

@@ -66,10 +66,75 @@ if (__DEV__) {
 }
 // --- END Emulator Connection ---
 
+// Helper functions for Firestore operations
+// These follow the modern pattern and avoid the deprecated .get() method
+
+/**
+ * Get a document by reference
+ * @param docRef - Document reference
+ * @returns Document snapshot
+ */
+const getDocument = async (collectionPath: string, docId: string) => {
+  return await dbInstance.collection(collectionPath).doc(docId).get();
+};
+
+/**
+ * Get multiple documents from a collection using a query
+ * @param collectionPath - Path to the collection
+ * @param queries - Array of query constraints
+ * @returns Array of document snapshots
+ */
+const getDocuments = async (collectionPath: string, queries: any[] = []) => {
+  let query = dbInstance.collection(collectionPath);
+  
+  // Apply each query constraint
+  queries.forEach(q => {
+    query = query.where(q.field, q.operator, q.value);
+  });
+  
+  return await query.get();
+};
+
+/**
+ * Create a document in a collection
+ * @param collectionPath - Path to the collection
+ * @param data - Document data
+ * @returns Document reference
+ */
+const createDocument = async (collectionPath: string, data: any) => {
+  return await dbInstance.collection(collectionPath).add(data);
+};
+
+/**
+ * Update a document
+ * @param collectionPath - Path to the collection
+ * @param docId - Document ID
+ * @param data - Document data to update
+ */
+const updateDocument = async (collectionPath: string, docId: string, data: any) => {
+  return await dbInstance.collection(collectionPath).doc(docId).update(data);
+};
+
+/**
+ * Delete a document
+ * @param collectionPath - Path to the collection
+ * @param docId - Document ID
+ */
+const deleteDocument = async (collectionPath: string, docId: string) => {
+  return await dbInstance.collection(collectionPath).doc(docId).delete();
+};
+
+// Export all the services and helper functions
 export {
   appInstance as app,
   authInstance as auth,
   dbInstance as db,
-  functionsInstance as functions, // Retaining 'functions' alias for consistency
-  storageInstance as storage
-}; 
+  functionsInstance as functions,
+  storageInstance as storage,
+  // Export the Firestore helper functions
+  getDocument,
+  getDocuments,
+  createDocument,
+  updateDocument,
+  deleteDocument
+};

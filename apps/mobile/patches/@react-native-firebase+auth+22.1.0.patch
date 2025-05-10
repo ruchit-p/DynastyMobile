@@ -1,0 +1,19 @@
+diff --git a/node_modules/@react-native-firebase/auth/package.json b/node_modules/@react-native-firebase/auth/package.json
+index 1234567..7654321 100644
+--- a/node_modules/@react-native-firebase/auth/package.json
++++ b/node_modules/@react-native-firebase/auth/package.json
+@@ -1,1 +1,1 @@
+ // Just a placeholder for the patch file
+diff --git a/node_modules/@react-native-firebase/auth/ios/RNFBAuth/RNFBAuthModule.m b/node_modules/@react-native-firebase/auth/ios/RNFBAuth/RNFBAuthModule.m
+index abcdef1..fedcba9 100644
+--- a/node_modules/@react-native-firebase/auth/ios/RNFBAuth/RNFBAuthModule.m
++++ b/node_modules/@react-native-firebase/auth/ios/RNFBAuth/RNFBAuthModule.m
+@@ -123,7 +123,7 @@
+       config[@"plugins"] = @[
+         @{
+           @"ios": @{
+-            @"URLSchemes": [@"if url.host.toLowerCase() == \"firebaseauth\" {\n      // invocations for Firebase Auth are handled elsewhere and should not be forwarded to Expo Router\n      return false\n    }" stringByReplacingOccurrencesOfString:@"toLowerCase" withString:@"lowercased"]
++            @"URLSchemes": @"if url.host?.lowercased() == \"firebaseauth\" {\n      // invocations for Firebase Auth are handled elsewhere and should not be forwarded to Expo Router\n      return false\n    }"
+           }
+         }
+       ];

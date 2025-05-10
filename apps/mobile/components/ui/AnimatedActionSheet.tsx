@@ -2,14 +2,22 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Modal,
   View,
-  Text,
   Animated,
   Dimensions,
   StyleSheet,
   TouchableOpacity,
   Platform,
   SafeAreaView,
+  StyleProp,
+  ViewStyle,
 } from 'react-native';
+
+// Import design system components and utilities
+import ThemedText from '../ThemedText';
+import { Spacing, BorderRadius, Shadows } from '../../constants/Spacing';
+import { useBackgroundColor, useTextColor, useBorderColor } from '../../hooks/useThemeColor';
+import { Colors } from '../../constants/Colors';
+import { useColorScheme } from '../../hooks/useColorScheme';
 
 export interface ActionSheetAction {
   title: string;
@@ -22,25 +30,47 @@ interface AnimatedActionSheetProps {
   onClose: () => void;
   title?: string;
   actions: ActionSheetAction[];
-  message?: string; // Optional message below title like iOS
+  message?: string;
+  containerStyle?: StyleProp<ViewStyle>;
+  testID?: string;
 }
 
+/**
+ * AnimatedActionSheet Component
+ * 
+ * A slide-up sheet with a list of actions, similar to iOS action sheet.
+ */
 const AnimatedActionSheet: React.FC<AnimatedActionSheetProps> = ({
   isVisible,
   onClose,
   title,
   actions,
   message,
+  containerStyle,
+  testID,
 }) => {
   const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
   const [modalActualVisible, setModalActualVisible] = useState(false);
+  
+  // Get theme colors
+  const colorScheme = useColorScheme();
+  const theme = colorScheme || 'light';
+  
+  const backgroundColor = useBackgroundColor('primary');
+  const borderColor = useBorderColor('primary');
+  const textColor = useTextColor('primary');
+  const secondaryTextColor = useTextColor('secondary');
+  
+  // Color for action buttons
+  const actionColor = Colors.palette.dynastyGreen.dark; // Primary color for actions
+  const destructiveColor = Colors.palette.status.error; // Red for destructive actions
 
   useEffect(() => {
     if (isVisible) {
       setModalActualVisible(true);
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 250, // Slightly faster
+        duration: 250,
         useNativeDriver: true,
       }).start();
     } else {
@@ -49,7 +79,6 @@ const AnimatedActionSheet: React.FC<AnimatedActionSheetProps> = ({
         duration: 250,
         useNativeDriver: true,
       }).start(() => {
-        // Defer state update to avoid potential conflicts with render phases
         requestAnimationFrame(() => {
           setModalActualVisible(false);
         });
@@ -58,15 +87,11 @@ const AnimatedActionSheet: React.FC<AnimatedActionSheetProps> = ({
   }, [isVisible, slideAnim]);
 
   const handleActionPress = (actionOnPress: () => void) => {
-    // The onClose callback (which should set isVisible to false) will trigger the animation.
-    // Then the action can be performed.
-    // If the action navigates, it should ideally happen after the sheet is fully closed.
-    // For simplicity here, we call onClose first then the action.
-    // Parent might need to delay navigation if animation interruption is an issue.
-    onClose(); // Request close (triggers animation)
-    setTimeout(actionOnPress, 50); // Give a slight delay for animation to start
+    onClose();
+    setTimeout(actionOnPress, 50);
   };
   
+  // Separate regular actions from cancel action
   const regularActions = actions.filter(a => a.style !== 'cancel');
   const cancelAction = actions.find(a => a.style === 'cancel');
 
@@ -76,61 +101,91 @@ const AnimatedActionSheet: React.FC<AnimatedActionSheetProps> = ({
       transparent={true}
       visible={modalActualVisible}
       onRequestClose={onClose}
+      testID={testID}
     >
       <TouchableOpacity
         style={styles.modalOverlay}
         activeOpacity={1}
-        onPress={onClose} // Close when tapping overlay
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close action sheet"
       >
-        {/* Use SafeAreaView for the bottom part if it contains the cancel button */}
         <SafeAreaView style={styles.safeAreaForCancel} pointerEvents="box-none">
           <Animated.View
             style={[
               styles.actionSheetContainer,
               { transform: [{ translateY: slideAnim }] },
+              containerStyle
             ]}
-            onStartShouldSetResponder={() => true} // Prevents taps from passing through to overlay
+            onStartShouldSetResponder={() => true}
           >
-            <View style={styles.actionsGroup}>
+            <View style={[
+              styles.actionsGroup,
+              { backgroundColor, borderColor }
+            ]}>
               {(title || message) && (
-                <View style={styles.titleContainer}>
-                  {title && <Text style={styles.titleText}>{title}</Text>}
-                  {message && <Text style={styles.messageText}>{message}</Text>}
+                <View style={[styles.titleContainer, { borderBottomColor: borderColor }]}>
+                  {title && (
+                    <ThemedText 
+                      variant="bodySmall" 
+                      color="secondary" 
+                      style={styles.titleText}
+                    >
+                      {title}
+                    </ThemedText>
+                  )}
+                  
+                  {message && (
+                    <ThemedText 
+                      variant="caption" 
+                      color="tertiary" 
+                      style={styles.messageText}
+                    >
+                      {message}
+                    </ThemedText>
+                  )}
                 </View>
               )}
+              
               {regularActions.map((action, index) => (
                 <TouchableOpacity
                   key={index}
                   onPress={() => handleActionPress(action.onPress)}
                   style={[
                     styles.actionButton,
-                    index === 0 && !(title || message) ? styles.firstActionButtonNoTitle : {},
-                    index === regularActions.length - 1 ? styles.lastActionButton : {},
-                    index > 0 ? styles.subsequentActionButton : {},
-
+                    index > 0 && [styles.subsequentActionButton, { borderTopColor: borderColor }]
                   ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={action.title}
                 >
-                  <Text
+                  <ThemedText
                     style={[
                       styles.actionButtonText,
-                      action.style === 'destructive' && styles.destructiveText,
+                      { color: action.style === 'destructive' ? destructiveColor : actionColor }
                     ]}
                   >
                     {action.title}
-                  </Text>
+                  </ThemedText>
                 </TouchableOpacity>
               ))}
             </View>
 
             {cancelAction && (
-              <View style={styles.cancelGroup}>
+              <View style={[
+                styles.cancelGroup,
+                { backgroundColor, borderColor }
+              ]}>
                 <TouchableOpacity
                   onPress={() => handleActionPress(cancelAction.onPress)}
-                  style={[styles.actionButton, styles.cancelButton]}
+                  style={styles.actionButton}
+                  accessibilityRole="button"
+                  accessibilityLabel={cancelAction.title}
                 >
-                  <Text style={[styles.actionButtonText, styles.cancelButtonText]}>
+                  <ThemedText
+                    style={[styles.actionButtonText, styles.cancelButtonText, { color: actionColor }]}
+                  >
                     {cancelAction.title}
-                  </Text>
+                  </ThemedText>
                 </TouchableOpacity>
               </View>
             )}
@@ -145,79 +200,59 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)', // Standard overlay color
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
-  safeAreaForCancel: { // Ensures cancel button group respects safe area
+  safeAreaForCancel: {
     justifyContent: 'flex-end',
     width: '100%',
   },
   actionSheetContainer: {
     width: '100%',
-    paddingHorizontal: 10,
-    paddingBottom: Platform.OS === 'ios' ? 0 : 10, // Padding already in SafeAreaView for iOS
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Platform.OS === 'ios' ? 0 : Spacing.md,
   },
   actionsGroup: {
-    backgroundColor: Platform.OS === 'ios' ? 'rgba(240,240,240,0.95)' : '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: BorderRadius.lg,
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
+    ...Shadows.md,
   },
   titleContainer: {
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
     alignItems: 'center',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#C7C7CD', // iOS separator color
   },
   titleText: {
-    fontSize: 13,
     fontWeight: '600',
-    color: '#8A8A8E', // iOS subtle title color
     textAlign: 'center',
   },
   messageText: {
-    fontSize: 13,
-    color: '#8A8A8E',
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: Spacing.xs,
   },
   actionButton: {
-    paddingVertical: 18,
-    paddingHorizontal: 16,
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent', // Handled by group background
-  },
-  firstActionButtonNoTitle: { // If no title, the first button needs top radius effect
-    // No specific style needed if group has overflow:hidden and borderRadius
-  },
-  lastActionButton: {
-    // No border if it's the last
   },
   subsequentActionButton: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#C7C7CD',
   },
   actionButtonText: {
     fontSize: 20,
-    color: '#007AFF', // iOS blue
     textAlign: 'center',
   },
-  destructiveText: {
-    color: '#FF3B30', // iOS red
-  },
   cancelGroup: {
-    backgroundColor: Platform.OS === 'ios' ? 'rgba(240,240,240,0.95)' : '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: BorderRadius.lg,
     overflow: 'hidden',
-    marginBottom: Platform.OS === 'ios' ? 8 : 0, // iOS has a bit of margin at the very bottom due to safe area
-  },
-  cancelButton: {
-    // Styles for cancel button are similar to actionButton but in its own group
+    marginBottom: Platform.OS === 'ios' ? Spacing.sm : 0,
+    ...Shadows.md,
   },
   cancelButtonText: {
-    fontWeight: '600', // Cancel button text is often bolder on iOS
+    fontWeight: '600',
   },
 });
 
-export default AnimatedActionSheet; 
+export default AnimatedActionSheet;

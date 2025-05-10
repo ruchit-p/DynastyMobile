@@ -1,66 +1,92 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, SafeAreaView, Platform, TouchableOpacity, Image, ActivityIndicator, Alert } from 'react-native';
+import { 
+  StyleSheet, 
+  View, 
+  ScrollView, 
+  TouchableOpacity, 
+  Image, 
+  Alert,
+  Platform
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
-import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/FloatingActionMenu';
-import { emptyStateStyles } from '../../constants/emptyStateConfig';
 
-// Define a type for History items (assuming they are essentially stories)
+// Import design system components and utilities
+import Screen from '../../components/ui/Screen';
+import ThemedText from '../../components/ThemedText';
+import Card from '../../components/ui/Card';
+import EmptyState from '../../components/ui/EmptyState';
+import Avatar from '../../components/ui/Avatar';
+import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/FloatingActionMenu';
+import Divider from '../../components/ui/Divider';
+
+// Import design tokens
+import { Spacing, BorderRadius } from '../../constants/Spacing';
+import { useBorderColor } from '../../hooks/useThemeColor';
+import { Colors } from '../../constants/Colors';
+
+// Define a type for History items
 interface HistoryItemType {
-  id: string; // Crucial for navigation to storyDetail
+  id: string;
   userAvatar: string;
   userName: string;
   timestamp: string;
   date: string;
-  createdAt?: Date; // Add this for more precise chronological sorting if available
+  createdAt?: Date;
   content: string;
   image?: string;
   location?: string;
   commentsCount: number;
-  mediaCount: number; // Or likesCount, depending on what this represents
+  mediaCount: number;
 }
 
-// Updated mock data with IDs and more specific content for history context
+// Mock data with empty array (for now)
 const mockHistoryItems: HistoryItemType[] = [];
 
-// MARK: - On This Day Section Component (Placeholder)
+// On This Day Section Component
 const OnThisDaySection = () => {
   return (
     <View style={styles.onThisDaySectionContainer}>
-      <Text style={styles.onThisDayTitle}>On This Day</Text>
-      {/* Placeholder content - replace with actual memories */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.onThisDayContent}>
+      <ThemedText variant="h5" style={styles.onThisDayTitle}>
+        On This Day
+      </ThemedText>
+      
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false} 
+        contentContainerStyle={styles.onThisDayContent}
+      >
         {[1, 2, 3].map(item => (
-          <View key={item} style={styles.onThisDayItem}>
-            <Text>Memory {item}</Text>
-          </View>
+          <Card key={item} style={styles.onThisDayItem}>
+            <ThemedText>Memory {item}</ThemedText>
+          </Card>
         ))}
       </ScrollView>
     </View>
   );
 };
 
-// MARK: - Scrollable Timeline Component
+// Scrollable Timeline Component
 interface ScrollableTimelineProps {
   historyItems: HistoryItemType[];
-  // Add props for onDrag, currentScrollPosition etc. later
 }
 
 const ScrollableTimeline: React.FC<ScrollableTimelineProps> = ({ historyItems }) => {
   const [timelineYears, setTimelineYears] = useState<string[]>([]);
+  
+  // Get theme colors
+  const borderColor = useBorderColor('primary');
 
   useEffect(() => {
     if (historyItems.length > 0) {
       const years = historyItems
         .map(item => {
-          // Assuming item.date is a string like "Oct 25, 2023" or item.createdAt is a Date
-          // Prioritize createdAt if it exists and is a Date object
           const dateObj = item.createdAt instanceof Date ? item.createdAt :
-                         item.date ? new Date(item.date) : new Date(); // Fallback to current date if no valid date found
+                         item.date ? new Date(item.date) : new Date();
           return dateObj.getFullYear().toString();
         })
-        .filter((value, index, self) => self.indexOf(value) === index) // Unique years
-        .sort((a, b) => parseInt(b) - parseInt(a)); // Sort descending (latest year first)
+        .filter((value, index, self) => self.indexOf(value) === index)
+        .sort((a, b) => parseInt(b) - parseInt(a));
       setTimelineYears(years);
     } else {
       setTimelineYears([]);
@@ -68,15 +94,15 @@ const ScrollableTimeline: React.FC<ScrollableTimelineProps> = ({ historyItems })
   }, [historyItems]);
 
   if (historyItems.length === 0) {
-    return null; // Don't render timeline if no items
+    return null;
   }
 
   return (
-    <View style={styles.timelineContainer}>
+    <View style={[styles.timelineContainer, { borderLeftColor: borderColor }]}>
       <View style={styles.timelineTrack}>
-        {/* Placeholder for draggable circle - actual implementation later */}
         <View style={styles.timelineDraggableCircle} />
       </View>
+      
       <ScrollView 
         showsVerticalScrollIndicator={false} 
         contentContainerStyle={styles.timelineScrollContent}
@@ -87,7 +113,9 @@ const ScrollableTimeline: React.FC<ScrollableTimelineProps> = ({ historyItems })
             style={styles.timelineMarker}
             accessibilityLabel={`Navigate to year ${year}`}
           >
-            <Text style={styles.timelineYearText}>{year}</Text>
+            <ThemedText variant="bodySmall" style={styles.timelineYearText}>
+              {year}
+            </ThemedText>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -95,55 +123,134 @@ const ScrollableTimeline: React.FC<ScrollableTimelineProps> = ({ historyItems })
   );
 };
 
+// History Feed Item Component
+interface HistoryFeedItemProps {
+  item: HistoryItemType;
+  onPress: (item: HistoryItemType) => void;
+  onMorePress: (item: HistoryItemType) => void;
+}
+
+const HistoryFeedItem: React.FC<HistoryFeedItemProps> = ({ 
+  item, 
+  onPress, 
+  onMorePress 
+}) => {
+  // Get theme colors
+  const borderColor = useBorderColor('primary');
+  
+  const handleMorePress = (e: any) => {
+    e.stopPropagation();
+    onMorePress(item);
+  };
+  
+  return (
+    <TouchableOpacity
+      onPress={() => onPress(item)}
+      activeOpacity={0.8}
+      accessibilityLabel={`View history post by ${item.userName}`}
+    >
+      <Card style={styles.feedItemContainer}>
+        <View style={styles.feedItem}>
+          <View style={styles.itemHeader}>
+            <Avatar
+              source={item.userAvatar}
+              size="sm"
+              style={styles.avatar}
+            />
+            
+            <View style={styles.userInfo}>
+              <ThemedText variant="bodyMedium" style={styles.userName}>
+                {item.userName}
+              </ThemedText>
+              
+              <View style={styles.timestampContainer}>
+                <ThemedText variant="caption" color="tertiary" style={styles.timestamp}>
+                  {item.timestamp}
+                </ThemedText>
+                
+                <View style={styles.dotSeparator} />
+                
+                <View style={styles.datePillContainer}>
+                  <ThemedText variant="caption" style={styles.datePill}>
+                    {item.date}
+                  </ThemedText>
+                </View>
+              </View>
+            </View>
+            
+            <TouchableOpacity 
+              style={styles.moreOptionsButton} 
+              onPress={handleMorePress}
+              accessibilityLabel="More options"
+            >
+              <Ionicons name="ellipsis-horizontal" size={24} color="#888" />
+            </TouchableOpacity>
+          </View>
+          
+          <ThemedText variant="bodyMedium" style={styles.feedContent} numberOfLines={3}>
+            {item.content}
+          </ThemedText>
+          
+          {item.image && (
+            <Image source={{ uri: item.image }} style={styles.feedImage} />
+          )}
+          
+          {item.location && (
+            <View style={styles.locationContainer}>
+              <Ionicons name="location-sharp" size={16} color="#555" />
+              <ThemedText variant="caption" color="secondary" style={styles.locationText}>
+                {item.location}
+              </ThemedText>
+            </View>
+          )}
+          
+          <Divider />
+          
+          <View style={styles.feedStats}>
+            <View style={styles.statItem}>
+              <Ionicons name="chatbubbles-outline" size={16} color="#555" />
+              <ThemedText variant="caption" color="secondary" style={styles.statText}>
+                {item.commentsCount} Comments
+              </ThemedText>
+            </View>
+            
+            <View style={styles.statItem}>
+              <Ionicons name="images-outline" size={16} color="#555" />
+              <ThemedText variant="caption" color="secondary" style={styles.statText}>
+                {item.mediaCount} Media
+              </ThemedText>
+            </View>
+          </View>
+        </View>
+      </Card>
+    </TouchableOpacity>
+  );
+};
+
+// Main History Screen
 const HistoryScreen = () => {
   const router = useRouter();
   const [historyItems, setHistoryItems] = useState<HistoryItemType[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   useFocusEffect(
     React.useCallback(() => {
       // Simulate fetching data
-      // Define an empty array with the correct type to ensure no string type issues
       const exampleItems: HistoryItemType[] = [];
-      
-      /* Example of items if you want to test the timeline populated:
-      const exampleItems: HistoryItemType[] = [
-        {
-          id: '1', 
-          userName: 'Test User', 
-          userAvatar: '', 
-          timestamp: '2h ago', 
-          date: '2023-10-26', 
-          createdAt: new Date(2023, 9, 26),
-          content: 'Post from 2023', 
-          commentsCount: 0, 
-          mediaCount: 0
-        },
-        {
-          id: '2', 
-          userName: 'Test User 2', 
-          userAvatar: '', 
-          timestamp: '1d ago', 
-          date: '2022-05-15', 
-          createdAt: new Date(2022, 4, 15),
-          content: 'Post from 2022', 
-          commentsCount: 0, 
-          mediaCount: 0
-        },
-      ];
-      */
       
       setHistoryItems(exampleItems);
 
       const timer = setTimeout(() => {
         setIsLoadingHistory(false);
+        setIsRefreshing(false);
       }, 500);
       
       return () => clearTimeout(timer);
     }, [])
   );
 
-  // MARK: - Define Menu Items for History Screen
+  // Menu items for History Screen
   const historyMenuItems: FabMenuItemAction[] = [
     {
       id: 'writeStory',
@@ -155,213 +262,118 @@ const HistoryScreen = () => {
   ];
 
   const handleHistoryItemPress = (item: HistoryItemType) => {
-    // Assuming history items are stories and navigate to StoryDetailScreen
-    router.push({ pathname: '/(screens)/storyDetail', params: { storyId: item.id } });
+    router.push({ 
+      pathname: '/(screens)/storyDetail', 
+      params: { storyId: item.id } 
+    });
+  };
+  
+  const handleMoreOptions = (item: HistoryItemType) => {
+    Alert.alert('Options', `More options for ${item.id}`);
+  };
+  
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    // Re-fetch data
   };
 
-  if (isLoadingHistory) {
+  if (isLoadingHistory && !isRefreshing) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0A5C36" />
-          <Text style={styles.loadingText}>Loading History...</Text>
-        </View>
-      </SafeAreaView>
+      <Screen>
+        <EmptyState
+          icon="hourglass-outline"
+          title="Loading History"
+          description="Please wait while we fetch your family history..."
+          iconSize={50}
+        />
+      </Screen>
     );
   }
 
-  // New: Overall Empty State if no history items
+  // Empty State
   if (historyItems.length === 0) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={emptyStateStyles.emptyStateContainer}> 
-          <Ionicons name="newspaper-outline" size={60} color="#CCC" />
-          <Text style={emptyStateStyles.emptyStateText}>Your History Book is empty.</Text>
-          <Text style={emptyStateStyles.emptyStateSubText}>
-            Start by writing your first story or add events to build your family timeline.
-          </Text>
-        </View>
-        {/* FAB Menu can still be shown in empty state */}
+      <Screen>
+        <EmptyState
+          icon="newspaper-outline"
+          title="Your History Book is Empty"
+          description="Start by writing your first story or add events to build your family timeline."
+          actionLabel="Write a Story"
+          onAction={() => router.push('/(screens)/createStory')}
+        />
+        
         <FloatingActionMenu menuItems={historyMenuItems} />
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <Screen
+      safeArea
+      padding={false}
+      scroll={{
+        enabled: false,
+      }}
+    >
       <OnThisDaySection />
+      
       <View style={styles.mainContentContainer}>
-        <ScrollView style={styles.postsScrollViewContainer}>
-          {historyItems.map((item) => (
-            <TouchableOpacity 
-              key={item.id} 
-              onPress={() => handleHistoryItemPress(item)} 
-              style={styles.feedItemContainer}
-              accessibilityLabel={`View history post by ${item.userName}`}
-            >
-              <View style={styles.feedItem}>
-                <View style={styles.itemHeader}>
-                  <Image 
-                    source={{ uri: item.userAvatar || '../../assets/images/avatar-placeholder.png' }} 
-                    style={styles.avatar} 
-                  />
-                  <View style={styles.userInfo}>
-                    <Text style={styles.userName}>{item.userName}</Text>
-                    <View style={styles.timestampContainer}>
-                      <Text style={styles.timestamp}>{item.timestamp}</Text>
-                      <View style={styles.dotSeparator} />
-                      <Text style={styles.datePill}>{item.date}</Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity 
-                    style={styles.moreOptionsButton} 
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      Alert.alert('Options', `More options for ${item.id}`);
-                    }}
-                    accessibilityLabel="More options"
-                  >
-                    <Ionicons name="ellipsis-horizontal" size={24} color="#888" />
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.feedContent} numberOfLines={3}>{item.content}</Text>
-                {item.image && <Image source={{ uri: item.image }} style={styles.feedImage} />}
-                {item.location && (
-                  <View style={styles.locationContainer}>
-                    <Ionicons name="location-sharp" size={16} color="#555" />
-                    <Text style={styles.locationText}>{item.location}</Text>
-                  </View>
-                )}
-                <View style={styles.feedStats}>
-                  <View style={styles.statItem}>
-                    <Ionicons name="chatbubbles-outline" size={16} color="#555" />
-                    <Text style={styles.statText}>{item.commentsCount} Comments</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Ionicons name="images-outline" size={16} color="#555" />
-                    <Text style={styles.statText}>{item.mediaCount} Media</Text>
-                  </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+        <ScrollView 
+          style={styles.postsScrollViewContainer}
+          showsVerticalScrollIndicator={false}
+          refreshing={isRefreshing}
+          onRefresh={handleRefresh}
+        >
+          <View style={styles.feedContainer}>
+            {historyItems.map((item) => (
+              <HistoryFeedItem
+                key={item.id}
+                item={item}
+                onPress={handleHistoryItemPress}
+                onMorePress={handleMoreOptions}
+              />
+            ))}
+          </View>
         </ScrollView>
+        
         <ScrollableTimeline historyItems={historyItems} />
       </View>
+      
       <FloatingActionMenu menuItems={historyMenuItems} />
-    </SafeAreaView>
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F4F4F4',
-  },
-  loadingContainer: { // Ensure this is centered for the loading state
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF', // Match safeArea background
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#555',
-  },
-  // Main content area with posts and timeline
   mainContentContainer: {
     flex: 1,
     flexDirection: 'row',
   },
   postsScrollViewContainer: {
     flex: 3,
-    backgroundColor: '#F4F4F4',
   },
-  // Updated Styles for ScrollableTimeline
-  timelineContainer: {
-    flex: 1,
-    backgroundColor: '#F0F0F0', // Light gray background for the timeline area
-    borderLeftWidth: 1,
-    borderLeftColor: '#DCDCDC',
-    paddingTop: 10, // Give some space at the top
-    alignItems: 'center', // Center the track and scrollview horizontally
+  feedContainer: {
+    padding: Spacing.md,
   },
-  timelineTrack: { // Visual track for the draggable circle
-    width: 4, // Width of the line itself
-    height: '90%', // Adjust as needed, relative to its scrollable content area
-    backgroundColor: '#C0C0C0', // Color of the track line
-    borderRadius: 2,
-    position: 'absolute',
-    left: '50%', // Center the track
-    marginLeft: -2, // Half of its width to truly center
-    top: '5%', // Align with content
-  },
-  timelineDraggableCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#0A5C36', // Theme color for the circle
-    position: 'absolute',
-    top: '50%', // Start in the middle, will be dynamic later
-    left: '50%',
-    marginLeft: -10, // Adjust to center the circle on the track
-    marginTop: -10,
-    borderWidth: 2,
-    borderColor: '#FFFFFF', // White border for better visibility
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 3,
-  },
-  timelineScrollContent: {
-    alignItems: 'center', // Ensure years are centered relative to the timeline container
-    paddingHorizontal: 10, // Padding for the year text itself
-  },
-  timelineMarker: {
-    alignItems: 'center',
-    paddingVertical: 20, // Increased padding for easier tapping and visual separation
-  },
-  timelineYearText: {
-    fontSize: 13, // Slightly smaller
-    fontWeight: '600',
-    color: '#444',
-  },
-  // ... (feedItemContainer and other specific item styles remain the same)
   feedItemContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    marginVertical: 8,
-    marginHorizontal: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
-    elevation: 2,
+    marginBottom: Spacing.md,
   },
   feedItem: {
-    padding: 15,
-    borderRadius: 8,
+    padding: Spacing.md,
   },
   itemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: Spacing.sm,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
+    marginRight: Spacing.sm,
   },
   userInfo: {
     flex: 1,
   },
   userName: {
-    fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
   },
   timestampContainer: {
     flexDirection: 'row',
@@ -370,82 +382,65 @@ const styles = StyleSheet.create({
   },
   timestamp: {
     fontSize: 12,
-    color: '#777',
   },
   dotSeparator: {
     width: 3,
     height: 3,
     borderRadius: 1.5,
     backgroundColor: '#BBB',
-    marginHorizontal: 5,
+    marginHorizontal: Spacing.xs,
   },
-  datePill: {
-    fontSize: 11,
-    color: '#006400',
-    backgroundColor: '#E8F5E9',
+  datePillContainer: {
+    backgroundColor: Colors.palette.dynastyGreen.extraLight,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 10,
-    overflow: 'hidden',
+  },
+  datePill: {
+    fontSize: 11,
+    color: Colors.palette.dynastyGreen.dark,
   },
   moreOptionsButton: {
-    padding: 5,
+    padding: Spacing.xs,
   },
   feedContent: {
-    fontSize: 15,
-    color: '#444',
-    lineHeight: 22,
-    marginBottom: 10,
+    marginBottom: Spacing.sm,
   },
   feedImage: {
     width: '100%',
     height: 200,
-    borderRadius: 8,
-    marginTop: 5,
-    marginBottom: 10,
+    borderRadius: BorderRadius.sm,
+    marginBottom: Spacing.sm,
   },
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
-    marginTop: 5,
+    marginBottom: Spacing.sm,
   },
   locationText: {
-    fontSize: 13,
-    color: '#555',
-    marginLeft: 5,
+    marginLeft: Spacing.xs,
   },
   feedStats: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#EEE',
-    paddingVertical: 10, 
-    marginTop: 10,
+    paddingTop: Spacing.xs,
   },
   statItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 20, 
+    marginRight: Spacing.md,
   },
   statText: {
-    marginLeft: 5,
-    fontSize: 13,
-    color: '#555',
+    marginLeft: Spacing.xs,
   },
-  // Styles for OnThisDaySection
   onThisDaySectionContainer: {
-    paddingVertical: 15,
-    paddingHorizontal: 10,
-    backgroundColor: '#FFFFFF', // Or theme.colors.background
+    padding: Spacing.md,
+    backgroundColor: Colors.palette.neutral.white,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0', // Or theme.colors.border
+    borderBottomColor: Colors.palette.neutral.lighter,
   },
   onThisDayTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333333', // Or theme.colors.text
-    marginBottom: 10,
+    marginBottom: Spacing.sm,
   },
   onThisDayContent: {
     flexDirection: 'row',
@@ -453,12 +448,62 @@ const styles = StyleSheet.create({
   onThisDayItem: {
     width: 120,
     height: 100,
-    backgroundColor: '#F0F0F0', // Placeholder
-    borderRadius: 8,
-    marginRight: 10,
+    marginRight: Spacing.sm,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  timelineContainer: {
+    flex: 1,
+    backgroundColor: Colors.palette.neutral.lightest,
+    borderLeftWidth: 1,
+    paddingTop: Spacing.sm,
+    alignItems: 'center',
+  },
+  timelineTrack: {
+    width: 4,
+    height: '90%',
+    backgroundColor: Colors.palette.neutral.light,
+    borderRadius: 2,
+    position: 'absolute',
+    left: '50%',
+    marginLeft: -2,
+    top: '5%',
+  },
+  timelineDraggableCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.palette.dynastyGreen.dark,
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginLeft: -10,
+    marginTop: -10,
+    borderWidth: 2,
+    borderColor: Colors.palette.neutral.white,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  timelineScrollContent: {
+    alignItems: 'center',
+    paddingHorizontal: Spacing.sm,
+  },
+  timelineMarker: {
+    alignItems: 'center',
+    paddingVertical: Spacing.lg,
+  },
+  timelineYearText: {
+    fontWeight: '600',
+  },
 });
 
-export default HistoryScreen; 
+export default HistoryScreen;

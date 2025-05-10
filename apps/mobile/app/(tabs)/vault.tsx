@@ -57,6 +57,52 @@ const mockVaultItems: VaultItem[] = [
   { id: 'video1', name: 'Tutorial.mp4', type: 'file', fileType: 'video', path: '/Tutorial.mp4', parentId: null, size: '15.2 MB', uri: 'http://d23dyxeqlo5psv.cloudfront.net/big_buck_bunny.mp4', mimeType: 'video/mp4' },
 ];
 
+// MARK: - Helper Functions
+
+const getVaultFileType = (mimeType?: string | null, fileName?: string | null): VaultFile['fileType'] => {
+  if (!mimeType && !fileName) return 'other';
+  const name = fileName?.toLowerCase() || '';
+  const type = mimeType?.toLowerCase() || '';
+
+  if (type.startsWith('image/')) return 'image';
+  if (type.startsWith('video/')) return 'video';
+  if (type.startsWith('audio/')) return 'audio';
+  if (type.startsWith('application/pdf') || name.endsWith('.pdf')) return 'document';
+  if (type.includes('document') || type.includes('text') || name.endsWith('.doc') || name.endsWith('.docx') || name.endsWith('.txt') || name.endsWith('.ppt') || name.endsWith('.pptx') || name.endsWith('.xls') || name.endsWith('.xlsx')) return 'document';
+  
+  return 'other';
+};
+
+const generateCanonicalPath = (name: string, parentId: string | null, allItems: VaultItem[]): string => {
+  if (parentId === null) {
+    return `/${name}`;
+  }
+  const parentFolder = allItems.find(item => item.id === parentId && item.type === 'folder');
+  if (parentFolder) {
+    return `${parentFolder.path}/${name}`;
+  }
+  // Fallback if parent isn't found (should ideally not happen in a consistent state)
+  return `/${name}`; 
+};
+
+const buildDisplayPath = (folderId: string | null, allItems: VaultItem[]): string => {
+  if (folderId === null) {
+    return 'Root';
+  }
+  let currentFolder = allItems.find(item => item.id === folderId);
+  if (!currentFolder) return 'Root'; // Should not happen
+
+  const pathParts: string[] = [currentFolder.name];
+  while (currentFolder?.parentId) {
+    currentFolder = allItems.find(item => item.id === currentFolder!.parentId);
+    if (currentFolder) {
+      pathParts.unshift(currentFolder.name);
+    } else {
+      break; // Parent not found, stop building path
+    }
+  }
+  return pathParts.join(' / ') || 'Root';
+};
 
 const VaultScreen = () => {
   const router = useRouter();
@@ -108,7 +154,13 @@ const VaultScreen = () => {
     let updatedVaultData = [...vaultData]; // Create a mutable copy
 
     const newVaultEntries: VaultFile[] = newFiles.map((fileResult) => {
-      const baseName = fileResult.name || `file_${Date.now()}`;
+      // Handle different structures for DocumentPickerAsset and ImagePickerAsset
+      const assetName = (fileResult as any).name || (fileResult as ImagePicker.ImagePickerAsset).fileName || `file_${Date.now()}`;
+      const assetMimeType = (fileResult as any).mimeType || (fileResult as ImagePicker.ImagePickerAsset).mimeType;
+      const assetSize = (fileResult as any).size || (fileResult as ImagePicker.ImagePickerAsset).fileSize;
+
+
+      const baseName = assetName;
       let uniqueName = baseName;
       let counter = 1;
       while (updatedVaultData.some(item => item.parentId === currentPathId && item.name === uniqueName)) {
@@ -122,10 +174,10 @@ const VaultScreen = () => {
         id: `file_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         name: uniqueName,
         type: 'file',
-        fileType: getVaultFileType(fileResult.mimeType, fileResult.name),
+        fileType: getVaultFileType(assetMimeType, assetName),
         uri: fileResult.uri,
-        size: fileResult.size ? `${(fileResult.size / (1024*1024)).toFixed(2)} MB` : undefined,
-        mimeType: fileResult.mimeType,
+        size: assetSize ? `${(assetSize / (1024*1024)).toFixed(2)} MB` : undefined,
+        mimeType: assetMimeType,
         parentId: currentPathId,
         path: generateCanonicalPath(uniqueName, currentPathId, updatedVaultData),
         createdAt: new Date(),
@@ -252,7 +304,8 @@ const VaultScreen = () => {
           let localUri = file.uri;
           if (file.uri.startsWith('http')) {
             setIsLoading(true); // Show loading indicator for download
-            const tempFileName = FileSystem.documentDirectory + file.name;
+            // Ensure file.name is a string for concatenation
+            const tempFileName = FileSystem.documentDirectory + String(file.name);
             const downloadResult = await FileSystem.downloadAsync(file.uri, tempFileName);
             localUri = downloadResult.uri;
             setIsLoading(false);
@@ -262,10 +315,10 @@ const VaultScreen = () => {
             mimeType: file.mimeType || 'application/octet-stream',
             dialogTitle: `Open ${file.name}`,
           });
-        } catch (error) {
+        } catch (e: any) { // Catch specific error type
           setIsLoading(false);
-          console.error('Error sharing file:', error);
-          Alert.alert('Error', `Could not open file: ${error.message}`);
+          console.error('Error sharing file:', e);
+          Alert.alert('Error', `Could not open file: ${e.message}`);
         }
       }
     }
@@ -381,7 +434,7 @@ const VaultScreen = () => {
         return;
     }
 
-    const folderOptions: Alert.AlertButton[] = availableFolders.map(folder => ({ 
+    const folderOptions = availableFolders.map(folder => ({ 
         text: folder.name,
         onPress: () => {
             let updatedData = [...vaultData];
@@ -438,7 +491,7 @@ const VaultScreen = () => {
   };
 
   const handleItemLongPress = (item: VaultItem) => {
-    const actionSheetOptions: Alert.AlertButton[] = [
+    const actionSheetOptions: { text: string; onPress?: () => void; style?: "default" | "cancel" | "destructive" }[] = [
       { text: 'Rename', onPress: () => handleRenameItem(item) },
       { text: 'Move', onPress: () => handleMoveItem(item) },
       { text: 'Delete', onPress: () => handleDeleteItem(item), style: 'destructive' },
@@ -450,8 +503,8 @@ const VaultScreen = () => {
   const getHeaderLeft = () => {
     if (pathHistory.length > 1) {
       return (
-        <TouchableOpacity onPress={navigateBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={Colors.light.primary} />
+        <TouchableOpacity onPress={navigateBack} style={styles.backButton as any /* Temp fix for style prop type */}>
+          <Ionicons name="arrow-back" size={24} color={Colors.light?.primary || '#007AFF'} />
         </TouchableOpacity>
       );
     }
@@ -462,10 +515,10 @@ const VaultScreen = () => {
   // MARK: - Render Logic
   if (isLoading && items.length === 0) { // Show full screen loader only on initial load or full path change
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.light.primary} />
-          <Text style={styles.loadingText}>Loading Vault...</Text>
+      <SafeAreaView style={styles.safeArea as any /* Temp fix for style prop type */}>
+        <View style={styles.loadingContainer as any /* Temp fix for style prop type */}>
+          <ActivityIndicator size="large" color={Colors.light?.primary || '#007AFF'} />
+          <Text style={styles.loadingText as any /* Temp fix for style prop type */}>Loading Vault...</Text>
         </View>
       </SafeAreaView>
     );
@@ -474,31 +527,31 @@ const VaultScreen = () => {
   const renderItem = (item: VaultItem) => (
     <TouchableOpacity 
       key={item.id} 
-      style={styles.itemContainer}
+      style={styles.itemContainer as any /* Temp fix for style prop type */}
       onPress={() => handleItemPress(item)}
       onLongPress={() => handleItemLongPress(item)}
     >
-      <Ionicons name={getItemIcon(item) as any} size={30} color={Colors.light.primary} style={styles.itemIcon} />
-      <View style={styles.itemTextContainer}>
-        <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+      <Ionicons name={getItemIcon(item) as any} size={30} color={Colors.light?.primary || '#007AFF'} style={styles.itemIcon as any /* Temp fix for style prop type */} />
+      <View style={styles.itemTextContainer as any /* Temp fix for style prop type */}>
+        <Text style={styles.itemName as any /* Temp fix for style prop type */} numberOfLines={1}>{item.name}</Text>
         {item.type === 'file' && (item as VaultFile).size && (
-          <Text style={styles.itemSize}>{(item as VaultFile).size}</Text>
+          <Text style={styles.itemSize as any /* Temp fix for style prop type */}>{(item as VaultFile).size}</Text>
         )}
       </View>
       {item.type === 'folder' && (
-         <Ionicons name="chevron-forward-outline" size={20} color={Colors.light.icon} />
+         <Ionicons name="chevron-forward-outline" size={20} color={Colors.light?.icon || '#8E8E93'} />
       )}
     </TouchableOpacity>
   );
 
   // MARK: - Main Return
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea as any /* Temp fix for style prop type */}>
       {/* <AppHeader title="Vault" headerLeft={getHeaderLeft()} /> */}
       {/* Custom Header part for path, could be integrated into AppHeader later */}
-      <View style={styles.customHeader}>
+      <View style={styles.customHeader as any /* Temp fix for style prop type */}>
         {getHeaderLeft()}
-        <Text style={styles.pathText} numberOfLines={1} ellipsizeMode="head">
+        <Text style={styles.pathText as any /* Temp fix for style prop type */} numberOfLines={1} ellipsizeMode="head">
           {currentPathDisplay}
         </Text>
         {/* Add a dummy view to balance flex if back button is present */}
@@ -506,23 +559,23 @@ const VaultScreen = () => {
       </View>
       
       {isLoading && items.length > 0 && ( // Inline loader when list is already populated
-        <View style={styles.inlineLoadingContainer}>
-            <ActivityIndicator size="small" color={Colors.light.primary} />
+        <View style={styles.inlineLoadingContainer as any /* Temp fix for style prop type */}>
+            <ActivityIndicator size="small" color={Colors.light?.primary || '#007AFF'} />
         </View>
       )}
 
       {items.length === 0 && !isLoading ? (
-        <View style={[emptyStateStyles.emptyStateContainer, styles.emptyStateCustom]}>
-          <Ionicons name="archive-outline" size={60} color={Colors.light.icon} />
-          <Text style={[emptyStateStyles.emptyStateText, {color: Colors.light.text}]}>
+        <View style={[emptyStateStyles.emptyStateContainer, styles.emptyStateCustom as any /* Temp fix for style prop type */]}>
+          <Ionicons name="archive-outline" size={60} color={Colors.light?.icon || '#8E8E93'} />
+          <Text style={[emptyStateStyles.emptyStateText, {color: Colors.light?.text?.primary || '#000000'}]}>
             This folder is empty.
           </Text>
-          <Text style={[emptyStateStyles.emptyStateSubText, {color: Colors.light.text}]}>
+          <Text style={[emptyStateStyles.emptyStateSubText, {color: Colors.light?.text?.primary || '#000000'}]}>
             Tap the '+' button to upload files or media.
           </Text>
         </View>
       ) : (
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContentContainer}>
+        <ScrollView style={styles.scrollView as any /* Temp fix for style prop type */} contentContainerStyle={styles.scrollContentContainer as any /* Temp fix for style prop type */}>
           {items.map(item => renderItem(item))}
         </ScrollView>
       )}
@@ -536,13 +589,13 @@ const VaultScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: Colors.light?.background?.primary || '#FFFFFF',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.light.background,
+    backgroundColor: Colors.light?.background?.primary || '#FFFFFF',
   },
   inlineLoadingContainer: {
     paddingVertical: 10,
@@ -550,9 +603,9 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 10,
-    fontSize: Fonts.size.medium,
-    fontFamily: Fonts.type.base,
-    color: Colors.light.text,
+    fontSize: Fonts.size?.medium || 16,
+    fontFamily: Fonts.type?.base || 'System',
+    color: Colors.light?.text?.primary || '#000000',
   },
   customHeader: {
     flexDirection: 'row',
@@ -561,8 +614,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: Platform.OS === 'ios' ? 10 : 12, // Adjust padding for platform
     borderBottomWidth: 1,
-    borderBottomColor: Colors.light.icon, // Use a subtle border color
-    backgroundColor: Colors.light.background, // Match SafeArea
+    borderBottomColor: Colors.light?.icon?.primary || '#C7C7CC', // Use a subtle border color
+    backgroundColor: Colors.light?.background?.primary || '#FFFFFF', // Match SafeArea
   },
   backButton: {
     padding: 5, // Make it easier to tap
@@ -571,9 +624,9 @@ const styles = StyleSheet.create({
   pathText: {
     flex: 1, // Allow text to take available space
     textAlign: 'center', // Center the text
-    fontSize: Fonts.size.regular,
-    fontFamily: Fonts.type.bold, // Make path more prominent
-    color: Colors.light.text,
+    fontSize: Fonts.size?.regular || 17,
+    fontFamily: Fonts.type?.bold || 'System', // Make path more prominent
+    color: Colors.light?.text?.primary || '#000000',
   },
   scrollView: {
     flex: 1,
@@ -587,7 +640,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 15,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.light.icon, // Lighter border for items
+    borderBottomColor: Colors.light?.icon?.primary || '#EFEFF4', // Lighter border for items
   },
   itemIcon: {
     marginRight: 15,
@@ -596,14 +649,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   itemName: {
-    fontSize: Fonts.size.medium,
-    fontFamily: Fonts.type.base,
-    color: Colors.light.text,
+    fontSize: Fonts.size?.medium || 16,
+    fontFamily: Fonts.type?.base || 'System',
+    color: Colors.light?.text?.primary || '#000000',
   },
   itemSize: {
-    fontSize: Fonts.size.small,
-    fontFamily: Fonts.type.base,
-    color: Colors.light.icon, // A lighter text color for secondary info
+    fontSize: Fonts.size?.small || 12,
+    fontFamily: Fonts.type?.base || 'System',
+    color: Colors.light?.icon?.secondary || '#8E8E93', // A lighter text color for secondary info
     marginTop: 2,
   },
   emptyStateCustom: { 
