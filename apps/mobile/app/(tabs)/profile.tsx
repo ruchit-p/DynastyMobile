@@ -91,11 +91,6 @@ const ProfileScreen = () => {
       text: 'Family Management',
       onPress: () => router.push('/(screens)/familyManagement' as any),
     },
-    {
-      icon: 'help-circle-outline' as keyof typeof Ionicons.glyphMap,
-      text: 'Help & Support',
-      onPress: () => router.push('/(screens)/helpAndSupport' as any),
-    },
   ];
 
   if (isLoading) {

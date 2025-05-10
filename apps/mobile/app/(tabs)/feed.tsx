@@ -45,35 +45,10 @@ const FeedScreen = () => {
         setIsLoadingFeed(true);
         
         try {
-          // Mock data for now (would be replaced with actual API calls)
-          // This is just a placeholder for demonstration
+          // This would be replaced with actual API calls to fetch real posts
+          // For now, we'll initialize with an empty array
           setTimeout(() => {
-            setFeedPosts([
-              // Example post 1
-              {
-                id: '1',
-                authorId: 'user1',
-                authorName: 'John Smith',
-                authorAvatar: 'https://randomuser.me/api/portraits/men/32.jpg',
-                createdAt: new Date(Date.now() - 3600000), // 1 hour ago
-                text: 'Just found these amazing old family photos from the 1950s! Can\'t wait to share these with everyone.',
-                imageUrl: 'https://images.unsplash.com/photo-1529932260967-af9d3bbd8138',
-                commentsCount: 5,
-                likesCount: 12,
-              },
-              // Example post 2
-              {
-                id: '2',
-                authorId: 'user2',
-                authorName: 'Emily Johnson',
-                authorAvatar: 'https://randomuser.me/api/portraits/women/44.jpg',
-                createdAt: new Date(Date.now() - 86400000), // 1 day ago
-                text: "Visited our family's hometown today. So many memories!",
-                location: 'Boston, MA',
-                commentsCount: 3,
-                likesCount: 8,
-              },
-            ]);
+            setFeedPosts([]);
             setIsLoadingFeed(false);
             setIsRefreshing(false);
           }, 1000);
@@ -92,8 +67,9 @@ const FeedScreen = () => {
   // Handle refresh
   const handleRefresh = () => {
     setIsRefreshing(true);
-    // Re-fetch data (using the same mock implementation for now)
+    // Re-fetch data with empty state
     setTimeout(() => {
+      setFeedPosts([]);
       setIsRefreshing(false);
     }, 1000);
   };
@@ -150,8 +126,6 @@ const FeedScreen = () => {
             icon="newspaper-outline"
             title="Your feed is empty"
             description="Create your first story or connect with family!"
-            actionLabel="Create Story"
-            onAction={handleCreateNewStory}
           />
         </View>
       ) : (
@@ -182,7 +156,7 @@ const styles = StyleSheet.create({
   },
   emptyStateContainer: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     minHeight: 400,
   },
   feedContainer: {

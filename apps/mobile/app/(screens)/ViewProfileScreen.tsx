@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors'; // Import Colors properly as a named export
 import AppHeader from '../../components/ui/AppHeader'; // Import AppHeader
 import type { StackHeaderProps } from '@react-navigation/stack'; // For props in header function
+import AnimatedActionSheet, { ActionSheetAction } from '../../components/ui/AnimatedActionSheet'; // Import AnimatedActionSheet
 
 // Mock user data type
 interface UserProfile {
@@ -34,6 +35,7 @@ export default function ViewProfileScreen() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedUser, setEditedUser] = useState<UserProfile | null>(null);
+  const [isActionSheetVisible, setIsActionSheetVisible] = useState(false); // State for Action Sheet
 
   // Set up header with dynamic title and action buttons using AppHeader
   useEffect(() => {
@@ -41,22 +43,19 @@ export default function ViewProfileScreen() {
 
     navigation.setOptions({
       headerShown: true,
-      header: (props: StackHeaderProps) => { // Explicitly type props
+      header: (props: StackHeaderProps) => {
+        const headerLeftComponent = () => (
+          <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+            <Ionicons name="arrow-back" size={26} color={Colors[colorScheme].icon.primary} />
+          </TouchableOpacity>
+        );
         const headerRightComponent = () => (
           <View style={styles.headerIconsContainer}>
-            <TouchableOpacity onPress={toggleEditMode} style={styles.iconButton}>
+            <TouchableOpacity onPress={() => setIsActionSheetVisible(true)} style={styles.iconButton}>
               <Ionicons 
-                name={isEditing ? "close-circle-outline" : "pencil-outline"} 
-                size={24} // Adjusted size to better fit AppHeader default icon sizes
-                color={Colors[colorScheme].icon} // Use theme icon color
-              />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={confirmRemoveUser} style={styles.iconButton}>
-              <Ionicons 
-                name="trash-bin-outline" 
-                size={24} // Adjusted size
-                // Consider a specific red from your Colors.ts or a theme error color
-                color={Platform.OS === 'ios' ? Colors.light.tint : Colors.dark.text} // Example: using tint for iOS, text for dark Android. Needs a proper destructive color.
+                name="ellipsis-horizontal" 
+                size={26} 
+                color={Colors[colorScheme].icon.primary}
               />
             </TouchableOpacity>
           </View>
@@ -65,15 +64,14 @@ export default function ViewProfileScreen() {
         return (
           <AppHeader 
             title={currentTitle}
-            headerLeft={props.options.headerLeft} 
+            headerLeft={headerLeftComponent}
             headerRight={headerRightComponent} 
           />
         );
       },
     });
   // Ensure all dependencies that might change the header are included.
-  // `user` is needed if `confirmRemoveUser` uses `user.name` in its alert.
-  }, [navigation, params.name, params.memberName, isEditing, colorScheme, user]); 
+  }, [navigation, params.name, params.memberName, isEditing, colorScheme, user]); // Removed isEditing and user from deps for headerRight unless they affect the ellipsis icon directly
 
   // In a real app, fetch user data based on params.userId or params.memberId
   useEffect(() => {
@@ -129,10 +127,10 @@ export default function ViewProfileScreen() {
       'Remove User',
       `Are you sure you want to remove ${user?.name || 'this user'} from the family tree? This action cannot be undone.`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel', onPress: () => setIsActionSheetVisible(false) }, // Close sheet on cancel
         { text: 'Remove', onPress: removeUser, style: 'destructive' },
       ],
-      { cancelable: true }
+      { cancelable: true, onDismiss: () => setIsActionSheetVisible(false) } // Close sheet on dismiss
     );
   };
 
@@ -147,6 +145,29 @@ export default function ViewProfileScreen() {
       router.replace('/(tabs)/familyTree'); // Fallback navigation
     }
   };
+
+  const profileActions: ActionSheetAction[] = [
+    {
+      title: 'Edit Profile',
+      onPress: () => {
+        // setIsActionSheetVisible(false); // ActionSheet handles its own closing
+        toggleEditMode();
+      },
+    },
+    {
+      title: 'Delete Profile',
+      onPress: () => {
+        // setIsActionSheetVisible(false); // ActionSheet handles its own closing
+        confirmRemoveUser();
+      },
+      style: 'destructive',
+    },
+    {
+      title: 'Cancel',
+      onPress: () => { /* setIsActionSheetVisible(false) -- Handled by component */ }, // ActionSheet handles its own closing
+      style: 'cancel',
+    },
+  ];
 
   if (!user || !editedUser) {
     return (
@@ -189,7 +210,7 @@ export default function ViewProfileScreen() {
 
         return (
           <View key={key} style={styles.fieldContainer}>
-            {icon && <Ionicons name={icon} size={24} color={Colors[colorScheme].text} style={styles.fieldIcon} />}
+            {icon && <Ionicons name={icon} size={24} color={Colors[colorScheme].text.primary} style={styles.fieldIcon} />}
             <View style={styles.fieldTextContainer}>
               <Text style={styles.fieldLabel}>{label}</Text>
               {isEditing ? (
@@ -216,6 +237,13 @@ export default function ViewProfileScreen() {
           <Text style={styles.saveButtonText}>Save Changes</Text>
         </TouchableOpacity>
       )}
+      
+      <AnimatedActionSheet
+        isVisible={isActionSheetVisible}
+        onClose={() => setIsActionSheetVisible(false)}
+        actions={profileActions}
+        title="Profile Actions" // Optional: Add a title to the action sheet
+      />
     </ScrollView>
   );
 }
@@ -223,7 +251,7 @@ export default function ViewProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background, // Using light as default
+    backgroundColor: Colors.light.background.primary, // Using light primary background
   },
   contentContainer: {
     paddingBottom: 30, // Ensure scroll content isn't hidden by save button or tab bar
@@ -232,11 +260,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.light.background, // Using light as default
+    backgroundColor: Colors.light.background.primary, // Using light primary background
   },
   headerIconsContainer: {
     flexDirection: 'row',
-    marginRight: 0, // Adjusted spacing for header icons
+    marginRight: Platform.OS === 'ios' ? 0 : 10, // Adjusted for Android alignment if needed
   },
   iconButton: {
     paddingHorizontal: 10, // Added padding for easier touch
@@ -244,7 +272,7 @@ const styles = StyleSheet.create({
   profileHeader: {
     alignItems: 'center',
     paddingVertical: 20,
-    backgroundColor: Colors.light.tint, // Use a theme color for header background
+    backgroundColor: Colors.light.background.secondary, // Use light secondary background
     borderBottomWidth: 1,
     borderBottomColor: '#E1E3E5', // Using a direct color for separator
   },
@@ -254,7 +282,7 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     marginBottom: 15,
     borderWidth: 3,
-    borderColor: Colors.light.background, // Contrast border for avatar
+    borderColor: Colors.light.background.primary, // Contrast border for avatar
   },
   nameText: {
     fontWeight: 'bold',
@@ -291,11 +319,11 @@ const styles = StyleSheet.create({
   },
   fieldValue: {
     fontSize: 16,
-    color: Colors.light.text,
+    color: Colors.light.text.primary,
   },
   input: {
     fontSize: 16,
-    color: Colors.light.text,
+    color: Colors.light.text.primary,
     paddingVertical: 5,
     borderBottomWidth: 1,
     borderBottomColor: '#E1E3E5', // Light separator color

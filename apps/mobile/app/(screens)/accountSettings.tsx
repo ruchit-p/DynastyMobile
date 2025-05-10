@@ -77,13 +77,6 @@ const AccountSettingsScreen = () => {
         keyExtractor={(item) => item.text}
         renderItem={({ item }) => <ListItem {...item} />}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
-        ListHeaderComponent={() => (
-          // Optional: Add user info header if needed, like in screenshot
-          <View style={styles.userInfoHeader}>
-            <Text style={styles.userName}>Ruchit Patel</Text>
-            <Text style={styles.userEmail}>user@example.com</Text>
-          </View>
-        )}
         ListFooterComponent={() => (
             <Text style={styles.footerText}>Dynasty App v1.0.0</Text>
         )}

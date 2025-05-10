@@ -4,7 +4,6 @@ import {
   View,
   Text,
   ScrollView,
-  SafeAreaView,
   Platform,
   TouchableOpacity,
   TextInput,
@@ -17,6 +16,7 @@ import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/FloatingActionMenu'; // Corrected path
 import AppHeader from '../../components/ui/AppHeader'; // Corrected path
 import IconButton, { IconSet } from '../../components/ui/IconButton'; // Import IconButton
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Define Event interface for type safety
 interface Event {
@@ -181,10 +181,8 @@ const EventListScreen = () => { // Renamed from EventsScreen
 
   if (isLoadingEvents) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        {/* Add Stack.Screen options here if needed for router-based header control,
-            otherwise, pass headerLeft to AppHeader directly. */}
-        {/* <Stack.Screen options={{ title: "Events", header: (props) => <AppHeader {...props} headerLeft={BackAction} /> }} /> */}
+      <SafeAreaView style={styles.safeArea} edges={[ 'left', 'right', 'bottom' ]}>
+        <Stack.Screen options={{ headerShown: false }} />
         <AppHeader title="Events" headerLeft={BackAction} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#0A5C36" />
@@ -195,8 +193,8 @@ const EventListScreen = () => { // Renamed from EventsScreen
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      {/* <Stack.Screen options={{ title: "Events", header: (props) => <AppHeader {...props} headerLeft={BackAction} /> }} /> */}
+    <SafeAreaView style={styles.safeArea} edges={[ 'left', 'right', 'bottom' ]}>
+      <Stack.Screen options={{ headerShown: false }} />
       <AppHeader title="Events" headerLeft={BackAction} />
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
