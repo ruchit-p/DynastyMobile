@@ -1,12 +1,17 @@
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, View, Text, SafeAreaView, ScrollView, ActivityIndicator, TouchableOpacity, Alert, Platform } from 'react-native';
+import { StyleSheet, View, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/FloatingActionMenu';
-// import AppHeader from '../../components/ui/AppHeader'; // Keep if a standard header is desired
-import { emptyStateStyles } from '../../constants/emptyStateConfig';
-import { Colors } from '../../constants/Colors'; // Import actual Colors
-import Fonts from '../../constants/Fonts'; // Import actual Fonts
+import Screen from '../../components/ui/Screen';
+import EmptyState from '../../components/ui/EmptyState';
+import ListItem from '../../components/ListItem';
+import ThemedText from '../../components/ThemedText';
+import IconButton from '../../components/ui/IconButton';
+import AppHeader from '../../components/ui/AppHeader';
+import { Colors } from '../../constants/Colors';
+import Fonts from '../../constants/Fonts';
+import { Spacing, BorderRadius } from '../../constants/Spacing';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
@@ -512,76 +517,105 @@ const VaultScreen = () => {
   };
 
 
-  // MARK: - Render Logic
-  if (isLoading && items.length === 0) { // Show full screen loader only on initial load or full path change
+  // Custom header with path navigation
+  const HeaderWithPath = () => {
     return (
-      <SafeAreaView style={styles.safeArea as any /* Temp fix for style prop type */}>
-        <View style={styles.loadingContainer as any /* Temp fix for style prop type */}>
-          <ActivityIndicator size="large" color={Colors.light?.primary || '#007AFF'} />
-          <Text style={styles.loadingText as any /* Temp fix for style prop type */}>Loading Vault...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const renderItem = (item: VaultItem) => (
-    <TouchableOpacity 
-      key={item.id} 
-      style={styles.itemContainer as any /* Temp fix for style prop type */}
-      onPress={() => handleItemPress(item)}
-      onLongPress={() => handleItemLongPress(item)}
-    >
-      <Ionicons name={getItemIcon(item) as any} size={30} color={Colors.light?.primary || '#007AFF'} style={styles.itemIcon as any /* Temp fix for style prop type */} />
-      <View style={styles.itemTextContainer as any /* Temp fix for style prop type */}>
-        <Text style={styles.itemName as any /* Temp fix for style prop type */} numberOfLines={1}>{item.name}</Text>
-        {item.type === 'file' && (item as VaultFile).size && (
-          <Text style={styles.itemSize as any /* Temp fix for style prop type */}>{(item as VaultFile).size}</Text>
-        )}
-      </View>
-      {item.type === 'folder' && (
-         <Ionicons name="chevron-forward-outline" size={20} color={Colors.light?.icon || '#8E8E93'} />
-      )}
-    </TouchableOpacity>
-  );
-
-  // MARK: - Main Return
-  return (
-    <SafeAreaView style={styles.safeArea as any /* Temp fix for style prop type */}>
-      {/* <AppHeader title="Vault" headerLeft={getHeaderLeft()} /> */}
-      {/* Custom Header part for path, could be integrated into AppHeader later */}
-      <View style={styles.customHeader as any /* Temp fix for style prop type */}>
+      <View style={styles.customHeader}>
         {getHeaderLeft()}
-        <Text style={styles.pathText as any /* Temp fix for style prop type */} numberOfLines={1} ellipsizeMode="head">
+        <ThemedText variant="h5" style={styles.pathText} numberOfLines={1} ellipsizeMode="head">
           {currentPathDisplay}
-        </Text>
+        </ThemedText>
         {/* Add a dummy view to balance flex if back button is present */}
         {getHeaderLeft() ? <View style={{width: 24}} /> : null}
       </View>
-      
-      {isLoading && items.length > 0 && ( // Inline loader when list is already populated
-        <View style={styles.inlineLoadingContainer as any /* Temp fix for style prop type */}>
-            <ActivityIndicator size="small" color={Colors.light?.primary || '#007AFF'} />
+    );
+  };
+
+  // MARK: - Render Logic
+  if (isLoading && items.length === 0) { // Show full screen loader only on initial load or full path change
+    return (
+      <Screen safeArea>
+        <EmptyState
+          icon="hourglass-outline"
+          title="Loading Vault"
+          description="Please wait while we load your files..."
+          iconSize={50}
+        />
+      </Screen>
+    );
+  }
+
+  const renderItem = (item: VaultItem) => {
+    const icon = getItemIcon(item) as keyof typeof Ionicons.glyphMap;
+    const description = item.type === 'file' && (item as VaultFile).size ?
+      (item as VaultFile).size : undefined;
+
+    if (item.type === 'folder') {
+      return (
+        <ListItem
+          key={item.id}
+          icon={icon}
+          text={item.name}
+          description={description}
+          onPress={() => handleItemPress(item)}
+          rightIcon="chevron-forward"
+          style={styles.listItem}
+        />
+      );
+    } else {
+      return (
+        <ListItem
+          key={item.id}
+          icon={icon}
+          text={item.name}
+          description={description}
+          onPress={() => handleItemPress(item)}
+          rightIcon="ellipsis-horizontal"
+          style={styles.listItem}
+        />
+      );
+    }
+  };
+
+  // MARK: - Main Return
+  return (
+    <Screen safeArea scroll={false}>
+      <HeaderWithPath />
+
+      {isLoading && items.length > 0 && (
+        <View style={styles.inlineLoadingContainer}>
+          <EmptyState
+            icon="sync-outline"
+            title="Loading contents"
+            iconSize={30}
+            style={styles.inlineEmptyState}
+          />
         </View>
       )}
 
       {items.length === 0 && !isLoading ? (
-        <View style={[emptyStateStyles.emptyStateContainer, styles.emptyStateCustom as any /* Temp fix for style prop type */]}>
-          <Ionicons name="archive-outline" size={60} color={Colors.light?.icon || '#8E8E93'} />
-          <Text style={[emptyStateStyles.emptyStateText, {color: Colors.light?.text?.primary || '#000000'}]}>
-            This folder is empty.
-          </Text>
-          <Text style={[emptyStateStyles.emptyStateSubText, {color: Colors.light?.text?.primary || '#000000'}]}>
-            Tap the '+' button to upload files or media.
-          </Text>
-        </View>
+        <EmptyState
+          icon="folder-open-outline"
+          title="This folder is empty"
+          description="Tap the '+' button to upload files or media"
+          style={styles.emptyStateCustom}
+        />
       ) : (
-        <ScrollView style={styles.scrollView as any /* Temp fix for style prop type */} contentContainerStyle={styles.scrollContentContainer as any /* Temp fix for style prop type */}>
+        <Screen
+          safeArea={false}
+          scroll={{
+            enabled: true,
+            contentContainerStyle: styles.scrollContentContainer,
+            showsVerticalScrollIndicator: false,
+          }}
+          style={styles.contentContainer}
+        >
           {items.map(item => renderItem(item))}
-        </ScrollView>
+        </Screen>
       )}
-      
+
       <FloatingActionMenu menuItems={vaultMenuItems} />
-    </SafeAreaView>
+    </Screen>
   );
 };
 

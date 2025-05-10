@@ -14,7 +14,8 @@ import {
 import { useRouter, useNavigation } from 'expo-router';
 import AppHeader from '../../components/ui/AppHeader';
 import IconButton, { IconSet } from '../../components/ui/IconButton';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import EmptyState from '../../components/ui/EmptyState';
 
 // Placeholder for Colors (ideally from a central theme file)
 const Colors = {
@@ -34,16 +35,8 @@ interface FamilyMember {
   avatarUrl?: string; // Optional
 }
 
-// Mock Data for family members
-const MOCK_FAMILY_MEMBERS: FamilyMember[] = [
-  { id: '1', name: 'Eleanor Vance' },
-  { id: '2', name: 'Marcus Thorne' },
-  { id: '3', name: 'Julia Chen' },
-  { id: '4', name: 'Samuel Green' },
-  { id: '5', name: 'Isabelle Rossi' },
-  { id: '6', name: 'David Miller' },
-  { id: '7', name: 'Sophia Lee' },
-];
+// Empty array for family members - will be populated from API in the future
+const FAMILY_MEMBERS: FamilyMember[] = [];
 
 const NewChatScreen = () => {
   const router = useRouter();
@@ -116,7 +109,7 @@ const NewChatScreen = () => {
     }
   };
 
-  const filteredMembers = MOCK_FAMILY_MEMBERS.filter(member =>
+  const filteredMembers = FAMILY_MEMBERS.filter(member =>
     member.name.toLowerCase().includes(searchText.toLowerCase())
   );
 
@@ -165,6 +158,15 @@ const NewChatScreen = () => {
          <View style={styles.emptyListContainer}>
             <Text style={styles.emptyListText}>No members found for "{searchText}"</Text>
          </View>
+      ) : filteredMembers.length === 0 ? (
+        <View style={styles.emptyStateContainer}>
+          <EmptyState
+            icon="people-outline"
+            title="No Family Members Available"
+            description="Connect with your family members to start chatting and sharing moments together."
+            iconSize={50}
+          />
+        </View>
       ) : (
         <FlatList
             data={filteredMembers}
@@ -212,6 +214,11 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     flex: 1,
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   memberItem: {
     flexDirection: 'row',
