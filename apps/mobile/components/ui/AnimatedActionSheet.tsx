@@ -11,6 +11,7 @@ import {
   StyleProp,
   ViewStyle,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 // Import design system components and utilities
 import ThemedText from '../ThemedText';
@@ -23,6 +24,9 @@ export interface ActionSheetAction {
   title: string;
   onPress: () => void;
   style?: 'cancel' | 'destructive' | 'default';
+  icon?: keyof typeof Ionicons.glyphMap;
+  iconColor?: string;
+  disabled?: boolean;
 }
 
 interface AnimatedActionSheetProps {
@@ -153,19 +157,33 @@ const AnimatedActionSheet: React.FC<AnimatedActionSheetProps> = ({
                   onPress={() => handleActionPress(action.onPress)}
                   style={[
                     styles.actionButton,
-                    index > 0 && [styles.subsequentActionButton, { borderTopColor: borderColor }]
+                    index > 0 && [styles.subsequentActionButton, { borderTopColor: borderColor }],
+                    action.disabled && styles.disabledActionButton
                   ]}
                   accessibilityRole="button"
                   accessibilityLabel={action.title}
+                  accessibilityState={{ disabled: action.disabled }}
+                  disabled={action.disabled}
                 >
-                  <ThemedText
-                    style={[
-                      styles.actionButtonText,
-                      { color: action.style === 'destructive' ? destructiveColor : actionColor }
-                    ]}
-                  >
-                    {action.title}
-                  </ThemedText>
+                  <View style={styles.actionContentWrapper}>
+                    {action.icon && (
+                      <Ionicons 
+                        name={action.icon} 
+                        size={22}
+                        color={action.disabled ? Colors.palette.neutral.light : (action.iconColor || (action.style === 'destructive' ? destructiveColor : actionColor))} 
+                        style={styles.actionIcon}
+                      />
+                    )}
+                    <ThemedText
+                      style={[
+                        styles.actionButtonText,
+                        { color: action.disabled ? Colors.palette.neutral.light : (action.style === 'destructive' ? destructiveColor : actionColor) },
+                        action.icon ? styles.actionButtonTextWithIcon : null
+                      ]}
+                    >
+                      {action.title}
+                    </ThemedText>
+                  </View>
                 </TouchableOpacity>
               ))}
             </View>
@@ -234,8 +252,9 @@ const styles = StyleSheet.create({
   actionButton: {
     paddingVertical: Spacing.lg,
     paddingHorizontal: Spacing.md,
-    alignItems: 'center',
+    flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
   },
   subsequentActionButton: {
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -243,6 +262,21 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: 20,
     textAlign: 'center',
+  },
+  disabledActionButton: {
+    opacity: 0.5,
+  },
+  actionButtonTextWithIcon: {
+    // Add styles if needed to adjust text position when an icon is present
+    // For example, marginLeft: Spacing.sm,
+  },
+  actionIcon: {
+    marginRight: Spacing.md,
+  },
+  actionContentWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelGroup: {
     borderRadius: BorderRadius.lg,

@@ -1,0 +1,124 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Dynasty Mobile Cursor Styling Guide
+
+This document outlines cursor styling rules for web implementations of the Dynasty Mobile app to ensure consistency with the mobile design system.
+
+## Design System Integration
+
+These cursor rules are designed to complement the Dynasty design system which includes:
+
+- **Color Palette:** Primarily using Dynasty green (`#1A4B44`) and its variants
+- **Typography:** Helvetica Neue with consistent sizing and weight scales
+- **Spacing:** Consistent spacing scale from xxs (2px) to 5xl (80px)
+- **Components:** Themed components that adapt to light/dark mode
+
+## Cursor Styling Rules
+
+### Interactive Elements
+
+| Element Type | Cursor Style | Example Components |
+|--------------|--------------|-------------------|
+| Buttons | `pointer` | Button, IconButton |
+| Links | `pointer` | ThemedText with variant="link" |
+| Form Controls | `pointer` | Checkboxes, radio buttons, switches |
+| Menu Items | `pointer` | FloatingActionMenu items, AnimatedActionSheet actions |
+| Icons (interactive) | `pointer` | Icons inside TouchableOpacity |
+| Draggable Elements | `grab` / `grabbing` | Profile picture during upload/crop |
+| Text Fields | `text` | Input fields, TextAreas |
+| Disabled Elements | `not-allowed` | Disabled buttons, form elements |
+
+### Non-Interactive Elements
+
+| Element Type | Cursor Style | Example Components |
+|--------------|--------------|-------------------|
+| Text Content | `default` | ThemedText (non-link variants) |
+| Images (non-interactive) | `default` | Static images, avatars (when not clickable) |
+| Containers | `default` | ThemedView, Card (when not clickable) |
+| Loading States | `wait` | During API calls, data loading |
+
+### Custom Cursor States
+
+For web implementations, consider these specialized cursor states to improve UX:
+
+| Interaction | Cursor Style | When to Use |
+|-------------|--------------|-------------|
+| Family Tree Manipulation | `grab` / `grabbing` | When panning or moving the family tree |
+| Media Selection | `pointer` | When selecting media items in vault |
+| Audio Recording/Playing | `pointer` | For audio controls |
+| Text Selection | `text` | When selecting text in stories or messages |
+## Implementation Notes
+
+1. **Touch vs. Cursor:** Remember that mobile uses touch interactions, so cursor styles only apply to web interfaces
+2. **Consistency:** Maintain consistent cursor feedback across similar interactive elements
+3. **Accessibility:** Ensure cursor styles enhance rather than hinder accessibility
+4. **Theme Awareness:** Consider different cursor visibility against light/dark backgrounds
+
+## Component-Specific Rules
+
+### Button Component
+
+```css
+.dynasty-button {
+  cursor: pointer;
+}
+
+.dynasty-button:disabled {
+  cursor: not-allowed;
+}
+```
+
+### ActionSheet/Menu Components
+
+```css
+.dynasty-action-item {
+  cursor: pointer;
+}
+
+.dynasty-action-item.disabled {
+  cursor: not-allowed;
+}
+```
+
+### Form Controls
+
+```css
+.dynasty-input {
+  cursor: text;
+}
+
+.dynasty-checkbox,
+.dynasty-radio,
+.dynasty-switch {
+  cursor: pointer;
+}
+```
+
+### Family Tree
+
+```css
+.dynasty-family-tree-container {
+  cursor: grab;
+}
+
+.dynasty-family-tree-container:active {
+  cursor: grabbing;
+}
+
+.dynasty-family-node {
+  cursor: pointer;
+}
+```
+
+## Integration with Dynasty Color System
+
+When implementing hover and active states, use the design system colors:
+
+- **Hover states:** Consider using lighter variants (e.g., dynastyGreen.medium)
+- **Active states:** Consider using darker variants (e.g., dynastyGreen.dark)
+- **Focus rings:** Use dynastyGreen.medium with appropriate opacity
+
+These cursor rules should be applied consistently across web implementations to maintain the look and feel of the Dynasty Mobile design system.

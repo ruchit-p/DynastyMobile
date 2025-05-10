@@ -1,4 +1,5 @@
-import functions from '@react-native-firebase/functions';
+import { functions as firebaseFunctions } from './firebase';
+import { httpsCallable } from '@react-native-firebase/functions';
 
 import { type RelativeItem as MobileRelativeItemType } from '../../react-native-relatives-tree/src'; // Adjusted path
 
@@ -13,6 +14,31 @@ export type FamilyTreeNode = MobileRelativeItemType & {
   avatar?: string;
   // Ensure this matches the structure returned by your Cloud Function and used by react-native-relatives-tree
   children?: FamilyTreeNode[]; 
+  gender?: 'male' | 'female' | 'other';
+  parents?: Array<{ id: string; type: string }>;
+  siblings?: Array<{ id: string; type: string }>;
+  spouses?: Array<{ id: string; type: string }>;
+  attributes?: {
+    displayName: string;
+    profilePicture?: string;
+    familyTreeId: string;
+    isBloodRelated: boolean;
+    status?: string;
+    treeOwnerId?: string;
+    email?: string;
+    phoneNumber?: string;
+  };
+};
+
+// For the profile view screen
+export type MemberProfile = {
+  id: string;
+  name: string;
+  avatar?: string;
+  email?: string;
+  phone?: string;
+  bio?: string;
+  [key: string]: any; // For any additional fields
 };
 
 // Initialize Firebase Functions
@@ -22,8 +48,8 @@ export type FamilyTreeNode = MobileRelativeItemType & {
 // MARK: - Family Tree Functions
 
 export const getFamilyTreeDataMobile = async (userId: string): Promise<{ treeNodes: FamilyTreeNode[] }> => {
-  // const functionRef = httpsCallable(functionsInstance, 'getFamilyTreeData');
-  const functionRef = functions().httpsCallable('getFamilyTreeData');
+  // Get a reference to the cloud function
+  const functionRef = httpsCallable(firebaseFunctions, 'getFamilyTreeData');
   try {
     const result = await functionRef({ userId });
     // Ensure the data from the cloud function matches FamilyTreeNode[]
@@ -32,6 +58,81 @@ export const getFamilyTreeDataMobile = async (userId: string): Promise<{ treeNod
   } catch (error) {
     console.error("Error fetching family tree data:", error);
     throw error; // Rethrow or handle as appropriate for your app
+  }
+};
+
+// Function to get a single member's profile data
+export const getMemberProfileDataMobile = async (memberId: string): Promise<MemberProfile> => {
+  try {
+    // First fetch the family tree data which contains all members
+    const { treeNodes } = await getFamilyTreeDataMobile(memberId);
+    
+    // First try to find the member by the exact ID
+    let memberNode = treeNodes.find(node => node.id === memberId);
+    
+    // If member not found (might happen if memberId is not the tree owner), search through all nodes
+    if (!memberNode) {
+      for (const node of treeNodes) {
+        const foundMember = findMemberInSubtree(node, memberId);
+        if (foundMember) {
+          memberNode = foundMember;
+          break;
+        }
+      }
+    }
+    
+    if (!memberNode) {
+      throw new Error(`Member with ID ${memberId} not found`);
+    }
+    
+    // Map the node data to the profile format expected by the UI
+    return {
+      id: memberNode.id,
+      name: memberNode.attributes?.displayName || memberNode.name || '',
+      avatar: memberNode.attributes?.profilePicture || memberNode.avatar,
+      email: memberNode.attributes?.email || '',
+      phone: memberNode.attributes?.phoneNumber || '',
+      // Add any other fields you want to expose
+    };
+  } catch (error) {
+    console.error("Error fetching member profile data:", error);
+    throw error;
+  }
+};
+
+// Helper function to find a member in a subtree
+const findMemberInSubtree = (node: FamilyTreeNode, memberId: string): FamilyTreeNode | null => {
+  if (node.id === memberId) {
+    return node;
+  }
+  
+  // Check spouse
+  if (node.spouse && node.spouse.id === memberId) {
+    return node.spouse;
+  }
+  
+  // Check children recursively
+  if (node.children) {
+    for (const child of node.children) {
+      const foundInChild = findMemberInSubtree(child, memberId);
+      if (foundInChild) {
+        return foundInChild;
+      }
+    }
+  }
+  
+  return null;
+};
+
+// Function to update a member's profile data
+export const updateMemberProfileDataMobile = async (memberId: string, profileData: Partial<MemberProfile>): Promise<{ success: boolean }> => {
+  const functionRef = httpsCallable(firebaseFunctions, 'updateUserProfile');
+  try {
+    const result = await functionRef({ userId: memberId, updates: profileData });
+    return result.data as { success: boolean };
+  } catch (error) {
+    console.error("Error updating member profile data:", error);
+    throw error;
   }
 };
 
@@ -59,8 +160,8 @@ export const createFamilyMemberMobile = async (
     connectToExistingParent?: boolean;
   }
 ): Promise<{ success: boolean; userId: string }> => {
-  // const functionRef = httpsCallable(functionsInstance, 'createFamilyMember');
-  const functionRef = functions().httpsCallable('createFamilyMember');
+  // Get a reference to the cloud function
+  const functionRef = httpsCallable(firebaseFunctions, 'createFamilyMember');
   try {
     const result = await functionRef({ 
       userData, 
@@ -71,6 +172,46 @@ export const createFamilyMemberMobile = async (
     return result.data as { success: boolean; userId: string };
   } catch (error) {
     console.error(`Error creating family member (type: ${relationType}):`, error);
+    throw error;
+  }
+};
+
+// MARK: - Additional helper functions for family tree
+
+export const updateFamilyRelationshipsMobile = async (
+  userId: string,
+  updates: {
+    addParents?: string[];
+    removeParents?: string[];
+    addChildren?: string[];
+    removeChildren?: string[];
+    addSpouses?: string[];
+    removeSpouses?: string[];
+  }
+): Promise<{ success: boolean }> => {
+  // Get a reference to the cloud function
+  const functionRef = httpsCallable(firebaseFunctions, 'updateFamilyRelationships');
+  try {
+    const result = await functionRef({ userId, updates });
+    return result.data as { success: boolean };
+  } catch (error) {
+    console.error("Error updating family relationships:", error);
+    throw error;
+  }
+};
+
+export const deleteFamilyMemberMobile = async (
+  memberId: string,
+  familyTreeId: string,
+  currentUserId: string
+): Promise<{ success: boolean }> => {
+  // Get a reference to the cloud function
+  const functionRef = httpsCallable(firebaseFunctions, 'deleteFamilyMember');
+  try {
+    const result = await functionRef({ memberId, familyTreeId, currentUserId });
+    return result.data as { success: boolean };
+  } catch (error) {
+    console.error("Error deleting family member:", error);
     throw error;
   }
 };

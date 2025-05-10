@@ -1,10 +1,12 @@
-import React, { useState, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { SafeAreaView, StyleSheet, Text, View, Platform, Image, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
 import RelativesTree, { type RelativeItem, type RelativeItemProps as LibRelativeItemProps } from '../../react-native-relatives-tree/src';
 import { useRouter, useNavigation } from 'expo-router';
 import AnimatedActionSheet, { type ActionSheetAction } from '../../components/ui/AnimatedActionSheet';
 import IconButton, { IconSet } from '../../components/ui/IconButton';
 import { Colors } from '../../constants/Colors';
+import { useAuth } from '../../src/contexts/AuthContext';
+import { getFamilyTreeDataMobile } from '../../src/lib/firebaseUtils';
 
 // Define the Items type for your specific data structure
 type Items = RelativeItem & {
@@ -16,55 +18,6 @@ type Items = RelativeItem & {
   // Add any other properties your nodes might have, e.g., avatar
   avatar?: string; 
 };
-
-// Example Data (as per the library's documentation)
-const relatives: Items[] = [
-  {
-    id: 'john1',
-    name: 'John',
-    dob: '01/05/2004',
-    spouse: {
-      id: 'anne1',
-      name: 'Anne',
-      dob: '04/05/2007',
-    },
-    children: [
-      {
-        id: 'dan1',
-        name: 'Dan',
-        dob: '01/05/2024',
-        spouse: {
-          id: 'ella1',
-          name: 'Ella',
-          dob: '04/05/2027',
-        },
-        children: [
-          {
-            id: 'olivia1',
-            name: 'Olivia',
-            dob: '01/05/2044',
-          },
-          {
-            id: 'mary1',
-            name: 'Mary',
-            dob: '01/05/2045',
-          },
-        ],
-      },
-      {
-        id: 'jack1',
-        name: 'Jack',
-        dob: '01/05/2025',
-        dod: '03/03/2057',
-        spouse: {
-          id: 'rachel1',
-          name: 'Rachel',
-          dob: '04/05/2027',
-        },
-      },
-    ],
-  },
-];
 
 // Helper function to get initials
 const getInitials = (name: string): string => {
@@ -113,6 +66,8 @@ const FamilyTreeScreen = () => {
   const [selectedNode, setSelectedNode] = useState<Items | null>(null);
   const [isNodeActionMenuVisible, setIsNodeActionMenuVisible] = useState(false);
   const [isHeaderMenuVisible, setIsHeaderMenuVisible] = useState(false);
+  const { user } = useAuth();
+  const [relativesData, setRelativesData] = useState<Items[]>([]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -129,6 +84,42 @@ const FamilyTreeScreen = () => {
       ),
     });
   }, [navigation]);
+
+  useEffect(() => {
+    if (!user) return;
+    getFamilyTreeDataMobile(user.uid)
+      .then(({ treeNodes }) => {
+        const nodeMap = new Map(treeNodes.map((node: any) => [node.id, node]));
+        const buildItem = (member: any): Items => {
+          const children = (member.children || [])
+            .map((c: any) => nodeMap.get(c.id))
+            .filter((m: any) => m)
+            .map((m: any) => buildItem(m));
+          const spouseRel = member.spouses?.[0];
+          let spouse: Items | undefined;
+          if (spouseRel) {
+            const spouseMember = nodeMap.get(spouseRel.id);
+            if (spouseMember) {
+              spouse = buildItem(spouseMember);
+            }
+          }
+          return {
+            id: member.id,
+            name: member.attributes?.displayName || '',
+            dob: '', // Map dateOfBirth if available
+            dod: undefined,
+            avatar: member.attributes?.profilePicture,
+            spouse,
+            children,
+          };
+        };
+        const rootMember = treeNodes.find((n: any) => n.id === user.uid);
+        if (rootMember) {
+          setRelativesData([buildItem(rootMember)]);
+        }
+      })
+      .catch((error) => console.error('Error fetching family tree:', error));
+  }, [user]);
 
   const openHeaderMenu = () => {
     setIsHeaderMenuVisible(true);
@@ -233,7 +224,7 @@ const FamilyTreeScreen = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <RelativesTree<Items>
-        data={relatives}
+        data={relativesData}
         spouseKey="spouse"
         relativeItem={(props) => {
           return (
