@@ -49,7 +49,10 @@ const AnimatedActionSheet: React.FC<AnimatedActionSheetProps> = ({
         duration: 250,
         useNativeDriver: true,
       }).start(() => {
-        setModalActualVisible(false);
+        // Defer state update to avoid potential conflicts with render phases
+        requestAnimationFrame(() => {
+          setModalActualVisible(false);
+        });
       });
     }
   }, [isVisible, slideAnim]);

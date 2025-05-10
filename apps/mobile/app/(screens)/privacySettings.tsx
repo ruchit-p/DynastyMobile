@@ -4,6 +4,7 @@ import { useNavigation, useRouter, useFocusEffect, useLocalSearchParams } from '
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../../src/lib/firebase';
 import { doc, setDoc, getDoc } from "firebase/firestore";
+import { commonHeaderOptions } from '../../constants/headerConfig'; // Import common header options
 
 interface SettingToggleProps {
     label: string;
@@ -147,11 +148,8 @@ const PrivacySettingsScreen = () => {
 
   useEffect(() => {
     navigation.setOptions({
+      ...commonHeaderOptions, // Spread common options
       title: 'Privacy Settings',
-      headerStyle: { backgroundColor: '#F8F8F8' },
-      headerTintColor: '#333333',
-      headerTitleStyle: { fontWeight: '600' },
-      headerBackTitleVisible: false,
     });
   }, [navigation]);
 

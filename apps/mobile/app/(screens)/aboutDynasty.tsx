@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, Image, TouchableOpacity, ScrollVi
 import { useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import { commonHeaderOptions } from '../../constants/headerConfig';
 
 const APP_NAME = "Dynasty - The Family Social Media App";
 const APP_VERSION = "1.0.0";
@@ -14,11 +15,8 @@ const AboutDynastyScreen = () => {
 
   useEffect(() => {
     navigation.setOptions({
+      ...commonHeaderOptions,
       title: 'About Dynasty',
-      headerStyle: { backgroundColor: '#F8F8F8' },
-      headerTintColor: '#333333',
-      headerTitleStyle: { fontWeight: '600' },
-      headerBackTitleVisible: false,
     });
   }, [navigation]);
 

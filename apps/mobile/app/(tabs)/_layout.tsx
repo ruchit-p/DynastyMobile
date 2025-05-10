@@ -2,7 +2,6 @@ import React from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Platform, View, Text, Alert, StyleSheet } from 'react-native';
-// import { Colors } from '../../constants/Colors'; // Corrected import - Assuming this path is correct or Colors are defined elsewhere
 import AppHeader from '../../components/ui/AppHeader'; // Import the new AppHeader
 import IconButton, { IconSet } from '../../components/ui/IconButton'; // Import the new IconButton
 
@@ -16,26 +15,24 @@ const Colors = {
 };
 
 // Custom hook for header actions to avoid repeating logic
+// This hook is problematic if used outside a component context for router instance.
+// Let's simplify and manage router instance directly in TabLayout.
+/*
 const useHeaderActions = () => {
-  const router = useRouter();
+  const router = useRouter(); // This is fine if useHeaderActions is called inside TabLayout
   return {
-    // navigateToNewChat: () => router.push('/(screens)/newChat'), // Kept for potential future use, but not for Feed header direct action
-    navigateToNotifications: () => router.push('/(screens)/notifications'), // Updated path and removed 'as any'
-    navigateToMessages: () => router.navigate('/(screens)/chat' as any), // Temp fix for type error
-    // Placeholder for actual notification actions if needed directly in header
-    // handleMarkAllNotificationsRead: () => console.log("Mark all as read"), 
-    // handleClearReadNotifications: () => console.log("Clear read notifications"), 
+    navigateToNotifications: () => router.push('/(screens)/notifications'),
+    navigateToMessages: () => router.navigate('/(screens)/chat' as any),
   };
 };
+*/
 
 export default function TabLayout() {
-  const { 
-    // navigateToNewChat, // Not used directly in Feed header now
-    navigateToNotifications,
-    navigateToMessages,
-    // handleMarkAllNotificationsRead, // Removed from direct use here
-    // handleClearReadNotifications // Removed from direct use here
-  } = useHeaderActions();
+  const router = useRouter(); // Call useRouter at the top level of the component
+
+  // const { navigateToNotifications, navigateToMessages } = useHeaderActions(); // Re-evaluate if this hook is still needed or integrate directly
+  const navigateToNotifications = () => router.push('/(screens)/notifications');
+  const navigateToMessages = () => router.navigate('/(screens)/chat' as any);
 
   // Define headerRight components to pass to AppHeader
   const feedHeaderRight = () => (
@@ -59,26 +56,27 @@ export default function TabLayout() {
     </View>
   );
 
-  const familyTreeHeaderRight = () => (
-    <IconButton
-      iconName="ellipsis-vertical"
-      size={24}
-      color={Colors.primary}
-      onPress={() => {
-        Alert.alert(
-          "Family Tree Options",
-          "",
-          [
-            { text: "Add new member", onPress: () => console.log("Add new member pressed") },
-            { text: "Family tree settings", onPress: () => console.log("Family tree settings pressed") },
-            { text: "Invite members", onPress: () => console.log("Invite members pressed") },
-            { text: "Cancel", style: "cancel" }
-          ],
-          { cancelable: true }
-        );
-      }}
-      accessibilityLabel="Family tree options"
-    />
+  // Modified calendarHeaderRight to accept router instance
+  const calendarHeaderRight = (currentRouter: ReturnType<typeof useRouter>) => (
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <Text
+        style={{ color: Colors.primary, marginRight: 15, fontSize: 16 }}
+        onPress={() => console.log('Today pressed')} // Placeholder action
+      >
+        Today
+      </Text>
+      <IconButton
+        iconSet={IconSet.Ionicons}
+        iconName="list-outline"
+        size={28}
+        color={Colors.primary}
+        onPress={() => {
+          currentRouter.push('/(screens)/EventListScreen');
+        }}
+        style={styles.headerIcon}
+        accessibilityLabel="View events list"
+      />
+    </View>
   );
 
   return (
@@ -128,18 +126,35 @@ export default function TabLayout() {
           ),
           tabBarLabelStyle: { fontSize: 10 },
           headerShown: true,
-          header: (props) => <AppHeader title={props.options.title || 'Family Tree'} headerRight={familyTreeHeaderRight} />,
+          header: (props) => <AppHeader title={props.options.title || 'Family Tree'} />,
         }}
       />
+      {/* Vault Tab - Moved and Icon Updated */}
+      <Tabs.Screen
+        name="vault"
+        options={{
+          title: 'Vault',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? "lock-closed" : "lock-closed-outline"} size={size} color={color} />
+          ),
+          headerShown: true, // Use AppHeader for consistency
+          header: (props) => <AppHeader title={props.options.title || 'Vault'} />,
+        }}
+      />
+      {/* End Vault Tab */}
       <Tabs.Screen
         name="events"
         options={{
-          title: 'Events',
+          title: 'Calendar',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? "calendar" : "calendar-outline"} size={size} color={color} /> 
           ),
-          headerShown: true,
-          header: (props) => <AppHeader title={props.options.title || 'Events'} />,
+          headerShown: true, // Changed from false
+          header: (props) => <AppHeader 
+                                title={props.options.title || 'Calendar'} 
+                                // Pass the router instance obtained from the top level
+                                headerRight={() => calendarHeaderRight(router)} 
+                             />,
         }}
       />
       <Tabs.Screen

@@ -30,6 +30,7 @@ interface GoogleUserDetails {
 interface AuthContextType {
   user: FirebaseUser | null;
   isLoading: boolean;
+  firestoreUser: { onboardingCompleted?: boolean, firstName?: string, lastName?: string, phoneNumber?: string, bio?: string, connectionsCount?: number, storiesCount?: number, profilePictureUrl?: string, createdAt?: any, [key: string]: any } | null;
   signIn: (email: string, pass: string) => Promise<void>;
   signUp: (email: string, pass: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -60,7 +61,7 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [firestoreUser, setFirestoreUser] = useState<{ onboardingCompleted?: boolean, [key: string]: any } | null>(null);
+  const [firestoreUser, setFirestoreUser] = useState<{ onboardingCompleted?: boolean, firstName?: string, lastName?: string, phoneNumber?: string, bio?: string, connectionsCount?: number, storiesCount?: number, profilePictureUrl?: string, createdAt?: any, [key: string]: any } | null>(null);
   const [isFetchingFirestoreUser, setIsFetchingFirestoreUser] = useState(false);
   const router = useRouter();
   const segments = useSegments();
@@ -414,6 +415,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     <AuthContext.Provider value={{
       user,
       isLoading,
+      firestoreUser,
       signIn,
       signUp,
       signOut,

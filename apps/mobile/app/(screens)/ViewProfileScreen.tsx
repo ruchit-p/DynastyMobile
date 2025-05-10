@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, Image, useColorScheme } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, Image, useColorScheme, Platform } from 'react-native';
+import { Stack, useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors'; // Import Colors properly as a named export
+import AppHeader from '../../components/ui/AppHeader'; // Import AppHeader
+import type { StackHeaderProps } from '@react-navigation/stack'; // For props in header function
 
 // Mock user data type
 interface UserProfile {
@@ -24,55 +26,65 @@ const MOCK_USER_DATA: UserProfile = {
 };
 
 export default function ViewProfileScreen() {
-  const colorScheme = useColorScheme() || 'light'; // Default to light if null
+  const colorScheme = useColorScheme() || 'light';
   const router = useRouter();
-  const params = useLocalSearchParams<{ userId?: string; name?: string }>(); // Get userId and name from params
+  const navigation = useNavigation();
+  const params = useLocalSearchParams<{ userId?: string; name?: string; memberId?: string; memberName?: string }>();
 
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedUser, setEditedUser] = useState<UserProfile | null>(null);
 
-  // Set up header with dynamic title and action buttons
+  // Set up header with dynamic title and action buttons using AppHeader
   useEffect(() => {
-    const title = params.name ? `${params.name}'s Profile` : 'View Profile';
-    router.setOptions({
-      title,
-      headerStyle: {
-        backgroundColor: '#F8F8F8', // Light gray background per standard style
-      },
-      headerTintColor: '#333333', // Dark text/icon color
-      headerTitleStyle: {
-        fontWeight: '600',
-        fontSize: 17, // Standard title size
-      },
-      headerBackTitleVisible: false,
-      headerRight: () => (
-        <View style={styles.headerIconsContainer}>
-          <TouchableOpacity onPress={toggleEditMode} style={styles.iconButton}>
-            <Ionicons 
-              name={isEditing ? "close-circle-outline" : "pencil-outline"} 
-              size={28} 
-              color={Colors[colorScheme].tabIconDefault} 
-            />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={confirmRemoveUser} style={styles.iconButton}>
-            <Ionicons name="trash-bin-outline" size={28} color="red" />
-          </TouchableOpacity>
-        </View>
-      ),
-    });
-  }, [router, params.name, isEditing, colorScheme]);
+    const currentTitle = params.memberName || params.name ? `${params.memberName || params.name}'s Profile` : 'View Profile';
 
-  // In a real app, fetch user data based on params.userId
+    navigation.setOptions({
+      headerShown: true,
+      header: (props: StackHeaderProps) => { // Explicitly type props
+        const headerRightComponent = () => (
+          <View style={styles.headerIconsContainer}>
+            <TouchableOpacity onPress={toggleEditMode} style={styles.iconButton}>
+              <Ionicons 
+                name={isEditing ? "close-circle-outline" : "pencil-outline"} 
+                size={24} // Adjusted size to better fit AppHeader default icon sizes
+                color={Colors[colorScheme].icon} // Use theme icon color
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={confirmRemoveUser} style={styles.iconButton}>
+              <Ionicons 
+                name="trash-bin-outline" 
+                size={24} // Adjusted size
+                // Consider a specific red from your Colors.ts or a theme error color
+                color={Platform.OS === 'ios' ? Colors.light.tint : Colors.dark.text} // Example: using tint for iOS, text for dark Android. Needs a proper destructive color.
+              />
+            </TouchableOpacity>
+          </View>
+        );
+        
+        return (
+          <AppHeader 
+            title={currentTitle}
+            headerLeft={props.options.headerLeft} 
+            headerRight={headerRightComponent} 
+          />
+        );
+      },
+    });
+  // Ensure all dependencies that might change the header are included.
+  // `user` is needed if `confirmRemoveUser` uses `user.name` in its alert.
+  }, [navigation, params.name, params.memberName, isEditing, colorScheme, user]); 
+
+  // In a real app, fetch user data based on params.userId or params.memberId
   useEffect(() => {
     // Simulate fetching user data
     // If a userId is passed, you would fetch data for that user
-    // For now, we use mock data, but try to use the name from params if available
-    const profileName = params.name || MOCK_USER_DATA.name;
-    const initialData = { ...MOCK_USER_DATA, id: params.userId || MOCK_USER_DATA.id, name: profileName };
+    const profileId = params.memberId || params.userId || MOCK_USER_DATA.id;
+    const profileName = params.memberName || params.name || MOCK_USER_DATA.name;
+    const initialData = { ...MOCK_USER_DATA, id: profileId, name: profileName };
     setUser(initialData);
     setEditedUser(initialData);
-  }, [params.userId, params.name]);
+  }, [params.userId, params.name, params.memberId, params.memberName]); // Add memberId and memberName to dependencies
 
   const handleInputChange = (field: keyof UserProfile, value: string) => {
     if (editedUser) {
@@ -148,14 +160,17 @@ export default function ViewProfileScreen() {
     { key: 'name', label: 'Name', icon: 'person-outline' },
     { key: 'email', label: 'Email', icon: 'mail-outline' },
     { key: 'phone', label: 'Phone', icon: 'call-outline' },
-    { key: 'bio', label: 'Bio', icon: 'information-circle-outline' },
+    // { key: 'bio', label: 'Bio', icon: 'information-circle-outline' }, // Bio field removed
     // Add more fields as needed
   ];
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <View style={styles.profileHeader}>
-        <Image source={{ uri: editedUser.avatar }} style={styles.avatar} />
+        <Image 
+          source={editedUser.avatar ? { uri: editedUser.avatar } : require('../../assets/images/avatar-placeholder.png')} 
+          style={styles.avatar} 
+        />
         {isEditing ? (
           <TextInput
             style={[styles.nameInput, styles.textLarge, styles.nameText]}
@@ -170,7 +185,7 @@ export default function ViewProfileScreen() {
 
       {profileFields.map(({ key, label, icon }) => {
         // Do not render 'name' here again as it's in the header
-        if (key === 'name') return null;
+        if (key === 'name' || key === 'bio') return null; // Also ensure bio isn't rendered
 
         return (
           <View key={key} style={styles.fieldContainer}>

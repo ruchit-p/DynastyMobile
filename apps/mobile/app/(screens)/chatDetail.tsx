@@ -18,11 +18,22 @@ import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 interface Message {
   id: string;
   text: string;
-  timestamp: string;
+  timestamp: Date; // Changed to Date for better sorting/formatting
   senderId: string; // 'currentUser' or other user's ID
   userName?: string; // Optional, for group chats or if sender name is needed
   avatarUrl?: string; // Optional
 }
+
+// Mock user data for group chat participant identification
+const MOCK_USERS_DB: Record<string, { name: string, avatarUrl?: string }> = {
+  'currentUser': { name: 'Me', avatarUrl: 'https://via.placeholder.com/30/008080/FFFFFF?Text=Me' }, // Current user
+  '1': { name: 'Eleanor Vance', avatarUrl: 'https://via.placeholder.com/30/FF7F50/000000?Text=EV' },
+  '2': { name: 'Marcus Thorne', avatarUrl: 'https://via.placeholder.com/30/6495ED/FFFFFF?Text=MT' },
+  '3': { name: 'Julia Chen', avatarUrl: 'https://via.placeholder.com/30/DC143C/FFFFFF?Text=JC' },
+  // Add more users from MOCK_FAMILY_MEMBERS in newChat.tsx if needed for detailed mock messages
+};
+
+const CURRENT_USER_ID = 'currentUser'; // Define current user's ID
 
 // Mock messages - will be removed/commented
 // const getMockMessages = (chatId: string): Message[] => {
@@ -43,8 +54,23 @@ interface Message {
 const ChatDetailScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
-  const params = useLocalSearchParams<{ chatId: string; userName?: string; userAvatar?: string }>();
-  const { chatId, userName = 'Chat', userAvatar } = params;
+  const params = useLocalSearchParams<{
+    chatId?: string; // For existing chats
+    userName?: string; // For 1-on-1 from newChat
+    userAvatar?: string;
+    userId?: string; // For 1-on-1 from newChat (target user's ID)
+    isGroupChat?: string; // Will be "true" or undefined
+    groupName?: string;
+    participantIds?: string; // JSON string array of user IDs
+  }>();
+
+  const isGroup = params.isGroupChat === 'true';
+  const chatTitle = isGroup ? params.groupName : params.userName;
+  const parsedParticipantIds: string[] = isGroup && params.participantIds ? JSON.parse(params.participantIds) : [];
+  
+  // For one-on-one chats initiated from newChat, use userId as the effective chatId for fetching/identifying the other user
+  // For existing chats, params.chatId would be used.
+  const effectiveChatId = params.chatId || params.userId;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -52,15 +78,18 @@ const ChatDetailScreen = () => {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: userName,
+      title: chatTitle || 'Chat',
       headerTitleAlign: 'center',
       headerStyle: { backgroundColor: '#FFFFFF' },
       headerTintColor: '#1A4B44',
       headerTitleStyle: { fontWeight: '600', fontSize: 18, color: '#1A4B44' },
       headerLeft: () => (
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerLeftButton}>
+        <TouchableOpacity 
+          onPress={() => router.canGoBack() ? router.back() : router.push('/(screens)/chat')} 
+          style={styles.headerLeftButton}
+        >
           <Ionicons name="arrow-back" size={28} color="#1A4B44" />
-          <Text style={styles.headerLeftButtonText}>Messages</Text>
+          {/* Removed "Messages" text to simplify header */}
         </TouchableOpacity>
       ),
       headerRight: () => (
@@ -70,18 +99,31 @@ const ChatDetailScreen = () => {
       ),
       headerBackTitleVisible: false,
     });
-  }, [navigation, userName, router]);
+  }, [navigation, chatTitle, router, isGroup]);
 
   useEffect(() => {
     // Fetch or load messages for the given chatId
-    // This is where you would typically fetch messages from a backend or local storage.
-    // For now, it will remain empty since mock data is removed.
-    if (chatId) {
-      // Example: fetchMessages(chatId).then(setMessages);
-      console.log(`Attempting to load messages for chatId: ${chatId}, userName: ${userName}`);
-      // setMessages(getMockMessages(chatId as string)); // Mock data removed
+    console.log("ChatDetailScreen Params:", params);
+    if (isGroup) {
+      console.log(`Loading group chat: ${params.groupName}, Participants: ${params.participantIds}`);
+      // Simulate group messages
+      const groupMessages: Message[] = [
+        { id: 'gm1', text: 'Hey everyone! Planning the weekend?', senderId: parsedParticipantIds[0] || '1', userName: MOCK_USERS_DB[parsedParticipantIds[0] || '1']?.name, timestamp: new Date(Date.now() - 3600000 * 3) },
+        { id: 'gm2', text: 'I am in for a movie!', senderId: parsedParticipantIds[1] || '2', userName: MOCK_USERS_DB[parsedParticipantIds[1] || '2']?.name, timestamp: new Date(Date.now() - 3600000 * 2.5) },
+        { id: 'gm3', text: 'Sounds good to me!', senderId: CURRENT_USER_ID, userName: MOCK_USERS_DB[CURRENT_USER_ID]?.name, timestamp: new Date(Date.now() - 3600000 * 2) },
+      ];
+      setMessages(groupMessages);
+    } else if (effectiveChatId) {
+      console.log(`Loading 1-on-1 chat with: ${params.userName} (ID: ${effectiveChatId})`);
+      // Simulate 1-on-1 messages
+      const directMessages: Message[] = [
+        { id: 'dm1', text: `Hello ${params.userName}!`, senderId: CURRENT_USER_ID, userName: MOCK_USERS_DB[CURRENT_USER_ID]?.name, timestamp: new Date(Date.now() - 3600000) },
+        { id: 'dm2', text: 'Hi there! How are you?', senderId: effectiveChatId, userName: params.userName, timestamp: new Date(Date.now() - 3000000) },
+      ];
+      setMessages(directMessages);
     }
-  }, [chatId, userName]);
+    // This is a simplified mock load. In a real app, you'd fetch based on IDs.
+  }, [isGroup, params.groupName, params.participantIds, effectiveChatId, params.userName]);
 
   useEffect(() => {
     // Scroll to bottom when messages change
@@ -95,28 +137,51 @@ const ChatDetailScreen = () => {
     const newMessage: Message = {
       id: `msg_${Date.now()}`,
       text: inputText.trim(),
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      senderId: 'currentUser',
-      userName: 'Me', // Replace with actual current user name
-      // avatarUrl: currentUser?.avatarUrl // Replace with actual current user avatar
+      timestamp: new Date(), // Use Date object
+      senderId: CURRENT_USER_ID,
+      userName: MOCK_USERS_DB[CURRENT_USER_ID]?.name,
+      avatarUrl: MOCK_USERS_DB[CURRENT_USER_ID]?.avatarUrl,
     };
     setMessages(prevMessages => [...prevMessages, newMessage]);
     setInputText('');
-    // TODO: Add logic to send message to backend/service
+    if (isGroup) {
+      // TODO: Add logic to send message to group backend/service with participantIds
+      console.log("Sending group message:", newMessage.text, "to participants:", parsedParticipantIds);
+    } else {
+      // TODO: Add logic to send message to 1-on-1 backend/service with effectiveChatId (recipient's ID)
+      console.log("Sending 1-on-1 message:", newMessage.text, "to user:", effectiveChatId);
+    }
   };
 
   const renderMessageItem = ({ item }: { item: Message }) => {
-    const isCurrentUser = item.senderId === 'currentUser';
-    // Use passed userAvatar for the other user if item.avatarUrl is not present
-    const messageAvatar = isCurrentUser ? undefined /* or currentUser.avatar */ : item.avatarUrl || userAvatar;
+    const isCurrentUser = item.senderId === CURRENT_USER_ID;
+    
+    // Determine avatar and sender name
+    // For group chats, or if item.userName is already set (e.g. from fetched data)
+    let senderName = item.userName;
+    let avatar = item.avatarUrl;
+
+    if (!isCurrentUser) {
+      if (isGroup) {
+        // In group chats, senderId should be one of the participant IDs
+        senderName = MOCK_USERS_DB[item.senderId]?.name || 'Unknown User';
+        avatar = MOCK_USERS_DB[item.senderId]?.avatarUrl;
+      } else {
+        // In 1-on-1 chats, the other user's name is from params.userName
+        senderName = params.userName;
+        avatar = params.userAvatar; // Use avatar passed from previous screen for the other user
+      }
+    }
 
     return (
       <View style={[styles.messageRow, isCurrentUser ? styles.currentUserMessageRow : styles.otherUserMessageRow]}>
-        {!isCurrentUser && messageAvatar && <Image source={{uri: messageAvatar}} style={styles.avatarSmall} />}
+        {!isCurrentUser && avatar && <Image source={{uri: avatar}} style={styles.avatarSmall} />}
         <View style={[styles.messageBubble, isCurrentUser ? styles.currentUserBubble : styles.otherUserBubble]}>
-          {!isCurrentUser && item.userName && <Text style={styles.messageSenderName}>{item.userName}</Text>}
+          {!isCurrentUser && senderName && <Text style={styles.messageSenderName}>{senderName}</Text>}
           <Text style={isCurrentUser ? styles.currentUserMessageText : styles.otherUserMessageText}>{item.text}</Text>
-          <Text style={isCurrentUser ? styles.currentUserTimestamp : styles.otherUserTimestamp}>{item.timestamp}</Text>
+          <Text style={isCurrentUser ? styles.currentUserTimestamp : styles.otherUserTimestamp}>
+            {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
         </View>
         {/* Current user avatar could be on the right, if desired and available */}
         {/* {isCurrentUser && currentUserAvatar && <Image source={{uri: currentUserAvatar}} style={styles.avatarSmall} /> } */}
@@ -148,7 +213,7 @@ const ChatDetailScreen = () => {
             style={styles.textInput}
             value={inputText}
             onChangeText={setInputText}
-            placeholder={`Message ${userName}...`}
+            placeholder={`Message ${chatTitle}...`}
             placeholderTextColor="#888"
             multiline
           />
@@ -167,12 +232,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginLeft: Platform.OS === 'ios' ? 10 : 10, 
-    paddingVertical: 5,
+    // paddingVertical: 5, // Removed to make icon primary touch target
   },
   headerLeftButtonText: {
     color: '#1A4B44',
     fontSize: 17, 
-    marginLeft: Platform.OS === 'ios' ? 6 : 8,
+    // marginLeft: Platform.OS === 'ios' ? 6 : 8, // Removed as text is removed
   },
   keyboardAvoidingContainer: { flex: 1 }, 
   messagesList: { flex: 1, backgroundColor: '#F4F4F4' },
