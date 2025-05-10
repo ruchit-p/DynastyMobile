@@ -22,14 +22,12 @@ import * as ImagePicker from 'expo-image-picker';
 const initialUserData = {
   name: 'Ruchit Patel',
   email: 'user@example.com', // Typically non-editable or handled differently
-  bio: 'Passionate about connecting family and preserving our shared history. Exploring our roots, one story at a time.',
   profilePicUrl: null,
 };
 
 const EditProfileScreen = () => {
   const navigation = useNavigation();
   const [name, setName] = useState(initialUserData.name);
-  const [bio, setBio] = useState(initialUserData.bio);
   const [avatarUri, setAvatarUri] = useState<string | null>(initialUserData.profilePicUrl);
   const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
   
@@ -61,9 +59,8 @@ const EditProfileScreen = () => {
       // const userId = auth.currentUser.uid;
       // const userDocRef = doc(db, "users", userId);
 
-      // const profileDataToSave: { name: string; bio: string; profilePicture?: string, updatedAt: Date } = {
+      // const profileDataToSave: { name: string; profilePicture?: string, updatedAt: Date } = { // Removed bio
       //   name: name,
-      //   bio: bio,
       //   updatedAt: new Date(),
       // };
 
@@ -77,7 +74,7 @@ const EditProfileScreen = () => {
       // await setDoc(userDocRef, profileDataToSave, { merge: true });
 
       // Simulate save
-      console.log('Simulating save:', { name, bio, avatarUri });
+      console.log('Simulating save:', { name, avatarUri }); // Removed bio
       Alert.alert('Profile Saved (Simulated)', 'Your changes have been successfully saved.');
       navigation.goBack();
     // } catch (error) { // Firebase saving logic commented out
@@ -107,7 +104,7 @@ const EditProfileScreen = () => {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, name, bio, avatarUri, /*profileImageFirebaseUrl,*/ isSavingProfile, isUploadingImage]); // Removed profileImageFirebaseUrl from deps
+  }, [navigation, name, avatarUri, /*profileImageFirebaseUrl,*/ isSavingProfile, isUploadingImage]); // Removed bio and profileImageFirebaseUrl from deps
 
   const handlePickProfileImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -200,20 +197,6 @@ const EditProfileScreen = () => {
           <Text style={styles.staticText}>{initialUserData.email}</Text> 
         </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Bio</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            value={bio}
-            onChangeText={setBio}
-            placeholder="Tell us about yourself"
-            placeholderTextColor="#999"
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
-        </View>
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -268,9 +251,6 @@ const styles = StyleSheet.create({
       fontSize: 16,
       color: '#888', // Indicate non-editable text
       paddingVertical: Platform.OS === 'ios' ? 5 : 3,
-  },
-  textArea: {
-    minHeight: 80,
   },
   uploadProgressOverlay: {
     ...StyleSheet.absoluteFillObject,

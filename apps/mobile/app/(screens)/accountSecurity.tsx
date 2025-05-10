@@ -4,6 +4,7 @@ import { useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../src/lib/firebase'; // Import auth for user info
 // import { sendPasswordResetEmail } from 'firebase/auth'; // REMOVED - For password reset
+import { commonHeaderOptions } from '../../constants/headerConfig'; // Import common header options
 
 // Mock data - replace with actual data fetching if needed
 const MOCK_LOGIN_ACTIVITY = [
@@ -17,11 +18,8 @@ const AccountSecurityScreen = () => {
 
   useEffect(() => {
     navigation.setOptions({
+      ...commonHeaderOptions, // Spread common options
       title: 'Account Security',
-      headerStyle: { backgroundColor: '#F8F8F8' },
-      headerTintColor: '#333333',
-      headerTitleStyle: { fontWeight: '600' },
-      headerBackTitleVisible: false,
     });
   }, [navigation]);
 

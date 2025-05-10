@@ -5,6 +5,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 // import { auth, db } from '../../src/lib/firebase'; // Commented out Firebase
 // import { collection, query, orderBy, limit, getDocs, Timestamp, doc, getDoc } from 'firebase/firestore'; // Commented out Firebase
 import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/FloatingActionMenu';
+import { emptyStateStyles } from '../../constants/emptyStateConfig';
 
 // Define the structure for a Post fetched from Firestore
 interface Post {
@@ -139,10 +140,10 @@ const FeedScreen = () => {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container}>
         {feedPosts.length === 0 ? (
-          <View style={styles.emptyStateContainer}>
+          <View style={emptyStateStyles.emptyStateContainer}>
             <Ionicons name="newspaper-outline" size={60} color="#CCC" />
-            <Text style={styles.emptyStateText}>Your feed is empty.</Text>
-            <Text style={styles.emptyStateSubText}>
+            <Text style={emptyStateStyles.emptyStateText}>Your feed is empty.</Text>
+            <Text style={emptyStateStyles.emptyStateSubText}>
               Create your first story or connect with family!
             </Text>
           </View>
@@ -304,25 +305,6 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontSize: 13,
     color: '#555',
-  },
-  emptyStateContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    marginTop: 50,
-  },
-  emptyStateText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#555',
-    marginTop: 15,
-  },
-  emptyStateSubText: {
-    fontSize: 14,
-    color: '#777',
-    marginTop: 5,
-    textAlign: 'center',
   },
   loadingContainer: {
     flex: 1,

@@ -28,7 +28,11 @@
   },
   "dependencies": {
     "expo": "~53.0.8",
+    "expo-av": "~15.1.4",
+    "expo-document-picker": "^13.1.5",
+    "expo-file-system": "^18.1.10",
     "expo-location": "~18.1.4",
+    "expo-sharing": "~13.1.5",
     "react": "19.0.0",
     "react-native": "0.79.2",
     "react-native-relatives-tree": "^0.1.1",

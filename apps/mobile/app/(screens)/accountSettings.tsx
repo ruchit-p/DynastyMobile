@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../src/lib/firebase';
 import ListItem, { ListItemProps } from '../../components/ListItem'; // Import shared ListItem
+import { commonHeaderOptions } from '../../constants/headerConfig'; // Import common header options
 
 // Reusable ListItem component - REMOVED
 // interface ListItemProps { ... }
@@ -16,11 +17,8 @@ const AccountSettingsScreen = () => {
 
   useEffect(() => {
     navigation.setOptions({
+      ...commonHeaderOptions, // Spread common options
       title: 'Account Settings',
-      headerStyle: { backgroundColor: '#F8F8F8' },
-      headerTintColor: '#333333',
-      headerTitleStyle: { fontWeight: '600' },
-      headerBackTitleVisible: false,
     });
   }, [navigation]);
 

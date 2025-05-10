@@ -15,10 +15,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
 // import { auth, db } from '../../src/lib/firebase'; // Commented out Firebase
 import ListItem, { ListItemProps } from '../../components/ListItem';
+import { useAuth } from '../contexts/AuthContext'; // Added AuthContext
+// AppHeader might not be needed here if the _layout.tsx handles it for the 'profile' tab.
+// However, if this screen can be pushed onto the stack independently, it might need its own header call.
+// For now, let's assume _layout.tsx handles the primary tab header.
 
-interface UserProfile {
-  name: string;
-  email: string;
+interface UserProfile { // This interface might become partially redundant or could be augmented by FirebaseUser
+  name: string; // This will come from user.displayName
+  email: string; // This will come from user.email
   phoneNumber?: string;
   bio?: string;
   joinDate?: string;
@@ -33,86 +37,48 @@ interface UserProfile {
 const ProfileScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
-  // const [userProfile, setUserProfile] = useState<UserProfile | null>(null); // Commented out
-  // const [isLoading, setIsLoading] = useState<boolean>(true); // Commented out
+  const { user, isLoading: authIsLoading, firestoreUser } = useAuth(); // Use AuthContext
 
-  // Initialize with mock data
-  const [userProfile, setUserProfile] = useState<UserProfile | null>({
-    name: 'Jane Doe',
-    email: 'jane.doe@example.com',
-    joinDate: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
-    connections: 150,
-    stories: 25,
-    profilePicture: null, // Or a placeholder image URI
-    firstName: 'Jane',
-    lastName: 'Doe',
-    createdAt: new Date(),
-    phoneNumber: '123-456-7890',
-  });
-  const [isLoading, setIsLoading] = useState<boolean>(false); // Set to false as we are using mock data
+  // isLoading state can now primarily rely on authIsLoading
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // This local userProfile state can be derived from auth context's user and firestoreUser
+  const [userProfileData, setUserProfileData] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    setIsLoading(authIsLoading);
+    if (user) {
+      // Combine Firebase Auth user data with Firestore user data
+      const profile: UserProfile = {
+        name: user.displayName || `${firestoreUser?.firstName || ''} ${firestoreUser?.lastName || ''}`.trim() || 'User',
+        email: user.email || 'No email',
+        phoneNumber: user.phoneNumber || firestoreUser?.phoneNumber,
+        bio: firestoreUser?.bio,
+        joinDate: user.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleString('default', { month: 'long', year: 'numeric' }) : (firestoreUser?.createdAt ? new Date(firestoreUser.createdAt.toDate()).toLocaleString('default', { month: 'long', year: 'numeric' }) : 'N/A'),
+        // connections and stories would typically come from Firestore or a dedicated backend
+        connections: firestoreUser?.connectionsCount || 0, // Example, assuming this field exists in firestoreUser
+        stories: firestoreUser?.storiesCount || 0,       // Example
+        profilePicture: user.photoURL || firestoreUser?.profilePictureUrl,
+        firstName: firestoreUser?.firstName || user.displayName?.split(' ')[0],
+        lastName: firestoreUser?.lastName || user.displayName?.split(' ').slice(1).join(' '),
+        createdAt: firestoreUser?.createdAt || (user.metadata?.creationTime ? new Date(user.metadata.creationTime) : undefined),
+      };
+      setUserProfileData(profile);
+    } else {
+      setUserProfileData(null);
+    }
+  }, [user, firestoreUser, authIsLoading]);
 
   // Fetch user profile data and listen for real-time updates
-  useFocusEffect(
-    React.useCallback(() => {
-      // Firebase data fetching logic commented out
-      /*
-      if (!auth.currentUser) {
-        setIsLoading(false);
-        setUserProfile(null); // Explicitly set to null
-        return;
-      }
+  // useFocusEffect can be used to refresh data if necessary, but AuthContext should provide live updates.
+  // The existing useFocusEffect logic related to Firebase direct calls is removed as AuthContext handles it.
 
-      setIsLoading(true);
-      const userId = auth.currentUser.uid;
-      const userDocRef = db.collection('users').doc(userId); // CHANGED: RNFB style
-
-      const unsubscribe = userDocRef.onSnapshot((docSnap) => { // CHANGED: RNFB style
-        if (docSnap.exists) { // RNFB uses .exists as a boolean property
-          const data = docSnap.data() as UserProfile;
-          let joinDateString = 'N/A';
-          // RNFB Timestamps are objects with toDate() method, no need to check for its existence if data.createdAt is a Firestore Timestamp
-          if (data.createdAt && data.createdAt.toDate) {
-            joinDateString = data.createdAt.toDate().toLocaleDateString('en-US', {
-              year: 'numeric', month: 'long'
-            });
-          }
-          setUserProfile({ ...data, joinDate: joinDateString, email: auth.currentUser?.email || data.email });
-        } else {
-          console.log("No such user document!");
-          setUserProfile(null);
-        }
-        setIsLoading(false);
-      }, (error) => {
-        console.error("Error fetching user profile:", error);
-        setIsLoading(false);
-        Alert.alert("Error", "Could not fetch profile data.");
-      });
-
-      return () => unsubscribe();
-      */
-      // Simulate loading finished for mock data
-      setIsLoading(false);
-      // If you want to simulate a user not being "logged in" for UI testing:
-      // setUserProfile(null); 
-    }, [])
-  );
-
-  // Update header dynamically - Assuming Profile is a main tab, might not need back button
-  // Or if it's presented modally sometimes?
-  useEffect(() => {
-    navigation.setOptions({
-      title: 'Profile', // Set title for the tab screen header
-      headerStyle: {
-        backgroundColor: '#F8F8F8',
-      },
-      headerTintColor: '#333333',
-      headerLargeTitle: true, // Use large title style like iOS settings
-      headerLargeTitleStyle: {
-          fontWeight: 'bold',
-      },
-      headerShadowVisible: false, // Remove shadow for cleaner look
-    });
-  }, [navigation]);
+  // useEffect(() => {
+  //   navigation.setOptions({
+  //     title: 'Profile', // This is handled by _layout.tsx for the tab
+  //     // AppHeader should be used via _layout.tsx for consistency
+  //   });
+  // }, [navigation]);
 
   const handleEditProfile = () => {
     router.push('/(screens)/editProfile');
@@ -157,7 +123,7 @@ const ProfileScreen = () => {
     );
   }
 
-  if (!userProfile && !isLoading) {
+  if (!userProfileData && !isLoading) { // Check userProfileData derived from context
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
@@ -169,34 +135,23 @@ const ProfileScreen = () => {
   }
 
   // Display actual user data
-  const displayName = userProfile?.name || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'User';
-  const displayEmailOrPhone = userProfile?.email || userProfile?.phoneNumber || 'No contact info';
+  const displayName = userProfileData?.name || 'User';
+  const displayEmailOrPhone = userProfileData?.email || userProfileData?.phoneNumber || 'No contact info';
   
   // Ensure joinDate is formatted correctly if it comes from a different source
-  let displayJoinDate = 'May 2025';
-  if (userProfile?.joinDate) {
-    // Assuming joinDate might sometimes be a full date string or a Date object from backend
+  let displayJoinDate = 'Not available';
+  if (userProfileData?.joinDate) {
+    displayJoinDate = userProfileData.joinDate;
+  } else if (userProfileData?.createdAt) { // Fallback to createdAt if joinDate is not present
     try {
-      const date = new Date(userProfile.joinDate);
-      displayJoinDate = date.toLocaleString('default', { month: 'long', year: 'numeric' });
-    } catch (e) {
-      // If it's already formatted as "Month Year", use as is
-      if (typeof userProfile.joinDate === 'string' && userProfile.joinDate.split(' ').length === 2) {
-        displayJoinDate = userProfile.joinDate;
-      }
-      // Otherwise, it keeps 'Not available' or the original problematic string if not caught by string check
-    }
-  } else if (userProfile?.createdAt) { // Fallback to createdAt if joinDate is not present
-    try {
-        // Assuming createdAt could be a Firestore Timestamp or a parsable date string
-        const date = userProfile.createdAt.toDate ? userProfile.createdAt.toDate() : new Date(userProfile.createdAt);
+        const date = userProfileData.createdAt.toDate ? userProfileData.createdAt.toDate() : new Date(userProfileData.createdAt);
         displayJoinDate = date.toLocaleString('default', { month: 'long', year: 'numeric' });
     } catch (e) {
-        console.warn("Could not parse createdAt for join date:", userProfile.createdAt);
+        console.warn("Could not parse createdAt for join date:", userProfileData.createdAt);
     }
   }
 
-  const displayProfilePic = userProfile?.profilePicture;
+  const displayProfilePic = userProfileData?.profilePicture;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -216,12 +171,12 @@ const ProfileScreen = () => {
           <Text style={styles.profileJoinDate}>Joined {displayJoinDate}</Text>
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{userProfile?.connections || 0}</Text>
+              <Text style={styles.statNumber}>{userProfileData?.connections || 0}</Text>
               <Text style={styles.statLabel}>Family Members</Text>
             </View>
             <View style={styles.statSeparator} />
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{userProfile?.stories || 0}</Text>
+              <Text style={styles.statNumber}>{userProfileData?.stories || 0}</Text>
               <Text style={styles.statLabel}>Stories</Text>
             </View>
           </View>

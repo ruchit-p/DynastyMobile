@@ -1,17 +1,15 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
 import { useNavigation } from 'expo-router';
+import { commonHeaderOptions } from '../../constants/headerConfig';
 
 const EventSettingsScreen = () => {
   const navigation = useNavigation();
 
   useEffect(() => {
     navigation.setOptions({
+      ...commonHeaderOptions,
       title: 'Events Settings',
-      headerStyle: { backgroundColor: '#F8F8F8' },
-      headerTintColor: '#333333',
-      headerTitleStyle: { fontWeight: '600' },
-      headerBackTitleVisible: false,
     });
   }, [navigation]);
 

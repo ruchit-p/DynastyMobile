@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { SafeAreaView, StyleSheet, Text, View, Platform, Image, TouchableOpacity } from 'react-native';
-import RelativesTree, { type RelativeItemComponent, type RelativeItem as RelativeItemType } from '../../react-native-relatives-tree/src';
-import { useRouter } from 'expo-router';
+import React, { useState, useLayoutEffect } from 'react';
+import { SafeAreaView, StyleSheet, Text, View, Platform, Image, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
+import RelativesTree, { type RelativeItem, type RelativeItemProps as LibRelativeItemProps } from '../../react-native-relatives-tree/src';
+import { useRouter, useNavigation } from 'expo-router';
 import AnimatedActionSheet, { type ActionSheetAction } from '../../components/ui/AnimatedActionSheet';
+import IconButton, { IconSet } from '../../components/ui/IconButton';
+import { Colors } from '../../constants/Colors';
 
 // Define the Items type for your specific data structure
-type Items = RelativeItemType & {
+type Items = RelativeItem & {
   id: string;
   name: string;
   spouse?: Items;
@@ -77,8 +79,16 @@ const getInitials = (name: string): string => {
   ).toUpperCase();
 };
 
+// Define props for our custom item component
+type CustomRelativeItemProps = LibRelativeItemProps<Items> & {
+  onPress: (item: Items) => void;
+  isSelected: boolean;
+};
+
+const DYNASTY_PRIMARY_COLOR = '#1A4B44'; // TODO: Move to Colors.ts or Theme.ts
+
 // Custom RelativeItem component to render each node
-const CustomRelativeItem: RelativeItemComponent<Items, { onPress: (item: Items) => void; isSelected: boolean }> = ({
+const CustomRelativeItem: React.FC<CustomRelativeItemProps> = ({
   level,
   info,
   style,
@@ -99,16 +109,68 @@ const CustomRelativeItem: RelativeItemComponent<Items, { onPress: (item: Items) 
 
 const FamilyTreeScreen = () => {
   const router = useRouter();
+  const navigation = useNavigation();
   const [selectedNode, setSelectedNode] = useState<Items | null>(null);
-  const [isActionMenuVisible, setIsActionMenuVisible] = useState(false);
+  const [isNodeActionMenuVisible, setIsNodeActionMenuVisible] = useState(false);
+  const [isHeaderMenuVisible, setIsHeaderMenuVisible] = useState(false);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <IconButton
+          iconSet={IconSet.Ionicons}
+          iconName="ellipsis-vertical"
+          size={24}
+          color={DYNASTY_PRIMARY_COLOR}
+          onPress={openHeaderMenu}
+          style={{ marginRight: Platform.OS === 'ios' ? 10 : 15 }}
+          accessibilityLabel="Family tree options"
+        />
+      ),
+    });
+  }, [navigation]);
+
+  const openHeaderMenu = () => {
+    setIsHeaderMenuVisible(true);
+  };
+
+  const closeHeaderMenu = () => {
+    setIsHeaderMenuVisible(false);
+  };
+
+  const handleFamilyTreeSettings = () => {
+    closeHeaderMenu();
+    console.log('Navigate to Family Tree Settings');
+  };
+
+  const handleInviteMembers = () => {
+    closeHeaderMenu();
+    console.log('Invite Members');
+  };
+
+  const headerMenuActions: ActionSheetAction[] = [
+    {
+      title: 'Family Tree Settings',
+      onPress: handleFamilyTreeSettings,
+    },
+    {
+      title: 'Invite Members',
+      onPress: handleInviteMembers,
+    },
+    {
+      title: 'Cancel',
+      onPress: closeHeaderMenu,
+      style: 'cancel',
+    },
+  ];
 
   const handleNodePress = (item: Items) => {
     setSelectedNode(item);
-    setIsActionMenuVisible(true);
+    setIsNodeActionMenuVisible(true);
   };
 
-  const handleCloseMenu = () => {
-    setIsActionMenuVisible(false);
+  const handleCloseNodeMenu = () => {
+    setIsNodeActionMenuVisible(false);
   };
 
   const onAddMember = (relationType: 'parent' | 'spouse' | 'child') => {
@@ -128,13 +190,19 @@ const FamilyTreeScreen = () => {
 
   const onViewProfile = () => {
     if (selectedNode) {
-      console.log(`View profile for ${selectedNode.name} (ID: ${selectedNode.id})`);
+      console.log(`Navigating to profile for ${selectedNode.name} (ID: ${selectedNode.id})`);
+      router.push({
+        pathname: '/(screens)/ViewProfileScreen',
+        params: {
+          memberId: selectedNode.id,
+          memberName: selectedNode.name,
+        }
+      });
     } else {
       console.warn("No node selected for viewing profile.");
     }
   };
 
-  // Prepare actions for the ActionSheet
   let dynamicActions: ActionSheetAction[] = [];
   if (selectedNode) {
     dynamicActions = [
@@ -156,7 +224,7 @@ const FamilyTreeScreen = () => {
       },
       {
         title: 'Cancel',
-        onPress: handleCloseMenu,
+        onPress: handleCloseNodeMenu,
         style: 'cancel',
       },
     ];
@@ -164,16 +232,18 @@ const FamilyTreeScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <RelativesTree
+      <RelativesTree<Items>
         data={relatives}
         spouseKey="spouse"
-        relativeItem={(props) => (
-          <CustomRelativeItem
-            {...props}
-            onPress={handleNodePress}
-            isSelected={selectedNode?.id === props.info.id}
-          />
-        )}
+        relativeItem={(props) => {
+          return (
+            <CustomRelativeItem
+              {...props}
+              onPress={handleNodePress}
+              isSelected={selectedNode?.id === props.info.id}
+            />
+          );
+        }}
         cardWidth={120}
         gap={20}
         pathColor="#006400"
@@ -183,12 +253,19 @@ const FamilyTreeScreen = () => {
 
       {selectedNode && (
         <AnimatedActionSheet
-          isVisible={isActionMenuVisible}
-          onClose={handleCloseMenu}
+          isVisible={isNodeActionMenuVisible}
+          onClose={handleCloseNodeMenu}
           title={`Actions for ${selectedNode.name}`}
           actions={dynamicActions}
         />
       )}
+
+      <AnimatedActionSheet
+        isVisible={isHeaderMenuVisible}
+        onClose={closeHeaderMenu}
+        title="Family Tree Options"
+        actions={headerMenuActions}
+      />
     </SafeAreaView>
   );
 };

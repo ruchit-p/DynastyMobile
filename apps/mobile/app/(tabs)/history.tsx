@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, ScrollView, SafeAreaView, Platform, TouchableOp
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/FloatingActionMenu';
+import { emptyStateStyles } from '../../constants/emptyStateConfig';
 
 // Define a type for History items (assuming they are essentially stories)
 interface HistoryItemType {
@@ -173,10 +174,10 @@ const HistoryScreen = () => {
   if (historyItems.length === 0) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.emptyStateContainer}> 
+        <View style={emptyStateStyles.emptyStateContainer}> 
           <Ionicons name="newspaper-outline" size={60} color="#CCC" />
-          <Text style={styles.emptyStateText}>Your History Book is empty.</Text>
-          <Text style={styles.emptyStateSubText}>
+          <Text style={emptyStateStyles.emptyStateText}>Your History Book is empty.</Text>
+          <Text style={emptyStateStyles.emptyStateSubText}>
             Start by writing your first story or add events to build your family timeline.
           </Text>
         </View>
@@ -267,54 +268,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 16,
     color: '#555',
-  },
-  // Consolidated and corrected empty state styles to match FeedScreen
-  emptyStateContainer: {
-    flex: 1,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    padding: 20,
-    marginTop: 50,
-    lineHeight: 20,
-  },
-  emptyStateText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 15,
-    textAlign: 'center',
-  },
-  emptyStateSubText: {
-    fontSize: 14,
-    color: '#777',
-    marginTop: 5,
-    textAlign: 'center',
-  },
-  // Styles for OnThisDaySection
-  onThisDaySectionContainer: {
-    paddingVertical: 15,
-    paddingHorizontal: 10,
-    backgroundColor: '#FFFFFF', // Or theme.colors.background
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0', // Or theme.colors.border
-  },
-  onThisDayTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333333', // Or theme.colors.text
-    marginBottom: 10,
-  },
-  onThisDayContent: {
-    flexDirection: 'row',
-  },
-  onThisDayItem: {
-    width: 120,
-    height: 100,
-    backgroundColor: '#F0F0F0', // Placeholder
-    borderRadius: 8,
-    marginRight: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   // Main content area with posts and timeline
   mainContentContainer: {
@@ -479,6 +432,32 @@ const styles = StyleSheet.create({
     marginLeft: 5,
     fontSize: 13,
     color: '#555',
+  },
+  // Styles for OnThisDaySection
+  onThisDaySectionContainer: {
+    paddingVertical: 15,
+    paddingHorizontal: 10,
+    backgroundColor: '#FFFFFF', // Or theme.colors.background
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0', // Or theme.colors.border
+  },
+  onThisDayTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333333', // Or theme.colors.text
+    marginBottom: 10,
+  },
+  onThisDayContent: {
+    flexDirection: 'row',
+  },
+  onThisDayItem: {
+    width: 120,
+    height: 100,
+    backgroundColor: '#F0F0F0', // Placeholder
+    borderRadius: 8,
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 
