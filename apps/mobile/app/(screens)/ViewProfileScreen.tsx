@@ -2,44 +2,32 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, Image, useColorScheme, Platform } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/Colors'; // Import Colors properly as a named export
-import AppHeader from '../../components/ui/AppHeader'; // Import AppHeader
-import type { StackHeaderProps } from '@react-navigation/stack'; // For props in header function
-import AnimatedActionSheet, { ActionSheetAction } from '../../components/ui/AnimatedActionSheet'; // Import AnimatedActionSheet
-
-// Mock user data type
-interface UserProfile {
-  id: string;
-  name: string;
-  avatar?: string; // URL to avatar image
-  // Add other fields as necessary, e.g., email, phone, bio, relationships
-  [key: string]: any; // For dynamic fields
-}
-
-// Mock initial user data - in a real app, this would come from a context, API, or route params
-const MOCK_USER_DATA: UserProfile = {
-  id: '1',
-  name: 'Jack Smith',
-  avatar: 'https://via.placeholder.com/100', // Placeholder avatar
-  email: 'jack.smith@example.com',
-  phone: '555-123-4567',
-  bio: 'Loves coding and family.',
-};
+import { Colors } from '../../constants/Colors';
+import AppHeader from '../../components/ui/AppHeader';
+import type { StackHeaderProps } from '@react-navigation/stack';
+import AnimatedActionSheet, { ActionSheetAction } from '../../components/ui/AnimatedActionSheet';
+import { getMemberProfileDataMobile, type MemberProfile, updateMemberProfileDataMobile } from '../../src/lib/firebaseUtils';
+import { useAuth } from '../../src/contexts/AuthContext';
 
 export default function ViewProfileScreen() {
   const colorScheme = useColorScheme() || 'light';
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ userId?: string; name?: string; memberId?: string; memberName?: string }>();
+  const { user: authUser } = useAuth();
 
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [userData, setUserData] = useState<MemberProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [editedUser, setEditedUser] = useState<UserProfile | null>(null);
-  const [isActionSheetVisible, setIsActionSheetVisible] = useState(false); // State for Action Sheet
+  const [editedUser, setEditedUser] = useState<MemberProfile | null>(null);
+  const [isActionSheetVisible, setIsActionSheetVisible] = useState(false);
 
   // Set up header with dynamic title and action buttons using AppHeader
   useEffect(() => {
-    const currentTitle = params.memberName || params.name ? `${params.memberName || params.name}'s Profile` : 'View Profile';
+    const currentTitle = params.memberName || params.name 
+      ? `${params.memberName || params.name}'s Profile` 
+      : userData?.name ? `${userData.name}'s Profile` : 'View Profile';
 
     navigation.setOptions({
       headerShown: true,
@@ -70,21 +58,39 @@ export default function ViewProfileScreen() {
         );
       },
     });
-  // Ensure all dependencies that might change the header are included.
-  }, [navigation, params.name, params.memberName, isEditing, colorScheme, user]); // Removed isEditing and user from deps for headerRight unless they affect the ellipsis icon directly
+  }, [navigation, params.name, params.memberName, userData?.name, colorScheme]);
 
-  // In a real app, fetch user data based on params.userId or params.memberId
+  // Fetch the member data using the new function
   useEffect(() => {
-    // Simulate fetching user data
-    // If a userId is passed, you would fetch data for that user
-    const profileId = params.memberId || params.userId || MOCK_USER_DATA.id;
-    const profileName = params.memberName || params.name || MOCK_USER_DATA.name;
-    const initialData = { ...MOCK_USER_DATA, id: profileId, name: profileName };
-    setUser(initialData);
-    setEditedUser(initialData);
-  }, [params.userId, params.name, params.memberId, params.memberName]); // Add memberId and memberName to dependencies
+    async function fetchMemberData() {
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        const profileId = params.memberId || params.userId || (authUser?.uid ?? '');
+        
+        if (!profileId) {
+          setError('No member ID provided');
+          setIsLoading(false);
+          return;
+        }
+        
+        const memberData = await getMemberProfileDataMobile(profileId);
+        setUserData(memberData);
+        const initialAvatar = memberData.avatar || authUser?.photoURL || undefined;
+        setEditedUser({ ...memberData, avatar: initialAvatar });
+      } catch (error) {
+        console.error('Error fetching member data:', error);
+        setError('Failed to load profile data');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    
+    fetchMemberData();
+  }, [params.userId, params.memberId, authUser?.uid]);
 
-  const handleInputChange = (field: keyof UserProfile, value: string) => {
+  const handleInputChange = (field: keyof MemberProfile, value: string) => {
     if (editedUser) {
       setEditedUser({ ...editedUser, [field]: value });
     }
@@ -98,7 +104,7 @@ export default function ViewProfileScreen() {
         "Do you want to save your changes?",
         [
           { text: "Discard", onPress: () => {
-            setEditedUser(user); // Revert changes
+            setEditedUser(userData); // Revert changes
             setIsEditing(false);
           }, style: "cancel" },
           { text: "Save", onPress: saveChanges }
@@ -106,43 +112,54 @@ export default function ViewProfileScreen() {
       );
     } else {
       setIsEditing(!isEditing);
-      if (!isEditing && user) {
-        setEditedUser(JSON.parse(JSON.stringify(user))); // Deep copy for editing
+      if (!isEditing && userData) {
+        setEditedUser(JSON.parse(JSON.stringify(userData))); // Deep copy for editing
       }
     }
   };
 
-  const saveChanges = () => {
-    // In a real app, call an API to save the user data
-    console.log('Saving changes:', editedUser);
-    if (editedUser) {
-      setUser(editedUser);
+  const saveChanges = async () => {
+    if (!editedUser || !userData?.id) {
+      Alert.alert('Error', 'No data to save.');
+      return;
     }
-    setIsEditing(false);
-    Alert.alert('Profile Updated', 'Your changes have been saved.');
+
+    setIsLoading(true);
+    try {
+      // Call the new Firebase utility function to update data
+      await updateMemberProfileDataMobile(userData.id, editedUser);
+      setUserData(editedUser); // Update local state with saved data
+      setIsEditing(false);
+      Alert.alert('Profile Updated', 'Your changes have been saved successfully.');
+    } catch (error: any) {
+      console.error('Failed to save profile changes:', error);
+      Alert.alert('Save Error', `Could not save changes: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const confirmRemoveUser = () => {
     Alert.alert(
       'Remove User',
-      `Are you sure you want to remove ${user?.name || 'this user'} from the family tree? This action cannot be undone.`,
+      `Are you sure you want to remove ${userData?.name || 'this user'} from the family tree? This action cannot be undone.`,
       [
-        { text: 'Cancel', style: 'cancel', onPress: () => setIsActionSheetVisible(false) }, // Close sheet on cancel
+        { text: 'Cancel', style: 'cancel', onPress: () => setIsActionSheetVisible(false) },
         { text: 'Remove', onPress: removeUser, style: 'destructive' },
       ],
-      { cancelable: true, onDismiss: () => setIsActionSheetVisible(false) } // Close sheet on dismiss
+      { cancelable: true, onDismiss: () => setIsActionSheetVisible(false) }
     );
   };
 
   const removeUser = () => {
     // In a real app, call an API to remove the user
-    console.log('Removing user:', user?.id);
-    Alert.alert('User Removed', `${user?.name || 'The user'} has been removed from the family tree.`);
+    console.log('Removing user:', userData?.id);
+    Alert.alert('User Removed', `${userData?.name || 'The user'} has been removed from the family tree.`);
     // Navigate back or to a relevant screen
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/(tabs)/familyTree'); // Fallback navigation
+      router.replace('/(tabs)/familyTree');
     }
   };
 
@@ -150,26 +167,24 @@ export default function ViewProfileScreen() {
     {
       title: 'Edit Profile',
       onPress: () => {
-        // setIsActionSheetVisible(false); // ActionSheet handles its own closing
         toggleEditMode();
       },
     },
     {
       title: 'Delete Profile',
       onPress: () => {
-        // setIsActionSheetVisible(false); // ActionSheet handles its own closing
         confirmRemoveUser();
       },
       style: 'destructive',
     },
     {
       title: 'Cancel',
-      onPress: () => { /* setIsActionSheetVisible(false) -- Handled by component */ }, // ActionSheet handles its own closing
+      onPress: () => { /* Handled by component */ },
       style: 'cancel',
     },
   ];
 
-  if (!user || !editedUser) {
+  if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <Text>Loading profile...</Text>
@@ -177,11 +192,32 @@ export default function ViewProfileScreen() {
     );
   }
 
-  const profileFields: Array<{ key: keyof UserProfile; label: string; icon?: keyof typeof Ionicons.glyphMap }> = [
+  if (error) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
+          <Text style={styles.retryButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!userData || !editedUser) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text>Profile not found</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
+          <Text style={styles.retryButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const profileFields: Array<{ key: keyof MemberProfile; label: string; icon?: keyof typeof Ionicons.glyphMap }> = [
     { key: 'name', label: 'Name', icon: 'person-outline' },
     { key: 'email', label: 'Email', icon: 'mail-outline' },
     { key: 'phone', label: 'Phone', icon: 'call-outline' },
-    // { key: 'bio', label: 'Bio', icon: 'information-circle-outline' }, // Bio field removed
     // Add more fields as needed
   ];
 
@@ -189,7 +225,7 @@ export default function ViewProfileScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <View style={styles.profileHeader}>
         <Image 
-          source={editedUser.avatar ? { uri: editedUser.avatar } : require('../../assets/images/avatar-placeholder.png')} 
+          source={editedUser.avatar ? { uri: editedUser.avatar } : (authUser?.photoURL && userData?.id === authUser.uid && authUser.photoURL ? {uri: authUser.photoURL} : require('../../assets/images/avatar-placeholder.png'))} 
           style={styles.avatar} 
         />
         {isEditing ? (
@@ -200,13 +236,13 @@ export default function ViewProfileScreen() {
             placeholder="Full Name"
           />
         ) : (
-          <Text style={[styles.nameText, styles.textLarge]}>{user.name}</Text>
+          <Text style={[styles.nameText, styles.textLarge]}>{userData.name}</Text>
         )}
       </View>
 
       {profileFields.map(({ key, label, icon }) => {
         // Do not render 'name' here again as it's in the header
-        if (key === 'name' || key === 'bio') return null; // Also ensure bio isn't rendered
+        if (key === 'name' || key === 'bio') return null;
 
         return (
           <View key={key} style={styles.fieldContainer}>
@@ -219,12 +255,11 @@ export default function ViewProfileScreen() {
                   value={editedUser[key] || ''}
                   onChangeText={(text) => handleInputChange(key, text)}
                   placeholder={label}
-                  // Add keyboardType, autoCapitalize, etc. as needed
                   multiline={key === 'bio'}
                   numberOfLines={key === 'bio' ? 3 : 1}
                 />
               ) : (
-                <Text style={styles.fieldValue}>{user[key] || 'Not set'}</Text>
+                <Text style={styles.fieldValue}>{userData[key] || 'Not set'}</Text>
               )}
             </View>
           </View>
@@ -242,7 +277,7 @@ export default function ViewProfileScreen() {
         isVisible={isActionSheetVisible}
         onClose={() => setIsActionSheetVisible(false)}
         actions={profileActions}
-        title="Profile Actions" // Optional: Add a title to the action sheet
+        title="Profile Actions"
       />
     </ScrollView>
   );
@@ -282,11 +317,11 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     marginBottom: 15,
     borderWidth: 3,
-    borderColor: Colors.light.background.primary, // Contrast border for avatar
+    borderColor: '#000000', // Contrast border for avatar
   },
   nameText: {
     fontWeight: 'bold',
-    color: '#FFFFFF', // Using white for header text
+    color: '#000000', // Using white for header text
   },
   nameInput: {
     borderBottomWidth: 1,
@@ -332,7 +367,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0a7ea4', // Primary action color
+    backgroundColor: '#1A4B44', // Primary action color
     borderRadius: 8,
     padding: 12,
     marginHorizontal: 20,
@@ -347,6 +382,20 @@ const styles = StyleSheet.create({
   },
   textLarge: {
     fontSize: 24,
+  },
+  errorText: {
+    color: Colors.light.text.error,
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#0a7ea4',
+    padding: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   // Add other styles from Colors.ts as needed
 }); 

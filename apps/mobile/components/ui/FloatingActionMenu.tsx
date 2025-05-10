@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useImperativeHandle, forwardRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -28,14 +28,30 @@ interface FloatingActionMenuProps {
   fabIconLibrary?: 'Ionicons' | 'MaterialCommunityIcons';
 }
 
+export interface FloatingActionMenuRef {
+  open: () => void;
+  close: () => void;
+  toggle: () => void;
+}
+
 // MARK: - Component
-const FloatingActionMenu: React.FC<FloatingActionMenuProps> = ({
-  menuItems,
-  fabIconName = 'add',
-  fabIconLibrary = 'Ionicons',
-}) => {
+const FloatingActionMenu = forwardRef<FloatingActionMenuRef, FloatingActionMenuProps>((
+  {
+    menuItems,
+    fabIconName = 'add',
+    fabIconLibrary = 'Ionicons',
+  },
+  ref
+) => {
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   
+  // Expose open, close, toggle methods via ref
+  useImperativeHandle(ref, () => ({
+    open: () => setIsMenuVisible(true),
+    close: () => setIsMenuVisible(false),
+    toggle: () => setIsMenuVisible(prevState => !prevState),
+  }));
+
   // Get theme colors
   const primaryBackground = useBackgroundColor('primary');
   const secondaryBackground = useBackgroundColor('secondary');
@@ -111,7 +127,7 @@ const FloatingActionMenu: React.FC<FloatingActionMenuProps> = ({
       </TouchableOpacity>
     </>
   );
-};
+});
 
 // MARK: - Styles
 const styles = StyleSheet.create({

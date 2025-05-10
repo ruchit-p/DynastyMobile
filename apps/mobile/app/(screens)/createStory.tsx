@@ -16,6 +16,7 @@ import {
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useNavigation, Stack, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import AnimatedActionSheet, { ActionSheetAction } from '../../components/ui/AnimatedActionSheet';
 import PrivacySegmentedControl from '../../components/ui/PrivacySegmentedControl';
@@ -69,10 +70,16 @@ const CreateStoryScreen = () => {
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const [isDetailsActionSheetVisible, setDetailsActionSheetVisible] = useState(false);
   const [isAddContentActionSheetVisible, setAddContentActionSheetVisible] = useState(false);
+  const [isAudioActionSheetVisible, setAudioActionSheetVisible] = useState(false);
 
   // Placeholder for user avatar/name - can be removed if not used
   // const userAvatar = 'https://via.placeholder.com/40';
   // const userName = 'Current User';
+
+  // ADDED: useEffect to log isAudioActionSheetVisible changes
+  useEffect(() => {
+    console.log(`isAudioActionSheetVisible changed to: ${isAudioActionSheetVisible}`);
+  }, [isAudioActionSheetVisible]);
 
   // MARK: - Navigation Setup & Data Return Handling
   useEffect(() => {
@@ -125,6 +132,37 @@ const CreateStoryScreen = () => {
     return unsubscribe; // Cleanup listener on unmount
   }, [navigation, params]);
 
+  // Check for returned audio recording
+  useEffect(() => {
+    const recordedAudioUri = params?.recordedAudioUri as string | undefined;
+    const recordedAudioDuration = params?.recordedAudioDuration as string | undefined;
+    console.log('Record audio useEffect params:', JSON.stringify(params, null, 2)); // ADDED LOG
+    console.log('Record audio useEffect values:', { recordedAudioUri, recordedAudioDuration }); // ADDED LOG
+    
+    if (recordedAudioUri) {
+      // Create a new audio block with the recorded audio
+      const newBlock: StoryBlock = {
+        id: Math.random().toString(36).substr(2, 9),
+        type: 'audio',
+        content: {
+          uri: recordedAudioUri,
+          duration: recordedAudioDuration ? parseInt(recordedAudioDuration) : 0,
+          isRecording: true,
+        },
+      };
+      console.log('Recorded newAudioBlock to add:', JSON.stringify(newBlock, null, 2)); // ADDED LOG
+      setBlocks(prevBlocks => [...prevBlocks, newBlock]);
+      
+      // Clear params to avoid re-processing
+      router.setParams({ recordedAudioUri: undefined, recordedAudioDuration: undefined });
+    }
+  }, [router, params]);
+
+  // Log blocks state whenever it changes
+  useEffect(() => {
+    console.log('Current story blocks state:', JSON.stringify(blocks, null, 2));
+  }, [blocks]);
+
   // MARK: - Handlers
   const handleSaveStory = () => {
     if (!storyTitle.trim()) {
@@ -136,17 +174,71 @@ const CreateStoryScreen = () => {
       return;
     }
     
-    console.log({
+    // Transform blocks to match Firebase structure
+    const transformedBlocks = blocks.map(block => {
+      if (block.type === 'text') {
+        return {
+          type: 'text',
+          data: block.content,
+          localId: block.id
+        };
+      } else if (block.type === 'image') {
+        // For image blocks, we would typically upload the images to Firebase Storage
+        // and then store the URLs in Firestore
+        // For now, we'll just store the local URIs as placeholders
+        return {
+          type: 'image',
+          data: Array.isArray(block.content) ? block.content.map(asset => asset.uri) : [],
+          localId: block.id
+        };
+      } else if (block.type === 'audio') {
+        // Similarly for audio, we would upload the file and store the URL
+        return {
+          type: 'audio',
+          data: typeof block.content === 'object' ? block.content.uri : block.content,
+          duration: typeof block.content === 'object' ? block.content.duration : 0,
+          isRecording: typeof block.content === 'object' ? !!block.content.isRecording : false,
+          localId: block.id
+        };
+      } else {
+        return {
+          type: block.type,
+          data: block.content,
+          localId: block.id
+        };
+      }
+    });
+    
+    // This is the data structure we would send to Firebase
+    const storyData = {
       title: storyTitle,
       subtitle: showSubtitle ? subtitle : undefined,
-      date: showDate ? storyDate?.toISOString().split('T')[0] : undefined,
+      eventDate: showDate ? storyDate?.toISOString() : undefined,
       location: showLocation ? location : undefined,
-      coverPhoto: coverPhoto ? coverPhoto.uri : undefined,
+      coverPhotoUrl: coverPhoto ? coverPhoto.uri : undefined, // In a real app, this would be uploaded to Firebase Storage
       privacy,
-      taggedMembers,
+      peopleInvolved: taggedMembers,
       customViewers: privacy === 'custom' ? customSelectedViewers : undefined,
-      blocks,
-    });
+      blocks: transformedBlocks,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    
+    // TODO: In a production app, implement actual API call to Firebase
+    // This would typically be a Cloud Function call similar to:
+    // const functions = getFunctions();
+    // const createStoryFunction = httpsCallable(functions, 'createStory');
+    // try {
+    //   const result = await createStoryFunction(storyData);
+    //   console.log('Story created:', result.data);
+    //   Alert.alert('Success', 'Your story has been saved.');
+    //   router.back();
+    // } catch (error) {
+    //   console.error('Error creating story:', error);
+    //   Alert.alert('Error', 'Failed to save your story. Please try again.');
+    // }
+    
+    console.log('Story data:', storyData);
     Alert.alert('Story Saved (Simulated)', 'Your story has been successfully saved.');
     router.back(); 
   };
@@ -173,6 +265,81 @@ const CreateStoryScreen = () => {
       )
     );
     setDetailsActionSheetVisible(false);
+  };
+  
+  // Handle uploading audio files
+  const handleUploadAudio = async () => {
+    console.log('handleUploadAudio: function entered'); // ADDED LOG
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Required', 'Allow access to media library to add audio.');
+        return;
+      }
+
+      // On iOS we can use ImagePicker for audio files
+      if (Platform.OS === 'ios') {
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.All, // Use 'All' since 'Audio' is not available, but 'All' includes video which might have audio.
+          quality: 1.0,
+        });
+        console.log('iOS ImagePicker result:', JSON.stringify(result, null, 2)); // ADDED LOG
+    
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          const asset = result.assets[0];
+          console.log('iOS selected asset:', JSON.stringify(asset, null, 2)); // ADDED LOG
+          // Ensure the selected asset might be an audio file (e.g., check extension or type if available, though ImagePicker is limited here)
+          // For now, we assume if the user picked it in an "audio" context, it's intended as audio.
+          const newBlock: StoryBlock = {
+            id: Math.random().toString(36).substr(2, 9),
+            type: 'audio',
+            content: {
+              uri: asset.uri,
+              name: asset.fileName || `audio_${Date.now()}.${asset.uri.split('.').pop() || 'm4a'}`, // Provide a default name and attempt to get extension
+              duration: asset.duration ? Math.floor(asset.duration / 1000) : 0, // duration is in ms, convert to seconds
+              isRecording: false,
+            },
+          };
+          console.log('iOS newAudioBlock to add:', JSON.stringify(newBlock, null, 2)); // ADDED LOG
+          setBlocks(prevBlocks => [...prevBlocks, newBlock]);
+        }
+      } else {
+        // On Android, we use DocumentPicker
+        const result = await DocumentPicker.getDocumentAsync({
+          type: 'audio/*',
+          copyToCacheDirectory: true, // Good practice for accessing the file
+        });
+        console.log('Android DocumentPicker result:', JSON.stringify(result, null, 2)); // ADDED LOG
+        
+        if (result.canceled === false && result.assets && result.assets.length > 0) { // Ensured assets exist and not empty
+          const asset = result.assets[0];
+          console.log('Android selected asset:', JSON.stringify(asset, null, 2)); // ADDED LOG
+          const newBlock: StoryBlock = {
+            id: Math.random().toString(36).substr(2, 9),
+            type: 'audio',
+            content: {
+              uri: asset.uri,
+              name: asset.name || `audio_${Date.now()}.${asset.uri.split('.').pop() || 'mp3'}`, // asset.name is available in DocumentPicker
+              duration: 0, // DocumentPicker asset doesn't directly provide duration. Needs post-processing.
+              isRecording: false,
+            },
+          };
+          console.log('Android newAudioBlock to add:', JSON.stringify(newBlock, null, 2)); // ADDED LOG
+          setBlocks(prevBlocks => [...prevBlocks, newBlock]);
+        }
+      }
+    } catch (error) {
+      console.error("Error picking audio file: ", error);
+      Alert.alert("Upload Error", "Could not select audio file.");
+    }
+    setAudioActionSheetVisible(false);
+  };
+
+  // Handle recording audio
+  const handleRecordAudio = () => {
+    console.log('handleRecordAudio: function entered'); // ADDED LOG
+    router.push('/recordAudio' as any);
+    setAudioActionSheetVisible(false);
   };
   
   const handleSelectMediaForBlock = async (blockId: string) => {
@@ -272,10 +439,69 @@ const CreateStoryScreen = () => {
   // MARK: - Add Content Action Sheet Actions
   const addContentActions: ActionSheetAction[] = [
     { title: 'Add Text', onPress: () => addBlock('text') },
-    { title: 'Add Media (Images/Videos)', onPress: () => addBlock('image') }, // For now, image block handles media
-    { title: 'Add Audio', onPress: () => addBlock('audio') },
-    { title: 'Cancel', onPress: () => {}, style: 'cancel' },
+    { title: 'Add Images', onPress: () => addBlock('image') },
+    { title: 'Add Audio', onPress: () => {
+        console.log('Add Content ActionSheet: "Add Audio" pressed'); // ADDED LOG
+        setAudioActionSheetVisible(true);
+      } 
+    },
+    { title: 'Cancel', onPress: () => setAddContentActionSheetVisible(false), style: 'cancel' },
   ];
+
+  // MARK: - Audio Options Action Sheet Actions
+  const audioActions: ActionSheetAction[] = [
+    { title: 'Upload Audio File', onPress: handleUploadAudio },
+    { title: 'Record Audio Clip', onPress: handleRecordAudio },
+    { title: 'Cancel', onPress: () => setAudioActionSheetVisible(false), style: 'cancel' },
+  ];
+
+  // MARK: - Render audio block
+  const renderAudioBlock = (block: StoryBlock) => {
+    console.log('renderAudioBlock called for block:', JSON.stringify(block, null, 2)); // ADDED LOG
+    const content = block.content;
+    const isRecording = typeof content === 'object' && content.isRecording;
+    const audioName = typeof content === 'object' && content.name ? content.name : 'Audio Clip';
+    const hasAudioContent = content && (typeof content === 'string' || (typeof content === 'object' && content.uri));
+    console.log('renderAudioBlock details:', { isRecording, audioName, hasAudioContent, contentUri: typeof content === 'object' ? content.uri : 'N/A' }); // ADDED LOG
+    
+    if (!hasAudioContent) {
+      // If no audio content yet, show the audio upload button
+      return (
+        <View style={styles.audioBlockContainer}>
+          <TouchableOpacity 
+            style={styles.uploadAudioButton}
+            onPress={() => setAudioActionSheetVisible(true)}
+          >
+            <MaterialIcons name="audiotrack" size={24} color="#1A4B44" />
+            <Text style={styles.uploadAudioButtonText}>Add Audio</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    // Render the audio player if there's content
+    return (
+      <View style={styles.audioBlockContainer}>
+        <MaterialIcons name="audiotrack" size={24} color="#1A4B44" />
+        <View style={styles.audioBlockInfo}>
+          <Text style={styles.audioBlockTitle}>
+            {isRecording ? 'Recorded Audio' : audioName}
+          </Text>
+          {typeof content === 'object' && content.duration && (
+            <Text style={styles.audioBlockDuration}>
+              {Math.floor(content.duration / 60)}:{(content.duration % 60).toString().padStart(2, '0')}
+            </Text>
+          )}
+        </View>
+        <TouchableOpacity 
+          style={styles.audioPlayButton}
+          onPress={() => Alert.alert("Play Audio", "Audio playback will be implemented here.")}
+        >
+          <Ionicons name="play" size={20} color="#1A4B44" />
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   // MARK: - Render Methods for Modals
   const renderAddDetailsModal = () => (
@@ -490,10 +716,7 @@ const CreateStoryScreen = () => {
                   </View>
                 )}
                 {block.type === 'audio' && (
-                  <TouchableOpacity onPress={() => Alert.alert("Add Audio", "Audio recording/upload coming soon.")} style={styles.mediaUploadButton}>
-                    <MaterialIcons name="audiotrack" size={24} color="#1A4B44" />
-                    <Text style={{color: "#1A4B44", marginLeft: 5}}>Add Audio</Text>
-                  </TouchableOpacity>
+                  renderAudioBlock(block)
                 )}
                  {/* Video block can be similar to image or have specific handling */}
                  {block.type === 'video' && (
@@ -527,6 +750,14 @@ const CreateStoryScreen = () => {
           onClose={() => setAddContentActionSheetVisible(false)}
           actions={addContentActions}
           title="Add Content Block"
+        />
+        
+        {/* Audio options action sheet */}
+        <AnimatedActionSheet
+          isVisible={isAudioActionSheetVisible}
+          onClose={() => setAudioActionSheetVisible(false)}
+          actions={audioActions}
+          title="Add Audio"
         />
       
       </ScrollView>
@@ -751,6 +982,50 @@ const styles = StyleSheet.create({
     right: 10,
     backgroundColor: 'rgba(0,0,0,0.3)',
     borderRadius: 15,
+  },
+  audioBlockContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#E8F5E9',
+    borderRadius: 8,
+  },
+  uploadAudioButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+  },
+  uploadAudioButtonText: {
+    color: '#1A4B44',
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  audioBlockInfo: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  audioBlockTitle: {
+    fontSize: 16,
+    color: '#1A4B44',
+    fontWeight: '500',
+  },
+  audioBlockDuration: {
+    fontSize: 14,
+    color: '#555555',
+    marginTop: 4,
+  },
+  audioPlayButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
+    borderWidth: 1,
+    borderColor: '#DDDDDD',
   },
 });
 

@@ -1,14 +1,15 @@
-import React, { useState, useCallback } from 'react';
-import { StyleSheet, View, Alert, Platform } from 'react-native';
+import React, { useState, useCallback, useRef } from 'react';
+import { StyleSheet, View, Alert, Platform, ActivityIndicator, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
-import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/FloatingActionMenu';
+import FloatingActionMenu, { FabMenuItemAction, FloatingActionMenuRef } from '../../components/ui/FloatingActionMenu';
 import Screen from '../../components/ui/Screen';
 import EmptyState from '../../components/ui/EmptyState';
-import ListItem from '../../components/ListItem';
 import ThemedText from '../../components/ThemedText';
-import IconButton from '../../components/ui/IconButton';
+import IconButton, { IconSet } from '../../components/ui/IconButton';
 import AppHeader from '../../components/ui/AppHeader';
+import FileListItem, { type VaultListItemType as UIVaultItem } from '../../components/ui/FileListItem';
+import AnimatedActionSheet, { type ActionSheetAction } from '../../components/ui/AnimatedActionSheet';
 import { Colors } from '../../constants/Colors';
 import Fonts from '../../constants/Fonts';
 import { Spacing, BorderRadius } from '../../constants/Spacing';
@@ -111,14 +112,17 @@ const buildDisplayPath = (folderId: string | null, allItems: VaultItem[]): strin
 
 const VaultScreen = () => {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState<boolean>(true); // Start with loading true
-  const [currentPathId, setCurrentPathId] = useState<string | null>(null); // null for root
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [currentPathId, setCurrentPathId] = useState<string | null>(null);
   const [currentPathDisplay, setCurrentPathDisplay] = useState<string>('Root');
   const [items, setItems] = useState<VaultItem[]>([]);
   const [pathHistory, setPathHistory] = useState<{id: string | null, name: string}[]>([{id: null, name: 'Root'}]);
-  // Use a state for mockVaultItems to make it updatable
   const [vaultData, setVaultData] = useState<VaultItem[]>(mockVaultItems);
 
+  const [selectedFile, setSelectedFile] = useState<VaultFile | null>(null);
+  const [isFileActionMenuVisible, setIsFileActionMenuVisible] = useState(false);
+
+  const fabMenuRef = useRef<FloatingActionMenuRef>(null);
 
   const loadItemsForPath = useCallback((folderId: string | null, currentData: VaultItem[]) => {
     setIsLoading(true);
@@ -136,6 +140,7 @@ const VaultScreen = () => {
   useFocusEffect(
     useCallback(() => {
       loadItemsForPath(currentPathId, vaultData);
+      fabMenuRef.current?.close();
     }, [currentPathId, vaultData, loadItemsForPath])
   );
   
@@ -207,8 +212,6 @@ const VaultScreen = () => {
         handleAddItemsToVault(result.assets);
       } else if (result.canceled === true) {
         console.log('Document picking cancelled');
-      } else {
-         // Handle other cases if assets is null, though type implies it should be present if not cancelled.
       }
     } catch (error) {
       console.error('Error picking documents:', error);
@@ -217,8 +220,6 @@ const VaultScreen = () => {
   };
 
   const pickMedia = async () => {
-    // No permissions request is necessary for launching the image library for Expo ImagePicker >= SDK 48
-    // For camera, use ImagePicker.requestCameraPermissionsAsync()
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.All, // Images and Videos
@@ -232,6 +233,83 @@ const VaultScreen = () => {
     } catch (error) {
       console.error('Error picking media:', error);
       Alert.alert('Error', 'Could not pick media.');
+    }
+  };
+
+  // On Android, try to use the Storage Access Framework via DocumentPicker for folder access
+  const pickFolder = async () => {
+    try {
+      if (Platform.OS === 'android') {
+        // Using DocumentPicker to access folders - this is the best approach for Android 10+
+        const result = await DocumentPicker.getDocumentAsync({
+          copyToCacheDirectory: true,
+          type: '*/*',
+          multiple: false
+        });
+
+        if (result.canceled === false && result.assets && result.assets.length > 0) {
+          const folderUri = result.assets[0].uri;
+          const folderName = result.assets[0].name;
+          
+          Alert.alert('Folder Selected', `Selected folder: ${folderName}. Unfortunately, due to platform limitations, we cannot automatically import all contents of this folder.`);
+          
+          // Potentially a folder could be added to your vault data structure here
+          // even if individual files would need to be picked separately
+          const newFolder: VaultFolder = {
+            id: `folder_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            name: folderName,
+            type: 'folder',
+            parentId: currentPathId,
+            path: generateCanonicalPath(folderName, currentPathId, vaultData),
+          };
+          
+          const updatedVaultData = [...vaultData, newFolder];
+          setVaultData(updatedVaultData);
+        }
+      } else {
+        // On iOS, folder picking isn't well supported - suggest alternative
+        Alert.alert(
+          'Folder Upload',
+          'Direct folder upload is not fully supported on this platform. You can create a folder and then upload files into it instead.',
+          [
+            { text: 'Cancel', onPress: () => {} },
+            { 
+              text: 'Create Folder', 
+              onPress: () => {
+                // Prompt to create a folder
+                Alert.prompt(
+                  'Create Folder',
+                  'Enter folder name:',
+                  [
+                    { 
+                      text: 'Cancel',
+                      onPress: () => {} 
+                    },
+                    {
+                      text: 'Create',
+                      onPress: (folderName) => {
+                        if (folderName && folderName.trim()) {
+                          const newFolder: VaultFolder = {
+                            id: `folder_${Date.now()}`,
+                            name: folderName.trim(),
+                            type: 'folder',
+                            parentId: currentPathId,
+                            path: generateCanonicalPath(folderName.trim(), currentPathId, vaultData),
+                          };
+                          setVaultData([...vaultData, newFolder]);
+                        }
+                      }
+                    }
+                  ]
+                );
+              }
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error accessing folder:', error);
+      Alert.alert('Error', 'Could not access the selected folder.');
     }
   };
 
@@ -255,11 +333,7 @@ const VaultScreen = () => {
       text: 'Upload Folder',
       iconName: 'folder-open-outline',
       iconLibrary: 'Ionicons',
-      onPress: () => {
-        Alert.alert('Upload Folder', 'Folder upload is complex and platform-dependent. This feature is a placeholder.');
-        // For true folder upload, advanced handling or backend assistance is typically needed.
-        // DocumentPicker might offer directory picking on some platforms, but recursive content access isn't standard.
-      },
+      onPress: pickFolder,
     },
   ];
 
@@ -481,7 +555,7 @@ const VaultScreen = () => {
         });
     }
 
-    folderOptions.push({ text: 'Cancel', style: 'cancel' });
+    folderOptions.push({ text: 'Cancel', onPress: () => {} });
     Alert.alert(`Move "${itemToMove.name}"`, 'Select a destination folder:', folderOptions);
   };
 
@@ -499,8 +573,8 @@ const VaultScreen = () => {
     const actionSheetOptions: { text: string; onPress?: () => void; style?: "default" | "cancel" | "destructive" }[] = [
       { text: 'Rename', onPress: () => handleRenameItem(item) },
       { text: 'Move', onPress: () => handleMoveItem(item) },
-      { text: 'Delete', onPress: () => handleDeleteItem(item), style: 'destructive' },
-      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', onPress: () => handleDeleteItem(item) },
+      { text: 'Cancel' },
     ];
     Alert.alert(item.name, `Selected: ${item.type}`, actionSheetOptions);
   };
@@ -509,32 +583,97 @@ const VaultScreen = () => {
     if (pathHistory.length > 1) {
       return (
         <IconButton
+          iconSet={IconSet.Ionicons}
           iconName="arrow-back"
           size={24}
-          color={Colors.palette.dynastyGreen.dark}
+          color={Colors.light.text.primary}
           onPress={navigateBack}
-          style={styles.backButton}
-          accessibilityLabel="Go back to previous folder"
+          accessibilityLabel="Navigate back"
         />
       );
     }
-    return null; // No back button at root
+    return null;
   };
 
-
-  // Custom header with path navigation
+  // New Header Component Logic
   const HeaderWithPath = () => {
+    const isNotRoot = pathHistory.length > 1;
+    const headerTitle = isNotRoot ? currentPathDisplay : "Vault";
+
     return (
-      <View style={styles.customHeader}>
-        {getHeaderLeft()}
-        <ThemedText variant="h5" style={styles.pathText} numberOfLines={1} ellipsizeMode="head">
-          {currentPathDisplay}
-        </ThemedText>
-        {/* Add a dummy view to balance flex if back button is present */}
-        {getHeaderLeft() ? <View style={{width: 24}} /> : null}
+      <View style={styles.headerRootContainer}>
+        <View style={styles.headerContentRow}>
+          <View style={styles.headerSideSection}>
+            {isNotRoot && (
+              <>
+                {getHeaderLeft()}
+                <ThemedText style={styles.headerVaultLabelText}>Vault</ThemedText>
+              </>
+            )}
+          </View>
+
+          <View style={styles.headerMainTitleSection}>
+            <ThemedText type="title" style={styles.headerCurrentPathText} numberOfLines={1} ellipsizeMode={isNotRoot ? "middle" : "tail"}>
+              {headerTitle}
+            </ThemedText>
+          </View>
+
+          {/* Spacer for centering, content should mirror left section's width if left section has content */}
+          <View style={[styles.headerSideSection, !isNotRoot && styles.headerSideSectionEmpty]} />
+        </View>
       </View>
     );
   };
+  
+  // MARK: - Item Actions & Action Sheet
+
+  const handleOpenItemMoreMenu = (item: VaultFile) => {
+    setSelectedFile(item);
+    setIsFileActionMenuVisible(true);
+  };
+
+  const handleCloseItemMoreMenu = () => {
+    setIsFileActionMenuVisible(false);
+    setSelectedFile(null);
+  };
+
+  const handleViewItemDetails = () => {
+    if (selectedFile) {
+      Alert.alert("View Details", `Viewing details for ${selectedFile.name}`);
+      // TODO: Implement actual navigation or modal for details
+    }
+    handleCloseItemMoreMenu();
+  };
+
+  const handleShareItem = async () => {
+    if (selectedFile?.uri) {
+      try {
+        if (!(await Sharing.isAvailableAsync())) {
+          Alert.alert("Sharing not available", "Sharing is not available on this device.");
+          return;
+        }
+        await Sharing.shareAsync(selectedFile.uri, {
+          mimeType: selectedFile.mimeType,
+          dialogTitle: `Share ${selectedFile.name}`,
+        });
+      } catch (error) {
+        console.error("Error sharing file:", error);
+        Alert.alert("Error", "Could not share the file.");
+      }
+    } else {
+      Alert.alert("Cannot Share", "File URI is missing or invalid.");
+    }
+    handleCloseItemMoreMenu();
+  };
+
+  const fileActionMenuActions: ActionSheetAction[] = selectedFile ? [
+    { title: 'View Details', onPress: handleViewItemDetails, icon: 'information-circle-outline' },
+    { title: 'Rename', onPress: () => { if(selectedFile) handleRenameItem(selectedFile); handleCloseItemMoreMenu(); }, icon: 'pencil-outline' },
+    { title: 'Move', onPress: () => { if(selectedFile) handleMoveItem(selectedFile); handleCloseItemMoreMenu(); }, icon: 'move-outline' },
+    { title: 'Share', onPress: handleShareItem, icon: 'share-outline', disabled: !selectedFile?.uri || !Sharing.isAvailableAsync() },
+    { title: 'Delete', onPress: () => { if(selectedFile) handleDeleteItem(selectedFile); handleCloseItemMoreMenu(); }, icon: 'trash-outline' },
+    { title: 'Cancel', onPress: handleCloseItemMoreMenu },
+  ] : [];
 
   // MARK: - Render Logic
   if (isLoading && items.length === 0) { // Show full screen loader only on initial load or full path change
@@ -550,124 +689,122 @@ const VaultScreen = () => {
     );
   }
 
-  const renderItem = (item: VaultItem) => {
-    const icon = getItemIcon(item) as keyof typeof Ionicons.glyphMap;
-    const description = item.type === 'file' && (item as VaultFile).size ?
-      (item as VaultFile).size : undefined;
-
-    if (item.type === 'folder') {
-      return (
-        <ListItem
-          key={item.id}
-          icon={icon}
-          text={item.name}
-          description={description}
-          onPress={() => handleItemPress(item)}
-          rightIcon="chevron-forward"
-          style={styles.listItem}
-        />
-      );
-    } else {
-      return (
-        <ListItem
-          key={item.id}
-          icon={icon}
-          text={item.name}
-          description={description}
-          onPress={() => handleItemPress(item)}
-          rightIcon="ellipsis-horizontal"
-          style={styles.listItem}
-        />
-      );
-    }
+  const renderItem = ({ item }: { item: VaultItem }) => {
+    return (
+      <FileListItem
+        item={item as UIVaultItem}
+        onPress={() => handleItemPress(item)}
+        onMorePress={item.type === 'file' ? () => handleOpenItemMoreMenu(item as VaultFile) : undefined}
+      />
+    );
   };
 
   // MARK: - Main Return
   return (
-    <Screen safeArea scroll={false}>
+    <Screen style={styles.screen}>
       <HeaderWithPath />
-
-      {isLoading && items.length > 0 && (
-        <View style={styles.inlineLoadingContainer}>
-          <EmptyState
-            icon="sync-outline"
-            title="Loading contents"
-            iconSize={30}
-            style={styles.inlineEmptyState}
-          />
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.dynastyGreen} />
+          <ThemedText variant="bodyMedium" color="secondary">Loading items...</ThemedText>
         </View>
-      )}
-
-      {items.length === 0 && !isLoading ? (
-        <EmptyState
-          icon="folder-open-outline"
-          title="This folder is empty"
-          description="Tap the '+' button to upload files or media"
-          style={styles.emptyStateCustom}
-        />
+      ) : items.length === 0 ? (
+         <View style={styles.emptyStateContainer}>
+            <EmptyState 
+                title={currentPathId === null ? "Vault is Empty" : "Folder is Empty"}
+                description={currentPathId === null ? "Tap the '+' button to add your first file or folder." : "This folder is currently empty. Add some files!"}
+                icon="archive-outline"
+                onAction={currentPathId === null ? undefined : () => fabMenuRef.current?.open()}
+                actionLabel={currentPathId === null ? undefined : "Add Items"}
+            />
+        </View>
       ) : (
-        <Screen
-          safeArea={false}
-          scroll={{
-            enabled: true,
-            contentContainerStyle: styles.scrollContentContainer,
-            showsVerticalScrollIndicator: false,
-          }}
-          style={styles.contentContainer}
-        >
-          {items.map(item => renderItem(item))}
-        </Screen>
+        <FlatList
+          data={items}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContentContainer}
+        />
       )}
-
-      <FloatingActionMenu menuItems={vaultMenuItems} />
+      <FloatingActionMenu
+        ref={fabMenuRef}
+        menuItems={vaultMenuItems}
+      />
+      {selectedFile && (
+        <AnimatedActionSheet
+          isVisible={isFileActionMenuVisible}
+          onClose={handleCloseItemMoreMenu}
+          title={`Actions for ${selectedFile.name}`}
+          actions={fileActionMenuActions}
+        />
+      )}
     </Screen>
   );
 };
 
 // MARK: - Styles
 const styles = StyleSheet.create({
-  customHeader: {
+  screen: {
+    flex: 1,
+    backgroundColor: Colors.light.background.primary,
+  },
+  headerRootContainer: {
+    backgroundColor: Colors.light.background.primary,
+    paddingTop: Platform.OS === 'ios' ? Spacing.lg : Spacing.xl + Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border.primary,
+  },
+  headerContentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    height: 50,
     paddingHorizontal: Spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? Spacing.sm : Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.palette.neutral.lighter,
-    backgroundColor: Colors.palette.neutral.white,
   },
-  backButton: {
-    padding: Spacing.xs,
-    marginRight: Spacing.sm,
-  },
-  pathText: {
-    flex: 1,
-    textAlign: 'center',
-    fontWeight: 'bold',
-  },
-  contentContainer: {
-    flex: 1,
-  },
-  inlineLoadingContainer: {
-    paddingVertical: Spacing.sm,
+  headerSideSection: {
+    flexDirection: 'row',
     alignItems: 'center',
+    minWidth: 'auto', // Allow to shrink if empty
+    paddingRight: Spacing.sm, // Add some padding if content is present
   },
-  inlineEmptyState: {
-    padding: Spacing.sm,
+  headerSideSectionEmpty: { // Style for the right spacer when the left section is empty
+    minWidth: 0, // Ensure it doesn't take up space if the left is truly empty
+    paddingRight: 0,
   },
-  scrollContentContainer: {
-    paddingBottom: 80, // Ensure space for FAB
+  headerVaultLabelText: {
+    fontSize: Fonts.size.medium,
+    fontWeight: Fonts.weight.medium,
+    color: Colors.light.text.primary,
+    marginLeft: Spacing.sm,
   },
-  listItem: {
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.palette.neutral.lighter,
+  headerMainTitleSection: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: Spacing.xs, 
   },
-  emptyStateCustom: {
+  headerCurrentPathText: {
+    fontSize: Fonts.size.h3,
+    fontWeight: Fonts.weight.bold,
+    color: Colors.light.text.primary,
+    textAlign: 'center',
+  },
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 60, // Give space for the FAB
-  }
+    backgroundColor: Colors.light.background.primary,
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.lg,
+  },
+  listContentContainer: {
+    flexGrow: 1,
+    paddingBottom: Spacing.lg + 80,
+  },
 });
 
 export default VaultScreen; 

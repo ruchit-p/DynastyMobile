@@ -5,7 +5,8 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   renderViewPadding: {
-    padding: 50,
+    paddingHorizontal: '50%',
+    paddingVertical: 50,
   },
   levelsView: {
     justifyContent: 'center',

@@ -30,13 +30,14 @@ const AddFamilyMemberScreen = () => {
   const [lastName, setLastName] = useState('');
   // const [displayName, setDisplayName] = useState(''); // Removed
   const [dateOfBirth, setDateOfBirth] = useState<Date | null>(new Date()); // Default to today, user should change
-  const [showDatePicker, setShowDatePicker] = useState(Platform.OS === 'ios'); // Keep open on iOS by default
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [gender, setGender] = useState<string>(''); // Initialize as empty or a default value
   // const [status, setStatus] = useState('Living'); // Removed
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   // TODO: Add state for profilePictureUrl if you plan to implement avatar uploads
   // const [profilePictureUrl, setProfilePictureUrl] = useState('');
+  const [showGenderPicker, setShowGenderPicker] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -125,12 +126,9 @@ const AddFamilyMemberScreen = () => {
   };
 
   const onDateChange = (event: any, selectedDate?: Date) => {
-    const currentDate = selectedDate || dateOfBirth;
-    if (Platform.OS === 'android') {
-      setShowDatePicker(false); // Close picker on Android after selection
-    }
-    if (currentDate) {
-      setDateOfBirth(currentDate);
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setDateOfBirth(selectedDate);
     }
   };
 
@@ -158,12 +156,16 @@ const AddFamilyMemberScreen = () => {
       <TextInput style={styles.input} placeholder="Full name (auto-updated)" value={displayName} onChangeText={setDisplayName} /> */}
       
       <Text style={styles.label}>Date of Birth*</Text>
-      {Platform.OS === 'android' && (
-        <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateButton}>
-          <Text style={styles.dateText}>{dateOfBirth ? dateOfBirth.toLocaleDateString() : "Select Date"}</Text>
-        </TouchableOpacity>
-      )}
-      {(showDatePicker || Platform.OS === 'ios') && (
+      <TouchableOpacity 
+        onPress={() => setShowDatePicker(true)} 
+        style={styles.selectorButton}
+      >
+        <Text style={styles.selectorButtonText}>
+          {dateOfBirth ? dateOfBirth.toLocaleDateString() : "Select Date of Birth"}
+        </Text>
+      </TouchableOpacity>
+      
+      {showDatePicker && (
         <DateTimePicker
           testID="dateTimePicker"
           value={dateOfBirth || new Date()} 
@@ -171,26 +173,43 @@ const AddFamilyMemberScreen = () => {
           display={Platform.OS === 'ios' ? "spinner" : "default"}
           onChange={onDateChange}
           maximumDate={new Date()} // Users cannot be born in the future
-          style={Platform.OS === 'ios' ? styles.iosDatePicker : {}}
         />
       )}
 
       <Text style={styles.label}>Gender*</Text>
-      <View style={styles.pickerContainer}> 
-        <Picker
-          selectedValue={gender}
-          onValueChange={(itemValue, itemIndex) => setGender(itemValue)}
-          style={styles.picker}
-          itemStyle={styles.pickerItem} // For iOS item styling if needed
-        >
-          <Picker.Item label="Select Gender..." value="" />
-          <Picker.Item label="Female" value="Female" />
-          <Picker.Item label="Male" value="Male" />
-          <Picker.Item label="Non-binary" value="Non-binary" />
-          <Picker.Item label="Other" value="Other" />
-          <Picker.Item label="Prefer not to say" value="Prefer not to say" />
-        </Picker>
-      </View>
+      <TouchableOpacity 
+        onPress={() => setShowGenderPicker(true)} 
+        style={styles.selectorButton}
+      >
+        <Text style={styles.selectorButtonText}>
+          {gender ? gender : "Select Gender"}
+        </Text>
+      </TouchableOpacity>
+      
+      {showGenderPicker && (
+        <View style={styles.pickerOverlay}>
+          <View style={styles.pickerContainer}>
+            <View style={styles.pickerHeader}>
+              <TouchableOpacity onPress={() => setShowGenderPicker(false)}>
+                <Text style={styles.pickerDoneButton}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <Picker
+              selectedValue={gender}
+              onValueChange={(itemValue) => setGender(itemValue)}
+              style={styles.picker}
+              itemStyle={styles.pickerItem}
+            >
+              <Picker.Item label="Select Gender..." value="" />
+              <Picker.Item label="Female" value="Female" />
+              <Picker.Item label="Male" value="Male" />
+              <Picker.Item label="Non-binary" value="Non-binary" />
+              <Picker.Item label="Other" value="Other" />
+              <Picker.Item label="Prefer not to say" value="Prefer not to say" />
+            </Picker>
+          </View>
+        </View>
+      )}
       
       {/* <Text style={styles.label}>Status</Text> // Removed
       <TextInput style={styles.input} placeholder="(e.g., Living, Deceased)" value={status} onChangeText={setStatus} /> */}
@@ -258,41 +277,52 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     fontWeight: '500',
   },
-  dateButton: {
-    height: 50,
-    backgroundColor: '#FFFFFF',
-    borderColor: '#DDD',
-    borderWidth: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 15,
-    borderRadius: 8,
-    marginBottom: 18, // Match input margin
-  },
-  dateText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  iosDatePicker: {
-    height: 120, // Adjust height for iOS spinner
-    marginBottom: 18,
-  },
-  pickerContainer: {
+  selectorButton: {
     height: 50,
     backgroundColor: '#FFFFFF',
     borderColor: '#D0D0D0',
     borderWidth: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 15,
     borderRadius: 8,
-    marginBottom: 18, // Match input margin
-    justifyContent: 'center', // Center picker content vertically
+    marginBottom: 18,
+  },
+  selectorButtonText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  pickerOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 1000,
+  },
+  pickerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+    overflow: 'hidden',
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  pickerDoneButton: {
+    color: '#1A4B44',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   picker: {
-    height: '100%', // Take full height of container
+    height: 150,
     width: '100%',
-    // backgroundColor: 'transparent', // Optional: for better iOS appearance
   },
   pickerItem: {
-    // For iOS, if you need to style individual items (e.g., font size)
-    // height: 120, // Example for iOS item height to make spinner taller
+    fontSize: 16,
   },
   buttonContainer: {
     marginTop: 10,
