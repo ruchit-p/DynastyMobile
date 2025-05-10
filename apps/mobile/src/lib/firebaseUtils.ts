@@ -128,7 +128,14 @@ const findMemberInSubtree = (node: FamilyTreeNode, memberId: string): FamilyTree
 export const updateMemberProfileDataMobile = async (memberId: string, profileData: Partial<MemberProfile>): Promise<{ success: boolean }> => {
   const functionRef = httpsCallable(firebaseFunctions, 'updateUserProfile');
   try {
-    const result = await functionRef({ userId: memberId, updates: profileData });
+    // Map client-side 'phone' to server-side 'phoneNumber'
+    const { phone, ...restOfProfileData } = profileData;
+    const updatesPayload: { [key: string]: any } = { ...restOfProfileData };
+    if (phone !== undefined) {
+      updatesPayload.phoneNumber = phone;
+    }
+
+    const result = await functionRef({ userId: memberId, updates: updatesPayload });
     return result.data as { success: boolean };
   } catch (error) {
     console.error("Error updating member profile data:", error);

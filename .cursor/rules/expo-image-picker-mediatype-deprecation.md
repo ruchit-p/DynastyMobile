@@ -1,0 +1,68 @@
+## `expo-image-picker` `MediaTypeOptions` Deprecation
+
+**Rule ID:** `EXPIMGPICKER001`
+**Severity:** `Warning`
+**Category:** `Deprecation`
+
+**Description:**
+The `ImagePicker.MediaTypeOptions` enum in `expo-image-picker` has been deprecated. Instead, use string literals `'images'`, `'videos'`, or `'livePhotos'`, either as a single string or in an array, for the `mediaTypes` option in `ImagePicker.launchImageLibraryAsync` or `ImagePicker.launchCameraAsync`.
+
+**Reasoning:**
+The `expo-image-picker` library updated its API to use string literals for `mediaTypes` for simplicity and alignment with web standards or underlying native APIs. Using the old `MediaTypeOptions` enum will result in deprecation warnings and may lead to issues in future versions of the library.
+
+**Correct Usage:**
+
+```typescript
+import * as ImagePicker from "expo-image-picker";
+
+// To pick only images:
+const resultImages = await ImagePicker.launchImageLibraryAsync({
+  mediaTypes: ["images"], // or ImagePicker.MediaType.Images if the specific version of SDK still exports the enum
+  // ... other options
+});
+
+// To pick only videos:
+const resultVideos = await ImagePicker.launchImageLibraryAsync({
+  mediaTypes: ["videos"], // or ImagePicker.MediaType.Videos
+  // ... other options
+});
+
+// To pick images or videos:
+const resultAll = await ImagePicker.launchImageLibraryAsync({
+  mediaTypes: ["images", "videos"], // Replaces MediaTypeOptions.All
+  // ... other options
+});
+
+// To pick live photos (iOS only):
+const resultLivePhotos = await ImagePicker.launchImageLibraryAsync({
+  mediaTypes: ["livePhotos"], // or ImagePicker.MediaType.LivePhotos
+  // ... other options
+});
+```
+
+**Incorrect Usage (Deprecated):**
+
+```typescript
+import * as ImagePicker from "expo-image-picker";
+
+// Deprecated:
+const resultOldImages = await ImagePicker.launchImageLibraryAsync({
+  mediaTypes: ImagePicker.MediaTypeOptions.Images,
+  // ... other options
+});
+
+// Deprecated:
+const resultOldAll = await ImagePicker.launchImageLibraryAsync({
+  mediaTypes: ImagePicker.MediaTypeOptions.All,
+  // ... other options
+});
+```
+
+**Further Information:**
+Refer to the official `expo-image-picker` documentation for the most up-to-date API usage:
+[https://docs.expo.dev/versions/latest/sdk/imagepicker/](https://docs.expo.dev/versions/latest/sdk/imagepicker/)
+
+**Note on `ImagePicker.MediaType` enum:**
+While the primary recommendation is to use string literals, some versions of `expo-image-picker` might still export a `ImagePicker.MediaType` enum (e.g., `ImagePicker.MediaType.Images`, `ImagePicker.MediaType.Videos`). If your TypeScript setup recognizes this enum and it resolves to the correct string values, it can be used. However, direct string literals are universally supported as per the latest documentation examples.
+Always verify with the specific version of `expo-image-picker` you are using.
+The latest (as of this rule's creation) documentation examples predominantly use direct string literals.

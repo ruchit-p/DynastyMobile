@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, Image, useColorScheme, Platform } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import AppHeader from '../../components/ui/AppHeader';
@@ -23,72 +23,72 @@ export default function ViewProfileScreen() {
   const [editedUser, setEditedUser] = useState<MemberProfile | null>(null);
   const [isActionSheetVisible, setIsActionSheetVisible] = useState(false);
 
+  const fetchMemberData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const profileId = params.memberId || params.userId || (authUser?.uid ?? '');
+      if (!profileId) {
+        setError('No member ID provided');
+        return;
+      }
+      const memberData = await getMemberProfileDataMobile(profileId);
+      setUserData(memberData);
+      const initialAvatar = memberData.avatar || authUser?.photoURL || undefined;
+      setEditedUser({ ...memberData, avatar: initialAvatar });
+    } catch (fetchError) {
+      console.error('Error fetching member data:', fetchError);
+      setError('Failed to load profile data');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [params.userId, params.memberId, authUser?.uid]);
+
   // Set up header with dynamic title and action buttons using AppHeader
   useEffect(() => {
     const currentTitle = params.memberName || params.name 
       ? `${params.memberName || params.name}'s Profile` 
       : userData?.name ? `${userData.name}'s Profile` : 'View Profile';
 
+    // Define headerLeftComponent and headerRightComponent inside this useEffect scope
+    const headerLeftComponent = () => (
+      <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+        <Ionicons name="arrow-back" size={26} color={Colors[colorScheme].icon.primary} />
+      </TouchableOpacity>
+    );
+    const headerRightComponent = () => (
+      <View style={styles.headerIconsContainer}>
+        <TouchableOpacity onPress={() => setIsActionSheetVisible(true)} style={styles.iconButton}>
+          <Ionicons 
+            name="ellipsis-horizontal" 
+            size={26} 
+            color={Colors[colorScheme].icon.primary}
+          />
+        </TouchableOpacity>
+      </View>
+    );
+
     navigation.setOptions({
       headerShown: true,
-      header: (props: StackHeaderProps) => {
-        const headerLeftComponent = () => (
-          <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-            <Ionicons name="arrow-back" size={26} color={Colors[colorScheme].icon.primary} />
-          </TouchableOpacity>
-        );
-        const headerRightComponent = () => (
-          <View style={styles.headerIconsContainer}>
-            <TouchableOpacity onPress={() => setIsActionSheetVisible(true)} style={styles.iconButton}>
-              <Ionicons 
-                name="ellipsis-horizontal" 
-                size={26} 
-                color={Colors[colorScheme].icon.primary}
-              />
-            </TouchableOpacity>
-          </View>
-        );
-        
-        return (
-          <AppHeader 
-            title={currentTitle}
-            headerLeft={headerLeftComponent}
-            headerRight={headerRightComponent} 
-          />
-        );
-      },
+      header: (props: StackHeaderProps) => (
+        <AppHeader 
+          title={currentTitle}
+          headerLeft={headerLeftComponent}
+          headerRight={headerRightComponent} 
+        />
+      ),
     });
   }, [navigation, params.name, params.memberName, userData?.name, colorScheme]);
 
-  // Fetch the member data using the new function
-  useEffect(() => {
-    async function fetchMemberData() {
-      setIsLoading(true);
-      setError(null);
-      
-      try {
-        const profileId = params.memberId || params.userId || (authUser?.uid ?? '');
-        
-        if (!profileId) {
-          setError('No member ID provided');
-          setIsLoading(false);
-          return;
-        }
-        
-        const memberData = await getMemberProfileDataMobile(profileId);
-        setUserData(memberData);
-        const initialAvatar = memberData.avatar || authUser?.photoURL || undefined;
-        setEditedUser({ ...memberData, avatar: initialAvatar });
-      } catch (error) {
-        console.error('Error fetching member data:', error);
-        setError('Failed to load profile data');
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    
-    fetchMemberData();
-  }, [params.userId, params.memberId, authUser?.uid]);
+  // Use useFocusEffect to fetch data when the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchMemberData();
+      return () => {
+        // Optional: Cleanup if needed when screen loses focus
+      };
+    }, [fetchMemberData])
+  );
 
   const handleInputChange = (field: keyof MemberProfile, value: string) => {
     if (editedUser) {

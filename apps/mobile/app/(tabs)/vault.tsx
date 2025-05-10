@@ -595,36 +595,6 @@ const VaultScreen = () => {
     return null;
   };
 
-  // New Header Component Logic
-  const HeaderWithPath = () => {
-    const isNotRoot = pathHistory.length > 1;
-    const headerTitle = isNotRoot ? currentPathDisplay : "Vault";
-
-    return (
-      <View style={styles.headerRootContainer}>
-        <View style={styles.headerContentRow}>
-          <View style={styles.headerSideSection}>
-            {isNotRoot && (
-              <>
-                {getHeaderLeft()}
-                <ThemedText style={styles.headerVaultLabelText}>Vault</ThemedText>
-              </>
-            )}
-          </View>
-
-          <View style={styles.headerMainTitleSection}>
-            <ThemedText type="title" style={styles.headerCurrentPathText} numberOfLines={1} ellipsizeMode={isNotRoot ? "middle" : "tail"}>
-              {headerTitle}
-            </ThemedText>
-          </View>
-
-          {/* Spacer for centering, content should mirror left section's width if left section has content */}
-          <View style={[styles.headerSideSection, !isNotRoot && styles.headerSideSectionEmpty]} />
-        </View>
-      </View>
-    );
-  };
-  
   // MARK: - Item Actions & Action Sheet
 
   const handleOpenItemMoreMenu = (item: VaultFile) => {
@@ -701,44 +671,49 @@ const VaultScreen = () => {
 
   // MARK: - Main Return
   return (
-    <Screen style={styles.screen}>
-      <HeaderWithPath />
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.dynastyGreen} />
-          <ThemedText variant="bodyMedium" color="secondary">Loading items...</ThemedText>
-        </View>
-      ) : items.length === 0 ? (
-         <View style={styles.emptyStateContainer}>
-            <EmptyState 
-                title={currentPathId === null ? "Vault is Empty" : "Folder is Empty"}
-                description={currentPathId === null ? "Tap the '+' button to add your first file or folder." : "This folder is currently empty. Add some files!"}
-                icon="archive-outline"
-                onAction={currentPathId === null ? undefined : () => fabMenuRef.current?.open()}
-                actionLabel={currentPathId === null ? undefined : "Add Items"}
-            />
-        </View>
-      ) : (
-        <FlatList
-          data={items}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContentContainer}
-        />
-      )}
-      <FloatingActionMenu
-        ref={fabMenuRef}
-        menuItems={vaultMenuItems}
+    <View style={styles.screen}>
+      <AppHeader
+        title={pathHistory.length > 1 ? currentPathDisplay : 'Vault'}
+        headerLeft={pathHistory.length > 1 ? getHeaderLeft : undefined}
       />
-      {selectedFile && (
-        <AnimatedActionSheet
-          isVisible={isFileActionMenuVisible}
-          onClose={handleCloseItemMoreMenu}
-          title={`Actions for ${selectedFile.name}`}
-          actions={fileActionMenuActions}
+      <Screen safeArea={false} style={styles.contentScreen}>
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.dynastyGreen} />
+            <ThemedText variant="bodyMedium" color="secondary">Loading items...</ThemedText>
+          </View>
+        ) : items.length === 0 ? (
+           <View style={styles.emptyStateContainer}>
+              <EmptyState 
+                  title={currentPathId === null ? "Vault is Empty" : "Folder is Empty"}
+                  description={currentPathId === null ? "Tap the '+' button to add your first file or folder." : "This folder is currently empty. Add some files!"}
+                  icon="archive-outline"
+                  onAction={currentPathId === null ? undefined : () => fabMenuRef.current?.open()}
+                  actionLabel={currentPathId === null ? undefined : "Add Items"}
+              />
+          </View>
+        ) : (
+          <FlatList
+            data={items}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContentContainer}
+          />
+        )}
+        <FloatingActionMenu
+          ref={fabMenuRef}
+          menuItems={vaultMenuItems}
         />
-      )}
-    </Screen>
+        {selectedFile && (
+          <AnimatedActionSheet
+            isVisible={isFileActionMenuVisible}
+            onClose={handleCloseItemMoreMenu}
+            title={`Actions for ${selectedFile.name}`}
+            actions={fileActionMenuActions}
+          />
+        )}
+      </Screen>
+    </View>
   );
 };
 
@@ -748,46 +723,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.light.background.primary,
   },
-  headerRootContainer: {
-    backgroundColor: Colors.light.background.primary,
-    paddingTop: Platform.OS === 'ios' ? Spacing.lg : Spacing.xl + Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border.primary,
-  },
-  headerContentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    height: 50,
-    paddingHorizontal: Spacing.md,
-  },
-  headerSideSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 'auto', // Allow to shrink if empty
-    paddingRight: Spacing.sm, // Add some padding if content is present
-  },
-  headerSideSectionEmpty: { // Style for the right spacer when the left section is empty
-    minWidth: 0, // Ensure it doesn't take up space if the left is truly empty
-    paddingRight: 0,
-  },
-  headerVaultLabelText: {
-    fontSize: Fonts.size.medium,
-    fontWeight: Fonts.weight.medium,
-    color: Colors.light.text.primary,
-    marginLeft: Spacing.sm,
-  },
-  headerMainTitleSection: {
+  contentScreen: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: Spacing.xs, 
-  },
-  headerCurrentPathText: {
-    fontSize: Fonts.size.h3,
-    fontWeight: Fonts.weight.bold,
-    color: Colors.light.text.primary,
-    textAlign: 'center',
   },
   loadingContainer: {
     flex: 1,

@@ -280,7 +280,7 @@ const CreateStoryScreen = () => {
       // On iOS we can use ImagePicker for audio files
       if (Platform.OS === 'ios') {
         const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.All, // Use 'All' since 'Audio' is not available, but 'All' includes video which might have audio.
+          mediaTypes: ['images', 'videos'], // Use 'All' since 'Audio' is not available, but 'All' includes video which might have audio.
           quality: 1.0,
         });
         console.log('iOS ImagePicker result:', JSON.stringify(result, null, 2)); // ADDED LOG
@@ -351,7 +351,7 @@ const CreateStoryScreen = () => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images, // For now, only images. Can be expanded.
+        mediaTypes: ['images'], // For now, only images. Can be expanded.
         allowsEditing: false, // To allow multiple selection easily. Editing can be per image.
         quality: 0.7,
         allowsMultipleSelection: true, 
@@ -403,7 +403,7 @@ const CreateStoryScreen = () => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         quality: 0.8,
         aspect: [16, 9], // Optional: set aspect ratio for cover photos
@@ -440,11 +440,6 @@ const CreateStoryScreen = () => {
   const addContentActions: ActionSheetAction[] = [
     { title: 'Add Text', onPress: () => addBlock('text') },
     { title: 'Add Images', onPress: () => addBlock('image') },
-    { title: 'Add Audio', onPress: () => {
-        console.log('Add Content ActionSheet: "Add Audio" pressed'); // ADDED LOG
-        setAudioActionSheetVisible(true);
-      } 
-    },
     { title: 'Cancel', onPress: () => setAddContentActionSheetVisible(false), style: 'cancel' },
   ];
 
