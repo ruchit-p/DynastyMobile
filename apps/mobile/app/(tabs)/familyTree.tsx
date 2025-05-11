@@ -239,8 +239,8 @@ const FamilyTreeScreen = () => {
             />
           );
         }}
-        cardWidth={120}
-        gap={20}
+        cardWidth={150}
+        gap={25}
         pathColor="#006400"
         strokeWidth={2}
         style={styles.treeContainer}
@@ -289,11 +289,11 @@ const styles = StyleSheet.create({
   itemContainer: {
     borderWidth: 1,
     borderColor: '#1A4B44',
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#E8F5E9',
-    padding: 5,
+    padding: 8,
   },
   selectedItemContainer: {
     borderColor: '#C4A55C',
@@ -301,29 +301,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFDE7',
   },
   avatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    marginBottom: 4,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginBottom: 8,
   },
   avatarPlaceholder: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: '#B0BEC5',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   avatarPlaceholderText: {
     color: '#FFFFFF',
     fontWeight: 'bold',
-    fontSize: 12,
+    fontSize: 18,
   },
   nameText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#1A4B44',
+    textAlign: 'center',
+    paddingHorizontal: 5,
   },
   dobText: {
     fontSize: 10,

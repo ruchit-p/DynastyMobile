@@ -62,7 +62,7 @@ async function getUserInfo(db: FirebaseFirestore.Firestore, userId: string): Pro
     return {
       id: userId,
       displayName: userData?.displayName || `${userData?.firstName || ""} ${userData?.lastName || ""}`.trim() || "Anonymous",
-      profilePicture: userData?.profilePicture || undefined,
+      profilePicture: userData?.profilePictureUrl || userData?.profilePicture || undefined,
     };
   } catch (error) {
     logger.error("Error getting user info:", error);

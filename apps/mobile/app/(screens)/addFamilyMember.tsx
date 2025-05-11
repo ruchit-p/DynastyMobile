@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, ScrollView, Alert, Platform, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
-import { createFamilyMemberMobile } from '../../src/lib/firebaseUtils'; // Adjust path if your lib folder is elsewhere
-// import { useAuth } from '../contexts/AuthContext'; // Assuming you have an Auth context for user and familyTreeId
+import { createFamilyMemberMobile } from '../../src/lib/firebaseUtils';
 import { commonHeaderOptions } from '../../constants/headerConfig';
+import { useAuth } from '../../src/contexts/AuthContext';
+
+// Custom components
+import FullScreenDatePicker from '../../components/ui/FullScreenDatePicker';
+import SelectorButton from '../../components/ui/SelectorButton';
+import GenderPicker from '../../components/ui/GenderPicker';
 
 // TODO: If you don't have a date picker, you might need to install one:
 // npm install @react-native-community/datetimepicker
@@ -13,6 +18,7 @@ import { Picker } from '@react-native-picker/picker'; // Import Picker
 const AddFamilyMemberScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
+  const { user, firestoreUser } = useAuth();
   // Ensure selectedNodeName is passed from FamilyTreeScreen or handle its potential undefined state
   const { selectedNodeId, relationType, selectedNodeName = "Selected Member" } = useLocalSearchParams<{
     selectedNodeId: string;
@@ -20,11 +26,7 @@ const AddFamilyMemberScreen = () => {
     selectedNodeName?: string; 
   }>();
   
-  // const { currentUser, familyTreeId } = useAuth(); // Get current user and their familyTreeId
-  // const currentFamilyTreeId = familyTreeId; // From auth context
-  // TODO: Replace this placeholder with actual familyTreeId from your auth context or state management
-  const placeholderFamilyTreeId = "your_actual_family_tree_id";
-
+  const familyTreeId = firestoreUser?.familyTreeId;
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -68,10 +70,9 @@ const AddFamilyMemberScreen = () => {
       return;
     }
 
-    // TODO: Replace placeholderFamilyTreeId with actual dynamic familyTreeId
-    if (!placeholderFamilyTreeId) {
-        Alert.alert("Configuration Error", "Family Tree ID not found. Please ensure you are logged in.");
-        return;
+    if (!familyTreeId) {
+      Alert.alert("Configuration Error", "Family Tree ID not found. Please ensure you are logged in.");
+      return;
     }
     if (!dateOfBirth) {
         Alert.alert("Validation Error", "Date of birth is required.");
@@ -91,20 +92,18 @@ const AddFamilyMemberScreen = () => {
         displayName: constructedDisplayName,
         dateOfBirth, // Ensure this is in a format your Firebase function expects (e.g., ISO string or Timestamp)
         gender: gender.trim(),
-        // status, // Removed
+        status: 'Living',
         phone: phone.trim(),
         email: email.trim(),
-        familyTreeId: placeholderFamilyTreeId, // Use actual familyTreeId
+        familyTreeId: familyTreeId,
         // profilePictureUrl, // if implementing avatar
       };
 
-      // TODO: Determine correct 'options' based on relationType and your Cloud Function logic.
-      // For example, if adding a parent, does it automatically link to existing spouse of the child node?
-      // These options are defined in the web's functionUtils.ts but their backend effect needs checking.
+      // Determine correct 'options' based on relationType
       const options = {
-        // connectToChildren: relationType === 'parent', 
-        // connectToSpouse: relationType === 'spouse', 
-        // connectToExistingParent: relationType === 'child', 
+        connectToSpouse: relationType === 'child',       // link child to selected node's spouse
+        connectToExistingParent: relationType === 'parent', // link new parent to existing parent of selected node
+        connectToChildren: relationType === 'spouse',      // link new spouse to children of selected node
       };
 
       await createFamilyMemberMobile(userData, relationType, selectedNodeId, options);
@@ -125,11 +124,9 @@ const AddFamilyMemberScreen = () => {
     }
   };
 
-  const onDateChange = (event: any, selectedDate?: Date) => {
+  const onDateChange = (selectedDate: Date) => {
+    setDateOfBirth(selectedDate);
     setShowDatePicker(false);
-    if (selectedDate) {
-      setDateOfBirth(selectedDate);
-    }
   };
 
   // const relativeToTitle = `Relative to: ${selectedNodeName}`;
@@ -141,97 +138,120 @@ const AddFamilyMemberScreen = () => {
     ? `Add New ${relationType.charAt(0).toUpperCase() + relationType.slice(1)}` 
     : "Add New Member";
 
+  // Close gender picker when opening date picker
+  const openDatePicker = () => {
+    if (showGenderPicker) {
+      setShowGenderPicker(false);
+    }
+    setShowDatePicker(true);
+  };
+
+  // Close date picker when opening gender picker
+  const openGenderPicker = () => {
+    if (showDatePicker) {
+      setShowDatePicker(false);
+    }
+    setShowGenderPicker(true);
+  };
+
+  // Handle gender selection
+  const handleGenderChange = (selectedGender: string) => {
+    setGender(selectedGender);
+    setShowGenderPicker(false);
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <Text style={styles.title}>{contentAreaTitle}</Text>
       <Text style={styles.subtitle}>Relative to: {selectedNodeName}</Text>
-      
+
       <Text style={styles.label}>First Name*</Text>
-      <TextInput style={styles.input} placeholder="Enter first name" value={firstName} onChangeText={setFirstName} />
-      
+      <TextInput
+        style={styles.input}
+        placeholder="Enter first name"
+        value={firstName}
+        onChangeText={setFirstName}
+        placeholderTextColor="#A0A0A0"
+      />
+
       <Text style={styles.label}>Last Name*</Text>
-      <TextInput style={styles.input} placeholder="Enter last name" value={lastName} onChangeText={setLastName} />
-      
-      {/* <Text style={styles.label}>Display Name</Text> // Removed
-      <TextInput style={styles.input} placeholder="Full name (auto-updated)" value={displayName} onChangeText={setDisplayName} /> */}
-      
-      <Text style={styles.label}>Date of Birth*</Text>
-      <TouchableOpacity 
-        onPress={() => setShowDatePicker(true)} 
-        style={styles.selectorButton}
-      >
-        <Text style={styles.selectorButtonText}>
-          {dateOfBirth ? dateOfBirth.toLocaleDateString() : "Select Date of Birth"}
-        </Text>
-      </TouchableOpacity>
-      
-      {showDatePicker && (
-        <DateTimePicker
-          testID="dateTimePicker"
-          value={dateOfBirth || new Date()} 
-          mode="date"
-          display={Platform.OS === 'ios' ? "spinner" : "default"}
-          onChange={onDateChange}
-          maximumDate={new Date()} // Users cannot be born in the future
-        />
-      )}
+      <TextInput
+        style={styles.input}
+        placeholder="Enter last name"
+        value={lastName}
+        onChangeText={setLastName}
+        placeholderTextColor="#A0A0A0"
+      />
 
-      <Text style={styles.label}>Gender*</Text>
-      <TouchableOpacity 
-        onPress={() => setShowGenderPicker(true)} 
-        style={styles.selectorButton}
-      >
-        <Text style={styles.selectorButtonText}>
-          {gender ? gender : "Select Gender"}
-        </Text>
-      </TouchableOpacity>
-      
-      {showGenderPicker && (
-        <View style={styles.pickerOverlay}>
-          <View style={styles.pickerContainer}>
-            <View style={styles.pickerHeader}>
-              <TouchableOpacity onPress={() => setShowGenderPicker(false)}>
-                <Text style={styles.pickerDoneButton}>Done</Text>
-              </TouchableOpacity>
-            </View>
-            <Picker
-              selectedValue={gender}
-              onValueChange={(itemValue) => setGender(itemValue)}
-              style={styles.picker}
-              itemStyle={styles.pickerItem}
-            >
-              <Picker.Item label="Select Gender..." value="" />
-              <Picker.Item label="Female" value="Female" />
-              <Picker.Item label="Male" value="Male" />
-              <Picker.Item label="Non-binary" value="Non-binary" />
-              <Picker.Item label="Other" value="Other" />
-              <Picker.Item label="Prefer not to say" value="Prefer not to say" />
-            </Picker>
-          </View>
-        </View>
-      )}
-      
-      {/* <Text style={styles.label}>Status</Text> // Removed
-      <TextInput style={styles.input} placeholder="(e.g., Living, Deceased)" value={status} onChangeText={setStatus} /> */}
-      
+      <SelectorButton
+        label="Date of Birth"
+        placeholder="Select Date of Birth"
+        value={dateOfBirth ? dateOfBirth.toLocaleDateString() : null}
+        onPress={openDatePicker}
+        required={true}
+      />
+
+      <FullScreenDatePicker
+        isVisible={showDatePicker}
+        onDismiss={() => setShowDatePicker(false)}
+        onDateChange={onDateChange}
+        value={dateOfBirth || new Date()}
+        maximumDate={new Date()} // Users cannot be born in the future
+        mode="date"
+        display="spinner"
+        doneButtonLabel="Done"
+      />
+
+      <SelectorButton
+        label="Gender"
+        placeholder="Select Gender"
+        value={gender}
+        onPress={openGenderPicker}
+        required={true}
+      />
+
+      <GenderPicker
+        isVisible={showGenderPicker}
+        onDismiss={() => setShowGenderPicker(false)}
+        onGenderChange={handleGenderChange}
+        value={gender}
+        doneButtonLabel="Done"
+      />
+
       <Text style={styles.label}>Email</Text>
-      <TextInput style={styles.input} placeholder="Enter email address" value={email} onChangeText={setEmail} keyboardType="email-address" autoComplete="email" textContentType="emailAddress" />
-      
-      <Text style={styles.label}>Phone</Text>
-      <TextInput style={styles.input} placeholder="Enter phone number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" textContentType="telephoneNumber" />
+      <TextInput
+        style={styles.input}
+        placeholder="Enter email address"
+        value={email}
+        onChangeText={setEmail}
+        keyboardType="email-address"
+        autoComplete="email"
+        textContentType="emailAddress"
+        placeholderTextColor="#A0A0A0"
+      />
 
-      <TouchableOpacity 
-        style={[styles.button, styles.saveButton]} 
-        onPress={handleSaveMember} 
+      <Text style={styles.label}>Phone</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Enter phone number"
+        value={phone}
+        onChangeText={setPhone}
+        keyboardType="phone-pad"
+        textContentType="telephoneNumber"
+        placeholderTextColor="#A0A0A0"
+      />
+
+      <TouchableOpacity
+        style={[styles.button, styles.saveButton]}
+        onPress={handleSaveMember}
         disabled={isLoading}
       >
         <Text style={styles.buttonText}>{isLoading ? "Saving..." : "Save Member"}</Text>
       </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={[styles.button, styles.cancelButton]} 
-        onPress={() => router.back()} 
-        disabled={isLoading} // Good to disable cancel if save is in progress
+
+      <TouchableOpacity
+        style={[styles.button, styles.cancelButton]}
+        onPress={() => router.back()}
+        disabled={isLoading}
       >
         <Text style={[styles.buttonText, styles.cancelButtonText]}>Cancel</Text>
       </TouchableOpacity>
@@ -246,9 +266,10 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 20,
+    paddingTop: 15,
   },
   title: {
-    fontSize: 24, // Increased size
+    fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 8,
     textAlign: 'center',
@@ -256,7 +277,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    marginBottom: 30, // Increased bottom margin
+    marginBottom: 24,
     textAlign: 'center',
     color: '#555555', // Darker gray
   },
@@ -265,16 +286,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderColor: '#D0D0D0', // Lighter border
     borderWidth: 1,
-    marginBottom: 18, // Increased margin
+    marginBottom: 20,
     paddingHorizontal: 15,
     borderRadius: 8, // More rounded corners
     fontSize: 16,
     color: '#333333',
   },
   label: {
-    fontSize: 14, // Slightly smaller label
+    fontSize: 15,
     color: '#4A4A4A', // Darker gray for label
-    marginBottom: 6,
+    marginBottom: 8,
     fontWeight: '500',
   },
   selectorButton: {
@@ -285,51 +306,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 15,
     borderRadius: 8,
-    marginBottom: 18,
+    marginBottom: 20,
   },
   selectorButtonText: {
     fontSize: 16,
-    color: '#333',
+    color: '#333333',
   },
-  pickerOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    zIndex: 1000,
-  },
-  pickerContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
-    overflow: 'hidden',
-  },
-  pickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  pickerDoneButton: {
-    color: '#1A4B44',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  picker: {
-    height: 150,
-    width: '100%',
-  },
-  pickerItem: {
-    fontSize: 16,
-  },
-  buttonContainer: {
-    marginTop: 10,
-    borderRadius: 8,
-    overflow: 'hidden',
-    width: '100%', // Make button containers take full width
-    marginBottom: 10, // Add space between buttons
+  placeholderText: {
+    color: '#A0A0A0', // Lighter color for placeholders
   },
   button: {
     height: 50,
@@ -337,7 +321,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
-    marginBottom: 12, // Space between buttons
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
@@ -345,20 +329,21 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   saveButton: {
-    backgroundColor: '#006400', // Dynasty Green
+    backgroundColor: '#1A4B44', // Dynasty Green dark
+    marginTop: 10,
   },
   cancelButton: {
     backgroundColor: '#FFFFFF',
-    borderColor: '#006400', // Dynasty Green border
+    borderColor: '#1A4B44', // Dynasty Green border
     borderWidth: 1,
   },
   buttonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   cancelButtonText: {
-    color: '#006400', // Dynasty Green text for cancel button
+    color: '#1A4B44', // Dynasty Green text for cancel button
   }
 });
 

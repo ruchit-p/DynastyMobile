@@ -16,6 +16,9 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { fetchAccessibleStoriesMobile, getStoryCommentsMobile } from '../../src/lib/storyUtils';
+import { commonHeaderOptions } from '../../constants/headerConfig';
+import ProfilePicture from '../../components/ui/ProfilePicture';
+import { formatDate, formatTimeAgo } from '../../src/lib/dateUtils';
 
 interface StoryComment {
   id: string;
@@ -59,7 +62,7 @@ const StoryDetailScreen = () => {
   useEffect(() => {
     // Fetch story detail and comments from backend
     if (storyId && user?.uid && firestoreUser?.familyTreeId && !story) {
-      navigation.setOptions({ title: 'Loading...', headerTitleAlign: 'center', headerRight: () => null });
+      navigation.setOptions({ ...commonHeaderOptions, title: 'Loading...', headerRight: () => null });
       (async () => {
         try {
           // Get all accessible stories and find current one
@@ -69,22 +72,13 @@ const StoryDetailScreen = () => {
             Alert.alert("Story not found", "This story could not be loaded.", [{ text: "OK", onPress: () => router.back() }]);
             return;
           }
-          // Parse creation date
-          let createdDate: Date;
-          if (found.createdAt && typeof (found.createdAt as any).toDate === 'function') {
-            createdDate = (found.createdAt as any).toDate();
-          } else if (found.createdAt && (found.createdAt as any).seconds) {
-            createdDate = new Date((found.createdAt as any).seconds * 1000);
-          } else {
-            createdDate = new Date(found.createdAt as any);
-          }
-          // Build local story detail
+          // Build local story detail with formatted dates
           const detail: StoryDetail = {
             id: found.id,
             userName: found.author?.displayName || found.authorID,
             userAvatar: found.author?.profilePicture || '',
-            timestamp: createdDate.toLocaleTimeString(),
-            date: createdDate.toLocaleDateString(),
+            date: formatDate(found.createdAt),
+            timestamp: formatTimeAgo(found.createdAt),
             title: found.blocks.find(b => b.type === 'text')?.data as string || '',
             content: found.blocks.find(b => b.type === 'text')?.data as string || '',
             images: found.blocks.filter(b => b.type === 'image').flatMap(b => Array.isArray(b.data) ? b.data : []),
@@ -118,8 +112,8 @@ const StoryDetailScreen = () => {
           setComments(mappedComments);
           // Update header title
           navigation.setOptions({
+            ...commonHeaderOptions,
             title: detail.title.length > 25 ? `${detail.title.substring(0, 25)}...` : detail.title,
-            headerTitleAlign: 'center',
             headerRight: () => (
               <TouchableOpacity onPress={() => Alert.alert("Story Options", "Share, Edit, Delete...")} style={{ paddingHorizontal: 15 }}>
                 <Ionicons name="ellipsis-horizontal" size={24} color="#1A4B44" />
@@ -171,7 +165,7 @@ const StoryDetailScreen = () => {
       >
         <ScrollView style={styles.scrollContainer}>
           <View style={styles.storyHeader}>
-            <Image source={{ uri: story.userAvatar }} style={styles.avatar} />
+            <ProfilePicture source={story.userAvatar} name={story.userName} size={45} style={styles.avatar} />
             <View style={styles.userInfo}>
               <Text style={styles.userName}>{story.userName}</Text>
               <View style={styles.timestampContainer}>
