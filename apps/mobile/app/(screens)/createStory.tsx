@@ -24,6 +24,8 @@ import SelectViewers from '../../components/ui/SelectViewers';
 import TagPeopleButton from '../../components/ui/TagPeopleButton';
 import AddDetailsButton from '../../components/ui/AddDetailsButton';
 import AddContentButton from '../../components/ui/AddContentButton';
+import { useAuth } from '../../src/contexts/AuthContext';
+import { createStoryMobile } from '../../src/lib/storyUtils';
 
 // MARK: - Types
 type BlockType = "text" | "image" | "video" | "audio";
@@ -41,6 +43,7 @@ interface Location {
 }
 
 const CreateStoryScreen = () => {
+  const { user, firestoreUser } = useAuth();
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams(); // Get potential returned params
@@ -164,7 +167,7 @@ const CreateStoryScreen = () => {
   }, [blocks]);
 
   // MARK: - Handlers
-  const handleSaveStory = () => {
+  const handleSaveStory = async () => {
     if (!storyTitle.trim()) {
       Alert.alert('Missing Title', 'Please provide a title for your story.');
       return;
@@ -209,38 +212,35 @@ const CreateStoryScreen = () => {
       }
     });
     
-    // This is the data structure we would send to Firebase
-    const storyData = {
+    // Prepare blocks for backend: only include necessary fields
+    const storyBlocks = transformedBlocks.map(({ type, data, localId }) => ({
+      type: type as 'text' | 'image' | 'video' | 'audio',
+      data,
+      localId,
+    }));
+    const storyPayload = {
+      authorID: user?.uid || '',
       title: storyTitle,
       subtitle: showSubtitle ? subtitle : undefined,
-      eventDate: showDate ? storyDate?.toISOString() : undefined,
-      location: showLocation ? location : undefined,
-      coverPhotoUrl: coverPhoto ? coverPhoto.uri : undefined, // In a real app, this would be uploaded to Firebase Storage
-      privacy,
+      eventDate: showDate && storyDate ? storyDate : undefined,
+      location: showLocation && location ? { lat: location.latitude, lng: location.longitude, address: location.address || '' } : undefined,
+      privacy: (privacy === 'personal' ? 'privateAccess' : privacy) as 'family' | 'privateAccess' | 'custom',
+      customAccessMembers: privacy === 'custom' ? customSelectedViewers : undefined,
+      blocks: storyBlocks,
+      familyTreeId: firestoreUser?.familyTreeId || '',
       peopleInvolved: taggedMembers,
-      customViewers: privacy === 'custom' ? customSelectedViewers : undefined,
-      blocks: transformedBlocks,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      coverPhoto: coverPhoto ? coverPhoto.uri : undefined,
     };
     
-    // TODO: In a production app, implement actual API call to Firebase
-    // This would typically be a Cloud Function call similar to:
-    // const functions = getFunctions();
-    // const createStoryFunction = httpsCallable(functions, 'createStory');
-    // try {
-    //   const result = await createStoryFunction(storyData);
-    //   console.log('Story created:', result.data);
-    //   Alert.alert('Success', 'Your story has been saved.');
-    //   router.back();
-    // } catch (error) {
-    //   console.error('Error creating story:', error);
-    //   Alert.alert('Error', 'Failed to save your story. Please try again.');
-    // }
-    
-    console.log('Story data:', storyData);
-    Alert.alert('Story Saved (Simulated)', 'Your story has been successfully saved.');
-    router.back(); 
+    try {
+      const newStoryId = await createStoryMobile(storyPayload);
+      console.log('Story created with ID:', newStoryId);
+      Alert.alert('Success', 'Your story has been saved.');
+      router.back();
+    } catch (error) {
+      console.error('Error creating story:', error);
+      Alert.alert('Error', 'Failed to save your story. Please try again.');
+    }
   };
 
   const addBlock = (type: BlockType) => {

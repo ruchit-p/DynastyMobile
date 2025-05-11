@@ -97,9 +97,9 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.lg,
     backgroundColor: Colors.light.background.primary,
-    borderBottomWidth: 0.5,
-    borderBottomColor: Colors.light.border.primary,
     minHeight: 70, // Ensure good touch target height
+    borderRadius: BorderRadius.md, // Added for rounded corners
+    marginBottom: Spacing.sm, // Added for separation
   },
   iconContainer: {
     marginRight: Spacing.md,

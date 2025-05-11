@@ -1,3 +1,8 @@
+---
+description:  `expo-image-picker` `MediaTypeOptions` Deprecation
+globs: 
+alwaysApply: false
+---
 ## `expo-image-picker` `MediaTypeOptions` Deprecation
 
 **Rule ID:** `EXPIMGPICKER001`
@@ -60,7 +65,7 @@ const resultOldAll = await ImagePicker.launchImageLibraryAsync({
 
 **Further Information:**
 Refer to the official `expo-image-picker` documentation for the most up-to-date API usage:
-[https://docs.expo.dev/versions/latest/sdk/imagepicker/](https://docs.expo.dev/versions/latest/sdk/imagepicker/)
+[https://docs.expo.dev/versions/latest/sdk/imagepicker/](mdc:https:/docs.expo.dev/versions/latest/sdk/imagepicker)
 
 **Note on `ImagePicker.MediaType` enum:**
 While the primary recommendation is to use string literals, some versions of `expo-image-picker` might still export a `ImagePicker.MediaType` enum (e.g., `ImagePicker.MediaType.Images`, `ImagePicker.MediaType.Videos`). If your TypeScript setup recognizes this enum and it resolves to the correct string values, it can be used. However, direct string literals are universally supported as per the latest documentation examples.

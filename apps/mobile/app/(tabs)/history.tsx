@@ -26,6 +26,10 @@ import { Spacing, BorderRadius } from '../../constants/Spacing';
 import { useBorderColor } from '../../hooks/useThemeColor';
 import { Colors } from '../../constants/Colors';
 
+// Import context and utility functions
+import { useAuth } from '../../src/contexts/AuthContext';
+import { fetchUserStoriesMobile } from '../../src/lib/storyUtils';
+
 // Define a type for History items
 interface HistoryItemType {
   id: string;
@@ -231,24 +235,47 @@ const HistoryFeedItem: React.FC<HistoryFeedItemProps> = ({
 // Main History Screen
 const HistoryScreen = () => {
   const router = useRouter();
+  const { user } = useAuth();
   const [historyItems, setHistoryItems] = useState<HistoryItemType[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   useFocusEffect(
     React.useCallback(() => {
-      // Simulate fetching data
-      const exampleItems: HistoryItemType[] = [];
-      
-      setHistoryItems(exampleItems);
-
-      const timer = setTimeout(() => {
-        setIsLoadingHistory(false);
-        setIsRefreshing(false);
-      }, 500);
-      
-      return () => clearTimeout(timer);
-    }, [])
+      const fetchHistory = async () => {
+        setIsLoadingHistory(true);
+        try {
+          if (user?.uid) {
+            const stories = await fetchUserStoriesMobile(user.uid);
+            const mapped: HistoryItemType[] = stories.map(story => {
+              const textBlock = story.blocks.find(b => b.type === 'text');
+              const imageBlock = story.blocks.find(b => b.type === 'image');
+              const created = new Date(story.createdAt.seconds * 1000);
+              return {
+                id: story.id,
+                userAvatar: '', // TODO: fetch user avatar
+                userName: '', // TODO: fetch author name
+                timestamp: created.toLocaleTimeString(),
+                date: created.toLocaleDateString(),
+                createdAt: created,
+                content: typeof textBlock?.data === 'string' ? textBlock.data : '',
+                image: Array.isArray(imageBlock?.data) ? imageBlock.data[0] : undefined,
+                location: story.location?.address,
+                commentsCount: story.commentCount || 0,
+                mediaCount: story.blocks.filter(b => b.type === 'image' || b.type === 'video').length,
+              };
+            });
+            setHistoryItems(mapped);
+          }
+        } catch (error) {
+          console.error('Error fetching history items:', error);
+        } finally {
+          setIsLoadingHistory(false);
+          setIsRefreshing(false);
+        }
+      };
+      fetchHistory();
+    }, [user])
   );
 
   // Menu items for History Screen
@@ -275,7 +302,37 @@ const HistoryScreen = () => {
   
   const handleRefresh = () => {
     setIsRefreshing(true);
-    // Re-fetch data
+    // Re-fetch history items
+    (async () => {
+      try {
+        if (user?.uid) {
+          const stories = await fetchUserStoriesMobile(user.uid);
+          const mapped: HistoryItemType[] = stories.map(story => {
+            const textBlock = story.blocks.find(b => b.type === 'text');
+            const imageBlock = story.blocks.find(b => b.type === 'image');
+            const created = new Date(story.createdAt.seconds * 1000);
+            return {
+              id: story.id,
+              userAvatar: '',
+              userName: '',
+              timestamp: created.toLocaleTimeString(),
+              date: created.toLocaleDateString(),
+              createdAt: created,
+              content: typeof textBlock?.data === 'string' ? textBlock.data : '',
+              image: Array.isArray(imageBlock?.data) ? imageBlock.data[0] : undefined,
+              location: story.location?.address,
+              commentsCount: story.commentCount || 0,
+              mediaCount: story.blocks.filter(b => b.type === 'image' || b.type === 'video').length,
+            };
+          });
+          setHistoryItems(mapped);
+        }
+      } catch (error) {
+        console.error('Error refreshing history items:', error);
+      } finally {
+        setIsRefreshing(false);
+      }
+    })();
   };
 
   if (isLoadingHistory && !isRefreshing) {

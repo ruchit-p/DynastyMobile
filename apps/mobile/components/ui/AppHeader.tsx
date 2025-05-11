@@ -81,6 +81,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
 const styles = StyleSheet.create({
   headerContainer: {
     // The background color and shadow/elevation styles are applied dynamically
+    zIndex: 1, // Add zIndex to potentially help with shadow visibility
   },
   headerContent: {
     height: Platform.OS === 'ios' ? 50 : 56,
