@@ -6,12 +6,13 @@ import {
   TouchableOpacity, 
   StyleProp, 
   ViewStyle,
-  ImageSourcePropType
+  ImageSourcePropType,
+  Text
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Spacing, BorderRadius } from '../../constants/Spacing';
 import { useColorScheme } from '../../hooks/useColorScheme';
-import { useBackgroundColor, useBorderColor } from '../../hooks/useThemeColor';
+import { useBackgroundColor, useBorderColor, useTextColor } from '../../hooks/useThemeColor';
 import { Colors } from '../../constants/Colors';
 
 export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | number;
@@ -19,6 +20,9 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | number;
 export interface AvatarProps {
   // Image source
   source?: string | ImageSourcePropType;
+  
+  // Fallback for when no image is available (typically initials)
+  fallback?: string;
   
   // Appearance
   size?: AvatarSize;
@@ -39,9 +43,11 @@ export interface AvatarProps {
  * Avatar Component
  * 
  * A component for displaying user profile images with various sizes and styles.
+ * Uses fallback text (typically initials) when no image is available.
  */
 const Avatar: React.FC<AvatarProps> = ({
   source,
+  fallback,
   size = 'md',
   borderWidth = 0,
   editable = false,
@@ -54,6 +60,8 @@ const Avatar: React.FC<AvatarProps> = ({
   
   // Get theme colors
   const borderColor = useBorderColor('primary');
+  const fallbackBgColor = useBackgroundColor('secondary', 0.1);
+  const fallbackTextColor = useTextColor('primary');
   const editBackgroundColor = 'rgba(0, 0, 0, 0.5)'; // Semi-transparent background
   
   // Convert size to number
@@ -85,20 +93,19 @@ const Avatar: React.FC<AvatarProps> = ({
   const borderRadiusValue = sizeValue / 2;
   
   // Prepare source
-  let imageSource: ImageSourcePropType;
+  let imageSource: ImageSourcePropType | undefined;
   if (typeof source === 'string') {
     imageSource = { uri: source };
   } else if (source) {
     imageSource = source;
-  } else {
-    // Default placeholder avatar
-    // Assume this exists, if not you may need to create one
-    imageSource = require('../../assets/images/avatar-placeholder.png');
   }
   
   // Edit icon size proportional to avatar size
   const editIconSize = sizeValue * 0.3; // 30% of avatar size
   const editIconPadding = sizeValue * 0.06; // 6% of avatar size
+  
+  // Calculate font size for fallback text based on avatar size
+  const fallbackFontSize = sizeValue * 0.4; // 40% of avatar size
   
   // Choose container based on interactivity
   const Container = onPress ? TouchableOpacity : View;
@@ -123,18 +130,57 @@ const Avatar: React.FC<AvatarProps> = ({
       accessibilityRole={onPress ? 'button' : 'image'}
       accessibilityLabel={editable ? 'Edit profile picture' : 'Profile picture'}
     >
-      <Image
-        source={imageSource}
-        style={[
-          styles.image,
+      {imageSource ? (
+        <Image
+          source={imageSource}
+          style={[
+            styles.image,
+            {
+              width: sizeValue,
+              height: sizeValue,
+              borderRadius: borderRadiusValue,
+            },
+          ]}
+          resizeMode="cover"
+        />
+      ) : fallback ? (
+        <View style={[
+          styles.fallbackContainer, 
           {
             width: sizeValue,
             height: sizeValue,
             borderRadius: borderRadiusValue,
-          },
-        ]}
-        resizeMode="cover"
-      />
+            backgroundColor: fallbackBgColor,
+          }
+        ]}>
+          <Text 
+            style={[
+              styles.fallbackText,
+              {
+                fontSize: fallbackFontSize,
+                color: fallbackTextColor,
+              }
+            ]}
+            numberOfLines={1}
+          >
+            {fallback}
+          </Text>
+        </View>
+      ) : (
+        // Default placeholder avatar when no source or fallback is provided
+        <Image
+          source={require('../../assets/images/avatar-placeholder.png')}
+          style={[
+            styles.image,
+            {
+              width: sizeValue,
+              height: sizeValue,
+              borderRadius: borderRadiusValue,
+            },
+          ]}
+          resizeMode="cover"
+        />
+      )}
       
       {editable && (
         <View
@@ -167,6 +213,13 @@ const styles = StyleSheet.create({
   },
   image: {
     // The size and border radius are applied dynamically
+  },
+  fallbackContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fallbackText: {
+    fontWeight: '600',
   },
   editIconContainer: {
     position: 'absolute',

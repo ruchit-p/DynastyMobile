@@ -5,9 +5,9 @@ import Link from "next/link"
 import Image from "next/image"
 import { useState, useEffect } from "react"
 import { Button } from "./ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
 import { Card, CardHeader, CardContent, CardFooter } from "./ui/card"
 import { Badge } from "./ui/badge"
+import ProfilePicture from "./ui/ProfilePicture"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,13 +50,9 @@ export function StoryCard({ story, currentUserId }: StoryProps) {
   const [imageError, setImageError] = useState(false);
   
   useEffect(() => {
-    console.log(`[StoryCard] Initializing story card for story ID: ${story.id}`);
-    console.log(`[StoryCard] Story author:`, story.author);
-    
     // Check if the user has liked this story
     checkStoryLikeStatus(story.id)
       .then(liked => {
-        console.log(`[StoryCard] User has liked story ${story.id}: ${liked}`);
         setIsLiked(liked);
       })
       .catch(error => {
@@ -66,17 +62,13 @@ export function StoryCard({ story, currentUserId }: StoryProps) {
     // Subscribe to like events for this story
     const unsubscribeLike = eventManager.subscribe<LikeEventData>('story:liked', (data) => {
       if (data.storyId === story.id && data.liked !== undefined) {
-        console.log(`[StoryCard] Received like event for story ${story.id}: ${data.liked}`);
         setIsLiked(data.liked);
-        // Don't update likeCount here as it's already updated by the optimistic update
       }
     });
     
     const unsubscribeUnlike = eventManager.subscribe<LikeEventData>('story:unliked', (data) => {
       if (data.storyId === story.id && data.liked !== undefined) {
-        console.log(`[StoryCard] Received unlike event for story ${story.id}: ${data.liked}`);
         setIsLiked(data.liked);
-        // Don't update likeCount here as it's already updated by the optimistic update
       }
     });
     
@@ -85,7 +77,7 @@ export function StoryCard({ story, currentUserId }: StoryProps) {
       unsubscribeLike();
       unsubscribeUnlike();
     };
-  }, [story.id, story.author]);
+  }, [story.id]);
   
   // Count different media types
   const getMediaCounts = (): MediaCount => {
@@ -106,6 +98,12 @@ export function StoryCard({ story, currentUserId }: StoryProps) {
 
   // Get first image from content if available
   const getCoverImage = () => {
+    // If there's a coverImageURL directly on the story, use that first
+    if (story.coverImageURL) {
+      return ensureAccessibleStorageUrl(story.coverImageURL);
+    }
+    
+    // Otherwise, find the first image block
     const imageBlocks = story.blocks.filter(block => block.type === 'image');
     
     if (imageBlocks.length > 0 && imageBlocks[0].data) {
@@ -139,22 +137,11 @@ export function StoryCard({ story, currentUserId }: StoryProps) {
       <CardHeader className="p-4 pb-0">
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3">
-            <Avatar className="h-10 w-10 border-2 border-[#0A5C36]/10">
-              {story.author.profilePicture ? (
-                <AvatarImage
-                  src={story.author.profilePicture}
-                  alt={`${story.author.displayName}'s profile picture`}
-                  className="object-cover"
-                />
-              ) : (
-                <AvatarFallback className="bg-[#0A5C36]/10 text-[#0A5C36]">
-                  {story.author.displayName
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
-                </AvatarFallback>
-              )}
-            </Avatar>
+            <ProfilePicture 
+              src={story.author.profilePicture} 
+              name={story.author.displayName} 
+              size="md"
+            />
             <div>
               <div className="font-medium text-gray-900">{story.author.displayName}</div>
               <div className="flex items-center text-xs text-gray-500">
@@ -244,7 +231,7 @@ export function StoryCard({ story, currentUserId }: StoryProps) {
           {coverImage && !imageError && (
             <div className="relative aspect-[1/1] w-1/3 overflow-hidden rounded-lg mb-4">
               <Image 
-                src={ensureAccessibleStorageUrl(coverImage)} 
+                src={coverImage} 
                 alt={story.title} 
                 fill 
                 className="object-cover"
@@ -269,14 +256,12 @@ export function StoryCard({ story, currentUserId }: StoryProps) {
               <span className="text-xs text-gray-500">With:</span>
               <div className="flex items-center -space-x-2">
                 {story.taggedPeople.slice(0, 3).map((person) => (
-                  <Avatar key={person.id} className="h-6 w-6 border-2 border-white">
-                    <AvatarFallback className="text-xs bg-[#0A5C36]/10 text-[#0A5C36]">
-                      {person.displayName
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </AvatarFallback>
-                  </Avatar>
+                  <ProfilePicture
+                    key={person.id}
+                    name={person.displayName}
+                    size="xs"
+                    className="border-2 border-white"
+                  />
                 ))}
                 {story.taggedPeople.length > 3 && (
                   <div className="h-6 w-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center">
@@ -334,7 +319,7 @@ export function StoryCard({ story, currentUserId }: StoryProps) {
             <Button variant="ghost" size="sm" className="gap-1 text-xs font-normal text-gray-600">
               <MessageSquare className="h-4 w-4" />
               <span>
-                Comments
+                {story.commentCount ? `${story.commentCount} ` : ""}Comments
               </span>
             </Button>
           </Link>

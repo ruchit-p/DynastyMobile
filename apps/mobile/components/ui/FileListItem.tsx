@@ -23,6 +23,7 @@ interface VaultFile extends VaultItemBase {
   fileType: 'image' | 'video' | 'audio' | 'document' | 'other';
   size?: string;
   mimeType?: string;
+  uri?: string;  // Added for mobile file access and sharing
 }
 
 export type VaultListItemType = VaultFolder | VaultFile;

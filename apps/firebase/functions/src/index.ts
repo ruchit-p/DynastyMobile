@@ -20,3 +20,4 @@ export * from "./api"; // HTTP API endpoints
 export * from "./events"; // Event management functions
 export * from "./eventsApi";
 export * from "./notifications"; // Notification functions
+export * from "./vault";
