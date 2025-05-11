@@ -150,8 +150,8 @@ const FeedScreen = () => {
         </View>
       )}
       
-      {/* Floating Action Button Menu */}
-      <FloatingActionMenu menuItems={feedMenuItems} />
+      {/* Floating Action Button Menu - Using fixed positioning */}
+      <FloatingActionMenu menuItems={feedMenuItems} absolutePosition={false} />
       <AnimatedActionSheet
         isVisible={actionSheetVisible}
         onClose={() => setActionSheetVisible(false)}
@@ -195,10 +195,10 @@ const styles = StyleSheet.create({
     minHeight: 400,
   },
   feedContainer: {
-    paddingBottom: Spacing.xl, // Extra padding at bottom for FAB
+    paddingBottom: Spacing.xl + Spacing.lg, // Extra padding at bottom for FAB and to ensure last post is fully visible
   },
   feedItem: {
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm, // Reduced spacing between posts from md (16) to sm (8)
   },
 });
 

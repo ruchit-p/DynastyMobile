@@ -1,9 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, Platform, Keyboard, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, Platform, Keyboard, ActivityIndicator, Alert, Dimensions } from 'react-native';
 import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, PROVIDER_APPLE, Region } from 'react-native-maps';
-import * as Location from 'expo-location'; // Import expo-location
+import MapView, { Marker, Region } from 'react-native-maps';
+import * as Location from 'expo-location';
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+
+// Define the primary green color from the app's theme (assuming it might be used or for consistency)
+const dynastyGreen = '#1A4B44'; 
+// Placeholder for API Key - REMEMBER TO REPLACE THIS
+const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || 'YOUR_GOOGLE_PLACES_API_KEY';
 
 // Default region (San Francisco) - will be overridden by user's location if permission granted
 const INITIAL_REGION = {
@@ -13,39 +19,57 @@ const INITIAL_REGION = {
   longitudeDelta: 0.0421,
 };
 
+interface SelectedPlace {
+  address: string;
+  latitude: number;
+  longitude: number;
+}
+
 const SelectLocationScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ currentLocation?: string, previousPath?: string }>();
   
-  // State for the map
   const [region, setRegion] = useState<Region>(INITIAL_REGION);
-  const [markerCoordinate, setMarkerCoordinate] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedPlace, setSelectedPlace] = useState<SelectedPlace | null>(() => {
+    if (params.currentLocation) {
+      // Try to parse if it's a JSON stringified coordinate object
+      try {
+        const parsedCoord = JSON.parse(params.currentLocation);
+        if (parsedCoord && typeof parsedCoord.latitude === 'number' && typeof parsedCoord.longitude === 'number') {
+          // If we have coordinates, we ideally need an address too.
+          // For now, let's assume if currentLocation is a coordinate object, we don't have an address for it yet.
+          // This part might need refinement based on how CreateEvent passes `currentLocation`
+          return { address: 'Selected on map', latitude: parsedCoord.latitude, longitude: parsedCoord.longitude };
+        }
+      } catch (e) {
+        // Not a JSON coordinate, assume it's an address string
+         return { address: params.currentLocation, latitude: INITIAL_REGION.latitude, longitude: INITIAL_REGION.longitude };
+      }
+    }
+    return null;
+  });
   const mapRef = useRef<MapView>(null);
-  const [manualAddress, setManualAddress] = useState<string>(params.currentLocation || '');
-
-  // State for loading and errors
+  
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    // Request location permissions
     (async () => {
       setIsLoading(true);
       setErrorMsg(null);
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        setErrorMsg('Permission to access location was denied. Please enable it in settings to see your current location and improve search.');
+        setErrorMsg('Permission to access location was denied.');
         Alert.alert(
           "Location Permission Denied",
-          "Please enable location services in your device settings for Dynasty to enhance location features. You can still manually search or select a location.",
+          "Please enable location services for a better experience. You can still search manually.",
           [{ text: "OK" }]
         );
         setIsLoading(false);
-        // Even if denied, try to set initial manual address if passed
-        if (params.currentLocation) {
-          setManualAddress(params.currentLocation);
+        if (params.currentLocation && !selectedPlace) {
+            // If permission denied but an old location string was passed
+            setSelectedPlace({ address: params.currentLocation, latitude: INITIAL_REGION.latitude, longitude: INITIAL_REGION.longitude });
         }
         return;
       }
@@ -55,189 +79,162 @@ const SelectLocationScreen = () => {
         const currentRegion = {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
-          latitudeDelta: 0.01, // Zoom in a bit more
+          latitudeDelta: 0.01,
           longitudeDelta: 0.005,
         };
         setRegion(currentRegion);
         if (mapRef.current) {
           mapRef.current.animateToRegion(currentRegion, 1000);
         }
-        // If no initial location is set via params, and we get user's location,
-        // we could optionally set a marker there or reverse geocode for an initial address.
-        // For now, just centering the map.
+        // If no place selected yet, and we got user's current location,
+        // pre-fill with current location's address
+        if (!selectedPlace) {
+            handleReverseGeocode(location.coords.latitude, location.coords.longitude, true);
+        }
+
       } catch (e: any) {
         console.error("Error getting current location:", e);
         setErrorMsg("Could not fetch current location.");
-        // Fallback to initial manual address if error
-         if (params.currentLocation) {
-          setManualAddress(params.currentLocation);
-        }
       } finally {
         setIsLoading(false);
       }
     })();
-  }, [params.currentLocation]); // Rerun if currentLocation param changes? Or just on mount? For now, mount + param.
+  }, []); // Run once on mount
 
   useEffect(() => {
     navigation.setOptions({
       title: 'Select Location',
+      headerLeft: () => (
+        <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: Platform.OS === 'ios' ? 15 : 10, padding:5 }}>
+          <Ionicons name="arrow-back" size={28} color={dynastyGreen} />
+        </TouchableOpacity>
+      ),
       headerStyle: { backgroundColor: '#F8F8F8' },
-      headerTintColor: '#333333',
-      headerTitleStyle: { fontWeight: '600' },
+      headerTintColor: dynastyGreen,
+      headerTitleStyle: { fontWeight: '600', color: dynastyGreen },
       headerBackTitleVisible: false,
     });
-  }, [navigation]);
-
-  const handleConfirmLocation = () => {
-    const targetPath = params.previousPath || '..';
-    let selectedLocationData: any = { fromScreen: 'selectLocation' };
-
-    if (markerCoordinate) {
-      selectedLocationData.selectedLocation = JSON.stringify(markerCoordinate);
-      selectedLocationData.locationType = 'coordinates';
-      if (manualAddress.trim() !== '') { // Send address if available (e.g., from reverse geocoding)
-        selectedLocationData.address = manualAddress;
-      }
-    } else if (manualAddress.trim() !== '') {
-      selectedLocationData.selectedLocation = manualAddress;
-      selectedLocationData.locationType = 'address';
-    } else {
-      Alert.alert("No Location", "Please select a location on the map or enter an address.");
-      return;
-    }
-
-    router.navigate({
-      pathname: targetPath,
-      params: selectedLocationData,
-    });
-  };
-
-  const handleMapPress = async (event: any) => {
-    Keyboard.dismiss();
-    const { coordinate } = event.nativeEvent;
-    setMarkerCoordinate(coordinate);
+  }, [navigation, router]);
+  
+  const handleReverseGeocode = async (latitude: number, longitude: number, isInitialLoad: boolean = false) => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const addressResponse = await Location.reverseGeocodeAsync(coordinate);
+      const addressResponse = await Location.reverseGeocodeAsync({ latitude, longitude });
+      let formattedAddress = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`; // Fallback
       if (addressResponse && addressResponse.length > 0) {
         const firstAddress = addressResponse[0];
-        // Format address nicely
-        const formattedAddress = [
+        formattedAddress = [
           firstAddress.name,
-          firstAddress.street,
+          firstAddress.streetNumber ? `${firstAddress.streetNumber} ${firstAddress.street}` : firstAddress.street,
           firstAddress.city,
           firstAddress.region,
           firstAddress.postalCode,
         ].filter(Boolean).join(', ');
-        setManualAddress(formattedAddress || `${coordinate.latitude.toFixed(5)}, ${coordinate.longitude.toFixed(5)}`);
-      } else {
-        setManualAddress(`${coordinate.latitude.toFixed(5)}, ${coordinate.longitude.toFixed(5)}`); // Fallback to coords
+      }
+      setSelectedPlace({ address: formattedAddress, latitude, longitude });
+      if (!isInitialLoad && mapRef.current) { // Avoid re-animating if it's the initial load based on current loc
+        mapRef.current.animateToRegion({ latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.005 }, 1000);
       }
     } catch (error) {
       console.error("Reverse geocoding error:", error);
       setErrorMsg("Could not fetch address for the selected point.");
-      setManualAddress(`${coordinate.latitude.toFixed(5)}, ${coordinate.longitude.toFixed(5)}`); // Fallback
+      setSelectedPlace({ address: 'Error fetching address', latitude, longitude });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSearch = async () => {
-    Keyboard.dismiss();
-    if (!searchQuery.trim()) {
-      Alert.alert("Empty Search", "Please enter a place or address to search.");
+
+  const handleConfirmLocation = () => {
+    if (!selectedPlace || !selectedPlace.address) {
+      Alert.alert("No Location", "Please select a location.");
       return;
     }
-    setIsLoading(true);
-    setErrorMsg(null);
-    try {
-      const geocodedLocations = await Location.geocodeAsync(searchQuery);
-      if (geocodedLocations && geocodedLocations.length > 0) {
-        const firstLocation = geocodedLocations[0];
-        const newRegion = {
-          latitude: firstLocation.latitude,
-          longitude: firstLocation.longitude,
-          latitudeDelta: 0.01, // Zoom in
-          longitudeDelta: 0.005,
-        };
-        if (mapRef.current) {
-          mapRef.current.animateToRegion(newRegion, 1000);
-        }
-        setMarkerCoordinate({ latitude: firstLocation.latitude, longitude: firstLocation.longitude });
-        
-        // Attempt to get a formatted address from the search query or geocoded result
-        // This can be improved by using the components of the geocoded address if available
-        const addressDetails = await Location.reverseGeocodeAsync({ latitude: firstLocation.latitude, longitude: firstLocation.longitude });
-        if (addressDetails && addressDetails.length > 0) {
-            const firstAddress = addressDetails[0];
-            const formattedAddress = [
-              firstAddress.name,
-              firstAddress.streetNumber ? `${firstAddress.streetNumber} ${firstAddress.street}` : firstAddress.street,
-              firstAddress.city,
-              firstAddress.region,
-              firstAddress.postalCode,
-            ].filter(Boolean).join(', ');
-            setManualAddress(formattedAddress || searchQuery);
-        } else {
-            setManualAddress(searchQuery); // Fallback to original search query
-        }
+    const targetPath = params.previousPath || '..';
+    router.navigate({
+      pathname: targetPath as any,
+      params: { 
+        selectedLocation: selectedPlace.address,
+        selectedLocationLat: selectedPlace.latitude.toString(),
+        selectedLocationLng: selectedPlace.longitude.toString(),
+        fromScreen: 'selectLocation'
+      },
+    });
+  };
 
-      } else {
-        setErrorMsg(`No results found for "${searchQuery}". Try a different search.`);
-        Alert.alert("Search Failed", `No results found for "${searchQuery}". Try a different search or select a point on the map.`);
-      }
-    } catch (error) {
-      console.error("Geocoding error:", error);
-      setErrorMsg("Error searching for location. Please check your connection or try again.");
-      Alert.alert("Search Error", "Could not search for the location. Please check your connection or try a different term.");
-    } finally {
-      setIsLoading(false);
-    }
+  const handleMapPress = (event: any) => {
+    Keyboard.dismiss();
+    const { coordinate } = event.nativeEvent;
+    handleReverseGeocode(coordinate.latitude, coordinate.longitude);
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search for a place or address"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onSubmitEditing={handleSearch}
-        />
-        <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
-          <Ionicons name="search" size={20} color="#FFF" />
-        </TouchableOpacity>
-      </View>
+      <GooglePlacesAutocomplete
+        placeholder="Search for a place or address"
+        onPress={(data, details = null) => {
+          Keyboard.dismiss();
+          if (details) {
+            const { lat, lng } = details.geometry.location;
+            const address = data.description;
+            setSelectedPlace({ address, latitude: lat, longitude: lng });
+            if (mapRef.current) {
+              mapRef.current.animateToRegion({
+                latitude: lat,
+                longitude: lng,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.005,
+              }, 1000);
+            }
+          } else {
+            // Fallback if details are null, though fetchDetails=true should provide them
+            // We could geocode data.description here if needed
+            console.warn("Place details not found, using description:", data.description);
+            setSelectedPlace({ address: data.description, latitude: region.latitude, longitude: region.longitude });
+          }
+        }}
+        query={{
+          key: GOOGLE_PLACES_API_KEY,
+          language: 'en',
+          components: 'country:us', // Optional: Bias to a country e.g. USA
+        }}
+        fetchDetails={true}
+        styles={{
+          container: styles.searchOuterContainer,
+          textInputContainer: styles.searchInputContainer,
+          textInput: styles.searchInput,
+          listView: styles.listView,
+          description: styles.description,
+          poweredContainer: styles.poweredContainer, // Hides "powered by Google" if empty style
+        }}
+        textInputProps={{
+          placeholderTextColor: '#A0A0A0',
+          returnKeyType: "search",
+        }}
+        enablePoweredByContainer={false}
+        debounce={200}
+        listUnderlayColor="#EFEFEF"
+      />
       <MapView
         ref={mapRef}
         style={styles.map}
-        provider={Platform.OS === 'ios' ? PROVIDER_APPLE : undefined}
         initialRegion={region}
-        onRegionChangeComplete={setRegion}
+        onRegionChangeComplete={(newRegion) => !isLoading && setRegion(newRegion)} // Avoid region change while animating
         onPress={handleMapPress}
         showsUserLocation={true}
-        showsMyLocationButton={true}
+        showsMyLocationButton={true} // Standard iOS/Android button
       >
-        {markerCoordinate && <Marker coordinate={markerCoordinate} />}
+        {selectedPlace && <Marker coordinate={{ latitude: selectedPlace.latitude, longitude: selectedPlace.longitude }} title={selectedPlace.address} />}
       </MapView>
-      <View style={styles.manualInputContainer}>
-        <Text style={styles.label}>Or enter address manually:</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter location or address"
-          value={manualAddress}
-          onChangeText={setManualAddress}
-        />
-      </View>
+      
       <View style={styles.confirmButtonContainer}>
-        {isLoading && <ActivityIndicator size="large" color="#007AFF" style={styles.loadingIndicator} />}
-        {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+        {isLoading && <ActivityIndicator size="small" color={dynastyGreen} style={styles.loadingIndicator} />}
+        {errorMsg && <Text style={styles.errorTextSmall}>{errorMsg}</Text>}
         <TouchableOpacity 
-          style={[styles.button, isLoading && styles.disabledButton]} 
+          style={[styles.button, (isLoading || !selectedPlace) && styles.disabledButton]} 
           onPress={handleConfirmLocation}
-          disabled={isLoading}
+          disabled={isLoading || !selectedPlace}
         >
           <Text style={styles.buttonText}>Confirm Location</Text>
         </TouchableOpacity>
@@ -249,85 +246,70 @@ const SelectLocationScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F0F0F0',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    padding: 10,
     backgroundColor: '#F8F8F8',
-    alignItems: 'center',
+  },
+  // Styles for GooglePlacesAutocomplete
+  searchOuterContainer: {
+    paddingTop: Platform.OS === 'ios' ? 10 : 15,
+    paddingHorizontal: 15,
+    backgroundColor: '#F8F8F8', // Match SafeArea
+    zIndex: 10 // Ensure suggestions are on top
+  },
+  searchInputContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 0,
+    borderBottomWidth: 0,
+    borderRadius: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   searchInput: {
-    flex: 1,
-    height: 40,
-    borderColor: '#DDD',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
+    height: 48,
+    color: '#333333',
     fontSize: 16,
-    backgroundColor: '#FFF',
-    marginRight: 10,
-  },
-  searchButton: {
-    backgroundColor: '#007AFF',
-    padding: 10,
     borderRadius: 8,
+    paddingLeft: 15, // Added padding
   },
+  listView: {
+    backgroundColor: '#FFFFFF',
+    marginTop: 2, // Space between input and list
+    borderRadius: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    maxHeight: Dimensions.get('window').height * 0.4, // Limit list height
+  },
+  description: {
+    fontWeight: '500',
+    color: '#333333',
+  },
+  poweredContainer: { // To hide "powered by Google"
+    display: 'none',
+  },
+  // End GooglePlacesAutocomplete styles
   map: {
     flex: 1,
-  },
-  manualInputContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 5,
-    backgroundColor: '#F0F0F0',
-  },
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 20,
-    paddingTop: 30,
-  },
-  label: {
-    fontSize: 16,
-    color: '#333',
-    alignSelf: 'flex-start',
-    marginBottom: 8,
-  },
-  input: {
-    height: 45,
-    borderColor: '#DDD',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    fontSize: 16,
-    backgroundColor: '#FFF',
-    width: '100%',
-  },
-  placeholderText: {
-    fontSize: 18,
-    color: '#555',
-    textAlign: 'center',
-  },
-  placeholderSubText: {
-    fontSize: 14,
-    color: '#777',
-    textAlign: 'center',
-    marginTop: 10,
+    zIndex: 1, // Ensure map is below search results
   },
   confirmButtonContainer: {
-    padding: 20,
-    paddingTop: 10,
-    backgroundColor: '#F0F0F0',
+    padding: 15,
+    backgroundColor: '#F8F8F8',
     borderTopWidth: 1,
     borderTopColor: '#E0E0E0',
   },
   button: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 12,
-    paddingHorizontal: 30,
+    backgroundColor: dynastyGreen,
+    paddingVertical: 15,
     borderRadius: 8,
-    alignSelf: 'center',
+    alignItems: 'center',
+  },
+  disabledButton: {
+    backgroundColor: '#A5A5A5',
   },
   buttonText: {
     color: '#FFFFFF',
@@ -337,15 +319,18 @@ const styles = StyleSheet.create({
   loadingIndicator: {
     marginBottom: 10,
   },
-  errorText: {
+  errorTextSmall: { // Renamed from errorText for clarity
     color: 'red',
     textAlign: 'center',
     marginBottom: 10,
-    marginHorizontal: 20,
+    fontSize: 12,
   },
-  disabledButton: {
-    backgroundColor: '#A9A9A9', // Grey out when disabled
-  },
+  // Old styles that might be removed or adapted:
+  // searchContainer (old, can be removed if searchOuterContainer/searchInputContainer cover it)
+  // searchButton (old, removed)
+  // label (old, "Or enter manually", removed)
+  // input (old manual input, removed)
+  // manualInputContainer (old, removed)
 });
 
 export default SelectLocationScreen; 

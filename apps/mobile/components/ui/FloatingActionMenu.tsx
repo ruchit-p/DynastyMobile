@@ -3,6 +3,7 @@ import {
   StyleSheet,
   View,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -26,6 +27,7 @@ interface FloatingActionMenuProps {
   menuItems: FabMenuItemAction[];
   fabIconName?: keyof typeof Ionicons.glyphMap | keyof typeof MaterialCommunityIcons.glyphMap;
   fabIconLibrary?: 'Ionicons' | 'MaterialCommunityIcons';
+  absolutePosition?: boolean; // Whether to use absolute positioning (fixed) or relative
 }
 
 export interface FloatingActionMenuRef {
@@ -40,6 +42,7 @@ const FloatingActionMenu = forwardRef<FloatingActionMenuRef, FloatingActionMenuP
     menuItems,
     fabIconName = 'add',
     fabIconLibrary = 'Ionicons',
+    absolutePosition = true, // Default to absolute positioning for backward compatibility
   },
   ref
 ) => {
@@ -82,11 +85,12 @@ const FloatingActionMenu = forwardRef<FloatingActionMenuRef, FloatingActionMenuP
     <>
       {isMenuVisible && (
         <View style={[
-          styles.fabMenu, 
-          { 
+          styles.fabMenu,
+          {
             backgroundColor: primaryBackground,
             ...Shadows.md
-          }
+          },
+          absolutePosition ? {} : styles.fabMenuRelative
         ]}>
           {menuItems.map((item, index) => (
             <TouchableOpacity
@@ -94,7 +98,7 @@ const FloatingActionMenu = forwardRef<FloatingActionMenuRef, FloatingActionMenuP
               style={[
                 styles.fabMenuItem,
                 index < menuItems.length - 1 && [
-                  styles.menuItemSeparator, 
+                  styles.menuItemSeparator,
                   { borderBottomColor: borderColor }
                 ]
               ]}
@@ -113,12 +117,13 @@ const FloatingActionMenu = forwardRef<FloatingActionMenuRef, FloatingActionMenuP
         </View>
       )}
 
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[
-          styles.fab, 
+          styles.fab,
           { backgroundColor: Colors.palette.dynastyGreen.dark },
-          Shadows.md
-        ]} 
+          Shadows.md,
+          absolutePosition ? {} : styles.fabRelative
+        ]}
         onPress={() => setIsMenuVisible(!isMenuVisible)}
         accessibilityLabel={isMenuVisible ? "Close menu" : "Open menu"}
         accessibilityRole="button"
@@ -142,14 +147,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 10,
   },
+  fabRelative: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 30 : 30,
+    right: 30,
+    zIndex: 999, // Higher z-index to ensure it stays on top
+  },
   fabMenu: {
     position: 'absolute',
-    bottom: 95, 
+    bottom: 95,
     right: 30,
     borderRadius: BorderRadius.lg,
     paddingVertical: Spacing.sm,
     minWidth: 200,
     zIndex: 20,
+  },
+  fabMenuRelative: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 95 : 95,
+    right: 30,
+    zIndex: 998, // Higher z-index to ensure it stays on top
   },
   fabMenuItem: {
     flexDirection: 'row',

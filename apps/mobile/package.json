@@ -59,6 +59,7 @@
     "react-native": "0.79.2",
     "react-native-calendars": "^1.1312.0",
     "react-native-gesture-handler": "~2.24.0",
+    "react-native-google-places-autocomplete": "^2.5.7",
     "react-native-maps": "1.20.1",
     "react-native-modal-datetime-picker": "^18.0.0",
     "react-native-phone-number-input": "^2.1.0",
