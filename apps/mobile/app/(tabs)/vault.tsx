@@ -9,63 +9,26 @@ import ThemedText from '../../components/ThemedText';
 import IconButton, { IconSet } from '../../components/ui/IconButton';
 import AppHeader from '../../components/ui/AppHeader';
 import FileListItem, { type VaultListItemType as UIVaultItem } from '../../components/ui/FileListItem';
-import AnimatedActionSheet, { type ActionSheetAction } from '../../components/ui/AnimatedActionSheet';
 import { Colors } from '../../constants/Colors';
 import Fonts from '../../constants/Fonts';
-import { Spacing, BorderRadius } from '../../constants/Spacing';
+import { Spacing, BorderRadius, Shadows } from '../../constants/Spacing';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-
-// Define types for Vault items
-interface VaultItemBase {
-  id: string;
-  name: string;
-  type: 'folder' | 'file';
-  path: string; // Full path of the item relative to vault root e.g., "/My Documents/Work"
-  parentId: string | null; // ID of the parent folder, null for root items
-}
-
-interface VaultFolder extends VaultItemBase {
-  type: 'folder';
-}
-
-interface VaultFile extends VaultItemBase {
-  type: 'file';
-  fileType: 'image' | 'video' | 'audio' | 'document' | 'other';
-  size?: string; // e.g., "1.2 MB"
-  createdAt?: Date;
-  uri?: string; // URI for local or remote file access
-  mimeType?: string; // e.g., 'application/pdf', 'image/jpeg'
-}
-
-type VaultItem = VaultFolder | VaultFile;
-
-// Mock data for initial display - adjust as needed
-// Simulating a nested structure:
-// / (root)
-//   - Vacation Photos (folder1)
-//     - TripToItaly.jpg (file4)
-//   - Beach.jpg (file1)
-//   - Presentation.pptx (file2)
-//   - Work Documents (folder2)
-//     - Meeting_Notes.docx (file3)
-//     - Report.pdf (file5)
-const mockVaultItems: VaultItem[] = [
-  { id: 'folder1', name: 'Vacation Photos', type: 'folder', path: '/Vacation Photos', parentId: null },
-  { id: 'file1', name: 'Beach.jpg', type: 'file', fileType: 'image', path: '/Beach.jpg', parentId: null, size: '2.1 MB', uri: 'https://picsum.photos/seed/beach/400/300', mimeType: 'image/jpeg' },
-  { id: 'file2', name: 'Presentation.pptx', type: 'file', fileType: 'document', path: '/Presentation.pptx', parentId: null, size: '500 KB', uri: 'https://example.com/sample.pptx', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'},
-  { id: 'folder2', name: 'Work Documents', type: 'folder', path: '/Work Documents', parentId: null },
-  { id: 'file3', name: 'Meeting_Notes.docx', type: 'file', fileType: 'document', path: '/Work Documents/Meeting_Notes.docx', parentId: 'folder2', size: '120 KB', uri: 'https://example.com/sample.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
-  { id: 'file4', name: 'TripToItaly.jpg', type: 'file', fileType: 'image', path: '/Vacation Photos/TripToItaly.jpg', parentId: 'folder1', size: '3.5 MB', uri: 'https://picsum.photos/seed/italy/400/300', mimeType: 'image/jpeg' },
-  { id: 'file5', name: 'Report.pdf', type: 'file', fileType: 'document', path: '/Work Documents/Report.pdf', parentId: 'folder2', size: '1.2 MB', uri: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', mimeType: 'application/pdf' },
-  { id: 'video1', name: 'Tutorial.mp4', type: 'file', fileType: 'video', path: '/Tutorial.mp4', parentId: null, size: '15.2 MB', uri: 'http://d23dyxeqlo5psv.cloudfront.net/big_buck_bunny.mp4', mimeType: 'video/mp4' },
-];
+import auth from '@react-native-firebase/auth';
+import { storage } from '../../src/lib/firebase';
+import {
+  getVaultItemsMobile,
+  createVaultFolderMobile,
+  addVaultFileMobile,
+  renameVaultItemMobile,
+  deleteVaultItemMobile,
+} from '../../src/lib/firebaseUtils';
 
 // MARK: - Helper Functions
 
-const getVaultFileType = (mimeType?: string | null, fileName?: string | null): VaultFile['fileType'] => {
+const getVaultFileType = (mimeType?: string | null, fileName?: string | null) => {
   if (!mimeType && !fileName) return 'other';
   const name = fileName?.toLowerCase() || '';
   const type = mimeType?.toLowerCase() || '';
@@ -79,137 +42,118 @@ const getVaultFileType = (mimeType?: string | null, fileName?: string | null): V
   return 'other';
 };
 
-const generateCanonicalPath = (name: string, parentId: string | null, allItems: VaultItem[]): string => {
-  if (parentId === null) {
-    return `/${name}`;
-  }
-  const parentFolder = allItems.find(item => item.id === parentId && item.type === 'folder');
-  if (parentFolder) {
-    return `${parentFolder.path}/${name}`;
-  }
-  // Fallback if parent isn't found (should ideally not happen in a consistent state)
-  return `/${name}`; 
-};
-
-const buildDisplayPath = (folderId: string | null, allItems: VaultItem[]): string => {
-  if (folderId === null) {
-    return 'Root';
-  }
-  let currentFolder = allItems.find(item => item.id === folderId);
-  if (!currentFolder) return 'Root'; // Should not happen
-
-  const pathParts: string[] = [currentFolder.name];
-  while (currentFolder?.parentId) {
-    currentFolder = allItems.find(item => item.id === currentFolder!.parentId);
-    if (currentFolder) {
-      pathParts.unshift(currentFolder.name);
-    } else {
-      break; // Parent not found, stop building path
-    }
-  }
-  return pathParts.join(' / ') || 'Root';
-};
+type VaultFile = Extract<UIVaultItem, { type: 'file' }>;
+type VaultFolder = Extract<UIVaultItem, { type: 'folder' }>;
 
 const VaultScreen = () => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [currentPathId, setCurrentPathId] = useState<string | null>(null);
-  const [currentPathDisplay, setCurrentPathDisplay] = useState<string>('Root');
-  const [items, setItems] = useState<VaultItem[]>([]);
-  const [pathHistory, setPathHistory] = useState<{id: string | null, name: string}[]>([{id: null, name: 'Root'}]);
-  const [vaultData, setVaultData] = useState<VaultItem[]>(mockVaultItems);
-
-  const [selectedFile, setSelectedFile] = useState<VaultFile | null>(null);
-  const [isFileActionMenuVisible, setIsFileActionMenuVisible] = useState(false);
+  const [currentPathDisplay, setCurrentPathDisplay] = useState<string>('');
+  const [items, setItems] = useState<UIVaultItem[]>([]);
+  const [pathHistory, setPathHistory] = useState<{id: string | null; name: string}[]>([{id: null, name: 'Vault'}]);
 
   const fabMenuRef = useRef<FloatingActionMenuRef>(null);
 
-  const loadItemsForPath = useCallback((folderId: string | null, currentData: VaultItem[]) => {
+  const fetchItems = useCallback(async (parentId: string | null) => {
     setIsLoading(true);
-    setTimeout(() => {
-      setItems(currentData.filter(item => item.parentId === folderId).sort((a,b) => {
-        if (a.type === 'folder' && b.type !== 'folder') return -1;
-        if (a.type !== 'folder' && b.type === 'folder') return 1;
-        return a.name.localeCompare(b.name);
-      }));      
-      setCurrentPathDisplay(buildDisplayPath(folderId, currentData));
-      setIsLoading(false);
-    }, 300);
-  }, []);
+    try {
+      const { items: remote } = await getVaultItemsMobile(parentId);
+      const uiItems: UIVaultItem[] = remote.map(r => {
+        if (r.type === 'file') {
+          return {
+            id: r.id,
+            name: r.name,
+            type: 'file',
+            fileType: r.fileType!,
+            size: r.size ? `${(r.size / (1024 * 1024)).toFixed(2)} MB` : undefined,
+            mimeType: r.mimeType,
+            uri: r.downloadURL,
+          };
+        }
+        return { id: r.id, name: r.name, type: 'folder' };
+      });
+      setItems(uiItems);
+      // update header display
+      if (pathHistory.length > 1) {
+        setCurrentPathDisplay(pathHistory.slice(1).map(p => p.name).join(' / '));
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Could not load vault items.');
+    }
+    setIsLoading(false);
+  }, [pathHistory]);
 
   useFocusEffect(
     useCallback(() => {
-      loadItemsForPath(currentPathId, vaultData);
+      fetchItems(currentPathId);
       fabMenuRef.current?.close();
-    }, [currentPathId, vaultData, loadItemsForPath])
+    }, [currentPathId, fetchItems])
   );
   
-  const navigateToFolder = (folder: VaultFolder) => {
-    const newPathEntry = { id: folder.id, name: folder.name };
-    setPathHistory(prev => [...prev, newPathEntry]);
+  const navigateToFolder = (folder: {id: string; name: string}) => {
+    const newHist = [...pathHistory, { id: folder.id, name: folder.name }];
+    setPathHistory(newHist);
+    setCurrentPathDisplay(newHist.slice(1).map(p => p.name).join(' / '));
     setCurrentPathId(folder.id);
   };
 
   const navigateBack = () => {
     if (pathHistory.length > 1) {
-      const newPathHistory = [...pathHistory];
-      newPathHistory.pop();
-      const previousPath = newPathHistory[newPathHistory.length - 1];
-      setPathHistory(newPathHistory);
-      setCurrentPathId(previousPath.id);
+      const newHist = [...pathHistory];
+      newHist.pop();
+      setPathHistory(newHist);
+      setCurrentPathId(newHist[newHist.length - 1].id);
+      setCurrentPathDisplay(newHist.length > 1 ? newHist.slice(1).map(p => p.name).join(' / ') : '');
     }
   };
 
-  const handleAddItemsToVault = (newFiles: DocumentPicker.DocumentPickerAsset[] | ImagePicker.ImagePickerAsset[]) => {
-    let updatedVaultData = [...vaultData]; // Create a mutable copy
-
-    const newVaultEntries: VaultFile[] = newFiles.map((fileResult) => {
-      // Handle different structures for DocumentPickerAsset and ImagePickerAsset
-      const assetName = (fileResult as any).name || (fileResult as ImagePicker.ImagePickerAsset).fileName || `file_${Date.now()}`;
-      const assetMimeType = (fileResult as any).mimeType || (fileResult as ImagePicker.ImagePickerAsset).mimeType;
-      const assetSize = (fileResult as any).size || (fileResult as ImagePicker.ImagePickerAsset).fileSize;
-
-
-      const baseName = assetName;
-      let uniqueName = baseName;
-      let counter = 1;
-      while (updatedVaultData.some(item => item.parentId === currentPathId && item.name === uniqueName)) {
-        const ext = baseName.includes('.') ? baseName.substring(baseName.lastIndexOf('.')) : '';
-        const nameWithoutExt = baseName.includes('.') ? baseName.substring(0, baseName.lastIndexOf('.')) : baseName;
-        uniqueName = `${nameWithoutExt}_${counter}${ext}`;
-        counter++;
+  const handleAddItemsToVault = async (
+    assets: DocumentPicker.DocumentPickerAsset[] | ImagePicker.ImagePickerAsset[]
+  ) => {
+    setIsLoading(true);
+    try {
+      const uid = auth().currentUser?.uid;
+      if (!uid) throw new Error('Not authenticated');
+      for (const fileResult of assets) {
+        const assetName = (fileResult as any).name || (fileResult as any).fileName || `file_${Date.now()}`;
+        const assetMimeType = (fileResult as any).mimeType;
+        const assetSize = (fileResult as any).size || 0;
+        // Generate unique storage path
+        const parentSegment = currentPathId || 'root';
+        const storagePath = `vault/${uid}/${parentSegment}/${assetName}`;
+        const ref = storage.ref(storagePath);
+        await ref.putFile((fileResult as any).uri);
+        const downloadURL = await ref.getDownloadURL();
+        const fileType = getVaultFileType(assetMimeType, assetName);
+        await addVaultFileMobile({
+          name: assetName,
+          parentId: currentPathId,
+          storagePath,
+          downloadURL,
+          fileType,
+          size: assetSize,
+          mimeType: assetMimeType,
+        });
       }
-
-      const newEntry: VaultFile = {
-        id: `file_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-        name: uniqueName,
-        type: 'file',
-        fileType: getVaultFileType(assetMimeType, assetName),
-        uri: fileResult.uri,
-        size: assetSize ? `${(assetSize / (1024*1024)).toFixed(2)} MB` : undefined,
-        mimeType: assetMimeType,
-        parentId: currentPathId,
-        path: generateCanonicalPath(uniqueName, currentPathId, updatedVaultData),
-        createdAt: new Date(),
-      };
-      updatedVaultData.push(newEntry); // Add to the mutable copy for path generation of subsequent items in the same batch
-      return newEntry;
-    });
-    setVaultData(updatedVaultData); // Single update to state
-    Alert.alert('Success', `${newFiles.length} item(s) added to Vault.`);
+      Alert.alert('Success', `${assets.length} item(s) added to Vault.`);
+      fetchItems(currentPathId);
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Could not upload items.');
+    }
+    setIsLoading(false);
   };
 
   // MARK: - FAB Menu Items & Pickers
   const pickDocuments = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*', // Allow all file types
-        multiple: true,
-        copyToCacheDirectory: true, // Important for accessing the file
+        type: '*/*', multiple: true, copyToCacheDirectory: true,
       });
 
-      if (result.canceled === false && result.assets) {
-        handleAddItemsToVault(result.assets);
+      if (!result.canceled && result.assets) {
+        await handleAddItemsToVault(result.assets);
       } else if (result.canceled === true) {
         console.log('Document picking cancelled');
       }
@@ -222,13 +166,13 @@ const VaultScreen = () => {
   const pickMedia = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All, // Images and Videos
-        allowsMultipleSelection: true, // Allow multiple media selection
-        quality: 0.8, // Adjust quality as needed (0 to 1)
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        allowsMultipleSelection: true,
+        quality: 0.8,
       });
 
       if (!result.canceled && result.assets) {
-        handleAddItemsToVault(result.assets);
+        await handleAddItemsToVault(result.assets);
       }
     } catch (error) {
       console.error('Error picking media:', error);
@@ -251,20 +195,9 @@ const VaultScreen = () => {
           const folderUri = result.assets[0].uri;
           const folderName = result.assets[0].name;
           
-          Alert.alert('Folder Selected', `Selected folder: ${folderName}. Unfortunately, due to platform limitations, we cannot automatically import all contents of this folder.`);
-          
-          // Potentially a folder could be added to your vault data structure here
-          // even if individual files would need to be picked separately
-          const newFolder: VaultFolder = {
-            id: `folder_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-            name: folderName,
-            type: 'folder',
-            parentId: currentPathId,
-            path: generateCanonicalPath(folderName, currentPathId, vaultData),
-          };
-          
-          const updatedVaultData = [...vaultData, newFolder];
-          setVaultData(updatedVaultData);
+          Alert.alert('Folder Selected', `Selected folder: ${folderName}.`);
+          // Create folder in backend
+          await createVaultFolderMobile(folderName, currentPathId);
         }
       } else {
         // On iOS, folder picking isn't well supported - suggest alternative
@@ -275,33 +208,16 @@ const VaultScreen = () => {
             { text: 'Cancel', onPress: () => {} },
             { 
               text: 'Create Folder', 
-              onPress: () => {
-                // Prompt to create a folder
-                Alert.prompt(
-                  'Create Folder',
-                  'Enter folder name:',
-                  [
-                    { 
-                      text: 'Cancel',
-                      onPress: () => {} 
-                    },
-                    {
-                      text: 'Create',
-                      onPress: (folderName) => {
-                        if (folderName && folderName.trim()) {
-                          const newFolder: VaultFolder = {
-                            id: `folder_${Date.now()}`,
-                            name: folderName.trim(),
-                            type: 'folder',
-                            parentId: currentPathId,
-                            path: generateCanonicalPath(folderName.trim(), currentPathId, vaultData),
-                          };
-                          setVaultData([...vaultData, newFolder]);
-                        }
-                      }
-                    }
-                  ]
-                );
+              onPress: async (folderName) => {
+                if (folderName && folderName.trim()) {
+                  try {
+                    await createVaultFolderMobile(folderName.trim(), currentPathId);
+                    fetchItems(currentPathId);
+                  } catch (e) {
+                    console.error('Error creating folder:', e);
+                    Alert.alert('Error', 'Could not create folder.');
+                  }
+                }
               }
             }
           ]
@@ -338,7 +254,7 @@ const VaultScreen = () => {
   ];
 
   // MARK: - File/Folder Icon Logic
-  const getItemIcon = (item: VaultItem) => {
+  const getItemIcon = (item: UIVaultItem) => {
     if (item.type === 'folder') {
       return 'folder-outline';
     }
@@ -356,7 +272,7 @@ const VaultScreen = () => {
     }
   };
   
-  const handleItemPress = async (item: VaultItem) => {
+  const handleItemPress = async (item: UIVaultItem) => {
     if (item.type === 'folder') {
       navigateToFolder(item);
     } else { // File
@@ -404,179 +320,58 @@ const VaultScreen = () => {
   };
 
   // MARK: - Long Press Actions
-  const handleDeleteItem = (itemToDelete: VaultItem) => {
+  const handleDeleteItem = (item: UIVaultItem) => {
     Alert.alert(
-      `Delete ${itemToDelete.type}`,
-      `Are you sure you want to delete "${itemToDelete.name}"? This action cannot be undone.`,
+      `Delete ${item.type}`,
+      `Are you sure you want to delete "${item.name}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            let updatedData = vaultData.filter(item => item.id !== itemToDelete.id);
-            // If deleting a folder, recursively delete its children
-            if (itemToDelete.type === 'folder') {
-                const itemsToDeleteStack: string[] = [itemToDelete.id];
-                const allDescendantIds = new Set<string>();
-
-                while(itemsToDeleteStack.length > 0) {
-                    const currentFolderId = itemsToDeleteStack.pop()!;
-                    const children = vaultData.filter(i => i.parentId === currentFolderId);
-                    children.forEach(child => {
-                        allDescendantIds.add(child.id);
-                        if (child.type === 'folder') {
-                            itemsToDeleteStack.push(child.id);
-                        }
-                    });
-                }
-                updatedData = updatedData.filter(item => !allDescendantIds.has(item.id));
+          text: 'Delete', style: 'destructive', onPress: async () => {
+            try {
+              await deleteVaultItemMobile(item.id);
+              Alert.alert('Deleted', `"${item.name}" has been deleted.`);
+              fetchItems(currentPathId);
+            } catch (e) {
+              console.error('Delete error:', e);
+              Alert.alert('Error', 'Could not delete item.');
             }
-            setVaultData(updatedData);
-            Alert.alert('Deleted', `"${itemToDelete.name}" and its contents (if a folder) have been deleted.`);
-          },
-        },
+          }
+        }
       ]
     );
   };
 
-  const handleRenameItem = (itemToRename: VaultItem) => {
-    const promptTitle = `Rename ${itemToRename.type}`;
-    const promptMessage = `Enter new name for "${itemToRename.name}":`;
-    const currentName = itemToRename.name;
-
-    Alert.prompt(promptTitle, promptMessage, async (newName) => {
-        if (newName && newName.trim() !== '' && newName.trim() !== currentName) {
-            const trimmedNewName = newName.trim();
-            const isNameTaken = vaultData.some(item => 
-                item.parentId === itemToRename.parentId && 
-                item.name === trimmedNewName &&
-                item.id !== itemToRename.id
-            );
-            if (isNameTaken) {
-                Alert.alert('Error', 'An item with this name already exists in this folder.');
-                return;
+  const handleRenameItem = (item: UIVaultItem) => {
+    Alert.prompt(
+      `Rename ${item.type}`,
+      `Enter new name for "${item.name}"`,
+      [
+        { text: 'Cancel' },
+        { text: 'Rename', onPress: async (newName) => {
+            if (newName && newName.trim() !== '' && newName.trim() !== item.name) {
+              try {
+                await renameVaultItemMobile(item.id, newName.trim());
+                Alert.alert('Renamed', `"${item.name}" -> "${newName.trim()}"`);
+                fetchItems(currentPathId);
+              } catch (e) {
+                console.error('Rename error:', e);
+                Alert.alert('Error', 'Could not rename item.');
+              }
             }
-
-            let updatedData = [...vaultData];
-            const itemIndex = updatedData.findIndex(item => item.id === itemToRename.id);
-            if (itemIndex === -1) return; 
-
-            const oldPath = updatedData[itemIndex].path;
-            updatedData[itemIndex] = { 
-                ...updatedData[itemIndex], 
-                name: trimmedNewName,
-                path: generateCanonicalPath(trimmedNewName, updatedData[itemIndex].parentId, updatedData) // Pass all data for context
-            };
-
-            // If renaming a folder, update paths of all children recursively
-            if (updatedData[itemIndex].type === 'folder') {
-                updatedData = updateDescendantPathsRecursive(updatedData[itemIndex].id, updatedData[itemIndex].path, updatedData);
-            }
-
-            setVaultData(updatedData);
-            Alert.alert('Renamed', `"${currentName}" has been renamed to "${trimmedNewName}".`);
-        } else if (newName && newName.trim() === currentName) {
-            // No change
-        } else {
-            Alert.alert('Error', 'Name cannot be empty.');
-        }
-    }, 'plain-text', currentName);
-  };
-
-  // Recursive function to update paths of descendants
-  const updateDescendantPathsRecursive = (parentId: string, parentPath: string, currentData: VaultItem[]): VaultItem[] => {
-    let updatedData = [...currentData];
-    for (let i = 0; i < updatedData.length; i++) {
-        if (updatedData[i].parentId === parentId) {
-            const newPath = `${parentPath}/${updatedData[i].name}`;
-            updatedData[i] = { ...updatedData[i], path: newPath };
-            if (updatedData[i].type === 'folder') {
-                // Pass the mutated updatedData to the recursive call so it has the latest paths
-                updatedData = updateDescendantPathsRecursive(updatedData[i].id, newPath, updatedData);
-            }
-        }
-    }
-    return updatedData;
-  };
-
-  const handleMoveItem = (itemToMove: VaultItem) => {
-    const availableFolders = vaultData.filter(item => 
-        item.type === 'folder' && 
-        item.id !== itemToMove.id && // Cannot move into itself
-        !(itemToMove.type === 'folder' && vaultData.some(child => child.parentId === itemToMove.id && child.id === item.id)) && // Cannot move into its own direct child
-        !(itemToMove.type === 'folder' && isDescendant(item.id, itemToMove.id, vaultData)) // Cannot move into one of its own descendants
+        }}
+      ],
+      'plain-text',
+      item.name
     );
-
-    if (availableFolders.length === 0 && itemToMove.parentId === null) {
-        Alert.alert('Move Item', 'No other folders available to move this item to.');
-        return;
-    }
-
-    const folderOptions = availableFolders.map(folder => ({ 
-        text: folder.name,
-        onPress: () => {
-            let updatedData = [...vaultData];
-            const itemIndex = updatedData.findIndex(i => i.id === itemToMove.id);
-            if (itemIndex === -1) return;
-
-            const newParentId = folder.id;
-            const newPath = generateCanonicalPath(updatedData[itemIndex].name, newParentId, updatedData);
-
-            updatedData[itemIndex] = { ...updatedData[itemIndex], parentId: newParentId, path: newPath };
-
-            if (updatedData[itemIndex].type === 'folder') {
-                updatedData = updateDescendantPathsRecursive(updatedData[itemIndex].id, newPath, updatedData);
-            }
-            setVaultData(updatedData);
-            Alert.alert('Moved', `"${itemToMove.name}" has been moved to "${folder.name}".`);
-        }
-    })); 
-
-    if (itemToMove.parentId !== null) {
-        folderOptions.unshift({ 
-            text: 'Move to Root', 
-            onPress: () => {
-                let updatedData = [...vaultData];
-                const itemIndex = updatedData.findIndex(i => i.id === itemToMove.id);
-                if (itemIndex === -1) return;
-
-                const newParentId = null;
-                const newPath = generateCanonicalPath(updatedData[itemIndex].name, newParentId, updatedData);
-                
-                updatedData[itemIndex] = { ...updatedData[itemIndex], parentId: newParentId, path: newPath };
-
-                if (updatedData[itemIndex].type === 'folder') {
-                    updatedData = updateDescendantPathsRecursive(updatedData[itemIndex].id, newPath, updatedData);
-                }
-                setVaultData(updatedData);
-                Alert.alert('Moved', `"${itemToMove.name}" has been moved to Root.`);
-            }
-        });
-    }
-
-    folderOptions.push({ text: 'Cancel', onPress: () => {} });
-    Alert.alert(`Move "${itemToMove.name}"`, 'Select a destination folder:', folderOptions);
   };
 
-  // Helper function to check if targetFolderId is a descendant of sourceFolderId
-  const isDescendant = (targetFolderId: string, sourceFolderId: string, allItems: VaultItem[]): boolean => {
-    let parent = allItems.find(item => item.id === targetFolderId)?.parentId;
-    while (parent) {
-        if (parent === sourceFolderId) return true;
-        parent = allItems.find(item => item.id === parent)?.parentId;
-    }
-    return false;
-  };
-
-  const handleItemLongPress = (item: VaultItem) => {
-    const actionSheetOptions: { text: string; onPress?: () => void; style?: "default" | "cancel" | "destructive" }[] = [
+  const handleItemLongPress = (item: UIVaultItem) => {
+    Alert.alert(item.name, undefined, [
       { text: 'Rename', onPress: () => handleRenameItem(item) },
-      { text: 'Move', onPress: () => handleMoveItem(item) },
-      { text: 'Delete', onPress: () => handleDeleteItem(item) },
-      { text: 'Cancel' },
-    ];
-    Alert.alert(item.name, `Selected: ${item.type}`, actionSheetOptions);
+      { text: 'Delete', style: 'destructive', onPress: () => handleDeleteItem(item) },
+      { text: 'Cancel', style: 'cancel' }
+    ]);
   };
   
   const getHeaderLeft = () => {
@@ -595,56 +390,6 @@ const VaultScreen = () => {
     return null;
   };
 
-  // MARK: - Item Actions & Action Sheet
-
-  const handleOpenItemMoreMenu = (item: VaultFile) => {
-    setSelectedFile(item);
-    setIsFileActionMenuVisible(true);
-  };
-
-  const handleCloseItemMoreMenu = () => {
-    setIsFileActionMenuVisible(false);
-    setSelectedFile(null);
-  };
-
-  const handleViewItemDetails = () => {
-    if (selectedFile) {
-      Alert.alert("View Details", `Viewing details for ${selectedFile.name}`);
-      // TODO: Implement actual navigation or modal for details
-    }
-    handleCloseItemMoreMenu();
-  };
-
-  const handleShareItem = async () => {
-    if (selectedFile?.uri) {
-      try {
-        if (!(await Sharing.isAvailableAsync())) {
-          Alert.alert("Sharing not available", "Sharing is not available on this device.");
-          return;
-        }
-        await Sharing.shareAsync(selectedFile.uri, {
-          mimeType: selectedFile.mimeType,
-          dialogTitle: `Share ${selectedFile.name}`,
-        });
-      } catch (error) {
-        console.error("Error sharing file:", error);
-        Alert.alert("Error", "Could not share the file.");
-      }
-    } else {
-      Alert.alert("Cannot Share", "File URI is missing or invalid.");
-    }
-    handleCloseItemMoreMenu();
-  };
-
-  const fileActionMenuActions: ActionSheetAction[] = selectedFile ? [
-    { title: 'View Details', onPress: handleViewItemDetails, icon: 'information-circle-outline' },
-    { title: 'Rename', onPress: () => { if(selectedFile) handleRenameItem(selectedFile); handleCloseItemMoreMenu(); }, icon: 'pencil-outline' },
-    { title: 'Move', onPress: () => { if(selectedFile) handleMoveItem(selectedFile); handleCloseItemMoreMenu(); }, icon: 'move-outline' },
-    { title: 'Share', onPress: handleShareItem, icon: 'share-outline', disabled: !selectedFile?.uri || !Sharing.isAvailableAsync() },
-    { title: 'Delete', onPress: () => { if(selectedFile) handleDeleteItem(selectedFile); handleCloseItemMoreMenu(); }, icon: 'trash-outline' },
-    { title: 'Cancel', onPress: handleCloseItemMoreMenu },
-  ] : [];
-
   // MARK: - Render Logic
   if (isLoading && items.length === 0) { // Show full screen loader only on initial load or full path change
     return (
@@ -659,12 +404,12 @@ const VaultScreen = () => {
     );
   }
 
-  const renderItem = ({ item }: { item: VaultItem }) => {
+  const renderItem = ({ item }: { item: UIVaultItem }) => {
     return (
       <FileListItem
-        item={item as UIVaultItem}
+        item={item}
         onPress={() => handleItemPress(item)}
-        onMorePress={item.type === 'file' ? () => handleOpenItemMoreMenu(item as VaultFile) : undefined}
+        onMorePress={() => handleItemLongPress(item)}
       />
     );
   };
@@ -672,10 +417,13 @@ const VaultScreen = () => {
   // MARK: - Main Return
   return (
     <View style={styles.screen}>
-      <AppHeader
-        title={pathHistory.length > 1 ? currentPathDisplay : 'Vault'}
-        headerLeft={pathHistory.length > 1 ? getHeaderLeft : undefined}
-      />
+      {/* Vault-specific header shadow wrapper */}
+      <View style={styles.vaultHeaderShadowContainer}>
+        <AppHeader
+          title={pathHistory.length > 1 ? currentPathDisplay : 'Vault'}
+          headerLeft={pathHistory.length > 1 ? getHeaderLeft : undefined}
+        />
+      </View>
       <Screen safeArea={false} style={styles.contentScreen}>
         {isLoading ? (
           <View style={styles.loadingContainer}>
@@ -704,14 +452,6 @@ const VaultScreen = () => {
           ref={fabMenuRef}
           menuItems={vaultMenuItems}
         />
-        {selectedFile && (
-          <AnimatedActionSheet
-            isVisible={isFileActionMenuVisible}
-            onClose={handleCloseItemMoreMenu}
-            title={`Actions for ${selectedFile.name}`}
-            actions={fileActionMenuActions}
-          />
-        )}
       </Screen>
     </View>
   );
@@ -725,6 +465,20 @@ const styles = StyleSheet.create({
   },
   contentScreen: {
     flex: 1,
+  },
+  vaultHeaderShadowContainer: {
+    zIndex: 1,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   loadingContainer: {
     flex: 1,

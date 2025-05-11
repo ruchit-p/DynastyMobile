@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { StyleSheet, View, TouchableOpacity, Platform } from 'react-native';
 import { CalendarList, DateData } from 'react-native-calendars';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -27,6 +27,24 @@ const CalendarScreen = () => {
 
   // Reference to the calendar
   const calendarRef = React.useRef(null);
+
+  // Get today's date in format YYYY-MM-DD
+  const today = useMemo(() => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  // Create marked dates object with today highlighted with a green circle
+  const markedDates = useMemo(() => {
+    return {
+      [today]: {
+        selected: true,
+        selectedColor: primaryColor,
+        marked: true,
+        dotColor: 'white'
+      }
+    };
+  }, [today, primaryColor]);
 
   // Handle scrollToToday param from navigation
   useEffect(() => {
@@ -57,7 +75,7 @@ const CalendarScreen = () => {
             textSectionTitleColor: '#b6c1cd',
             selectedDayBackgroundColor: primaryColor,
             selectedDayTextColor: '#FFFFFF',
-            todayTextColor: primaryColor,
+            todayTextColor: '#FFFFFF', // Changed to white so it's visible on the green circle
             dayTextColor: textColor,
             textDisabledColor: Colors.palette.neutral.light,
             dotColor: primaryColor,
@@ -70,9 +88,7 @@ const CalendarScreen = () => {
             textMonthFontSize: 16,
             textDayHeaderFontSize: 14,
           }}
-          markedDates={{
-            // Example: Mark events here
-          }}
+          markedDates={markedDates}
           pastScrollRange={12}
           futureScrollRange={24}
           scrollEnabled={true}

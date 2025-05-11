@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
+import { useAuth } from '../../src/contexts/AuthContext';
+import { fetchAccessibleStoriesMobile, getStoryCommentsMobile } from '../../src/lib/storyUtils';
 
 interface StoryComment {
   id: string;
@@ -24,7 +26,8 @@ interface StoryComment {
   // replies?: StoryComment[]; // For threaded comments
 }
 
-interface Story {
+// Local story detail type used by this screen
+interface StoryDetail {
   id: string;
   userName: string;
   userAvatar: string;
@@ -40,98 +43,96 @@ interface Story {
   // comments: StoryComment[]; // Full comment objects
 }
 
-// Mock Story Data - In a real app, fetch based on storyId
-const mockStoriesDatabase: { [key: string]: Story } = {
-  story123: {
-    id: 'story123',
-    userName: 'Grandma Millie',
-    userAvatar: 'https://via.placeholder.com/40/FFD700/000000?Text=M',
-    timestamp: '3 hours ago',
-    date: 'October 26, 2023',
-    title: 'My Childhood Memories on the Farm',
-    content: 
-      `I remember those long summer days on the farm like they were yesterday. Waking up to the rooster crowing, the smell of fresh hay, and my mother baking bread in the old wood-fired oven. We didn't have much, but we had each other, and that was everything. We'd spend hours playing in the fields, chasing butterflies and making up grand adventures. Evenings were for storytelling around the fireplace, with dad playing his old guitar. Those simple times shaped who I am today.\n\nOne particular memory that stands out is the big harvest festival. The whole community would come together. There was so much food, music, and laughter. It was a celebration of hard work and togetherness. I miss those days dearly.`,
-    images: [
-      'https://via.placeholder.com/600x400/E6E6FA/000000?Text=Farm+View',
-      'https://via.placeholder.com/600x400/FFF0F5/000000?Text=Family+Photo+1950s',
-    ],
-    location: 'Sunny Meadows Farm, Willow Creek',
-    likesCount: 156,
-    commentsCount: 23,
-    isLiked: false,
-  },
-  story789: {
-    id: 'story789',
-    userName: 'Uncle John',
-    userAvatar: 'https://via.placeholder.com/40/ADD8E6/000000?Text=J',
-    timestamp: '1 day ago',
-    date: 'October 25, 2023',
-    title: 'My First Fishing Trip with Dad',
-    content: 
-      `I must have been about 7 years old when Dad took me on my first real fishing trip. We woke up before dawn, packed our gear, and headed to Miller's Pond. I was so excited, I could barely sit still. He taught me how to cast, how to be patient, and the importance of respecting nature. I didn't catch a big one that day, just a tiny sunfish, but I felt like the king of the world. It's a memory I'll cherish forever.`,
-    images: ['https://via.placeholder.com/600x400/B0E0E6/000000?Text=Fishing+at+Pond'],
-    location: "Miller's Pond",
-    likesCount: 88,
-    commentsCount: 12,
-    isLiked: true,
-  },
-};
-
-const mockStoryComments: { [key: string]: StoryComment[] } = {
-    story123: [
-        { id: 'c1', userName: 'Sarah P.', avatarUrl: 'https://via.placeholder.com/30/FFC0CB/000000?Text=S', commentText: 'What a beautiful story, Grandma! Sounds idyllic.', timestamp: '2h ago' },
-        { id: 'c2', userName: 'Tom R.', avatarUrl: 'https://via.placeholder.com/30/90EE90/000000?Text=T', commentText: 'Amazing memories. Thanks for sharing!', timestamp: '1h ago' },
-    ],
-    story789: [
-        { id: 'c3', userName: 'Lisa M.', avatarUrl: 'https://via.placeholder.com/30/FFA07A/000000?Text=L', commentText: 'So sweet! Every kid remembers their first fish.', timestamp: '20h ago' },
-    ]
-};
-
 const StoryDetailScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ storyId: string }>();
   const storyId = params.storyId as string;
+  const { user, firestoreUser } = useAuth();
 
-  const [story, setStory] = useState<Story | null>(null);
+  const [story, setStory] = useState<StoryDetail | null>(null);
   const [comments, setComments] = useState<StoryComment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
 
   useEffect(() => {
-    // Set initial title to "Loading..." when storyId is present but story is not yet loaded
-    if (storyId && !story) {
-      navigation.setOptions({ 
-        title: 'Loading...',
-        headerTitleAlign: 'center', // Keep consistent alignment
-        headerRight: () => null, // Hide options menu while loading
-      });
+    // Fetch story detail and comments from backend
+    if (storyId && user?.uid && firestoreUser?.familyTreeId && !story) {
+      navigation.setOptions({ title: 'Loading...', headerTitleAlign: 'center', headerRight: () => null });
+      (async () => {
+        try {
+          // Get all accessible stories and find current one
+          const stories = await fetchAccessibleStoriesMobile(user.uid, firestoreUser.familyTreeId);
+          const found = stories.find(s => s.id === storyId);
+          if (!found) {
+            Alert.alert("Story not found", "This story could not be loaded.", [{ text: "OK", onPress: () => router.back() }]);
+            return;
+          }
+          // Parse creation date
+          let createdDate: Date;
+          if (found.createdAt && typeof (found.createdAt as any).toDate === 'function') {
+            createdDate = (found.createdAt as any).toDate();
+          } else if (found.createdAt && (found.createdAt as any).seconds) {
+            createdDate = new Date((found.createdAt as any).seconds * 1000);
+          } else {
+            createdDate = new Date(found.createdAt as any);
+          }
+          // Build local story detail
+          const detail: StoryDetail = {
+            id: found.id,
+            userName: found.author?.displayName || found.authorID,
+            userAvatar: found.author?.profilePicture || '',
+            timestamp: createdDate.toLocaleTimeString(),
+            date: createdDate.toLocaleDateString(),
+            title: found.blocks.find(b => b.type === 'text')?.data as string || '',
+            content: found.blocks.find(b => b.type === 'text')?.data as string || '',
+            images: found.blocks.filter(b => b.type === 'image').flatMap(b => Array.isArray(b.data) ? b.data : []),
+            location: found.location?.address,
+            likesCount: found.likeCount || 0,
+            commentsCount: found.commentCount || 0,
+            isLiked: false,
+          };
+          setStory(detail);
+          setIsLiked(detail.isLiked || false);
+          setLikesCount(detail.likesCount);
+          // Fetch comments
+          const rawComments = await getStoryCommentsMobile(storyId);
+          const mappedComments: StoryComment[] = rawComments.map(c => {
+            let cDate: Date;
+            if (c.createdAt && typeof (c.createdAt as any).toDate === 'function') {
+              cDate = (c.createdAt as any).toDate();
+            } else if (c.createdAt && (c.createdAt as any).seconds) {
+              cDate = new Date((c.createdAt as any).seconds * 1000);
+            } else {
+              cDate = new Date(c.createdAt as any);
+            }
+            return {
+              id: c.id,
+              userName: c.user?.displayName || '',
+              avatarUrl: c.user?.profilePicture || '',
+              commentText: c.text || '',
+              timestamp: cDate.toLocaleTimeString(),
+            };
+          });
+          setComments(mappedComments);
+          // Update header title
+          navigation.setOptions({
+            title: detail.title.length > 25 ? `${detail.title.substring(0, 25)}...` : detail.title,
+            headerTitleAlign: 'center',
+            headerRight: () => (
+              <TouchableOpacity onPress={() => Alert.alert("Story Options", "Share, Edit, Delete...")} style={{ paddingHorizontal: 15 }}>
+                <Ionicons name="ellipsis-horizontal" size={24} color="#1A4B44" />
+              </TouchableOpacity>
+            ),
+          });
+        } catch (error) {
+          console.error(error);
+          Alert.alert("Error", "Failed to load story.", [{ text: "OK", onPress: () => router.back() }]);
+        }
+      })();
     }
-
-    if (storyId) {
-      const foundStory = mockStoriesDatabase[storyId];
-      if (foundStory) {
-        setStory(foundStory);
-        setComments(mockStoryComments[storyId] || []);
-        setIsLiked(foundStory.isLiked || false);
-        setLikesCount(foundStory.likesCount || 0);
-        navigation.setOptions({
-          title: foundStory.title.length > 25 ? `${foundStory.title.substring(0, 25)}...` : foundStory.title,
-          headerTitleAlign: 'center',
-          headerRight: () => (
-            <TouchableOpacity onPress={() => Alert.alert("Story Options", "Share, Edit, Delete...")} style={{ paddingHorizontal: 15}}>
-              <Ionicons name="ellipsis-horizontal" size={24} color="#1A4B44" />
-            </TouchableOpacity>
-          ),
-        });
-      } else {
-        Alert.alert("Story not found", "This story could not be loaded.", [{ text: "OK", onPress: () => router.back() }]);
-      }
-    } else {
-        Alert.alert("Error", "Story ID is missing.", [{ text: "OK", onPress: () => router.back() }]);
-    }
-  }, [storyId, navigation, router]);
+  }, [storyId, user, firestoreUser]);
 
   const handleLikePress = () => {
     setIsLiked(!isLiked);

@@ -222,3 +222,132 @@ export const deleteFamilyMemberMobile = async (
     throw error;
   }
 };
+
+// MARK: - Vault Functions
+
+/**
+ * Vault item type returned from Cloud Functions
+ */
+export interface VaultItem {
+  id: string;
+  userId: string;
+  name: string;
+  type: 'folder' | 'file';
+  parentId: string | null;
+  path: string;
+  createdAt: { seconds: number; nanoseconds: number };
+  updatedAt: { seconds: number; nanoseconds: number };
+  fileType?: 'image' | 'video' | 'audio' | 'document' | 'other';
+  size?: number;
+  storagePath?: string;
+  downloadURL?: string;
+  mimeType?: string;
+  isDeleted: boolean;
+}
+
+/**
+ * Fetch vault items for a given folder
+ */
+export const getVaultItemsMobile = async (
+  parentId: string | null
+): Promise<{ items: VaultItem[] }> => {
+  const functionRef = httpsCallable(firebaseFunctions, 'getVaultItems');
+  try {
+    const result = await functionRef({ parentId });
+    return result.data as { items: VaultItem[] };
+  } catch (error) {
+    console.error('Error fetching vault items:', error);
+    throw error;
+  }
+};
+
+/**
+ * Create a new folder in the vault
+ */
+export const createVaultFolderMobile = async (
+  name: string,
+  parentId: string | null
+): Promise<{ id: string }> => {
+  const functionRef = httpsCallable(firebaseFunctions, 'createVaultFolder');
+  try {
+    const result = await functionRef({ name, parentId });
+    return result.data as { id: string };
+  } catch (error) {
+    console.error('Error creating vault folder:', error);
+    throw error;
+  }
+};
+
+/**
+ * Add a new file entry to the vault (after uploading to storage)
+ */
+export const addVaultFileMobile = async (
+  payload: {
+    name: string;
+    parentId: string | null;
+    storagePath: string;
+    downloadURL: string;
+    fileType: 'image' | 'video' | 'audio' | 'document' | 'other';
+    size: number;
+    mimeType: string;
+  }
+): Promise<{ id: string }> => {
+  const functionRef = httpsCallable(firebaseFunctions, 'addVaultFile');
+  try {
+    const result = await functionRef(payload);
+    return result.data as { id: string };
+  } catch (error) {
+    console.error('Error adding vault file:', error);
+    throw error;
+  }
+};
+
+/**
+ * Rename a vault item
+ */
+export const renameVaultItemMobile = async (
+  itemId: string,
+  newName: string
+): Promise<{ success: boolean }> => {
+  const functionRef = httpsCallable(firebaseFunctions, 'renameVaultItem');
+  try {
+    const result = await functionRef({ itemId, newName });
+    return result.data as { success: boolean };
+  } catch (error) {
+    console.error('Error renaming vault item:', error);
+    throw error;
+  }
+};
+
+/**
+ * Move a vault item to a new folder
+ */
+export const moveVaultItemMobile = async (
+  itemId: string,
+  newParentId: string | null
+): Promise<{ success: boolean }> => {
+  const functionRef = httpsCallable(firebaseFunctions, 'moveVaultItem');
+  try {
+    const result = await functionRef({ itemId, newParentId });
+    return result.data as { success: boolean };
+  } catch (error) {
+    console.error('Error moving vault item:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a vault item (file or folder)
+ */
+export const deleteVaultItemMobile = async (
+  itemId: string
+): Promise<{ success: boolean }> => {
+  const functionRef = httpsCallable(firebaseFunctions, 'deleteVaultItem');
+  try {
+    const result = await functionRef({ itemId });
+    return result.data as { success: boolean };
+  } catch (error) {
+    console.error('Error deleting vault item:', error);
+    throw error;
+  }
+};

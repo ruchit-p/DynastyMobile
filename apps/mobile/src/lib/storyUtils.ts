@@ -25,6 +25,11 @@ export interface Story {
   coverPhoto?: string;
   likeCount?: number;
   commentCount?: number;
+  author?: {
+    id: string;
+    displayName: string;
+    profilePicture?: string;
+  };
 }
 
 /**
