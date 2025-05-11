@@ -17,14 +17,15 @@ import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import auth from '@react-native-firebase/auth';
-import { storage } from '../../src/lib/firebase';
 import {
   getVaultItemsMobile,
   createVaultFolderMobile,
   addVaultFileMobile,
   renameVaultItemMobile,
   deleteVaultItemMobile,
+  getUploadSignedUrlMobile,
 } from '../../src/lib/firebaseUtils';
+import firebase from '@react-native-firebase/app';
 
 // MARK: - Helper Functions
 
@@ -113,36 +114,59 @@ const VaultScreen = () => {
   ) => {
     setIsLoading(true);
     try {
-      const uid = auth().currentUser?.uid;
-      if (!uid) throw new Error('Not authenticated');
       for (const fileResult of assets) {
         const assetName = (fileResult as any).name || (fileResult as any).fileName || `file_${Date.now()}`;
-        const assetMimeType = (fileResult as any).mimeType;
+        const assetMimeType = (fileResult as any).mimeType || 'application/octet-stream';
         const assetSize = (fileResult as any).size || 0;
-        // Generate unique storage path
-        const parentSegment = currentPathId || 'root';
-        const storagePath = `vault/${uid}/${parentSegment}/${assetName}`;
-        const ref = storage.ref(storagePath);
-        await ref.putFile((fileResult as any).uri);
-        const downloadURL = await ref.getDownloadURL();
+        const assetUri = (fileResult as any).uri;
+
+        // 1. Get Signed URL from Cloud Function
+        const { signedUrl, storagePath } = await getUploadSignedUrlMobile(
+          assetName,
+          assetMimeType,
+          currentPathId
+        );
+
+        // 2. Upload the file to the Signed URL
+        const response = await fetch(assetUri);
+        const blob = await response.blob();
+
+        const uploadResponse = await fetch(signedUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': assetMimeType,
+          },
+          body: blob,
+        });
+
+        if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text();
+          throw new Error(`Failed to upload ${assetName} to storage. Status: ${uploadResponse.status}. Error: ${errorText}`);
+        }
+
+        console.log(`Successfully uploaded ${assetName} to ${storagePath}`);
+
+        // 3. Add file metadata to Firestore via Cloud Function
         const fileType = getVaultFileType(assetMimeType, assetName);
         await addVaultFileMobile({
           name: assetName,
           parentId: currentPathId,
           storagePath,
-          downloadURL,
           fileType,
           size: assetSize,
           mimeType: assetMimeType,
         });
       }
+
       Alert.alert('Success', `${assets.length} item(s) added to Vault.`);
       fetchItems(currentPathId);
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'Could not upload items.');
+
+    } catch (error: any) {
+      console.error('Error in handleAddItemsToVault:', error);
+      Alert.alert('Upload Error', error.message || 'Could not upload items.');
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   // MARK: - FAB Menu Items & Pickers

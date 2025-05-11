@@ -200,6 +200,7 @@ const SelectLocationScreen = () => {
           components: 'country:us', // Optional: Bias to a country e.g. USA
         }}
         fetchDetails={true}
+        predefinedPlaces={[]}
         styles={{
           container: styles.searchOuterContainer,
           textInputContainer: styles.searchInputContainer,
