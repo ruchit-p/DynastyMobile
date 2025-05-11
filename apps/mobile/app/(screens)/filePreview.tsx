@@ -58,17 +58,14 @@ const FilePreviewScreen = () => {
       );
     }
 
-    if (isLoading && fileType === 'image') { // For images, loading is usually quick, handled by Image onError/onLoad
-        // Can show a placeholder if desired, but Image component has its own internal loading
-    }
-
     if (fileType === 'image') {
       return (
-        <Image 
+        <Image
           source={{ uri: fileUri }}
           style={styles.image}
           resizeMode="contain"
-          onLoad={() => setIsLoading(false)}
+          onLoadStart={() => setIsLoading(true)}
+          onLoadEnd={() => setIsLoading(false)}
           onError={(e) => {
             console.error("Image load error:", e.nativeEvent.error);
             setError(`Failed to load image. ${e.nativeEvent.error || 'Unknown error'}`);
@@ -117,13 +114,13 @@ const FilePreviewScreen = () => {
         }}
       />
       <View style={styles.contentContainer}>
+        {renderContent()}
         {isLoading && (
-            <View style={styles.loadingOverlay}>
-                <ActivityIndicator size="large" color={Colors.dynastyGreen} />
-                <Text style={styles.loadingText}>Loading Preview...</Text>
-            </View>
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={Colors.dynastyGreen} />
+            <Text style={styles.loadingText}>Loading Preview...</Text>
+          </View>
         )}
-        {!isLoading && renderContent()}
       </View>
       {fileType === 'video' && status.isLoaded && !error && (
         <View style={styles.controlsContainer}>

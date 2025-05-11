@@ -13,6 +13,7 @@ import {
   Switch,
   InputAccessoryView,
   Keyboard,
+  Dimensions,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useNavigation, useLocalSearchParams, usePathname } from 'expo-router';
@@ -23,6 +24,11 @@ import DateTimePickerModal from "react-native-modal-datetime-picker";
 // import { auth, db } from '../../src/lib/firebase'; // Commented out Firebase
 // import { collection, addDoc, serverTimestamp } from "firebase/firestore"; // Commented out Firebase
 import { useImageUpload } from '../../hooks/useImageUpload';
+
+// Custom components
+import FullScreenDatePicker from '../../components/ui/FullScreenDatePicker';
+import SelectorButton from '../../components/ui/SelectorButton';
+import TimePickerModal from '../../components/ui/TimePickerModal';
 
 // Define the primary green color from the app's theme
 const dynastyGreen = '#1A4B44';
@@ -84,14 +90,17 @@ const CreateEventScreen = () => {
   const navigation = useNavigation();
   const params = useLocalSearchParams<{
     // Params from sub-screens like selectLocation, selectVisibility etc.
-    // These will need to be updated or re-thought based on new UI flows
     selectedVisibility?: 'family' | 'private', // Matched to new privacy type
     selectedLocation?: string, // Keep for now, but selectedLocation object is richer
     selectedLocationLat?: string,
     selectedLocationLng?: string,
     selectedInviteType?: 'all' | 'select',
     newSelectedMembers?: string, // Expecting a JSON string of array
-    fromScreen?: string 
+    fromScreen?: string,
+    // New params for calendar day view integration
+    prefillDate?: string, // ISO string of selected date
+    prefillStartTime?: string, // Format HH:MM
+    prefillEndTime?: string, // Format HH:MM
   }>();
   const currentPath = usePathname();
 
@@ -167,8 +176,28 @@ const CreateEventScreen = () => {
   const [timePickerTarget, setTimePickerTarget] = useState<'startTime' | 'endTime' | null>(null); // This is for the NEW time modal picker
 
   // This effect handles parameters passed from other screens (like location or visibility selection)
-  // It seems okay for now.
   useEffect(() => {
+    // Handle prefilled date and time from calendar view
+    if (params.prefillDate) {
+      try {
+        const eventDate = new Date(params.prefillDate);
+        if (!isNaN(eventDate.getTime())) {
+          setNewEvent(prev => ({
+            ...prev,
+            eventDate,
+            endDate: prev.isMultiDay ? prev.endDate : eventDate,
+            startTime: params.prefillStartTime ?? prev.startTime,
+            endTime: params.prefillEndTime ?? prev.endTime,
+          }));
+        } else {
+          console.error("Invalid prefillDate:", params.prefillDate);
+        }
+      } catch (e) {
+        console.error("Failed to parse prefilled date", e);
+      }
+    }
+
+    // Handle selection screen params
     if (params.fromScreen === 'selectVisibility' && params.selectedVisibility) {
       // setNewEvent(prev => ({ ...prev, visibility: params.selectedVisibility! })); // Old
       setNewEvent(prev => ({ ...prev, privacy: params.selectedVisibility! }));
@@ -176,8 +205,8 @@ const CreateEventScreen = () => {
       const lat = params.selectedLocationLat ? parseFloat(params.selectedLocationLat) : null;
       const lng = params.selectedLocationLng ? parseFloat(params.selectedLocationLng) : null;
       if (lat !== null && lng !== null) {
-        setNewEvent(prev => ({ 
-          ...prev, 
+        setNewEvent(prev => ({
+          ...prev,
           location: params.selectedLocation!,
           selectedLocation: { address: params.selectedLocation!, lat, lng }
         }));
@@ -200,7 +229,7 @@ const CreateEventScreen = () => {
     // Clear params after processing to avoid re-triggering (basic approach)
     // A more robust solution might involve a navigation state or context
     // router.setParams({ fromScreen: undefined, selectedVisibility: undefined, selectedLocation: undefined, selectedLocationLat: undefined, selectedLocationLng: undefined, selectedInviteType: undefined, newSelectedMembers: undefined });
-  }, [params, router]);
+  }, [params.prefillDate, params.prefillStartTime, params.prefillEndTime]);
 
   const [mediaLibraryPermission, requestMediaLibraryPermission] = ImagePicker.useMediaLibraryPermissions();
 
@@ -469,6 +498,29 @@ const CreateEventScreen = () => {
     return date;
   };
 
+  // Handler to replace a specific photo
+  const handleReplaceImage = async (index: number) => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+        selectionLimit: 1,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const newUri = result.assets[0].uri;
+        setNewEvent(prev => {
+          const photos = [...prev.photos];
+          photos[index] = { uri: newUri };
+          return { ...prev, photos };
+        });
+      }
+    } catch (error) {
+      console.error("Image replacement error:", error);
+      Alert.alert("Error", "Could not replace the image. Please try again.");
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView 
@@ -476,34 +528,50 @@ const CreateEventScreen = () => {
         contentContainerStyle={styles.scrollContentContainer}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity style={styles.imagePickerContainer} onPress={handlePickImage}>
+        <View style={styles.imagePickerContainer}>
           {newEvent.photos.length > 0 ? (
-            <>
-              <Image source={{ uri: newEvent.photos[0].uri }} style={styles.eventImagePreview} />
-              {/* Display a count if more than one photo */}
-              {newEvent.photos.length > 1 && (
-                <View style={styles.photoCountBadge}>
-                  <Text style={styles.photoCountText}>+{newEvent.photos.length - 1}</Text>
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+            >
+              {newEvent.photos.map((photo, index) => (
+                <View key={index} style={styles.imageWrapper}>
+                  <Image source={{ uri: photo.uri }} style={styles.eventImagePreview} />
+                  <TouchableOpacity
+                    style={styles.removePhotoButton}
+                    onPress={() => removePhoto(index)}
+                  >
+                    <Ionicons name="close-circle" size={24} color="white" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.replacePhotoButton}
+                    onPress={() => handleReplaceImage(index)}
+                  >
+                    <MaterialCommunityIcons name="camera-flip-outline" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
                 </View>
+              ))}
+              {newEvent.photos.length < 5 && (
+                <TouchableOpacity
+                  style={[styles.imageWrapper, styles.imagePickerPlaceholder]}
+                  onPress={handlePickImage}
+                >
+                  <MaterialCommunityIcons name="camera-plus-outline" size={48} color="#A0A0A0" />
+                  <Text style={styles.imagePickerText}>Add Photo</Text>
+                </TouchableOpacity>
               )}
-              {/* General upload progress might be tricky for multiple files here,
-                  Individual progress bars would be better near previews if shown */}
-              {isUploadingImage && ( // This `isUploadingImage` from hook is for single; needs rework for multi
-                <View style={styles.uploadProgressOverlay}>
-                  <Text style={styles.uploadProgressText}>{Math.round(uploadProgress)}%</Text>
-                </View>
-              )}
-            </>
+            </ScrollView>
           ) : (
-            <View style={styles.imagePickerPlaceholder}>
+            <TouchableOpacity
+              style={styles.imagePickerPlaceholder}
+              onPress={handlePickImage}
+            >
               <MaterialCommunityIcons name="camera-plus-outline" size={48} color="#A0A0A0" />
               <Text style={styles.imagePickerText}>Add Event Photo</Text>
-            </View>
+            </TouchableOpacity>
           )}
-          <View style={styles.imageEditIconContainer}>
-            <MaterialCommunityIcons name="camera-flip-outline" size={20} color="#FFFFFF" />
-          </View>
-        </TouchableOpacity>
+        </View>
 
         <View style={styles.formSection}>
           <TextInput
@@ -516,23 +584,33 @@ const CreateEventScreen = () => {
             inputAccessoryViewID={inputAccessoryViewID}
           />
 
-          <TouchableOpacity style={styles.inputRow} onPress={() => showDatePickerModalFor('eventDate')}>
+          <View style={styles.inputRow}>
             <MaterialCommunityIcons name="calendar-clock" size={22} color={styles.inputIcon.color} style={styles.inputIcon} />
             <Text style={styles.inputLabel}>Start Date</Text>
-            <Text style={newEvent.eventDate ? styles.inputTextValue : styles.placeholderTextValue}>
-              {newEvent.eventDate ? formatDate(newEvent.eventDate) : 'Select...'}
-            </Text>
-            <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.inputRow} onPress={() => showTimePickerModalFor('startTime')}>
+            <TouchableOpacity
+              style={styles.valueContainer}
+              onPress={() => showDatePickerModalFor('eventDate')}
+            >
+              <Text style={newEvent.eventDate ? styles.inputTextValue : styles.placeholderTextValue}>
+                {newEvent.eventDate ? formatDate(newEvent.eventDate) : 'Select...'}
+              </Text>
+              <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.inputRow}>
             <Ionicons name="time-outline" size={22} color={styles.inputIcon.color} style={styles.inputIcon} />
             <Text style={styles.inputLabel}>Start Time</Text>
-            <Text style={styles.inputTextValue}>
-              {formatTime(newEvent.startTime)}
-            </Text>
-            <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.valueContainer}
+              onPress={() => showTimePickerModalFor('startTime')}
+            >
+              <Text style={styles.inputTextValue}>
+                {formatTime(newEvent.startTime)}
+              </Text>
+              <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+            </TouchableOpacity>
+          </View>
           
           <View style={styles.separatorThin} />
 
@@ -549,23 +627,33 @@ const CreateEventScreen = () => {
 
           {newEvent.isMultiDay && (
             <>
-              <TouchableOpacity style={styles.inputRow} onPress={() => showDatePickerModalFor('endDate')}>
+              <View style={styles.inputRow}>
                 <View style={{width: 22, marginRight: 15}} />
                 <Text style={styles.inputLabel}>End Date</Text>
-                <Text style={newEvent.endDate ? styles.inputTextValue : styles.placeholderTextValue}>
-                  {newEvent.endDate ? formatDate(newEvent.endDate) : 'Select...'}
-                </Text>
-                <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.valueContainer}
+                  onPress={() => showDatePickerModalFor('endDate')}
+                >
+                  <Text style={newEvent.endDate ? styles.inputTextValue : styles.placeholderTextValue}>
+                    {newEvent.endDate ? formatDate(newEvent.endDate) : 'Select...'}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+                </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity style={styles.inputRow} onPress={() => showTimePickerModalFor('endTime')}>
+              <View style={styles.inputRow}>
                 <View style={{width: 22, marginRight: 15}} />
                 <Text style={styles.inputLabel}>End Time</Text>
-                <Text style={styles.inputTextValue}>
-                  {formatTime(newEvent.endTime)}
-                </Text>
-                <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.valueContainer}
+                  onPress={() => showTimePickerModalFor('endTime')}
+                >
+                  <Text style={styles.inputTextValue}>
+                    {formatTime(newEvent.endTime)}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+                </TouchableOpacity>
+              </View>
             </>
           )}
           
@@ -689,34 +777,39 @@ const CreateEventScreen = () => {
 
       </ScrollView>
       
-      {/* DateTimePickerModal Instances */}
-      <DateTimePickerModal
+      {/* DatePicker Instance */}
+      <FullScreenDatePicker
         isVisible={isDatePickerVisible}
         mode="date"
-        onConfirm={handleDateConfirm}
-        onCancel={hideDatePicker}
-        date={
+        onDateChange={handleDateConfirm}
+        onDismiss={hideDatePicker}
+        value={
           (currentPickerTarget === 'eventDate' && newEvent.eventDate) ||
           (currentPickerTarget === 'endDate' && newEvent.endDate) ||
           (currentPickerTarget === 'rsvpDeadline' && newEvent.rsvpDeadline) ||
           new Date()
         }
         minimumDate={currentPickerTarget === 'endDate' && newEvent.eventDate ? newEvent.eventDate : undefined}
-        timeZoneName={newEvent.timezone} // Pass timezone
+        maximumDate={undefined}
+        timeZoneName={newEvent.timezone}
+        doneButtonLabel="Done"
+        display="spinner"
       />
 
-      <DateTimePickerModal
+      {/* TimePicker Instance */}
+      <TimePickerModal
         isVisible={isTimePickerVisible}
-        mode="time"
         onConfirm={handleTimeConfirm}
         onCancel={hideTimePicker}
-        date={
+        value={
           (timePickerTarget === 'startTime' && getTimeAsDate(newEvent.startTime)) ||
           (timePickerTarget === 'endTime' && getTimeAsDate(newEvent.endTime)) ||
           new Date()
         }
-        is24Hour={true} // Or based on locale/preference
-        timeZoneName={newEvent.timezone} // Pass timezone
+        timeZoneName={newEvent.timezone}
+        confirmText="Confirm"
+        cancelText="Cancel"
+        is24Hour={false}
       />
 
       {Platform.OS === 'ios' && (
@@ -964,6 +1057,34 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 0,
     lineHeight: 20,
+  },
+  imageWrapper: {
+    width: Dimensions.get('window').width, // full screen width
+    height: 220,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  removePhotoButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 2,
+  },
+  replacePhotoButton: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    zIndex: 2,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    padding: 6,
+    borderRadius: 20,
+  },
+  valueContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
   },
 });
 

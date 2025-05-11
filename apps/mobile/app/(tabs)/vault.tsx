@@ -285,7 +285,7 @@ const VaultScreen = () => {
       if (file.fileType === 'image' || file.fileType === 'video') {
         // Navigate to a new screen for image/video preview
         router.push({ 
-          pathname: '/(screens)/filePreview', // Placeholder - this screen needs to be created
+          pathname: '/filePreview',
           params: { fileUri: file.uri, fileName: file.name, fileType: file.fileType } 
         });
       } else if (file.fileType === 'document' || file.fileType === 'audio' || file.fileType === 'other') {

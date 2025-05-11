@@ -68,5 +68,11 @@ service firebase.storage {
       // Auto-expire temporary files after 24 hours
       // This requires Cloud Functions to implement properly
     }
+
+    // Vault media storage for user's vault items
+    match /vault/{userId}/{allPaths=**} {
+      // Only the owner can read and write their vault items
+      allow read, write: if isOwner(userId);
+    }
   }
 } 
