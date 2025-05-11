@@ -90,23 +90,44 @@ const FamilyTreeScreen = () => {
     getFamilyTreeDataMobile(user.uid)
       .then(({ treeNodes }) => {
         const nodeMap = new Map(treeNodes.map((node: any) => [node.id, node]));
+        // Keep track of nodes we've already processed to prevent infinite recursion
+        const processedNodes = new Set<string>();
+
         const buildItem = (member: any): Items => {
+          // Prevent processing the same node twice (circular references)
+          if (processedNodes.has(member.id)) {
+            return {
+              id: member.id,
+              name: member.attributes?.displayName || 'Duplicate Reference',
+              dob: '',
+              children: [],
+            };
+          }
+
+          // Mark this node as processed
+          processedNodes.add(member.id);
+
+          // Process children
           const children = (member.children || [])
             .map((c: any) => nodeMap.get(c.id))
             .filter((m: any) => m)
             .map((m: any) => buildItem(m));
+
+          // Process spouse
           const spouseRel = member.spouses?.[0];
           let spouse: Items | undefined;
-          if (spouseRel) {
+          if (spouseRel && !processedNodes.has(spouseRel.id)) {
             const spouseMember = nodeMap.get(spouseRel.id);
             if (spouseMember) {
               spouse = buildItem(spouseMember);
             }
           }
+
           // Determine avatar: use provided profilePicture, otherwise for current user fall back to auth or firestore picture
           const attributeAvatar = member.attributes?.profilePicture;
           const isCurrentUser = member.id === user.uid;
           const fallbackAvatar = isCurrentUser ? (user.photoURL || firestoreUser?.profilePictureUrl) : undefined;
+
           return {
             id: member.id,
             name: member.attributes?.displayName || '',
@@ -117,9 +138,15 @@ const FamilyTreeScreen = () => {
             children,
           };
         };
+
         const rootMember = treeNodes.find((n: any) => n.id === user.uid);
         if (rootMember) {
-          setRelativesData([buildItem(rootMember)]);
+          try {
+            const treeData = [buildItem(rootMember)];
+            setRelativesData(treeData);
+          } catch (err) {
+            console.error('Error building family tree data:', err);
+          }
         }
       })
       .catch((error) => console.error('Error fetching family tree:', error));

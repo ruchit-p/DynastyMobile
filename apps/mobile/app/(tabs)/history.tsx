@@ -164,8 +164,8 @@ const HistoryScreen = () => {
         </View>
       )}
       
-      {/* Floating Action Button Menu */}
-      <FloatingActionMenu menuItems={historyMenuItems} />
+      {/* Floating Action Button Menu - Using fixed positioning */}
+      <FloatingActionMenu menuItems={historyMenuItems} absolutePosition={false} />
     </Screen>
   );
 };
@@ -182,10 +182,10 @@ const styles = StyleSheet.create({
     minHeight: 400,
   },
   storiesContainer: {
-    paddingBottom: Spacing.xl, // Extra padding at bottom for FAB
+    paddingBottom: Spacing.xl + Spacing.lg, // Extra padding at bottom for FAB and to ensure last post is fully visible
   },
   storyItem: {
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm, // Reduced spacing between posts from md (16) to sm (8)
   },
 });
 

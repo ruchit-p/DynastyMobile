@@ -3,6 +3,7 @@ import { StyleSheet, View, Image, Text, ActivityIndicator, TouchableOpacity, Dim
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Video, ResizeMode, Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system'; // Import FileSystem
 import { commonHeaderOptions } from '../../constants/headerConfig';
 import { Colors } from '../../constants/Colors';
 import Fonts from '../../constants/Fonts';
@@ -13,63 +14,112 @@ const FilePreviewScreen = () => {
   const params = useLocalSearchParams<{ fileUri: string; fileName: string; fileType: 'image' | 'video' }>();
   const router = useRouter();
   const videoRef = useRef<Video>(null);
-  const [status, setStatus] = useState<any>({}); // To store video status
-  const [isLoading, setIsLoading] = useState(true);
+  const [status, setStatus] = useState<any>({});
+  const [isLoading, setIsLoading] = useState(true); // Global loading for screen (download + render)
   const [error, setError] = useState<string | null>(null);
+  const [mediaUriToDisplay, setMediaUriToDisplay] = useState<string | null>(null); // URI for Image/Video source
 
-  const { fileUri, fileName, fileType } = params;
+  const { fileUri: initialFileUri, fileName, fileType } = params;
 
   useEffect(() => {
-    if (fileType === 'video') {
-      (async () => {
+    let isMounted = true;
+
+    const setupAudioAndPrepareMedia = async () => {
+      if (!isMounted) return;
+
+      if (fileType === 'video') {
         try {
           await Audio.setAudioModeAsync({
             allowsRecordingIOS: false,
-            playsInSilentModeIOS: true, // Important for video sound to play even in silent mode
+            playsInSilentModeIOS: true,
             staysActiveInBackground: false,
             shouldDuckAndroid: true,
             playThroughEarpieceAndroid: false,
           });
         } catch (e) {
-          console.error('Failed to set audio mode', e);
+          console.error('Failed to set audio mode for video playback:', e);
         }
-      })();
+      }
+
+      if (!initialFileUri) {
+        if (isMounted) {
+          setError("File information is missing.");
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      if (isMounted) setIsLoading(true);
+
+      if (initialFileUri.startsWith('http')) {
+        const extension = fileName?.includes('.') ? fileName.substring(fileName.lastIndexOf('.')) : '';
+        const localPath = `${FileSystem.cacheDirectory}${fileName ? fileName.replace(/[^a-zA-Z0-9.]/g, '_') : `preview_${Date.now()}`}${extension}`;
+        
+        try {
+          console.log(`Attempting to download ${fileType}: ${initialFileUri} to ${localPath}`);
+          const downloadResult = await FileSystem.downloadAsync(initialFileUri, localPath);
+          if (isMounted) {
+            console.log(`${fileType} downloaded successfully to: ${downloadResult.uri}`);
+            setMediaUriToDisplay(downloadResult.uri);
+            setError(null); 
+          }
+        } catch (e: any) {
+          console.error(`Error downloading ${fileType} from ${initialFileUri}:`, e);
+          if (isMounted) {
+            setError(`Failed to download media for preview. ${e.message || 'Check network or permissions.'}`);
+            setMediaUriToDisplay(null);
+          }
+        } finally {
+          if (isMounted) setIsLoading(false); 
+        }
+      } else { // Already a local URI
+        if (isMounted) {
+          setMediaUriToDisplay(initialFileUri);
+          setError(null);
+          setIsLoading(false);
+        }
+      }
+    };
+
+    setupAudioAndPrepareMedia();
+
+    return () => {
+      isMounted = false;
+      if (mediaUriToDisplay && mediaUriToDisplay.startsWith(FileSystem.cacheDirectory || '')) {
+        FileSystem.deleteAsync(mediaUriToDisplay, { idempotent: true })
+          .then(() => console.log("Deleted cached preview file:", mediaUriToDisplay))
+          .catch(e => console.warn("Failed to delete cached preview file:", mediaUriToDisplay, e));
+      }
+    };
+  }, [initialFileUri, fileName, fileType]);
+
+
+  const renderActualContent = () => {
+    if (error && !mediaUriToDisplay) { 
+        return (
+            <View style={styles.containerCentered}>
+                <Ionicons name="alert-circle-outline" size={60} color={Colors.light.text.error} />
+                <Text style={styles.errorText}>{error}</Text>
+                 <TouchableOpacity onPress={() => router.back()} style={styles.button}>
+                    <Text style={styles.buttonText}>Go Back</Text>
+                </TouchableOpacity>
+            </View>
+        );
     }
-  }, [fileType]);
-
-  if (!fileUri || !fileType) {
-    return (
-      <View style={styles.containerCentered}>
-        <Text style={styles.errorText}>File information is missing.</Text>
-        <TouchableOpacity onPress={() => router.back()} style={styles.button}>
-            <Text style={styles.buttonText}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  const renderContent = () => {
-    if (error) {
-      return (
-        <View style={styles.containerCentered}>
-          <Ionicons name="alert-circle-outline" size={60} color={Colors.light.text.error} />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      );
+    
+    if (!mediaUriToDisplay) {
+        return null; 
     }
 
     if (fileType === 'image') {
       return (
         <Image
-          source={{ uri: fileUri }}
+          source={{ uri: mediaUriToDisplay }}
           style={styles.image}
           resizeMode="contain"
-          onLoadStart={() => setIsLoading(true)}
-          onLoadEnd={() => setIsLoading(false)}
           onError={(e) => {
-            console.error("Image load error:", e.nativeEvent.error);
-            setError(`Failed to load image. ${e.nativeEvent.error || 'Unknown error'}`);
-            setIsLoading(false);
+            console.error("Image rendering error (from local URI):", e.nativeEvent.error);
+            if (!error) setError(`Failed to render image. ${e.nativeEvent.error || ''}`);
           }}
         />
       );
@@ -80,20 +130,15 @@ const FilePreviewScreen = () => {
         <Video
           ref={videoRef}
           style={styles.video}
-          source={{
-            uri: fileUri,
-          }}
+          source={{ uri: mediaUriToDisplay }}
           useNativeControls
           resizeMode={ResizeMode.CONTAIN}
           isLooping={false}
           onPlaybackStatusUpdate={playbackStatus => setStatus(() => playbackStatus)}
-          onLoad={() => setIsLoading(false)}
-          onError={(e) => {
-            console.error("Video load error:", e);
-            setError(`Failed to load video. ${e}`);
-            setIsLoading(false);
+          onError={(videoError) => {
+            console.error("Video rendering error (from local URI):", videoError);
+            if (!error) setError(`Failed to render video. ${videoError}`);
           }}
-          onReadyForDisplay={() => setIsLoading(false)} // Another good point to hide loader
         />
       );
     }
@@ -101,6 +146,9 @@ const FilePreviewScreen = () => {
     return (
         <View style={styles.containerCentered}>
             <Text style={styles.errorText}>Unsupported file type for preview.</Text>
+            <TouchableOpacity onPress={() => router.back()} style={styles.button}>
+                <Text style={styles.buttonText}>Go Back</Text>
+            </TouchableOpacity>
         </View>
     );
   };
@@ -110,19 +158,25 @@ const FilePreviewScreen = () => {
       <Stack.Screen
         options={{
           title: fileName || 'Preview',
-          ...commonHeaderOptions
+          ...commonHeaderOptions,
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: Platform.OS === 'ios' ? 10 : 0 }}>
+              <Ionicons name="arrow-back" size={24} color={Colors.light.text.primary} />
+            </TouchableOpacity>
+          ),
         }}
       />
       <View style={styles.contentContainer}>
-        {renderContent()}
+        {!isLoading && (mediaUriToDisplay || error) && renderActualContent()}
+        
         {isLoading && (
-          <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color={Colors.dynastyGreen} />
-            <Text style={styles.loadingText}>Loading Preview...</Text>
-          </View>
+            <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="large" color={Colors.dynastyGreen} />
+                <Text style={styles.loadingText}>Loading Preview...</Text>
+            </View>
         )}
       </View>
-      {fileType === 'video' && status.isLoaded && !error && (
+      {fileType === 'video' && mediaUriToDisplay && !error && status.isLoaded && (
         <View style={styles.controlsContainer}>
           <TouchableOpacity 
             onPress={() => status.isPlaying ? videoRef.current?.pauseAsync() : videoRef.current?.playAsync()}
@@ -139,7 +193,7 @@ const FilePreviewScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background.secondary, // Darker background for media focus
+    backgroundColor: Colors.light.background.secondary,
   },
   contentContainer: {
     flex: 1,
@@ -158,25 +212,25 @@ const styles = StyleSheet.create({
   },
   video: {
     width: screenWidth,
-    height: screenHeight * 0.7, // Adjust as needed
+    height: screenHeight * 0.7,
     backgroundColor: '#000',
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.3)', // Semi-transparent overlay
+    backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10, // Ensure it's on top
+    zIndex: 10,
   },
   loadingText: {
     marginTop: 10,
     fontSize: Fonts.size.medium,
-    color: Colors.light.text.inverse, // White text on dark overlay
+    color: Colors.light.text.inverse,
     fontFamily: Fonts.type.base,
   },
   errorText: {
     fontSize: Fonts.size.large,
-    color: Colors.light.text.error, // Use theme error text color
+    color: Colors.light.text.error,
     textAlign: 'center',
     marginBottom: 20,
     fontFamily: Fonts.type.base,
@@ -186,7 +240,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     alignItems: 'center',
     paddingVertical: 10,
-    backgroundColor: Colors.light.background.primary, // Match container bg
+    backgroundColor: Colors.light.background.primary,
     borderTopWidth: 1,
     borderTopColor: Colors.light.icon.primary,
   },

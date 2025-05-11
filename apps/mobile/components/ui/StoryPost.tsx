@@ -106,7 +106,7 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm, // Reduced from md (16) to sm (8)
   },
   header: {
     flexDirection: 'row',

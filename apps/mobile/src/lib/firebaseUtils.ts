@@ -101,26 +101,40 @@ export const getMemberProfileDataMobile = async (memberId: string): Promise<Memb
 };
 
 // Helper function to find a member in a subtree
-const findMemberInSubtree = (node: FamilyTreeNode, memberId: string): FamilyTreeNode | null => {
+const findMemberInSubtree = (
+  node: FamilyTreeNode,
+  memberId: string,
+  visited: Set<string> = new Set()
+): FamilyTreeNode | null => {
+  // Prevent infinite recursion by tracking visited nodes
+  if (visited.has(node.id)) {
+    return null;
+  }
+
+  visited.add(node.id);
+
   if (node.id === memberId) {
     return node;
   }
-  
+
   // Check spouse
   if (node.spouse && node.spouse.id === memberId) {
     return node.spouse;
   }
-  
+
   // Check children recursively
   if (node.children) {
     for (const child of node.children) {
-      const foundInChild = findMemberInSubtree(child, memberId);
+      // Skip already visited nodes
+      if (visited.has(child.id)) continue;
+
+      const foundInChild = findMemberInSubtree(child, memberId, visited);
       if (foundInChild) {
         return foundInChild;
       }
     }
   }
-  
+
   return null;
 };
 

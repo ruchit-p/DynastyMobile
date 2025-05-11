@@ -25,7 +25,11 @@
       [
         "@react-native-firebase/messaging",
         {
-          "presentationOptions": ["badge", "sound", "alert"]
+          "presentationOptions": [
+            "badge",
+            "sound",
+            "alert"
+          ]
         }
       ],
       "expo-av",
