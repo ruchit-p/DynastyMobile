@@ -58,10 +58,33 @@ const FilePreviewScreen = () => {
         try {
           console.log(`Attempting to download ${fileType}: ${initialFileUri} to ${localPath}`);
           const downloadResult = await FileSystem.downloadAsync(initialFileUri, localPath);
+          console.log("Download HTTP Result:", JSON.stringify({ status: downloadResult.status, headers: downloadResult.headers, mimeType: downloadResult.mimeType }));
+
           if (isMounted) {
-            console.log(`${fileType} downloaded successfully to: ${downloadResult.uri}`);
+            if (downloadResult.status === 200) {
+              try {
+                const fileInfo = await FileSystem.getInfoAsync(downloadResult.uri);
+                console.log("Downloaded File Info:", JSON.stringify(fileInfo));
+
+                if (fileInfo.exists && fileInfo.size && fileInfo.size > 500) { // Check existence and size
             setMediaUriToDisplay(downloadResult.uri);
             setError(null); 
+                } else {
+                  const sizeError = fileInfo.exists ? `File size too small (${fileInfo.size} bytes)` : 'File not found after download';
+                  console.error("Downloaded file seems invalid or too small. URI:", downloadResult.uri, "Info:", fileInfo);
+                  setError(`Failed to download a valid media file. ${sizeError}.`);
+                  setMediaUriToDisplay(null);
+                }
+              } catch (infoError: any) {
+                console.error("Error getting file info after download:", infoError);
+                setError(`Failed to verify downloaded file. ${infoError.message}`);
+                setMediaUriToDisplay(null);
+              }
+            } else {
+              console.error("Download failed. Status:", downloadResult.status, "URI:", initialFileUri);
+              setError(`Failed to download media. HTTP status ${downloadResult.status}.`);
+              setMediaUriToDisplay(null); // Ensure we don't try to display a bad URI
+            }
           }
         } catch (e: any) {
           console.error(`Error downloading ${fileType} from ${initialFileUri}:`, e);

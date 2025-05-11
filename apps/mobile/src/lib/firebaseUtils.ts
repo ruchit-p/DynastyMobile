@@ -237,30 +237,46 @@ export const deleteFamilyMemberMobile = async (
   }
 };
 
-// MARK: - Vault Functions
-
-/**
- * Vault item type returned from Cloud Functions
- */
+// MARK: - Vault Types (already defined, ensure it matches)
 export interface VaultItem {
   id: string;
-  userId: string;
+  // userId is usually implicit by function security rules, not stored directly in what client gets for list
   name: string;
-  type: 'folder' | 'file';
+  type: "folder" | "file";
   parentId: string | null;
-  path: string;
-  createdAt: { seconds: number; nanoseconds: number };
-  updatedAt: { seconds: number; nanoseconds: number };
-  fileType?: 'image' | 'video' | 'audio' | 'document' | 'other';
+  path: string; // Logical path in vault, not GCS path
+  createdAt: { seconds: number; nanoseconds: number }; // Or string, or Date, depending on transform
+  updatedAt: { seconds: number; nanoseconds: number }; // Or string, or Date
+  fileType?: "image" | "video" | "audio" | "document" | "other";
   size?: number;
-  storagePath?: string;
-  downloadURL?: string;
+  // storagePath is an implementation detail for the backend, not usually sent to client for listing
+  downloadURL?: string; // This is what the client uses to display/download
   mimeType?: string;
-  isDeleted: boolean;
+  // isDeleted items are filtered out by the function
 }
 
+// MARK: - Vault Functions (Mobile Client)
+
 /**
- * Fetch vault items for a given folder
+ * Get a signed URL for uploading a file to the vault.
+ */
+export const getUploadSignedUrlMobile = async (
+  fileName: string,
+  mimeType: string,
+  parentId: string | null
+): Promise<{ signedUrl: string; storagePath: string; parentPathInVault: string }> => {
+  const functionRef = httpsCallable(firebaseFunctions, 'getVaultUploadSignedUrl');
+  try {
+    const result = await functionRef({ fileName, mimeType, parentId });
+    return result.data as { signedUrl: string; storagePath: string; parentPathInVault: string };
+  } catch (error) {
+    console.error("Error getting upload signed URL:", error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch vault items for a user and optional parent folder
  */
 export const getVaultItemsMobile = async (
   parentId: string | null
@@ -270,7 +286,7 @@ export const getVaultItemsMobile = async (
     const result = await functionRef({ parentId });
     return result.data as { items: VaultItem[] };
   } catch (error) {
-    console.error('Error fetching vault items:', error);
+    console.error("Error fetching vault items:", error);
     throw error;
   }
 };
@@ -287,37 +303,37 @@ export const createVaultFolderMobile = async (
     const result = await functionRef({ name, parentId });
     return result.data as { id: string };
   } catch (error) {
-    console.error('Error creating vault folder:', error);
+    console.error("Error creating vault folder:", error);
     throw error;
   }
 };
 
 /**
- * Add a new file entry to the vault (after uploading to storage)
+ * Add a new file entry to the vault (metadata only).
+ * This is called AFTER the file has been uploaded to storage via a signed URL.
  */
 export const addVaultFileMobile = async (
   payload: {
     name: string;
     parentId: string | null;
-    storagePath: string;
-    downloadURL: string;
-    fileType: 'image' | 'video' | 'audio' | 'document' | 'other';
+    storagePath: string; // Path in GCS where the file was uploaded
+    fileType: "image" | "video" | "audio" | "document" | "other";
     size: number;
     mimeType: string;
   }
-): Promise<{ id: string }> => {
+): Promise<{ id: string; downloadURL: string }> => { // Expect downloadURL back from function
   const functionRef = httpsCallable(firebaseFunctions, 'addVaultFile');
   try {
     const result = await functionRef(payload);
-    return result.data as { id: string };
+    return result.data as { id: string; downloadURL: string };
   } catch (error) {
-    console.error('Error adding vault file:', error);
+    console.error("Error adding vault file metadata:", error);
     throw error;
   }
 };
 
 /**
- * Rename a vault item
+ * Rename an existing vault item
  */
 export const renameVaultItemMobile = async (
   itemId: string,
@@ -328,13 +344,13 @@ export const renameVaultItemMobile = async (
     const result = await functionRef({ itemId, newName });
     return result.data as { success: boolean };
   } catch (error) {
-    console.error('Error renaming vault item:', error);
+    console.error("Error renaming vault item:", error);
     throw error;
   }
 };
 
 /**
- * Move a vault item to a new folder
+ * Move a vault item to a new parent folder
  */
 export const moveVaultItemMobile = async (
   itemId: string,
@@ -345,13 +361,13 @@ export const moveVaultItemMobile = async (
     const result = await functionRef({ itemId, newParentId });
     return result.data as { success: boolean };
   } catch (error) {
-    console.error('Error moving vault item:', error);
+    console.error("Error moving vault item:", error);
     throw error;
   }
 };
 
 /**
- * Delete a vault item (file or folder)
+ * Delete a vault item (and children if folder)
  */
 export const deleteVaultItemMobile = async (
   itemId: string
@@ -361,7 +377,7 @@ export const deleteVaultItemMobile = async (
     const result = await functionRef({ itemId });
     return result.data as { success: boolean };
   } catch (error) {
-    console.error('Error deleting vault item:', error);
+    console.error("Error deleting vault item:", error);
     throw error;
   }
 };

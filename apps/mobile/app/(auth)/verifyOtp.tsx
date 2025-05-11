@@ -24,12 +24,15 @@ export default function VerifyOtpScreen() {
   const params = useLocalSearchParams<{ phoneNumberSent?: string }>();
   const phoneNumberSent = params.phoneNumberSent;
 
+  console.log('[VerifyOtpScreen] Component Load: isLoading:', isLoading, 'phoneAuthConfirmation exists:', !!phoneAuthConfirmation, 'phoneNumberSent:', phoneNumberSent);
+
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [resendDisabled, setResendDisabled] = useState(false);
   const [countdown, setCountdown] = useState(30); // Countdown for resend OTP
 
   useEffect(() => {
+    console.log('[VerifyOtpScreen] useEffect (initial): isLoading:', isLoading, 'phoneAuthConfirmation exists:', !!phoneAuthConfirmation);
     if (!phoneAuthConfirmation && !isLoading) {
       // This might happen if user navigates here directly or context was lost.
       // Alert and redirect or allow re-sending OTP for the passed phone number.

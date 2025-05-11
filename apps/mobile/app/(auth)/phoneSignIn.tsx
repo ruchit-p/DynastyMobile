@@ -44,9 +44,7 @@ export default function PhoneSignInScreen() {
 
     try {
       const confirmationResult = await signInWithPhoneNumber(formattedValue);
-      if (confirmationResult) {
-        router.push({ pathname: '/(auth)/verifyOtp', params: { phoneNumberSent: formattedValue } });
-      } else {
+      if (!confirmationResult) {
         setError("Could not initiate phone sign-in. Please try again.");
       }
     } catch (e: any) {

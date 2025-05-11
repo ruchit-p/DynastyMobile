@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Mobile App Execution Directory
+
+To run the Dynasty Mobile application, you **MUST** navigate to the `apps/mobile` directory first.
+
+All commands related to running, building, or serving the mobile app (e.g., `expo start`, `yarn ios`, `yarn android`) should be executed from within the `[apps/mobile/](mdc:apps/mobile)` directory.
+
+*Rationale*: The mobile project is configured to run from this specific subdirectory, and running commands from the workspace root or other locations may lead to build failures or unexpected behavior.

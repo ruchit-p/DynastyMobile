@@ -140,13 +140,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   useEffect(() => {
+    const routeInfo = {
+      segments: segments.join('/'),
+      currentRoute: segments.join('/') || 'index',
+      isLoading,
+      isFetchingFirestoreUser,
+      userExists: !!user,
+      phoneAuthConfirmationExists: !!phoneAuthConfirmation,
+    };
+    console.log('[AuthNavEffect START]', JSON.stringify(routeInfo));
+
     // If a phone auth confirmation is active, HMGLogNav('Phone auth active, returning early from nav logic') and do not redirect, allow OTP entry
     if (phoneAuthConfirmation) {
-      console.log('Auth Nav Logic: Phone auth confirmation is active. INTENTIONALLY SKIPPING further nav logic to allow OTP flow.');
+      console.log('[AuthNavEffect] phoneAuthConfirmation is ACTIVE. INTENTIONALLY SKIPPING further nav logic.');
       return;
     }
 
-    if (isLoading || isFetchingFirestoreUser) return; // Wait for both auth and Firestore data
+    if (isLoading || isFetchingFirestoreUser) {
+      console.log('[AuthNavEffect] isLoading or isFetchingFirestoreUser is TRUE. Returning early.');
+      return;
+    }
 
     const currentRoute = segments.join('/') || 'index'; // Treat empty segments as index
     const inAuthGroup = segments[0] === '(auth)';
@@ -165,22 +178,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     console.log(
-      'Auth Nav Logic - User:', user?.uid,
+      '[AuthNavEffect Decision Logic] User:', user?.uid,
       'Email Verified:', user?.emailVerified,
       'OnboardingComplete:', firestoreUser?.onboardingCompleted,
-      'Segments:', segments.join('/'),
       'CurrentRoute:', currentRoute,
       'inAuthGroup:', inAuthGroup,
       'isLandingPageEquivalent:', isLandingPageEquivalent,
-      'phoneAuthConfirmation:', !!phoneAuthConfirmation
+      'phoneAuthConfirmation (should be false here):', !!phoneAuthConfirmation
     );
 
     if (!user) {
-      // If nobody is signed-in AND phone auth is NOT active AND we are NOT in (auth) group 
-      // AND it's not a page an unauthenticated user should be on (like index or signIn) -> go home
-      const canBeOnPageWithoutAuth = inAuthGroup || isLandingPageEquivalent || isConfirmEmailScreen || currentRoute === '(auth)/signIn' || currentRoute === '(auth)/signUp' || currentRoute === '(auth)/phoneSignIn';
+      const canBeOnPageWithoutAuth = inAuthGroup || isLandingPageEquivalent || isConfirmEmailScreen || currentRoute === '(auth)/signIn' || currentRoute === '(auth)/signUp' || currentRoute === '(auth)/phoneSignIn' || currentRoute === '(auth)/verifyOtp'; // Added verifyOtp here just in case
+      console.log('[AuthNavEffect !user] canBeOnPageWithoutAuth:', canBeOnPageWithoutAuth, 'CurrentRoute:', currentRoute);
       if (!phoneAuthConfirmation && !canBeOnPageWithoutAuth) {
-        console.log(`Redirecting to / (landing page) - No user, not in auth flow, not on a public auth page. Current route: ${currentRoute}`);
+        console.log(`[AuthNavEffect !user] Redirecting to / (landing page). Current route: ${currentRoute}`);
         router.replace('/');
       }
     } else { // User exists
@@ -377,18 +388,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signInWithPhoneNumber = async (phoneNumber: string): Promise<FirebaseAuthTypes.ConfirmationResult | null> => {
     setIsLoading(true);
-    console.log(`AuthContext: Initiating phone sign-in for ${phoneNumber}`);
     try {
-      const confirmation = await RNAuth().signInWithPhoneNumber(phoneNumber);
-      setPhoneAuthConfirmation(confirmation);
-      console.log(`AuthContext: OTP Sent to ${phoneNumber}. Confirmation pending.`);
-      setIsLoading(false);
+      console.log("AuthContext: Initiating phone sign-in for", phoneNumber);
+      const confirmation = await auth.signInWithPhoneNumber(phoneNumber);
+      setPhoneAuthConfirmation(confirmation); 
+      console.log("AuthContext: OTP Sent to", phoneNumber, ". Confirmation pending. phoneAuthConfirmation set:", !!confirmation);
+      
+      const navigationParams = { pathname: '/(auth)/verifyOtp' as const, params: { phoneNumberSent: phoneNumber } };
+      console.log('[AuthContext signInWithPhoneNumber] Attempting to navigate with:', JSON.stringify(navigationParams));
+      console.log('[AuthContext signInWithPhoneNumber] isLoading state BEFORE push:', isLoading);
+      // @ts-ignore Linter seems overly strict here, this form is valid for Expo Router
+      router.push(navigationParams);
+      console.log('[AuthContext signInWithPhoneNumber] Navigation to verifyOtp initiated.');
+      
       return confirmation;
     } catch (error: any) {
       console.error("AuthContext: Error during signInWithPhoneNumber", error);
       setPhoneAuthConfirmation(null);
-      setIsLoading(false);
       throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
