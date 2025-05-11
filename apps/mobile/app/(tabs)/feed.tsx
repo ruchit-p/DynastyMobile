@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Alert, View, StyleSheet } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useAuth } from '../../src/contexts/AuthContext';
+import { fetchAccessibleStoriesMobile } from '../../src/lib/storyUtils';
 
 // Import design system components
 import Screen from '../../components/ui/Screen';
@@ -14,6 +16,7 @@ import { Spacing } from '../../constants/Spacing';
 
 const FeedScreen = () => {
   const router = useRouter();
+  const { user, firestoreUser } = useAuth();
   
   // State for feed posts and loading state
   const [feedPosts, setFeedPosts] = useState<Post[]>([]);
@@ -43,35 +46,74 @@ const FeedScreen = () => {
     React.useCallback(() => {
       const fetchPosts = async () => {
         setIsLoadingFeed(true);
-        
         try {
-          // This would be replaced with actual API calls to fetch real posts
-          // For now, we'll initialize with an empty array
-          setTimeout(() => {
+          if (!user?.uid || !firestoreUser?.familyTreeId) {
             setFeedPosts([]);
-            setIsLoadingFeed(false);
-            setIsRefreshing(false);
-          }, 1000);
+            return;
+          }
+          const stories = await fetchAccessibleStoriesMobile(user.uid, firestoreUser.familyTreeId);
+          const mapped = stories.map(story => {
+            const textBlock = story.blocks.find(b => b.type === 'text');
+            const imageBlock = story.blocks.find(b => b.type === 'image');
+            return {
+              id: story.id,
+              authorId: story.authorID,
+              createdAt: new Date(story.createdAt.seconds * 1000),
+              text: typeof textBlock?.data === 'string' ? textBlock.data : undefined,
+              imageUrl: Array.isArray(imageBlock?.data) ? imageBlock.data[0] : undefined,
+              location: story.location?.address,
+              authorName: '', // To implement: fetch author info
+              authorAvatar: undefined,
+              commentsCount: story.commentCount || 0,
+              likesCount: story.likeCount || 0,
+            } as Post;
+          });
+          setFeedPosts(mapped);
         } catch (error) {
           console.error("Error fetching feed posts: ", error);
           Alert.alert("Error", "Could not fetch feed.");
+        } finally {
           setIsLoadingFeed(false);
           setIsRefreshing(false);
         }
       };
-      
       fetchPosts();
-    }, [])
+    }, [user, firestoreUser])
   );
   
   // Handle refresh
   const handleRefresh = () => {
     setIsRefreshing(true);
-    // Re-fetch data with empty state
-    setTimeout(() => {
-      setFeedPosts([]);
-      setIsRefreshing(false);
-    }, 1000);
+    // Re-fetch data
+    (async () => {
+      try {
+        if (user?.uid && firestoreUser?.familyTreeId) {
+          const stories = await fetchAccessibleStoriesMobile(user.uid, firestoreUser.familyTreeId);
+          const mapped = stories.map(story => {
+            const textBlock = story.blocks.find(b => b.type === 'text');
+            const imageBlock = story.blocks.find(b => b.type === 'image');
+            return {
+              id: story.id,
+              authorId: story.authorID,
+              createdAt: new Date(story.createdAt.seconds * 1000),
+              text: typeof textBlock?.data === 'string' ? textBlock.data : undefined,
+              imageUrl: Array.isArray(imageBlock?.data) ? imageBlock.data[0] : undefined,
+              location: story.location?.address,
+              authorName: '',
+              authorAvatar: undefined,
+              commentsCount: story.commentCount || 0,
+              likesCount: story.likeCount || 0,
+            } as Post;
+          });
+          setFeedPosts(mapped);
+        }
+      } catch (error) {
+        console.error("Error refreshing feed posts: ", error);
+        Alert.alert("Error", "Could not refresh feed.");
+      } finally {
+        setIsRefreshing(false);
+      }
+    })();
   };
   
   // Handle feed item press
