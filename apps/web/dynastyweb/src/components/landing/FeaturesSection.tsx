@@ -64,14 +64,13 @@ const FeaturesSection = () => {
     },
     {
       icon: <Users className="h-10 w-10" />,
-      title: "Collaborative Sharing",
-      description: "Invite family members to contribute their memories, photos, and knowledge to build a comprehensive family story."
+      title: "Secure Messaging",
+      description: "Connect securely with your family through end-to-end encrypted messaging. Supports group chats and media sharing, keeping your conversations private."
     },
     {
-      //eslint-disable-next-line
       icon: <Image className="h-10 w-10" />,
-      title: "Media Management",
-      description: "Upload, organize and share family photos and videos with smart compression and secure storage for precious memories."
+      title: "The Vault: Encrypted Storage",
+      description: "Safeguard your family\'s precious memories in The Vault, an encrypted storage platform. Easily store, organize, and share photos and videos. Vault folders can be linked to events, creating a shared space for all attendees to contribute, making photo sharing effortless and secure."
     },
     {
       icon: <Shield className="h-10 w-10" />,
@@ -121,7 +120,7 @@ const FeaturesSection = () => {
         
         <div className="mt-16 text-center">
           <p className="text-dynasty-neutral-dark font-medium">
-            <span className="text-dynasty-green font-bold">Coming soon:</span> Time Machine, DNA Integration, Historical Context, and much more!
+            <span className="text-dynasty-green font-bold">Coming soon:</span> Time Machine, Financial Tools, and much more!
           </p>
         </div>
       </div>
