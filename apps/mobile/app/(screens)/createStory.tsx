@@ -343,27 +343,22 @@ const CreateStoryScreen = () => {
   };
   
   const handleSelectMediaForBlock = async (blockId: string) => {
-    try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert('Permission Required', 'Allow access to photos to add media.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'], // For now, only images. Can be expanded.
-        allowsEditing: false, // To allow multiple selection easily. Editing can be per image.
-        quality: 0.7,
-        allowsMultipleSelection: true, 
-      });
-  
-      if (!result.canceled && result.assets) {
-        updateBlockContent(blockId, result.assets);
-      }
-    } catch (error) {
-      console.error("Error picking images for block: ", error);
-      Alert.alert("Image Picker Error", "Could not select images.");
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert("Permission Denied", "You've refused to allow this app to access your photos and videos.");
+      return;
     }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'], // Updated from ImagePicker.MediaTypeOptions.All
+      allowsMultipleSelection: true,
+      quality: 0.8, // Keep quality reasonable for uploads
+    });
+
+    if (!result.canceled && result.assets) {
+      updateBlockContent(blockId, result.assets);
+    }
+    setAddContentActionSheetVisible(false); // Close sheet after action
   };
 
   const handleTagPeople = () => {
@@ -395,28 +390,23 @@ const CreateStoryScreen = () => {
 
   // MARK: - Cover Photo Handler
   const handleSelectCoverPhoto = async () => {
-    try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert('Permission Required', 'Allow access to photos to add a cover image.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        quality: 0.8,
-        aspect: [16, 9], // Optional: set aspect ratio for cover photos
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setCoverPhoto(result.assets[0]);
-      }
-    } catch (error) {
-      console.error("Error picking cover image: ", error);
-      Alert.alert("Image Picker Error", "Could not select a cover image.");
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permissionResult.granted === false) {
+      Alert.alert("Permission Denied", "You've refused to allow this app to access your photos.");
+      return;
     }
-    setDetailsActionSheetVisible(false);
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'], // Updated from ImagePicker.MediaTypeOptions.Images
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 1,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setCoverPhoto(result.assets[0]);
+    }
+    setDetailsActionSheetVisible(false); // Close sheet
   };
 
   // MARK: - Additional Details Action Sheet Actions
