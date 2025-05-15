@@ -5,6 +5,7 @@ import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 const HeroSection = () => {
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -134,20 +135,32 @@ const HeroSection = () => {
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
       {/* MARK: Image Slideshow */}
-      {images.map((imageData, index) => (
-        <div
-          key={imageData.src}
-          className={`absolute inset-0 w-full h-full transition-opacity duration-1000 ease-in-out ${
-            index === currentImageIndex ? 'opacity-100' : 'opacity-0'
-          }`}
-          style={{
-            backgroundImage: `url(${imageData.src})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-        />
-      ))}
-      <div className="absolute inset-0 bg-black/50"></div> {/* Increased overlay opacity for better general contrast */}
+      <div className="absolute inset-0">
+        {images.map((imageData, index) => (
+          <div
+            key={imageData.src}
+            className={`absolute inset-0 w-full h-full transition-opacity duration-1000 ease-in-out ${
+              index === currentImageIndex ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            <div className="relative w-full h-full">
+              <Image
+                src={imageData.src}
+                alt={`Slideshow image ${index + 1}`}
+                fill
+                priority={index === 0}
+                sizes="100vw"
+                quality={85}
+                style={{
+                  objectFit: 'cover',
+                  objectPosition: 'center',
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="absolute inset-0 bg-black/50 z-[1]"></div> {/* Increased overlay opacity for better general contrast */}
       {/* END MARK: Image Slideshow */}
       
       {/* Decorative elements - Removed as they might conflict with the slideshow. 

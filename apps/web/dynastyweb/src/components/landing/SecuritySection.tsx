@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { Shield, Lock, Eye, Database } from 'lucide-react';
+import { Lock, Eye, Database } from 'lucide-react';
+import Image from 'next/image';
 
 const SecuritySection = () => {
   const sectionRef = useRef<HTMLDivElement>(null);
@@ -47,7 +48,7 @@ const SecuritySection = () => {
 
   const securityFeatures = [
     {
-      icon: <Shield className="h-6 w-6" />,
+      icon: <Lock className="h-6 w-6" />,
       title: "Secure Authentication",
       description: "Multi-factor authentication and strict access controls protect your family's memories from unauthorized access."
     },
@@ -101,19 +102,21 @@ const SecuritySection = () => {
             </div>
           </div>
           
-          <div className="lg:w-1/2 opacity-0" ref={imageRef}>
-            <div className="relative">
+          <div className="lg:w-1/2 opacity-0 w-full" ref={imageRef}>
+            <div className="relative mx-auto max-w-sm">
               <div className="absolute -inset-4 bg-dynasty-gold/10 rounded-3xl blur-xl"></div>
-              <div className="relative bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-dynasty-neutral overflow-hidden">
-                <div className="bg-dynasty-neutral-light p-4 rounded-xl mb-6 flex items-center justify-center">
-                  <Shield className="h-24 w-24 text-dynasty-green" />
-                </div>
-                
-                <div className="space-y-4">
-                  <div className="h-4 bg-dynasty-neutral rounded-full w-3/4"></div>
-                  <div className="h-4 bg-dynasty-neutral rounded-full w-full"></div>
-                  <div className="h-4 bg-dynasty-neutral rounded-full w-5/6"></div>
-                  <div className="h-4 bg-dynasty-neutral rounded-full w-2/3"></div>
+              <div className="relative bg-white rounded-2xl shadow-lg border border-dynasty-neutral overflow-hidden">
+                <div className="flex justify-center items-center py-6 px-4">
+                  <div className="relative w-full h-[200px] sm:h-[250px]">
+                    <Image 
+                      src="/images/security/dynastylock.png" 
+                      alt="Dynasty Security Lock" 
+                      fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 768px) 80vw, 50vw"
+                      className="object-contain p-2"
+                      priority
+                    />
+                  </div>
                 </div>
                 
                 <div className="absolute top-0 right-0 w-32 h-32 bg-dynasty-gold/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
