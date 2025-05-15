@@ -225,6 +225,18 @@ const EditProfileScreen = () => {
           />
         </View>
 
+        {firestoreUser?.phoneNumber && (
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Phone Number</Text>
+            <TextInput
+              style={[styles.input, styles.readOnlyInput]} // Added readOnlyInput style
+              value={firestoreUser.phoneNumber}
+              editable={false} // Make it non-editable for now
+              placeholderTextColor="#999"
+            />
+          </View>
+        )}
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -271,9 +283,18 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   input: {
+    backgroundColor: '#FFF',
+    paddingHorizontal: 15,
+    paddingVertical: Platform.OS === 'ios' ? 15 : 10, // Adjusted padding for Android
+    borderRadius: 8,
     fontSize: 16,
     color: '#333',
-    paddingVertical: Platform.OS === 'ios' ? 5 : 3, // Adjust padding for input height
+    borderWidth: 1,
+    borderColor: '#DDD',
+  },
+  readOnlyInput: {
+    backgroundColor: '#F0F0F0', // Different background for read-only
+    color: '#555', // Different text color for read-only
   },
   staticText: {
       fontSize: 16,

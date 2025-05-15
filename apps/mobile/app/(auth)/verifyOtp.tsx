@@ -99,10 +99,10 @@ export default function VerifyOtpScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style={Platform.OS === 'ios' ? 'dark' : 'light'} />
+      <TouchableOpacity onPress={() => router.replace('/(auth)/phoneSignIn')} style={[styles.backButton, { top: insets.top + 5 }]}>
+        <Ionicons name="arrow-back" size={28} color="#1A4B44" />
+      </TouchableOpacity>
       <View style={styles.container}>
-        <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { top: insets.top + 5 }]}>
-          <Ionicons name="arrow-back" size={24} color="#1A4B44" />
-        </TouchableOpacity>
         <Image source={dynastyLogo} style={styles.logo} resizeMode="contain" />
         <Text style={styles.title}>Verify Your Phone</Text>
         <Text style={styles.subtitle}>
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: 'absolute',
-    left: 25,
+    left: 20,
     zIndex: 1,
     padding: 10,
   },
