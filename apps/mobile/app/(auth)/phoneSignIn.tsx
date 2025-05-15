@@ -191,6 +191,7 @@ const styles = StyleSheet.create({
     height: 48,
     fontSize: 16,
     color: '#000000',
+    fontFamily: 'Helvetica Neue',
   },
   phoneInputCodeText: {
     fontSize: 16,
