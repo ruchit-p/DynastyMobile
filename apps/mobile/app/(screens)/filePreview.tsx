@@ -1,7 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { StyleSheet, View, Image, Text, ActivityIndicator, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { Video, ResizeMode, Audio } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
+import { setAudioModeAsync, AudioMode } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system'; // Import FileSystem
 import { commonHeaderOptions } from '../../constants/headerConfig';
@@ -13,13 +14,28 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const FilePreviewScreen = () => {
   const params = useLocalSearchParams<{ fileUri: string; fileName: string; fileType: 'image' | 'video' }>();
   const router = useRouter();
-  const videoRef = useRef<Video>(null);
-  const [status, setStatus] = useState<any>({});
-  const [isLoading, setIsLoading] = useState(true); // Global loading for screen (download + render)
+  const videoViewRef = useRef<VideoView>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [mediaUriToDisplay, setMediaUriToDisplay] = useState<string | null>(null); // URI for Image/Video source
+  const [mediaUriToDisplay, setMediaUriToDisplay] = useState<string | null>(null);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
 
   const { fileUri: initialFileUri, fileName, fileType } = params;
+
+  const player = useVideoPlayer(mediaUriToDisplay && fileType === 'video' ? mediaUriToDisplay : null, (p) => {
+    p.loop = true;
+  });
+
+  useEffect(() => {
+    if (player) {
+      const playingSubscription = player.addListener('playingChange', (event: { isPlaying: boolean }) => {
+        setIsVideoPlaying(event.isPlaying);
+      });
+      return () => {
+        playingSubscription.remove();
+      };
+    }
+  }, [player]);
 
   useEffect(() => {
     let isMounted = true;
@@ -29,13 +45,16 @@ const FilePreviewScreen = () => {
 
       if (fileType === 'video') {
         try {
-          await Audio.setAudioModeAsync({
-            allowsRecordingIOS: false,
-            playsInSilentModeIOS: true,
-            staysActiveInBackground: false,
-            shouldDuckAndroid: true,
-            playThroughEarpieceAndroid: false,
-          });
+          const mode: Partial<AudioMode> = {
+            allowsRecording: false,
+            playsInSilentMode: true,
+            shouldPlayInBackground: false,
+            interruptionModeAndroid: 'duckOthers',
+          };
+          if (Platform.OS === 'android') {
+            mode.shouldRouteThroughEarpiece = false;
+          }
+          await setAudioModeAsync(mode);
         } catch (e) {
           console.error('Failed to set audio mode for video playback:', e);
         }
@@ -116,6 +135,17 @@ const FilePreviewScreen = () => {
     };
   }, [initialFileUri, fileName, fileType]);
 
+  useEffect(() => {
+    return () => {
+      if (player) {
+        player.replace(null);
+      }
+    };
+  }, [player]);
+
+  const handleVideoLoad = () => {
+    console.log('Video ready for display/playback');
+  };
 
   const renderActualContent = () => {
     if (error && !mediaUriToDisplay) { 
@@ -148,20 +178,16 @@ const FilePreviewScreen = () => {
       );
     }
 
-    if (fileType === 'video') {
+    if (fileType === 'video' && player) {
       return (
-        <Video
-          ref={videoRef}
+        <VideoView
+          ref={videoViewRef}
+          player={player}
           style={styles.video}
-          source={{ uri: mediaUriToDisplay }}
-          useNativeControls
-          resizeMode={ResizeMode.CONTAIN}
-          isLooping={false}
-          onPlaybackStatusUpdate={playbackStatus => setStatus(() => playbackStatus)}
-          onError={(videoError) => {
-            console.error("Video rendering error (from local URI):", videoError);
-            if (!error) setError(`Failed to render video. ${videoError}`);
-          }}
+          contentFit="contain"
+          allowsFullscreen
+          allowsPictureInPicture
+          nativeControls={false}
         />
       );
     }
@@ -199,13 +225,19 @@ const FilePreviewScreen = () => {
             </View>
         )}
       </View>
-      {fileType === 'video' && mediaUriToDisplay && !error && status.isLoaded && (
+      {fileType === 'video' && mediaUriToDisplay && !error && player && (
         <View style={styles.controlsContainer}>
           <TouchableOpacity 
-            onPress={() => status.isPlaying ? videoRef.current?.pauseAsync() : videoRef.current?.playAsync()}
+            onPress={() => {
+              if (isVideoPlaying) {
+                player.pause();
+              } else {
+                player.play();
+              }
+            }}
             style={styles.controlButton}
           >
-            <Ionicons name={status.isPlaying ? 'pause-circle-outline' : 'play-circle-outline'} size={40} color={Colors.dynastyGreen} />
+            <Ionicons name={isVideoPlaying ? 'pause-circle-outline' : 'play-circle-outline'} size={40} color={Colors.dynastyGreen} />
           </TouchableOpacity>
         </View>
       )}

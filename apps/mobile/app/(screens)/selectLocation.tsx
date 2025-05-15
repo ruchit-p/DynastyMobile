@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, Platform, Keyboard, ActivityIndicator, Alert, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, Platform, Keyboard, ActivityIndicator, Alert, Dimensions, StatusBar } from 'react-native';
 import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Region } from 'react-native-maps';
@@ -11,12 +11,12 @@ const dynastyGreen = '#1A4B44';
 // Placeholder for API Key - REMEMBER TO REPLACE THIS
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || 'YOUR_GOOGLE_PLACES_API_KEY';
 
-// Default region (San Francisco) - will be overridden by user's location if permission granted
+// Default region (Chicago) - will be overridden by user's location if permission granted
 const INITIAL_REGION = {
-  latitude: 37.78825,
-  longitude: -122.4324,
-  latitudeDelta: 0.0922,
-  longitudeDelta: 0.0421,
+  latitude: 41.8781,
+  longitude: -87.6298,
+  latitudeDelta: 0.01,
+  longitudeDelta: 0.005,
 };
 
 interface SelectedPlace {
@@ -33,23 +33,19 @@ const SelectLocationScreen = () => {
   const [region, setRegion] = useState<Region>(INITIAL_REGION);
   const [selectedPlace, setSelectedPlace] = useState<SelectedPlace | null>(() => {
     if (params.currentLocation) {
-      // Try to parse if it's a JSON stringified coordinate object
       try {
         const parsedCoord = JSON.parse(params.currentLocation);
         if (parsedCoord && typeof parsedCoord.latitude === 'number' && typeof parsedCoord.longitude === 'number') {
-          // If we have coordinates, we ideally need an address too.
-          // For now, let's assume if currentLocation is a coordinate object, we don't have an address for it yet.
-          // This part might need refinement based on how CreateEvent passes `currentLocation`
           return { address: 'Selected on map', latitude: parsedCoord.latitude, longitude: parsedCoord.longitude };
         }
       } catch (e) {
-        // Not a JSON coordinate, assume it's an address string
          return { address: params.currentLocation, latitude: INITIAL_REGION.latitude, longitude: INITIAL_REGION.longitude };
       }
     }
     return null;
   });
   const mapRef = useRef<MapView>(null);
+  const searchRef = useRef<any>(null); // Add ref for GooglePlacesAutocomplete
   
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -167,69 +163,95 @@ const SelectLocationScreen = () => {
     Keyboard.dismiss();
     const { coordinate } = event.nativeEvent;
     handleReverseGeocode(coordinate.latitude, coordinate.longitude);
+    // Clear search input when map is pressed
+    if (searchRef.current) {
+      searchRef.current.setAddressText('');
+    }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <GooglePlacesAutocomplete
-        placeholder="Search for a place or address"
-        onPress={(data, details = null) => {
-          Keyboard.dismiss();
-          if (details) {
-            const { lat, lng } = details.geometry.location;
-            const address = data.description;
-            setSelectedPlace({ address, latitude: lat, longitude: lng });
-            if (mapRef.current) {
-              mapRef.current.animateToRegion({
-                latitude: lat,
-                longitude: lng,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.005,
-              }, 1000);
-            }
-          } else {
-            // Fallback if details are null, though fetchDetails=true should provide them
-            // We could geocode data.description here if needed
-            console.warn("Place details not found, using description:", data.description);
-            setSelectedPlace({ address: data.description, latitude: region.latitude, longitude: region.longitude });
-          }
-        }}
-        query={{
-          key: GOOGLE_PLACES_API_KEY,
-          language: 'en',
-          components: 'country:us', // Optional: Bias to a country e.g. USA
-        }}
-        fetchDetails={true}
-        predefinedPlaces={[]}
-        styles={{
-          container: styles.searchOuterContainer,
-          textInputContainer: styles.searchInputContainer,
-          textInput: styles.searchInput,
-          listView: styles.listView,
-          description: styles.description,
-          poweredContainer: styles.poweredContainer, // Hides "powered by Google" if empty style
-        }}
-        textInputProps={{
-          placeholderTextColor: '#A0A0A0',
-          returnKeyType: "search",
-        }}
-        enablePoweredByContainer={false}
-        debounce={200}
-        listUnderlayColor="#EFEFEF"
-      />
+    <View style={styles.container}>
       <MapView
         ref={mapRef}
-        style={styles.map}
+        style={StyleSheet.absoluteFillObject}
         initialRegion={region}
-        onRegionChangeComplete={(newRegion) => !isLoading && setRegion(newRegion)} // Avoid region change while animating
+        onRegionChangeComplete={(newRegion) => !isLoading && setRegion(newRegion)}
         onPress={handleMapPress}
         showsUserLocation={true}
-        showsMyLocationButton={true} // Standard iOS/Android button
+        showsMyLocationButton={true}
       >
         {selectedPlace && <Marker coordinate={{ latitude: selectedPlace.latitude, longitude: selectedPlace.longitude }} title={selectedPlace.address} />}
       </MapView>
+
+      <SafeAreaView style={styles.overlayContainer}>
+        <GooglePlacesAutocomplete
+          ref={searchRef} // Assign ref
+          placeholder="Search for a place or address"
+          onPress={(data, details = null) => {
+            Keyboard.dismiss();
+            if (details) {
+              const { lat, lng } = details.geometry.location;
+              const address = data.description;
+              setSelectedPlace({ address, latitude: lat, longitude: lng });
+              if (mapRef.current) {
+                mapRef.current.animateToRegion({
+                  latitude: lat,
+                  longitude: lng,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.005,
+                }, 1000);
+              }
+            } else {
+              console.warn("Place details not found, using description:", data.description);
+              // Attempt to geocode the description if details are missing
+              // This requires a geocoding function call here. For now, we'll just set the address.
+              setSelectedPlace({ address: data.description, latitude: region.latitude, longitude: region.longitude });
+            }
+          }}
+          query={{
+            key: GOOGLE_PLACES_API_KEY,
+            language: 'en',
+            components: 'country:us', 
+          }}
+          fetchDetails={true}
+          predefinedPlaces={[]}
+          styles={{
+            container: styles.searchOuterContainer,
+            textInputContainer: styles.searchInputContainer,
+            textInput: styles.searchInput,
+            listView: styles.listView, // Ensure this allows visibility
+            description: styles.description,
+            // poweredContainer: styles.poweredContainer, // Keep if you want to hide "powered by Google"
+          }}
+          textInputProps={{
+            placeholderTextColor: '#A0A0A0',
+            returnKeyType: "search",
+            value: selectedPlace?.address || '', // Control the input value
+            onChangeText: (text) => { // Allow clearing or manual typing
+              if (!text) {
+                // Optionally clear selectedPlace if text is manually cleared
+                // setSelectedPlace(null); 
+              } else if (selectedPlace?.address !== text) {
+                // If user types something different from current selected place,
+                // consider clearing the marker or allowing new search
+                // For now, just let GooglePlacesAutocomplete handle search based on new text
+              }
+            }
+          }}
+          enablePoweredByContainer={false}
+          debounce={200}
+          listUnderlayColor="#EFEFEF"
+          // Keep results list visible until an item is pressed or map is pressed
+          keepResultsAfterBlur={true} 
+          onNotFound={() => Alert.alert("Not Found", "No results found for your search.")}
+          onFail={(error) => {
+            console.error("Google Places API Error:", error);
+            Alert.alert("Search Error", "Could not fetch results. Please check your API key and internet connection.");
+          }}
+        />
+      </SafeAreaView>
       
-      <View style={styles.confirmButtonContainer}>
+      <View style={styles.bottomControlsContainer}>
         {isLoading && <ActivityIndicator size="small" color={dynastyGreen} style={styles.loadingIndicator} />}
         {errorMsg && <Text style={styles.errorTextSmall}>{errorMsg}</Text>}
         <TouchableOpacity 
@@ -240,98 +262,113 @@ const SelectLocationScreen = () => {
           <Text style={styles.buttonText}>Confirm Location</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: { // New container for the whole screen
     flex: 1,
-    backgroundColor: '#F8F8F8',
   },
-  // Styles for GooglePlacesAutocomplete
+  overlayContainer: { // SafeAreaView for search and other top elements
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10, // Ensure it's above the map
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0, // Handle Android status bar
+  },
   searchOuterContainer: {
-    paddingTop: Platform.OS === 'ios' ? 10 : 15,
-    paddingHorizontal: 15,
-    backgroundColor: '#F8F8F8', // Match SafeArea
-    zIndex: 10 // Ensure suggestions are on top
+    // flex: 0, // Let it take natural height based on input
+    marginHorizontal: 10,
+    marginTop: 10, // Adjust as needed from top of SafeAreaView
+    backgroundColor: 'transparent', // Or a semi-transparent background
   },
   searchInputContainer: {
     backgroundColor: '#FFFFFF',
-    borderTopWidth: 0,
-    borderBottomWidth: 0,
     borderRadius: 8,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    borderBottomWidth: 0, // Remove default border
+    borderTopWidth: 0, // Remove default border
+    elevation: 5, // Android shadow
+    shadowColor: '#000', // iOS shadow
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 4,
   },
   searchInput: {
     height: 48,
-    color: '#333333',
+    color: '#000',
     fontSize: 16,
     borderRadius: 8,
-    paddingLeft: 15, // Added padding
+    paddingHorizontal: 10,
   },
   listView: {
-    backgroundColor: '#FFFFFF',
-    marginTop: 2, // Space between input and list
+    backgroundColor: 'white',
     borderRadius: 8,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    marginTop: 5, // Space between input and list
+    marginHorizontal: 0, // Align with search input container
+    maxHeight: Dimensions.get('window').height * 0.4, // Limit height of results
+    elevation: 5, // Android shadow for list
+    shadowColor: '#000', // iOS shadow for list
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    maxHeight: Dimensions.get('window').height * 0.4, // Limit list height
+    shadowRadius: 4,
+    borderWidth: 0, // Remove border if any from component default
   },
   description: {
     fontWeight: '500',
-    color: '#333333',
+    color: '#333',
+    fontSize: 15,
   },
-  poweredContainer: { // To hide "powered by Google"
-    display: 'none',
+  // poweredContainer: {
+  //   display: 'none', // If you want to ensure it's hidden
+  // },
+  map: { // This style is now applied directly using StyleSheet.absoluteFillObject
+    // ...StyleSheet.absoluteFillObject, (This is how it's used directly now)
+    // zIndex: 0, (No longer needed here, map is base layer)
   },
-  // End GooglePlacesAutocomplete styles
-  map: {
-    flex: 1,
-    zIndex: 1, // Ensure map is below search results
-  },
-  confirmButtonContainer: {
-    padding: 15,
-    backgroundColor: '#F8F8F8',
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+  bottomControlsContainer: { // Renamed from confirmButtonContainer for clarity
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 20, // Avoid home indicator / provide padding
+    paddingHorizontal: 20,
+    backgroundColor: 'transparent', // Or a very slight gradient/blur if needed
+    alignItems: 'center', // Center button if it's not full width
+    zIndex: 10, // Ensure above map
   },
   button: {
     backgroundColor: dynastyGreen,
     paddingVertical: 15,
+    paddingHorizontal: 20,
     borderRadius: 8,
     alignItems: 'center',
-  },
-  disabledButton: {
-    backgroundColor: '#A5A5A5',
+    justifyContent: 'center',
+    width: '100%', // Make button full width
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
+  },
+  disabledButton: {
+    backgroundColor: '#A0A0A0', // Grey out when disabled
   },
   loadingIndicator: {
-    marginBottom: 10,
+    marginBottom: 10, // Space between loader and button if both visible
   },
-  errorTextSmall: { // Renamed from errorText for clarity
+  errorTextSmall: { // For errors near the button
     color: 'red',
-    textAlign: 'center',
-    marginBottom: 10,
     fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 5,
   },
-  // Old styles that might be removed or adapted:
-  // searchContainer (old, can be removed if searchOuterContainer/searchInputContainer cover it)
-  // searchButton (old, removed)
-  // label (old, "Or enter manually", removed)
-  // input (old manual input, removed)
-  // manualInputContainer (old, removed)
 });
 
 export default SelectLocationScreen; 

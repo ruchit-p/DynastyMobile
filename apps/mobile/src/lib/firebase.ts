@@ -1,20 +1,20 @@
-import firebase from '@react-native-firebase/app';
-// No specific top-level type for FirebaseApp instance, ReturnType<typeof firebase.app> will be used.
-import rnAuth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
-import rnFirestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
-import rnFunctions, { FirebaseFunctionsTypes } from '@react-native-firebase/functions';
-import rnStorage, { FirebaseStorageTypes } from '@react-native-firebase/storage';
+import { getApp as getFirebaseCoreApp } from '@react-native-firebase/app';
+import type { ReactNativeFirebase } from '@react-native-firebase/app'; // For App type
+import { getAuth, connectAuthEmulator, FirebaseAuthTypes } from '@react-native-firebase/auth';
+import { getFirestore, connectFirestoreEmulator, FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import { getFunctions, connectFunctionsEmulator, FirebaseFunctionsTypes } from '@react-native-firebase/functions';
+import { getStorage, connectStorageEmulator, FirebaseStorageTypes } from '@react-native-firebase/storage';
 
 // For React Native Firebase, the native configuration (GoogleService-Info.plist / google-services.json)
 // is typically used for initialization, and explicit initializeApp(config) in JS is not needed
 // for the default app. The @react-native-firebase/app plugin in app.json handles this.
 
-let _app: ReturnType<typeof firebase.app> | undefined;
-const getApp = (): ReturnType<typeof firebase.app> => {
+let _app: ReactNativeFirebase.FirebaseApp | undefined; // Use the type from RNF
+const retrieveApp = (): ReactNativeFirebase.FirebaseApp => { // Renamed from getApp to avoid conflict
   if (!_app) {
-    console.log('Firebase JS: Attempting to initialize default app instance...');
-    _app = firebase.app(); // This is where the error occurs if native isn't ready
-    console.log('Firebase JS: Default app instance initialized.');
+    console.log('Firebase JS: Attempting to retrieve default app instance...');
+    _app = getFirebaseCoreApp(); // Use RNF's getApp() to get the default app
+    console.log('Firebase JS: Default app instance retrieved.');
   }
   return _app;
 };
@@ -22,9 +22,9 @@ const getApp = (): ReturnType<typeof firebase.app> => {
 let _auth: FirebaseAuthTypes.Module | undefined;
 const getAuthInstance = (): FirebaseAuthTypes.Module => {
   if (!_auth) {
-    getApp(); // Ensure app is initialized first
+    retrieveApp(); // Ensure app is initialized/retrieved first
     console.log('Firebase JS: Attempting to initialize Auth instance...');
-    _auth = rnAuth();
+    _auth = getAuth();
     console.log('Firebase JS: Auth instance initialized.');
   }
   return _auth;
@@ -33,9 +33,9 @@ const getAuthInstance = (): FirebaseAuthTypes.Module => {
 let _db: FirebaseFirestoreTypes.Module | undefined;
 const getDbInstance = (): FirebaseFirestoreTypes.Module => {
   if (!_db) {
-    getApp(); // Ensure app is initialized first
+    retrieveApp(); // Ensure app is initialized/retrieved first
     console.log('Firebase JS: Attempting to initialize Firestore instance...');
-    _db = rnFirestore();
+    _db = getFirestore();
     console.log('Firebase JS: Firestore instance initialized.');
   }
   return _db;
@@ -44,9 +44,10 @@ const getDbInstance = (): FirebaseFirestoreTypes.Module => {
 let _functions: FirebaseFunctionsTypes.Module | undefined;
 const getFunctionsInstance = (): FirebaseFunctionsTypes.Module => {
   if (!_functions) {
-    getApp(); // Ensure app is initialized first
+    retrieveApp(); // Ensure app is initialized/retrieved first
     console.log('Firebase JS: Attempting to initialize Functions instance...');
-    _functions = rnFunctions(); // Or rnFunctions(getApp(), 'your-region');
+    // For specific app instance or region: getFunctions(retrieveApp(), 'your-region')
+    _functions = getFunctions(retrieveApp()); // Pass the app instance
     console.log('Firebase JS: Functions instance initialized.');
   }
   return _functions;
@@ -55,9 +56,10 @@ const getFunctionsInstance = (): FirebaseFunctionsTypes.Module => {
 let _storage: FirebaseStorageTypes.Module | undefined;
 const getStorageInstance = (): FirebaseStorageTypes.Module => {
   if (!_storage) {
-    getApp(); // Ensure app is initialized first
+    retrieveApp(); // Ensure app is initialized/retrieved first
     console.log('Firebase JS: Attempting to initialize Storage instance...');
-    _storage = rnStorage();
+    // For specific app instance or bucket: getStorage(retrieveApp(), 'gs://your-bucket')
+    _storage = getStorage(retrieveApp()); // Pass the app instance
     console.log('Firebase JS: Storage instance initialized.');
   }
   return _storage;
@@ -66,12 +68,12 @@ const getStorageInstance = (): FirebaseStorageTypes.Module => {
 // Function to connect to emulators, should be called after services are confirmed to be working
 export const connectToEmulators = () => {
   if (__DEV__) {
-    const FBASE_EMULATOR_HOST = '127.0.0.1';
+    const FBASE_EMULATOR_HOST = '127.0.0.1'; 
     console.log('Firebase JS: Attempting to connect to Firebase Emulators on host:', FBASE_EMULATOR_HOST);
 
     try {
       const auth = getAuthInstance();
-      auth.useEmulator(`http://${FBASE_EMULATOR_HOST}:9099`);
+      connectAuthEmulator(auth, `http://${FBASE_EMULATOR_HOST}:9099`);
       console.log('Firebase JS: Auth emulator connected');
     } catch (e) {
       console.warn('Firebase JS: Failed to connect to Auth emulator:', e);
@@ -79,7 +81,7 @@ export const connectToEmulators = () => {
 
     try {
       const db = getDbInstance();
-      db.useEmulator(FBASE_EMULATOR_HOST, 8080);
+      connectFirestoreEmulator(db, FBASE_EMULATOR_HOST, 8080);
       console.log('Firebase JS: Firestore emulator connected');
     } catch (e) {
       console.warn('Firebase JS: Failed to connect to Firestore emulator:', e);
@@ -87,7 +89,7 @@ export const connectToEmulators = () => {
     
     try {
       const functions = getFunctionsInstance();
-      functions.useEmulator(FBASE_EMULATOR_HOST, 5001);
+      connectFunctionsEmulator(functions, FBASE_EMULATOR_HOST, 5001);
       console.log('Firebase JS: Functions emulator connected');
     } catch (e) {
       console.warn('Firebase JS: Failed to connect to Functions emulator:', e);
@@ -95,7 +97,7 @@ export const connectToEmulators = () => {
 
     try {
       const storage = getStorageInstance();
-      storage.useEmulator(FBASE_EMULATOR_HOST, 9199);
+      connectStorageEmulator(storage, FBASE_EMULATOR_HOST, 9199);
       console.log('Firebase JS: Storage emulator connected');
     } catch (e) {
       console.warn('Firebase JS: Failed to connect to Storage emulator:', e);
@@ -145,7 +147,7 @@ const deleteDocument = async (collectionPath: string, docId: string) => {
 
 // Export getter functions for services, and helper functions
 export {
-  getApp as getFirebaseApp, // Renamed for clarity
+  retrieveApp as getFirebaseApp, // Renamed to maintain external API
   getAuthInstance as getFirebaseAuth,
   getDbInstance as getFirebaseDb,
   getFunctionsInstance as getFirebaseFunctions,

@@ -49,7 +49,7 @@ const ProfileScreen = () => {
       // Building user profile data from auth context
       const profile: UserProfile = {
         name: user.displayName || `${firestoreUser?.firstName || ''} ${firestoreUser?.lastName || ''}`.trim() || 'User',
-        email: user.email || 'No email',
+        email: user.email || null,
         phoneNumber: user.phoneNumber || firestoreUser?.phoneNumber,
         bio: firestoreUser?.bio,
         joinDate: user.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleString('default', { month: 'long', year: 'numeric' }) : 'N/A',

@@ -26,6 +26,7 @@ import AddDetailsButton from '../../components/ui/AddDetailsButton';
 import AddContentButton from '../../components/ui/AddContentButton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { createStoryMobile } from '../../src/lib/storyUtils';
+import Fonts from '../../constants/Fonts';
 
 // MARK: - Types
 type BlockType = "text" | "image" | "video" | "audio";
@@ -798,11 +799,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     color: '#222222',
     fontWeight: '500',
+    fontFamily: Fonts.type.base,
   },
   inputField: { // Generic input field style
     fontSize: 16,
     paddingVertical: 12,
     color: '#333333',
+    fontFamily: Fonts.type.base,
   },
   inputRow: {
     flexDirection: 'row',
@@ -898,6 +901,7 @@ const styles = StyleSheet.create({
     color: '#333333',
     minHeight: 80,
     textAlignVertical: 'top',
+    fontFamily: Fonts.type.base,
   },
   mediaUploadButton: {
     flexDirection: 'row',

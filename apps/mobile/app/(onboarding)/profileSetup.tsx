@@ -17,6 +17,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../src/contexts/AuthContext'; // Adjust path as needed
 import { getFirebaseFunctions } from '../../src/lib/firebase'; // Corrected import for functions
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import Fonts from '../../constants/Fonts';
 // You might want a gender picker component (e.g., dropdown)
 
 // Define the expected structure of data from the completeOnboarding Firebase function
@@ -268,6 +269,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     borderWidth: 1,
     borderColor: '#E0E0E0',
+    fontFamily: Fonts.type.base,
   },
   label: {
     fontSize: 14,
