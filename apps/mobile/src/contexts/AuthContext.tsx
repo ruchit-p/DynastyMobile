@@ -78,12 +78,12 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-// Get Firebase services
-const auth = useMemo(() => getFirebaseAuth(), []);
-const functions = useMemo(() => getFirebaseFunctions(), []);
-const db = useMemo(() => getFirebaseDb(), []);
-
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  // Move Firebase service initialization inside the component with useMemo
+  const auth = useMemo(() => getFirebaseAuth(), []);
+  const functions = useMemo(() => getFirebaseFunctions(), []);
+  const db = useMemo(() => getFirebaseDb(), []);
+  
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [firestoreUser, setFirestoreUser] = useState<FirestoreUserType | null>(null);
@@ -403,30 +403,56 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const confirmPhoneCode = async (phoneNumber: string, code: string) => {
     if (!phoneAuthConfirmation) {
-      throw new Error("No phone authentication confirmation result found. Please request OTP first.");
+      console.error("AuthContext: phoneAuthConfirmation is null. Cannot confirm code.");
+      throw new Error("Verification session expired or not found. Please request a new OTP.");
     }
+    
     setIsLoading(true);
     try {
       // 'phoneAuthConfirmation' from useState
       // 'functions' from useMemo
       const userCredential = await phoneAuthConfirmation.confirm(code);
-      setPhoneAuthConfirmation(null); 
+      console.log(`AuthContext: Phone OTP confirmed. Firebase User UID: ${userCredential?.user?.uid}`);
       
-      if (userCredential.user) {
+      if (userCredential && userCredential.user) {
+        const firebaseUser = userCredential.user;
+        console.log(`AuthContext: Calling handlePhoneSignIn cloud function for UID: ${firebaseUser.uid}`);
+        
         const handlePhoneSignInFn = functions.httpsCallable('handlePhoneSignIn');
-        await handlePhoneSignInFn({
-            uid: userCredential.user.uid,
-            phoneNumber: userCredential.user.phoneNumber,
-        });
-        console.log('handlePhoneSignIn cloud function called.');
+        const result = await handlePhoneSignInFn({ uid: firebaseUser.uid, phoneNumber: phoneNumber });
+        
+        console.log('AuthContext: handlePhoneSignIn cloud function result:', result.data);
+        await fetchFirestoreUserData(firebaseUser.uid);
+      } else {
+        throw new Error("Failed to confirm OTP: No user credential received.");
       }
+      
+      setPhoneAuthConfirmation(null);
     } catch (error: any) {
-      console.error(`Error confirming phone code: ${error.message}`);
-      throw new Error(error.message || 'Failed to confirm phone code.');
-    } finally {
+      console.error("AuthContext: Error during confirmPhoneCode", error);
       setIsLoading(false);
+      throw error;
     }
   };
-}
 
-// ... rest of the existing code ...
+  return (
+    <AuthContext.Provider value={{
+      user,
+      isLoading,
+      firestoreUser,
+      signIn,
+      signUp,
+      signOut,
+      signInWithGoogle,
+      signInWithPhoneNumber,
+      confirmPhoneCode,
+      phoneAuthConfirmation,
+      setPhoneAuthConfirmation,
+      resendVerificationEmail,
+      confirmEmailVerificationLink,
+      refreshUser
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
