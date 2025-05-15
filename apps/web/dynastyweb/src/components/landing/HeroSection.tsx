@@ -47,16 +47,36 @@ const HeroSection = () => {
     { src: '/images/landing-slideshow/image27.jpg', textTheme: 'light' as const },
   ];
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [shuffledIndices, setShuffledIndices] = useState<number[]>([]);
+  const [currentShuffleIndex, setCurrentShuffleIndex] = useState(0);
+
+  // Create a shuffled array of image indices on component mount
+  useEffect(() => {
+    const indices = Array.from({ length: images.length }, (_, i) => i);
+    // Fisher-Yates shuffle algorithm
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    setShuffledIndices(indices);
+    // Set initial image to first in shuffled array
+    setCurrentImageIndex(indices[0]);
+  }, [images.length]);
 
   useEffect(() => {
+    if (shuffledIndices.length === 0) return;
+    
     const timer = setTimeout(() => {
-      setCurrentImageIndex((prevIndex) => (prevIndex + 1) % images.length);
+      // Move to next image in shuffled order
+      const nextShuffleIndex = (currentShuffleIndex + 1) % shuffledIndices.length;
+      setCurrentShuffleIndex(nextShuffleIndex);
+      setCurrentImageIndex(shuffledIndices[nextShuffleIndex]);
     }, 8000); // 8 seconds
 
     return () => clearTimeout(timer);
-  }, [currentImageIndex, images.length]);
+  }, [currentShuffleIndex, shuffledIndices]);
 
-  const currentTextTheme = images[currentImageIndex].textTheme;
+  const currentTextTheme = images[currentImageIndex]?.textTheme || 'light';
   const textColorClass = currentTextTheme === 'light' ? 'text-white' : 'text-dynasty-neutral-darkest';
   const subTextColorClass = currentTextTheme === 'light' ? 'text-neutral-200' : 'text-dynasty-neutral-dark';
   // END MARK: Slideshow State and Logic
