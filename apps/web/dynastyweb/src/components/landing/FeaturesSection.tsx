@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { Trees, Book, Calendar, Users, Image, Shield } from 'lucide-react';
+import { Trees, Book, Calendar, Users, Image as ImageIcon, Shield } from 'lucide-react';
 
 const FeaturesSection = () => {
   const sectionRef = useRef<HTMLDivElement>(null);
@@ -68,9 +68,9 @@ const FeaturesSection = () => {
       description: "Connect securely with your family through end-to-end encrypted messaging. Supports group chats and media sharing, keeping your conversations private."
     },
     {
-      icon: <Image className="h-10 w-10" />,
+      icon: <ImageIcon className="h-10 w-10" />,
       title: "The Vault: Encrypted Storage",
-      description: "Safeguard your family\'s precious memories in The Vault, an encrypted storage platform. Easily store, organize, and share photos and videos. Vault folders can be linked to events, creating a shared space for all attendees to contribute, making photo sharing effortless and secure."
+      description: "Safeguard your family\\\'s precious memories in The Vault, an encrypted storage platform. Easily store, organize, and share photos and videos. Vault folders can be linked to events, creating a shared space for all attendees to contribute, making photo sharing effortless and secure."
     },
     {
       icon: <Shield className="h-10 w-10" />,

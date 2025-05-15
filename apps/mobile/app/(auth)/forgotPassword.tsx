@@ -16,19 +16,18 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext'; // Updated path
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { httpsCallable } from '@react-native-firebase/functions'; // Import from @react-native-firebase/functions
 
 const dynastyLogo = require('../../assets/images/dynasty.png');
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const { app } = useAuth(); // Get Firebase app instance from AuthContext
+  const { functions } = useAuth(); // Get functions instance directly
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
-  const functions = getFunctions(app); // Initialize Firebase Functions
 
   const handleSendResetLink = async () => {
     setError(null);
