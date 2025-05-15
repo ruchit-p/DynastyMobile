@@ -3,6 +3,9 @@ import { httpsCallable } from '@react-native-firebase/functions';
 
 import { type RelativeItem as MobileRelativeItemType } from '../../react-native-relatives-tree/src'; // Adjusted path
 
+// Initialize Firebase Functions instance at the module level
+const functionsInstance = getFirebaseFunctions();
+
 // Re-define or import the Items type used in FamilyTreeScreen.tsx
 // This ensures consistency. For now, I'll define a structure based on what FamilyTreeScreen uses.
 export type FamilyTreeNode = MobileRelativeItemType & {
@@ -41,14 +44,9 @@ export type MemberProfile = {
   [key: string]: any; // For any additional fields
 };
 
-// Initialize Firebase Functions
-// const functionsInstance = getFunctions(firebaseApp, 'us-central1'); // Ensure 'us-central1' is your functions region
-// React Native Firebase functions are typically accessed via functions() or functions('region')
-
 // MARK: - Family Tree Functions
 
 export const getFamilyTreeDataMobile = async (userId: string): Promise<{ treeNodes: FamilyTreeNode[] }> => {
-  const functionsInstance = getFirebaseFunctions(); // Get the instance
   const functionRef = httpsCallable(functionsInstance, 'getFamilyTreeData');
   try {
     const result = await functionRef({ userId });
@@ -181,7 +179,6 @@ export const createFamilyMemberMobile = async (
     connectToExistingParent?: boolean;
   }
 ): Promise<{ success: boolean; userId: string }> => {
-  const functionsInstance = getFirebaseFunctions(); // Get the instance
   const functionRef = httpsCallable(functionsInstance, 'createFamilyMember');
   try {
     const result = await functionRef({ 
@@ -210,7 +207,6 @@ export const updateFamilyRelationshipsMobile = async (
     removeSpouses?: string[];
   }
 ): Promise<{ success: boolean }> => {
-  const functionsInstance = getFirebaseFunctions(); // Get the instance
   const functionRef = httpsCallable(functionsInstance, 'updateFamilyRelationships');
   try {
     const result = await functionRef({ userId, updates });
@@ -226,7 +222,6 @@ export const deleteFamilyMemberMobile = async (
   familyTreeId: string,
   currentUserId: string
 ): Promise<{ success: boolean }> => {
-  const functionsInstance = getFirebaseFunctions(); // Get the instance
   const functionRef = httpsCallable(functionsInstance, 'deleteFamilyMember');
   try {
     const result = await functionRef({ memberId, familyTreeId, currentUserId });

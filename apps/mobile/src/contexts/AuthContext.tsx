@@ -6,7 +6,7 @@ import {
   getFirebaseApp, // Added getFirebaseApp
   connectToEmulators // Import the function to connect to emulators
 } from '../lib/firebase'; 
-import { doc, FirebaseFirestoreTypes } from '@react-native-firebase/firestore'; // Added doc import and FirebaseFirestoreTypes
+import { doc, getDoc, FirebaseFirestoreTypes } from '@react-native-firebase/firestore'; 
 import RNAuth, { FirebaseAuthTypes } from '@react-native-firebase/auth'; // Import default for auth providers
 import { useRouter, useSegments } from 'expo-router';
 // Use an alias for GoogleSignInUser from the library to avoid conflict
@@ -135,7 +135,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       // 'db' instance is now from useMemo
       const userDocRef = doc(db, 'users', uid); 
-      const docSnap = await userDocRef.get();
+      const docSnap = await getDoc(userDocRef); // Updated to use getDoc()
       if (docSnap.exists()) {
         console.log("AuthContext: Fetched Firestore user data:", docSnap.data());
         setFirestoreUser(docSnap.data() as FirestoreUserType);
@@ -226,7 +226,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     let isLandingPageEquivalent = false;
-    if (segments.length === 0) isLandingPageEquivalent = true;
+    if (segments.length < 1) isLandingPageEquivalent = true;
     if (segments.length === 1 && segments[0] && ['', 'index'].includes(segments[0])) isLandingPageEquivalent = true;
 
     console.log(
@@ -244,39 +244,73 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         router.replace('/');
       }
     } else { // User exists
-      // 1. Handle Onboarding
-      if (firestoreUser && firestoreUser.onboardingCompleted === false) { // Explicitly check for false
-        if (!inOnboardingGroup && !inAuthGroup) { // Avoid loop if already in onboarding/auth sections
-          console.log('[AuthNavEffect] User exists, Onboarding INCOMPLETE. Redirecting to /onboarding/profileSetup. Current route:', currentRoute);
-          router.replace('/(onboarding)/profileSetup');
-          return; // Exit after redirect
-        }
-      } else if (firestoreUser && firestoreUser.onboardingCompleted === true) {
-        // 2. Handle Post-Onboarding (User is onboarded)
-        // If they are on auth, onboarding, or landing pages, redirect to feed.
-        if (inAuthGroup || inOnboardingGroup || isLandingPageEquivalent || isVerifyEmailScreen || isConfirmEmailScreen ) {
-          console.log('[AuthNavEffect] User exists, ONBOARDED. Redirecting to /(tabs)/feed. Current route:', currentRoute);
-          router.replace('/(tabs)/feed');
-          return; // Exit after redirect
-        }
-      } else if (!firestoreUser && !isFetchingFirestoreUser) {
-        // Firestore user data is not available yet, and not actively fetching. This might be an edge case or initial state.
-        // Potentially redirect to a safe page or wait. For now, let it pass to email verification if applicable.
-        console.log("[AuthNavEffect] User exists, but firestoreUser data is null and not fetching. This might be an intermediate state.");
-      }
 
-      // 3. Handle Email Verification (primarily for email-based users, or if email exists)
-      // This logic runs if onboarding is complete OR if firestoreUser is null (allowing email verification to be primary for new email users)
+      // 1. PRIORITIZE EMAIL VERIFICATION
       if (user.email && !user.emailVerified) {
-        if (!isVerifyEmailScreen && !isConfirmEmailScreen && !inOnboardingGroup && 
-            currentRoute !== '(auth)/verifyEmail' && !inAuthGroup // More refined check to avoid loops
-           ) {
-          console.log(`[AuthNavEffect] User email ${user.email} NOT VERIFIED. Redirecting to /(auth)/verifyEmail. Current route: ${segments.join('/')}`);
+        // If email is not verified, user MUST go to verification screen
+        // unless they are already there or in a related flow (like confirmEmail).
+        // This also prevents redirection if they are in the onboarding group, as email verification should come first.
+        if (!isVerifyEmailScreen && !isConfirmEmailScreen && currentRoute !== '(auth)/verifyEmail' && !inAuthGroup) {
+          console.log(`[AuthNavEffect] User email ${user.email} NOT VERIFIED. Redirecting to /(auth)/verifyEmail. Current route: ${currentRoute}`);
           router.replace({ pathname: '/(auth)/verifyEmail', params: { email: user.email } });
           return; // Exit after redirect
         } else if (isVerifyEmailScreen || isConfirmEmailScreen || (inAuthGroup && currentRoute !== '(auth)/verifyEmail')) {
-          // If on verifyEmail screen, or confirm screen, or some other auth screen (but not verify itself if already handled)
           console.log(`[AuthNavEffect] User email ${user.email} NOT VERIFIED, but staying on current auth-related page or verification flow: ${currentRoute}`);
+          // Allow user to stay on verification-related pages or other auth pages if email not verified.
+          // No further navigation logic should execute if email is not verified and they are on an appropriate page.
+          return; 
+        }
+        // If in onboarding group but email not verified, they shouldn't be. The above should catch and redirect to verifyEmail.
+        // If somehow they are in onboarding with unverified email, the !inAuthGroup above should redirect them.
+      } else { 
+        // EMAIL IS VERIFIED (or no email to verify, e.g., phone auth only) - Proceed to Onboarding/Feed Logic
+
+        // 2. Handle Onboarding (only if email is verified or not applicable)
+        if (firestoreUser && firestoreUser.onboardingCompleted === false) { 
+          if (!inOnboardingGroup && !inAuthGroup) { 
+            console.log('[AuthNavEffect] User email VERIFIED, Onboarding INCOMPLETE. Redirecting to /onboarding/profileSetup. Current route:', currentRoute);
+            router.replace('/(onboarding)/profileSetup');
+            return; // Exit after redirect
+          }
+        } else if (firestoreUser && firestoreUser.onboardingCompleted === true) {
+          // 3. Handle Post-Onboarding (User is onboarded AND email verified/not applicable)
+          // If they are on auth, onboarding, or landing pages, redirect to feed.
+          if (inAuthGroup || inOnboardingGroup || isLandingPageEquivalent ) {
+            console.log('[AuthNavEffect] User email VERIFIED, ONBOARDED. Redirecting to /(tabs)/feed. Current route:', currentRoute);
+            router.replace('/(tabs)/feed');
+            return; // Exit after redirect
+          }
+        } else if (!firestoreUser && !isFetchingFirestoreUser) {
+          console.log("[AuthNavEffect] User email VERIFIED (or N/A), but firestoreUser data is null and not fetching. This might be an intermediate state before onboarding or if no Firestore document exists yet.");
+          // If onboarding is truly required next and firestoreUser is null, this state might mean
+          // we need to ensure the handleSignUp/handleGoogleSignIn correctly creates a base firestoreUser doc with onboardingCompleted: false
+          // For now, if email is verified, allow progression, assuming an onboarding check or firestore sync will handle it.
+          // If they are on auth pages at this point (and email is verified), they should be moved.
+          if (inAuthGroup || isLandingPageEquivalent) {
+            // This is a tricky spot. If email is verified, and firestore user is null (not loading),
+            // and they are stuck on an auth page, where should they go?
+            // Assuming that if onboarding is next, the firestoreUser.onboardingCompleted === false check should trigger once data loads.
+            // If they're here, it means firestoreUser is null.
+            // Let's assume they should proceed towards onboarding if applicable, or feed if somehow firestore user is delayed but onboarding is done.
+            // This might require the onboarding/profileSetup page to be robust if firestoreUser is still loading.
+            console.log('[AuthNavEffect] Email verified, firestoreUser null, on auth/landing. Potential redirect to onboarding if not yet completed, or feed. Holding for now, relying on subsequent firestoreUser updates.');
+            // To prevent loops if firestoreUser never loads but onboarding is false:
+            // This state needs careful consideration. If they are on (auth)/login, and email is verified, they should not stay.
+            // They should at least go to onboarding or feed.
+            // A simple redirect to a "default" screen if firestoreUser remains null and onboarding status is unknown might be needed.
+            // For now, if they are on auth/landing and email is verified, let's push them towards where onboarding check would happen or feed.
+            // This assumes firestoreUser will eventually load. If not, it's a data issue.
+            // Let's cautiously redirect to a place where onboarding state would be re-evaluated or is the default start.
+            // This could still cause a loop if firestoreUser doesn't load and onboarding is false.
+            // A better way: If email verified and on auth/landing, and firestoreUser is null (not loading),
+            // perhaps redirect to a loading/default page or trigger a refresh of firestore data.
+            // For now, to avoid loops from login to login:
+             if (inAuthGroup || isLandingPageEquivalent) {
+                console.log('[AuthNavEffect] Email verified, firestoreUser null (and not fetching), on auth/landing. Redirecting to /onboarding/profileSetup as a likely next step or to break loop from auth pages.');
+                router.replace('/(onboarding)/profileSetup'); // Or a dedicated loading/transition screen
+                return;
+             }
+          }
         }
       }
     }
@@ -424,44 +458,47 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signInWithGoogle = async () => {
     setIsLoading(true);
+
+    // Type guard for SignInSuccessResponse
+    function isSignInSuccessResponse(response: SignInResponse): response is SignInSuccessResponse {
+      if (!response) return false;
+      // A success response should have an idToken (string) and a user object.
+      // An error response or cancellation often has a 'code' or specific 'type'.
+      // If 'code' exists, it's likely not a direct success object from this perspective.
+      if (typeof (response as any).code !== 'undefined') {
+        return false;
+      }
+      // If 'type' is 'cancelled', it's not a success.
+      if ((response as any).type === 'cancelled') {
+        return false;
+      }
+      // Check for core success properties
+      const successCandidate = response as any;
+      return typeof successCandidate.idToken === 'string' && successCandidate.user != null;
+    }
+
     try {
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       const signInResponse = await GoogleSignin.signIn(); // This is of type SignInResponse
 
-      // Type guard for SignInSuccessResponse
-      function isSignInSuccessResponse(response: SignInResponse): response is SignInSuccessResponse {
-        // Check if it's the success structure and not the error structure.
-        // A success response should have an idToken (string) and a user object.
-        // An error response typically has a 'code' property.
-        if (!response) return false;
-
-        // Check if it might be an error response (SignInErrorResponse has 'code')
-        if (typeof (response as any).code === 'number' || typeof (response as any).code === 'string') {
-          // It has a 'code', so it's likely an error response or at least not a clean success response.
-          // Ensure 'idToken' and 'user' are not primary indicators if 'code' for error exists.
-          return false; 
-        }
-        
-        // If no 'code' indicating an error, check for success properties.
-        const successCandidate = response as SignInSuccessResponse;
-        return typeof successCandidate.idToken === 'string' && 
-               successCandidate.user != null &&
-               // Optionally, add a check for a known property on the user object if User type is also problematic
-               // typeof successCandidate.user.id === 'string' 
-               true; // Assuming if idToken is string and user exists, it's a success.
+      // Scenario 1: User cancelled (detected from response object structure)
+      // Based on logs, cancellation can result in: { "data": null, "type": "cancelled" }
+      if (signInResponse && (signInResponse as any).type === 'cancelled') {
+        console.log("AuthContext: Google Sign-In cancelled by user (detected from response.type).");
+        Alert.alert("Google Sign-In", "Sign in was cancelled.");
+        // No error needs to be thrown, allow to proceed to finally block.
+        return; // Gracefully exit the function.
       }
 
+      // Scenario 2: Successful sign-in
       if (isSignInSuccessResponse(signInResponse)) {
-        // Now TypeScript knows signInResponse is SignInSuccessResponse
-        const idToken: string = signInResponse.idToken; 
-        const userDetails: LibGoogleSignInUser = signInResponse.user;
+        const idToken: string = (signInResponse as any).idToken; 
+        const userDetails: LibGoogleSignInUser = (signInResponse as any).user;
 
         console.log("AuthContext: Google User ID Token acquired.");
-        // Accessing properties from LibGoogleSignInUser (User type from the library)
-        // These properties (email, name, photo) are defined on the User type in @react-native-google-signin/google-signin
-        console.log("AuthContext: Google User Details Email:", userDetails.email);
-        console.log("AuthContext: Google User Details Name:", userDetails.name);
-        console.log("AuthContext: Google User Details Photo:", userDetails.photo);
+        console.log("AuthContext: Google User Details Email:", (userDetails as any).email);
+        console.log("AuthContext: Google User Details Name:", (userDetails as any).name);
+        console.log("AuthContext: Google User Details Photo:", (userDetails as any).photo);
 
         const googleCredential = RNAuth.GoogleAuthProvider.credential(idToken);
         const userCredential = await auth.signInWithCredential(googleCredential);
@@ -472,50 +509,74 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           const handleGoogleSignIn = functions.httpsCallable('handleGoogleSignIn');
           await handleGoogleSignIn({
             userId: firebaseUser.uid,
-            email: userDetails.email,      // Should be valid: LibGoogleSignInUser.email
-            displayName: userDetails.name || '', // Should be valid: LibGoogleSignInUser.name
-            photoURL: userDetails.photo || null // Should be valid: LibGoogleSignInUser.photo
+            email: (userDetails as any).email,
+            displayName: (userDetails as any).name || '',
+            photoURL: (userDetails as any).photo || null
           });
         }
-      } else if (signInResponse && typeof (signInResponse as any).code === 'string' || typeof (signInResponse as any).code === 'number') {
-        // This is more likely an error response if 'code' is present
-        const googleError = (signInResponse as any).error as { message?: string } | null; // error can be null or an object with message
+        // Successful completion, allow to proceed to finally block.
+      }
+      // Scenario 3: Sign-in returned an object with an error code
+      else if (signInResponse && (signInResponse as any).code !== undefined) {
         const errorCode = (signInResponse as any).code as string | number;
-
         let errorMessage = "Google Sign-In error";
-        if (googleError?.message) {
-            errorMessage = `Google Sign-In error: ${googleError.message}`;
-        } else if (statusCodes[errorCode as keyof typeof statusCodes]) {
+
+        if (statusCodes[errorCode as keyof typeof statusCodes]) {
             errorMessage = `Google Sign-In failed: ${statusCodes[errorCode as keyof typeof statusCodes]}`;
         } else {
             errorMessage = `Google Sign-In failed with code: ${errorCode}`;
         }
-        console.error("AuthContext: " + errorMessage, signInResponse);
-        throw new Error(errorMessage);
-      } else {
+        
+        // Check if this returned code is specifically SIGN_IN_CANCELLED
+        if (errorCode === statusCodes.SIGN_IN_CANCELLED || String(errorCode) === String(statusCodes.SIGN_IN_CANCELLED)) {
+            console.log("AuthContext: Google Sign-In was cancelled by the user (detected from signInResponse.code).");
+            Alert.alert("Google Sign-In", "Sign in was cancelled.");
+            return; // Gracefully exit
+        } else {
+            console.error("AuthContext: " + errorMessage, signInResponse);
+            Alert.alert("Google Sign-In Error", errorMessage);
+            throw new Error(errorMessage); // This is an actual error from Google's side.
+        }
+      } 
+      // Scenario 4: signInResponse is neither success, nor known cancellation, nor known error code structure
+      else {
         console.error("AuthContext: Google Sign-In cancelled or failed with unexpected response structure.", signInResponse);
-        throw new Error("Google Sign-In cancelled or failed.");
+        Alert.alert("Google Sign-In Error", "Google Sign-In cancelled or failed with an unexpected response.");
+        // Avoid throwing a new generic error if signInResponse is null or undefined after cancellation
+        // as this might be the state after a cancellation that didn't fit other checks.
+        // If signInResponse is truly unexpected and not a cancellation, this path is problematic.
+        // For now, assume this can also be a form of cancellation/failure not throwing an error.
+        return; 
       }
     } catch (error: any) {
-      if (isLoading) setIsLoading(false);
-      console.error("Google sign in error caught in outer catch", error);
-      let displayMessage = 'An unknown error occurred during Google sign in.';
-      const errorCodeString = String(error.code);
-      if (error.code === statusCodes.SIGN_IN_CANCELLED || errorCodeString === statusCodes.SIGN_IN_CANCELLED) {
-        displayMessage = "Sign in was cancelled.";
-      } else if (error.code === statusCodes.IN_PROGRESS || errorCodeString === statusCodes.IN_PROGRESS) {
-        displayMessage = "Sign in is already in progress.";
-      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE || errorCodeString === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        displayMessage = "Play services not available or outdated.";
-      } else if (error.message) {
-        displayMessage = error.message;
-      }
-      Alert.alert("Google Sign-In Error", displayMessage);
-      if (error.code !== statusCodes.SIGN_IN_CANCELLED && errorCodeString !== statusCodes.SIGN_IN_CANCELLED) {
-           throw new Error(displayMessage);
+      // This catch block handles errors THROWN by GoogleSignin.hasPlayServices(), GoogleSignin.signIn(),
+      // or errors thrown by our logic above (e.g., from Scenario 3).
+      console.error("Google sign in error caught in outer catch block:", error); // Log the original error
+      
+      const errorCode = error.code; // error.code can be a number or string
+      const errorCodeString = String(errorCode);
+
+      if (errorCode === statusCodes.SIGN_IN_CANCELLED || errorCodeString === String(statusCodes.SIGN_IN_CANCELLED)) {
+        console.log("AuthContext: Google Sign-In was cancelled by the user (detected from thrown error.code).");
+        Alert.alert("Google Sign-In", "Sign in was cancelled.");
+        // No re-throw for cancellation.
+      } else if (errorCode === statusCodes.IN_PROGRESS || errorCodeString === String(statusCodes.IN_PROGRESS)) {
+        console.log("AuthContext: Google Sign-In operation already in progress.");
+        Alert.alert("Google Sign-In", "Sign in is already in progress.");
+        // No re-throw.
+      } else if (errorCode === statusCodes.PLAY_SERVICES_NOT_AVAILABLE || errorCodeString === String(statusCodes.PLAY_SERVICES_NOT_AVAILABLE)) {
+        console.log("AuthContext: Google Play Services not available or outdated.");
+        Alert.alert("Google Sign-In Error", "Play services not available or outdated. Please update Google Play Services.");
+        // No re-throw, user is alerted.
+      } else {
+        // For other errors (network errors, unexpected issues from the library, or our own re-thrown errors)
+        const displayMessage = error.message || 'An unknown error occurred during Google sign in.';
+        console.error("AuthContext: Unhandled Google Sign-In error in catch block:", displayMessage, error);
+        Alert.alert("Google Sign-In Error", displayMessage);
+        // To prevent crashing the app, we will not re-throw here. The error is logged and user is alerted.
       }
     } finally {
-        if(isLoading) setIsLoading(false);
+        setIsLoading(false); // Ensure isLoading is always reset
     }
   };
 

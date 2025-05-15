@@ -80,6 +80,7 @@ const VaultScreen = () => {
         setCurrentPathDisplay(pathHistory.slice(1).map(p => p.name).join(' / '));
       }
     } catch (error) {
+      console.error("VaultScreen: Error fetching vault items:", error); // Detailed error logging
       Alert.alert('Error', 'Could not load vault items.');
     }
     setIsLoading(false);
