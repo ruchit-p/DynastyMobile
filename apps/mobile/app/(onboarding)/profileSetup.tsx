@@ -9,14 +9,23 @@ import {
   Platform,
   Alert,
   ScrollView,
-  ActivityIndicator
+  ActivityIndicator,
+  Image
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../src/contexts/AuthContext'; // Adjust path as needed
-import { functions } from '../../src/lib/firebase'; // For calling cloud functions
+import { getFirebaseFunctions } from '../../src/lib/firebase'; // Corrected import for functions
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 // You might want a gender picker component (e.g., dropdown)
+
+// Define the expected structure of data from the completeOnboarding Firebase function
+interface CompleteOnboardingResultData {
+  success: boolean;
+  message?: string;
+}
+
+const GENDER_OPTIONS = ['Male', 'Female', 'Other', 'Prefer not to say'];
 
 export default function ProfileSetupScreen() {
   const router = useRouter();
@@ -26,6 +35,7 @@ export default function ProfileSetupScreen() {
   const [dateOfBirth, setDateOfBirth] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [gender, setGender] = useState(''); // 'male', 'female', 'other', 'unspecified'
+  const [showGenderPicker, setShowGenderPicker] = useState(false); // Added for gender picker
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,6 +68,11 @@ export default function ProfileSetupScreen() {
     }
   };
 
+  const handleSelectGender = (selectedGender: string) => {
+    setGender(selectedGender);
+    setShowGenderPicker(false);
+  };
+
   const handleSubmit = async () => {
     if (!firstName || !lastName) {
       setError('First and last name are required.');
@@ -82,16 +97,18 @@ export default function ProfileSetupScreen() {
       if (!user) {
         throw new Error('User not authenticated.');
       }
-      const completeOnboardingFn = functions.httpsCallable('completeOnboarding');
+      // Get functions instance for callable
+      const firebaseFunctions = getFirebaseFunctions();
+      const completeOnboardingFn = firebaseFunctions.httpsCallable('completeOnboarding');
       const result = await completeOnboardingFn({
         userId: user.uid,
         firstName,
         lastName,
         // Ensure dateOfBirth is sent in a format your backend expects (e.g., ISO string or Timestamp)
         dateOfBirth: dateOfBirthISO,
-        gender: gender || 'unspecified',
+        gender: gender || 'Prefer not to say', // Updated to use selected gender, default if empty
         displayName: `${firstName} ${lastName}`.trim(), // Added displayName
-      });
+      }) as { data: CompleteOnboardingResultData }; // Added type assertion for the result
 
       if (result.data.success) {
         Alert.alert('Profile Updated', 'Your profile has been set up!');
@@ -116,13 +133,18 @@ export default function ProfileSetupScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Set Up Your Profile' }} />
+      <Stack.Screen options={{ title: 'Set Up Your Profile', headerShown: false }} />
       <SafeAreaView style={styles.safeArea}>
         <StatusBar style={Platform.OS === 'ios' ? 'dark' : 'light'} />
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <View style={styles.container}>
+            <Image 
+              source={require('../../assets/images/dynasty.png')} 
+              style={styles.logo}
+              resizeMode="contain" 
+            />
             <Text style={styles.title}>Welcome to Dynasty!</Text>
-            <Text style={styles.subtitle}>Let's set up your profile to get started.</Text>
+            <Text style={styles.subtitle}>Let&apos;s set up your profile to get started.</Text>
 
             <TextInput
               style={styles.input}
@@ -161,12 +183,28 @@ export default function ProfileSetupScreen() {
 
             <Text style={styles.label}>Gender (Optional)</Text>
             {/* Replace with a proper Picker component */}
-            <TextInput
-              style={styles.input}
-              placeholder="Gender (e.g., male, female, other)"
-              value={gender}
-              onChangeText={setGender}
-            />
+            <TouchableOpacity 
+              onPress={() => setShowGenderPicker(prev => !prev)} 
+              style={styles.pickerButton}
+            >
+              <Text style={styles.pickerButtonText}>
+                {gender || 'Select Gender'}
+              </Text>
+            </TouchableOpacity>
+
+            {showGenderPicker && (
+              <View style={styles.pickerOptionsContainer}>
+                {GENDER_OPTIONS.map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={styles.pickerOptionButton}
+                    onPress={() => handleSelectGender(option)}
+                  >
+                    <Text style={styles.pickerOptionText}>{option}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
 
             {error && <Text style={styles.errorText}>{error}</Text>}
 
@@ -201,6 +239,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 25,
     paddingVertical: 20,
+  },
+  logo: {
+    width: 100, // Adjust size as needed
+    height: 100, // Adjust size as needed
+    marginBottom: 20,
   },
   title: {
     fontSize: 28,
@@ -247,6 +290,40 @@ const styles = StyleSheet.create({
   datePickerButtonText: {
     fontSize: 16,
     color: '#333', // Color for selected date
+  },
+  pickerButton: {
+    width: '100%',
+    height: 50,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 8,
+    justifyContent: 'center',
+    paddingHorizontal: 15,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  pickerButtonText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  pickerOptionsContainer: {
+    width: '100%',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 8,
+    borderColor: '#E0E0E0',
+    borderWidth: 1,
+    marginTop: -10, // Adjust to overlap slightly with button or align as needed
+    marginBottom: 15,
+  },
+  pickerOptionButton: {
+    paddingVertical: 15,
+    paddingHorizontal: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  pickerOptionText: {
+    fontSize: 16,
+    color: '#333',
   },
   button: {
     width: '100%',

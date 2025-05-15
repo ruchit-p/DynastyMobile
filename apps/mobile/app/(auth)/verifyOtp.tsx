@@ -15,6 +15,7 @@ import { useRouter, useLocalSearchParams, Link } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const dynastyLogo = require('../../assets/images/dynasty.png');
 
@@ -23,6 +24,7 @@ export default function VerifyOtpScreen() {
   const { confirmPhoneCode, isLoading, phoneAuthConfirmation, signInWithPhoneNumber } = useAuth();
   const params = useLocalSearchParams<{ phoneNumberSent?: string }>();
   const phoneNumberSent = params.phoneNumberSent;
+  const insets = useSafeAreaInsets();
 
   console.log('[VerifyOtpScreen] Component Load: isLoading:', isLoading, 'phoneAuthConfirmation exists:', !!phoneAuthConfirmation, 'phoneNumberSent:', phoneNumberSent);
 
@@ -98,7 +100,7 @@ export default function VerifyOtpScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style={Platform.OS === 'ios' ? 'dark' : 'light'} />
       <View style={styles.container}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { top: insets.top + 5 }]}>
           <Ionicons name="arrow-back" size={24} color="#1A4B44" />
         </TouchableOpacity>
         <Image source={dynastyLogo} style={styles.logo} resizeMode="contain" />
@@ -166,9 +168,9 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 40,
     left: 25,
     zIndex: 1,
+    padding: 10,
   },
   logo: {
     width: 80, 

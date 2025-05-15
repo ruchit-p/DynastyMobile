@@ -1,4 +1,4 @@
-import { functions as firebaseFunctions } from './firebase';
+import { getFirebaseFunctions } from './firebase';
 import { httpsCallable } from '@react-native-firebase/functions';
 
 /**
@@ -39,9 +39,11 @@ export const fetchAccessibleStoriesMobile = async (
   userId: string,
   familyTreeId: string
 ): Promise<Story[]> => {
-  const functionRef = httpsCallable(firebaseFunctions, 'getAccessibleStories');
+  const functionsInstance = getFirebaseFunctions();
+  const functionRef = httpsCallable(functionsInstance, 'getAccessibleStories');
   const res = await functionRef({ userId, familyTreeId });
-  return res.data.stories as Story[];
+  const data = res.data as { stories: Story[] };
+  return data.stories;
 };
 
 /**
@@ -50,9 +52,11 @@ export const fetchAccessibleStoriesMobile = async (
 export const fetchUserStoriesMobile = async (
   userId: string
 ): Promise<Story[]> => {
-  const functionRef = httpsCallable(firebaseFunctions, 'getUserStories');
+  const functionsInstance = getFirebaseFunctions();
+  const functionRef = httpsCallable(functionsInstance, 'getUserStories');
   const res = await functionRef({ userId });
-  return res.data.stories as Story[];
+  const data = res.data as { stories: Story[] };
+  return data.stories;
 };
 
 /**
@@ -72,9 +76,11 @@ export const createStoryMobile = async (storyData: {
   peopleInvolved: string[];
   coverPhoto?: string;
 }): Promise<string> => {
-  const functionRef = httpsCallable(firebaseFunctions, 'createStory');
+  const functionsInstance = getFirebaseFunctions();
+  const functionRef = httpsCallable(functionsInstance, 'createStory');
   const res = await functionRef(storyData);
-  return res.data.id as string;
+  const data = res.data as { id: string };
+  return data.id;
 };
 
 /**
@@ -94,9 +100,11 @@ export const updateStoryMobile = async (
     peopleInvolved: string[];
   }>
 ): Promise<boolean> => {
-  const functionRef = httpsCallable(firebaseFunctions, 'updateStory');
+  const functionsInstance = getFirebaseFunctions();
+  const functionRef = httpsCallable(functionsInstance, 'updateStory');
   const res = await functionRef({ storyId, userId, updates });
-  return Boolean(res.data.success);
+  const data = res.data as { success: boolean };
+  return data.success;
 };
 
 /**
@@ -106,9 +114,11 @@ export const deleteStoryMobile = async (
   storyId: string,
   userId: string
 ): Promise<boolean> => {
-  const functionRef = httpsCallable(firebaseFunctions, 'deleteStory');
+  const functionsInstance = getFirebaseFunctions();
+  const functionRef = httpsCallable(functionsInstance, 'deleteStory');
   const res = await functionRef({ storyId, userId });
-  return Boolean(res.data.success);
+  const data = res.data as { success: boolean };
+  return data.success;
 };
 
 /**
@@ -123,7 +133,8 @@ export const toggleStoryLikeMobile = async (
     onLikeChange(!isCurrentlyLiked, isCurrentlyLiked ? -1 : 1);
   }
   try {
-    const functionRef = httpsCallable(firebaseFunctions, 'likeStory');
+    const functionsInstance = getFirebaseFunctions();
+    const functionRef = httpsCallable(functionsInstance, 'likeStory');
     const res = await functionRef({ storyId });
     const data = res.data as { success: boolean; liked: boolean };
     if (!data.success && onLikeChange) {
@@ -144,9 +155,11 @@ export const checkStoryLikeStatusMobile = async (
   storyId: string
 ): Promise<boolean> => {
   try {
-    const functionRef = httpsCallable(firebaseFunctions, 'checkStoryLikeStatus');
+    const functionsInstance = getFirebaseFunctions();
+    const functionRef = httpsCallable(functionsInstance, 'checkStoryLikeStatus');
     const res = await functionRef({ storyId });
-    return Boolean(res.data.isLiked);
+    const data = res.data as { isLiked: boolean };
+    return data.isLiked;
   } catch (error) {
     console.error('Error checking story like status:', error);
     return false;
@@ -160,9 +173,11 @@ export const getStoryLikesMobile = async (
   storyId: string
 ): Promise<Array<any>> => {
   try {
-    const functionRef = httpsCallable(firebaseFunctions, 'getStoryLikes');
+    const functionsInstance = getFirebaseFunctions();
+    const functionRef = httpsCallable(functionsInstance, 'getStoryLikes');
     const res = await functionRef({ storyId });
-    return res.data.likes || [];
+    const data = res.data as { likes?: Array<any> };
+    return data.likes || [];
   } catch (error) {
     console.error('Error fetching story likes:', error);
     return [];
@@ -176,12 +191,14 @@ export const getStoryCommentsMobile = async (
   storyId: string
 ): Promise<Array<any>> => {
   try {
-    const functionRef = httpsCallable(firebaseFunctions, 'getStoryComments');
+    const functionsInstance = getFirebaseFunctions();
+    const functionRef = httpsCallable(functionsInstance, 'getStoryComments');
     const res = await functionRef({ storyId });
-    if (res.data.status === 'error') {
+    const data = res.data as { status?: string; comments?: Array<any> };
+    if (data.status === 'error') {
       return [];
     }
-    return res.data.comments || [];
+    return data.comments || [];
   } catch (error) {
     console.error('Error fetching story comments:', error);
     return [];
@@ -197,7 +214,8 @@ export const addCommentMobile = async (
   parentId?: string
 ): Promise<any | null> => {
   try {
-    const functionRef = httpsCallable(firebaseFunctions, 'commentOnStory');
+    const functionsInstance = getFirebaseFunctions();
+    const functionRef = httpsCallable(functionsInstance, 'commentOnStory');
     const res = await functionRef({ storyId, text, parentId });
     const data = res.data as { success: boolean; comment: any };
     return data.success ? data.comment : null;
@@ -217,7 +235,8 @@ export const toggleCommentLikeMobile = async (
 ): Promise<boolean> => {
   if (onCommentUpdated) onCommentUpdated(!isCurrentlyLiked);
   try {
-    const functionRef = httpsCallable(firebaseFunctions, 'likeComment');
+    const functionsInstance = getFirebaseFunctions();
+    const functionRef = httpsCallable(functionsInstance, 'likeComment');
     const res = await functionRef({ commentId });
     const data = res.data as { success: boolean; liked: boolean };
     if (!data.success && onCommentUpdated) onCommentUpdated(isCurrentlyLiked);
@@ -236,9 +255,11 @@ export const getCommentLikesMobile = async (
   commentId: string
 ): Promise<Array<any>> => {
   try {
-    const functionRef = httpsCallable(firebaseFunctions, 'getCommentLikes');
+    const functionsInstance = getFirebaseFunctions();
+    const functionRef = httpsCallable(functionsInstance, 'getCommentLikes');
     const res = await functionRef({ commentId });
-    return res.data.likes || [];
+    const data = res.data as { likes?: Array<any> };
+    return data.likes || [];
   } catch (error) {
     console.error('Error fetching comment likes:', error);
     return [];

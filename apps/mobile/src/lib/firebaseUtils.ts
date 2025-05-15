@@ -1,4 +1,4 @@
-import { functions as firebaseFunctions } from './firebase';
+import { getFirebaseFunctions } from './firebase';
 import { httpsCallable } from '@react-native-firebase/functions';
 
 import { type RelativeItem as MobileRelativeItemType } from '../../react-native-relatives-tree/src'; // Adjusted path
@@ -48,8 +48,8 @@ export type MemberProfile = {
 // MARK: - Family Tree Functions
 
 export const getFamilyTreeDataMobile = async (userId: string): Promise<{ treeNodes: FamilyTreeNode[] }> => {
-  // Get a reference to the cloud function
-  const functionRef = httpsCallable(firebaseFunctions, 'getFamilyTreeData');
+  const functionsInstance = getFirebaseFunctions(); // Get the instance
+  const functionRef = httpsCallable(functionsInstance, 'getFamilyTreeData');
   try {
     const result = await functionRef({ userId });
     // Ensure the data from the cloud function matches FamilyTreeNode[]
@@ -140,7 +140,7 @@ const findMemberInSubtree = (
 
 // Function to update a member's profile data
 export const updateMemberProfileDataMobile = async (memberId: string, profileData: Partial<MemberProfile>): Promise<{ success: boolean }> => {
-  const functionRef = httpsCallable(firebaseFunctions, 'updateUserProfile');
+  const functionRef = httpsCallable(functionsInstance, 'updateUserProfile');
   try {
     // Map client-side 'phone' to server-side 'phoneNumber'
     const { phone, ...restOfProfileData } = profileData;
@@ -181,8 +181,8 @@ export const createFamilyMemberMobile = async (
     connectToExistingParent?: boolean;
   }
 ): Promise<{ success: boolean; userId: string }> => {
-  // Get a reference to the cloud function
-  const functionRef = httpsCallable(firebaseFunctions, 'createFamilyMember');
+  const functionsInstance = getFirebaseFunctions(); // Get the instance
+  const functionRef = httpsCallable(functionsInstance, 'createFamilyMember');
   try {
     const result = await functionRef({ 
       userData, 
@@ -210,8 +210,8 @@ export const updateFamilyRelationshipsMobile = async (
     removeSpouses?: string[];
   }
 ): Promise<{ success: boolean }> => {
-  // Get a reference to the cloud function
-  const functionRef = httpsCallable(firebaseFunctions, 'updateFamilyRelationships');
+  const functionsInstance = getFirebaseFunctions(); // Get the instance
+  const functionRef = httpsCallable(functionsInstance, 'updateFamilyRelationships');
   try {
     const result = await functionRef({ userId, updates });
     return result.data as { success: boolean };
@@ -226,8 +226,8 @@ export const deleteFamilyMemberMobile = async (
   familyTreeId: string,
   currentUserId: string
 ): Promise<{ success: boolean }> => {
-  // Get a reference to the cloud function
-  const functionRef = httpsCallable(firebaseFunctions, 'deleteFamilyMember');
+  const functionsInstance = getFirebaseFunctions(); // Get the instance
+  const functionRef = httpsCallable(functionsInstance, 'deleteFamilyMember');
   try {
     const result = await functionRef({ memberId, familyTreeId, currentUserId });
     return result.data as { success: boolean };
@@ -265,7 +265,7 @@ export const getUploadSignedUrlMobile = async (
   mimeType: string,
   parentId: string | null
 ): Promise<{ signedUrl: string; storagePath: string; parentPathInVault: string }> => {
-  const functionRef = httpsCallable(firebaseFunctions, 'getVaultUploadSignedUrl');
+  const functionRef = httpsCallable(functionsInstance, 'getVaultUploadSignedUrl');
   try {
     const result = await functionRef({ fileName, mimeType, parentId });
     return result.data as { signedUrl: string; storagePath: string; parentPathInVault: string };
@@ -281,7 +281,7 @@ export const getUploadSignedUrlMobile = async (
 export const getVaultItemsMobile = async (
   parentId: string | null
 ): Promise<{ items: VaultItem[] }> => {
-  const functionRef = httpsCallable(firebaseFunctions, 'getVaultItems');
+  const functionRef = httpsCallable(functionsInstance, 'getVaultItems');
   try {
     const result = await functionRef({ parentId });
     return result.data as { items: VaultItem[] };
@@ -298,7 +298,7 @@ export const createVaultFolderMobile = async (
   name: string,
   parentId: string | null
 ): Promise<{ id: string }> => {
-  const functionRef = httpsCallable(firebaseFunctions, 'createVaultFolder');
+  const functionRef = httpsCallable(functionsInstance, 'createVaultFolder');
   try {
     const result = await functionRef({ name, parentId });
     return result.data as { id: string };
@@ -322,7 +322,7 @@ export const addVaultFileMobile = async (
     mimeType: string;
   }
 ): Promise<{ id: string; downloadURL: string }> => { // Expect downloadURL back from function
-  const functionRef = httpsCallable(firebaseFunctions, 'addVaultFile');
+  const functionRef = httpsCallable(functionsInstance, 'addVaultFile');
   try {
     const result = await functionRef(payload);
     return result.data as { id: string; downloadURL: string };
@@ -339,7 +339,7 @@ export const renameVaultItemMobile = async (
   itemId: string,
   newName: string
 ): Promise<{ success: boolean }> => {
-  const functionRef = httpsCallable(firebaseFunctions, 'renameVaultItem');
+  const functionRef = httpsCallable(functionsInstance, 'renameVaultItem');
   try {
     const result = await functionRef({ itemId, newName });
     return result.data as { success: boolean };
@@ -356,7 +356,7 @@ export const moveVaultItemMobile = async (
   itemId: string,
   newParentId: string | null
 ): Promise<{ success: boolean }> => {
-  const functionRef = httpsCallable(firebaseFunctions, 'moveVaultItem');
+  const functionRef = httpsCallable(functionsInstance, 'moveVaultItem');
   try {
     const result = await functionRef({ itemId, newParentId });
     return result.data as { success: boolean };
@@ -372,7 +372,7 @@ export const moveVaultItemMobile = async (
 export const deleteVaultItemMobile = async (
   itemId: string
 ): Promise<{ success: boolean }> => {
-  const functionRef = httpsCallable(firebaseFunctions, 'deleteVaultItem');
+  const functionRef = httpsCallable(functionsInstance, 'deleteVaultItem');
   try {
     const result = await functionRef({ itemId });
     return result.data as { success: boolean };

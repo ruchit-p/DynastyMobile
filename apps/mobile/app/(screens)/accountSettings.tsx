@@ -2,8 +2,7 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Alert } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { signOut } from 'firebase/auth';
-import { auth } from '../../src/lib/firebase';
+import { getFirebaseAuth } from '../../src/lib/firebase';
 import ListItem, { ListItemProps } from '../../components/ListItem'; // Import shared ListItem
 import { commonHeaderOptions } from '../../constants/headerConfig'; // Import common header options
 
@@ -24,7 +23,8 @@ const AccountSettingsScreen = () => {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      const authInstance = getFirebaseAuth(); // Get the auth instance
+      await authInstance.signOut(); // Call signOut on the instance
       router.replace('/login');
     } catch (error) {
       console.error("Logout error:", error);
