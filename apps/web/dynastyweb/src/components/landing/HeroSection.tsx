@@ -192,13 +192,13 @@ const HeroSection = () => {
             style={{ textShadow: currentTextTheme === 'light' ? '0 2px 4px rgba(0,0,0,0.5)' : '0 1px 2px rgba(0,0,0,0.1)' }}
           >
             Your Family&apos;s Story, Beautifully Preserved with <span 
-              className="text-dynasty-green"
+              className="text-dynasty-green "
               style={{
                 textShadow: currentTextTheme === 'light' 
-                  // Subtle white glow/outline for the green text when main text is light
-                  ? '0 0 2px rgba(255,255,255,0.2), 0 0 14px rgba(255,255,255,0.2)' 
-                  // Or a very minimal dark shadow if main text is dark, to match parent, or none
-                  : '0 1px 2px rgba(0,0,0,0.2)' 
+                  // Subtle white outline for green text on dark background
+                  ? '-1px -1px 0 rgba(255,255,255,0.4), 1px -1px 0 rgba(255,255,255,0.4), -1px 1px 0 rgba(255,255,255,0.4), 1px 1px 0 rgba(255,255,255,0.4)' 
+                  // Subtle dark outline for green text on light background
+                  : '-1px -1px 0 rgba(0,0,0,0.15), 1px -1px 0 rgba(0,0,0,0.15), -1px 1px 0 rgba(0,0,0,0.15), 1px 1px 0 rgba(0,0,0,0.15)'
               }}
             >Dynasty</span>
           </h1>

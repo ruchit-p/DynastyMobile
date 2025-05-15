@@ -1,3 +1,4 @@
+import 'react-native-gesture-handler'; // This MUST be the first import
 import React, { useEffect } from 'react';
 import { SplashScreen, Stack } from 'expo-router';
 import { useFonts } from 'expo-font';

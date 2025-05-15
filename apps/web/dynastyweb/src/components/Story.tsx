@@ -98,12 +98,7 @@ export function StoryCard({ story, currentUserId }: StoryProps) {
 
   // Get first image from content if available
   const getCoverImage = () => {
-    // If there's a coverImageURL directly on the story, use that first
-    if (story.coverImageURL) {
-      return ensureAccessibleStorageUrl(story.coverImageURL);
-    }
-    
-    // Otherwise, find the first image block
+    // Find the first image block
     const imageBlocks = story.blocks.filter(block => block.type === 'image');
     
     if (imageBlocks.length > 0 && imageBlocks[0].data) {

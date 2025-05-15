@@ -3,6 +3,7 @@ import {
   getFirebaseAuth, 
   getFirebaseFunctions, 
   getFirebaseDb,
+  getFirebaseApp, // Added getFirebaseApp
   connectToEmulators // Import the function to connect to emulators
 } from '../lib/firebase'; 
 import { doc, FirebaseFirestoreTypes } from '@react-native-firebase/firestore'; // Added doc import and FirebaseFirestoreTypes
@@ -10,6 +11,8 @@ import RNAuth, { FirebaseAuthTypes } from '@react-native-firebase/auth'; // Impo
 import { useRouter, useSegments } from 'expo-router';
 import { GoogleSignin, statusCodes, User as GoogleSignInUser, ConfigureParams, HasPlayServicesParams, SignInResponse } from '@react-native-google-signin/google-signin';
 import { FirebaseFunctionsTypes } from '@react-native-firebase/functions'; // Added FirebaseFunctionsTypes
+import firebase from '@react-native-firebase/app'; // Added firebase import for ReturnType
+import { Alert } from 'react-native';
 
 // Configure Google Sign-In
 // IMPORTANT: Replace with your WEB CLIENT ID from Google Cloud Console / Firebase Project settings
@@ -47,10 +50,18 @@ export interface FirestoreUserType {
   [key: string]: any; // Keep this for flexibility if other fields exist
 }
 
+// Type for the user object returned by @react-native-google-signin/google-signin
+// This matches the 'user' part of the object returned by GoogleSignin.signIn()
+export type GoogleSignInUser = GoogleSignInUser;
+
 interface AuthContextType {
   user: FirebaseUser | null;
   isLoading: boolean;
   firestoreUser: FirestoreUserType | null;
+  app: ReturnType<typeof firebase.app>; // Added app instance
+  auth: FirebaseAuthTypes.Module; // Explicitly type auth
+  functions: FirebaseFunctionsTypes.Module; // Explicitly type functions
+  db: FirebaseFirestoreTypes.Module; // Explicitly type db
   signIn: (email: string, pass: string) => Promise<void>;
   signUp: (email: string, pass: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -62,6 +73,9 @@ interface AuthContextType {
   resendVerificationEmail: () => Promise<void>;
   confirmEmailVerificationLink: (uid: string, token: string) => Promise<void>;
   refreshUser: () => Promise<void>; // Added for manual refresh
+  signInWithApple: () => Promise<void>; // Added for completeness
+  sendPasswordReset: (email: string) => Promise<void>;
+  triggerSendVerificationEmail: (userId: string, email: string, displayName: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -80,9 +94,10 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Move Firebase service initialization inside the component with useMemo
-  const auth = useMemo(() => getFirebaseAuth(), []);
-  const functions = useMemo(() => getFirebaseFunctions(), []);
-  const db = useMemo(() => getFirebaseDb(), []);
+  const app = useMemo(() => getFirebaseApp(), []); // Added app initialization
+  const auth: FirebaseAuthTypes.Module = useMemo(() => getFirebaseAuth(), []); // Explicit type
+  const functions: FirebaseFunctionsTypes.Module = useMemo(() => getFirebaseFunctions(), []); // Explicit type
+  const db: FirebaseFirestoreTypes.Module = useMemo(() => getFirebaseDb(), []); // Explicit type
   
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -248,13 +263,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const triggerSendVerificationEmail = async (userId: string, email: string, displayName?: string) => {
-    const sendEmailFunction = functions.httpsCallable('sendVerificationEmail'); // functions from useMemo
+  const triggerSendVerificationEmail = async (userId: string, email: string, displayName: string) => {
+    if (!functions) {
+      console.error("AuthContext: Firebase functions not initialized for triggerSendVerificationEmail.");
+      throw new Error("Functions service not available.");
+    }
     try {
-      await sendEmailFunction({ userId, email, displayName });
-      console.log('Verification email triggered for:', email);
-    } catch (error: any) {
-      console.error('Error triggering verification email:', error);
+      console.log(`AuthContext: Calling 'sendVerificationEmail' cloud function for user ${userId}, email ${email}`);
+      const sendEmailFunction = functions.httpsCallable('sendVerificationEmail');
+      const result = await sendEmailFunction({ userId, email, displayName });
+      console.log("AuthContext: 'sendVerificationEmail' cloud function result:", result.data);
+    } catch (error) {
+      console.error("AuthContext: Error calling 'sendVerificationEmail' cloud function:", error);
+      // Don't throw an error that stops the signup flow, but log it.
+      // Alert.alert("Verification Email", "Could not send verification email. Please try resending from the verify email page.");
     }
   };
 
@@ -262,23 +284,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
     let firebaseUser: FirebaseUser | null = null;
     try {
-      const userCredential = await auth.createUserWithEmailAndPassword(newEmail, newPass); // auth from useMemo
+      console.log("AuthContext: Attempting email/password sign-up for:", newEmail);
+      const userCredential = await auth.createUserWithEmailAndPassword(newEmail, newPass); 
       firebaseUser = userCredential.user;
       console.log("AuthContext: User signed up with email/pass, UID:", firebaseUser?.uid);
       setUser(firebaseUser); // Set user immediately for faster UI update
+      
       // Trigger verification email via cloud function
       if (firebaseUser) {
-        await triggerSendVerificationEmail(firebaseUser.uid, newEmail, firebaseUser.displayName || newEmail.split('@')[0]);
-        // Call handleNewUser cloud function
-        const handleNewUserFn = functions.httpsCallable('handleNewUser');
-        await handleNewUserFn({ 
-          uid: firebaseUser.uid, 
-          email: newEmail, 
-          displayName: firebaseUser.displayName || newEmail.split('@')[0] 
-        });
-        console.log('handleNewUser cloud function called after sign-up.');
+        try {
+          let nameForEmail = firebaseUser.displayName;
+          if (!nameForEmail || nameForEmail.trim() === '') {
+            const emailPrefix = newEmail.split('@')[0];
+            nameForEmail = emailPrefix || 'User'; // Default to 'User' if prefix is empty
+          }
+          console.log(`AuthContext: Triggering verification email for ${newEmail} with displayName: ${nameForEmail}`);
+          await triggerSendVerificationEmail(firebaseUser.uid, newEmail, nameForEmail);
+        } catch (emailError) {
+          console.error("AuthContext: Failed to trigger verification email during sign up:", emailError);
+        }
       }
-      // No explicit setIsLoading(false) here, onAuthStateChanged will handle it
+      
     } catch (error: any) {
       console.error("Sign up error", error);
       setIsLoading(false); // Set loading to false in case of error
@@ -335,12 +361,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
     try {
       // Check if Google Sign-In was used
-      const isSignedInWithGoogle = await GoogleSignin.isSignedIn();
-      if (isSignedInWithGoogle) {
-        await GoogleSignin.revokeAccess(); // Recommended for complete sign out
-        await GoogleSignin.signOut();
-        console.log("AuthContext: Google user signed out");
+      // Use getCurrentUser() which returns the user object or null
+      if (GoogleSignin) { // Ensure GoogleSignin module is available
+        const currentGoogleUser = await GoogleSignin.getCurrentUser();
+        if (currentGoogleUser) {
+          console.log("AuthContext: Google user is signed in, attempting full Google sign out.");
+          if (typeof GoogleSignin.revokeAccess === 'function') {
+            await GoogleSignin.revokeAccess();
+            console.log("AuthContext: Google access revoked.");
+          } else {
+            console.warn("AuthContext: GoogleSignin.revokeAccess function is not available.");
+          }
+          if (typeof GoogleSignin.signOut === 'function') {
+            await GoogleSignin.signOut();
+            console.log("AuthContext: Google user signed out from Google.");
+          } else {
+            console.warn("AuthContext: GoogleSignin.signOut function is not available.");
+          }
+        } else {
+          console.log("AuthContext: No current Google user found via getCurrentUser(). Skipping Google-specific sign out steps.");
+        }
+      } else {
+        console.warn("AuthContext: GoogleSignin module is not available. Skipping Google sign out check.");
       }
+      
       await auth.signOut(); // auth from useMemo
       setUser(null);
       setFirestoreUser(null);
@@ -357,27 +401,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signInWithGoogle = async () => {
     setIsLoading(true);
     try {
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true } as HasPlayServicesParams); // Added type assertion
-      const { idToken, user: googleUser } = await GoogleSignin.signIn() as SignInResponse & { user: GoogleSignInUser }; // Ensure 'user' is part of type
-      
-      if (!idToken) {
-        throw new Error('Google Sign-In failed: No ID token received.');
+      console.log("AuthContext: Attempting Google Sign-In");
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      console.log("AuthContext: Play Services checked/available.");
+
+      // GoogleSignin.signIn() returns a response object containing the user.
+      const signInResponse = await GoogleSignin.signIn();
+      console.log("AuthContext: Google Sign-In successful, response received.");
+
+      if (!signInResponse || !signInResponse.idToken) {
+        throw new Error("Google Sign-In response missing idToken.");
       }
- 
-      const googleCredential = RNAuth.GoogleAuthProvider.credential(idToken);
-      // 'auth' and 'functions' from useMemo
-      const userCredential = await auth.signInWithCredential(googleCredential);
-      
-      const handleGoogleSignInFn = functions.httpsCallable('handleGoogleSignIn');
-      await handleGoogleSignInFn({
-        uid: userCredential.user.uid,
-        email: userCredential.user.email,
-        displayName: userCredential.user.displayName,
-        photoURL: userCredential.user.photoURL,
-        googleFirstName: googleUser.givenName,
-        googleLastName: googleUser.familyName,
-      });
-      console.log('handleGoogleSignIn cloud function called.');
+      if (!signInResponse.user) {
+        throw new Error("Google Sign-In response missing user object.");
+      }
+
+      const googleAuthUser: GoogleSignInUser = signInResponse.user; // Access the user object
+      const idToken = signInResponse.idToken; // idToken is directly on the response
+
+      console.log("AuthContext: Google User ID Token acquired.");
+
+      // Create a Google credential with the token
+      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
+      console.log("AuthContext: Google credential created.");
+
+      // Sign-in the user with the credential
+      const userCredential = await auth.signInWithCredential(googleCredential); // auth from useMemo
+      const firebaseUser = userCredential.user;
+      console.log("AuthContext: Firebase sign-in with Google credential successful, UID:", firebaseUser?.uid);
+      setUser(firebaseUser);
+
+      // Call the backend to handle new user document creation or update if necessary
+      if (firebaseUser && functions) { // functions from useMemo
+        const handleGoogleSignIn = functions.httpsCallable('handleGoogleSignIn');
+        await handleGoogleSignIn({ 
+          userId: firebaseUser.uid, 
+          email: googleAuthUser.email, 
+          displayName: googleAuthUser.name, // Use 'name' for full name
+          photoURL: googleAuthUser.photo 
+        });
+        console.log("AuthContext: handleGoogleSignIn cloud function called.");
+      }
+      router.replace('/(tabs)/feed');
     } catch (error: any) {
       setIsLoading(false); // Set loading to false in case of error
       console.error("Google sign in error", error);
@@ -435,11 +500,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const signInWithApple = async () => {
+    setIsLoading(true);
+    console.log("AuthContext: Apple Sign-In initiated (placeholder).");
+    // Placeholder for Apple Sign-In logic
+    // See https://rnfirebase.io/auth/social-auth#apple
+    // const appleAuthRequestResponse = await appleAuth.performRequest({...});
+    // const { identityToken } = appleAuthRequestResponse;
+    // const appleCredential = auth.AppleAuthProvider.credential(identityToken);
+    // await auth.signInWithCredential(appleCredential);
+    Alert.alert("Apple Sign-In", "Apple Sign-In is not yet implemented.");
+    setIsLoading(false);
+  };
+
+  const sendPasswordReset = async (email: string) => {
+    setIsLoading(true);
+    try {
+      console.log("AuthContext: Attempting to send password reset email to:", email);
+      await auth.sendPasswordResetEmail(email);
+      console.log("AuthContext: Password reset email sent successfully to:", email);
+      Alert.alert("Password Reset", "Password reset email sent. Please check your inbox.");
+      router.back(); // Navigate back after sending email
+    } catch (error: any) {
+      console.error("AuthContext: Password reset error for:", email, error);
+      Alert.alert("Password Reset Failed", error.message || "Could not send password reset email.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
       isLoading,
       firestoreUser,
+      app, // Provide the app instance
+      auth, // Explicitly type auth
+      functions, // Explicitly type functions
+      db, // Explicitly type db
       signIn,
       signUp,
       signOut,
@@ -450,7 +548,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setPhoneAuthConfirmation,
       resendVerificationEmail,
       confirmEmailVerificationLink,
-      refreshUser
+      refreshUser,
+      signInWithApple,
+      sendPasswordReset,
+      triggerSendVerificationEmail
     }}>
       {children}
     </AuthContext.Provider>

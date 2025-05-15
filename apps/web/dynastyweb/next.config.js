@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  typescript: {
+    tsconfigPath: './tsconfig.json',
+  },
   transpilePackages: ['ui', 'utils'],
   images: {
     remotePatterns: [
