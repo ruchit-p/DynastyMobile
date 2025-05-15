@@ -430,10 +430,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // Type guard for SignInSuccessResponse
       function isSignInSuccessResponse(response: SignInResponse): response is SignInSuccessResponse {
-        // Check for the presence of idToken and user, and that they are of expected types
-        return response != null && 
-               typeof (response as SignInSuccessResponse).idToken === 'string' && 
-               (response as SignInSuccessResponse).user != null;
+        // Check if it's the success structure and not the error structure.
+        // A success response should have an idToken (string) and a user object.
+        // An error response typically has a 'code' property.
+        if (!response) return false;
+
+        // Check if it might be an error response (SignInErrorResponse has 'code')
+        if (typeof (response as any).code === 'number' || typeof (response as any).code === 'string') {
+          // It has a 'code', so it's likely an error response or at least not a clean success response.
+          // Ensure 'idToken' and 'user' are not primary indicators if 'code' for error exists.
+          return false; 
+        }
+        
+        // If no 'code' indicating an error, check for success properties.
+        const successCandidate = response as SignInSuccessResponse;
+        return typeof successCandidate.idToken === 'string' && 
+               successCandidate.user != null &&
+               // Optionally, add a check for a known property on the user object if User type is also problematic
+               // typeof successCandidate.user.id === 'string' 
+               true; // Assuming if idToken is string and user exists, it's a success.
       }
 
       if (isSignInSuccessResponse(signInResponse)) {
@@ -443,6 +458,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         console.log("AuthContext: Google User ID Token acquired.");
         // Accessing properties from LibGoogleSignInUser (User type from the library)
+        // These properties (email, name, photo) are defined on the User type in @react-native-google-signin/google-signin
         console.log("AuthContext: Google User Details Email:", userDetails.email);
         console.log("AuthContext: Google User Details Name:", userDetails.name);
         console.log("AuthContext: Google User Details Photo:", userDetails.photo);
@@ -461,15 +477,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             photoURL: userDetails.photo || null // Should be valid: LibGoogleSignInUser.photo
           });
         }
-      } else if (signInResponse && 'error' in signInResponse && (signInResponse as any).error) {
-        const googleError = (signInResponse as any).error as { code?: string | number, message?: string };
+      } else if (signInResponse && typeof (signInResponse as any).code === 'string' || typeof (signInResponse as any).code === 'number') {
+        // This is more likely an error response if 'code' is present
+        const googleError = (signInResponse as any).error as { message?: string } | null; // error can be null or an object with message
+        const errorCode = (signInResponse as any).code as string | number;
+
         let errorMessage = "Google Sign-In error";
-        if (googleError.message) {
+        if (googleError?.message) {
             errorMessage = `Google Sign-In error: ${googleError.message}`;
-        } else if (googleError.code && statusCodes[googleError.code as keyof typeof statusCodes]) {
-            errorMessage = `Google Sign-In failed: ${statusCodes[googleError.code as keyof typeof statusCodes]}`;
-        } else if (googleError.code) {
-            errorMessage = `Google Sign-In failed with code: ${googleError.code}`;
+        } else if (statusCodes[errorCode as keyof typeof statusCodes]) {
+            errorMessage = `Google Sign-In failed: ${statusCodes[errorCode as keyof typeof statusCodes]}`;
+        } else {
+            errorMessage = `Google Sign-In failed with code: ${errorCode}`;
         }
         console.error("AuthContext: " + errorMessage, signInResponse);
         throw new Error(errorMessage);

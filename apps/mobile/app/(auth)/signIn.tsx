@@ -69,6 +69,14 @@ export default function SignInScreen() {
     router.push('/(auth)/phoneSignIn'); // Example, create this screen later
   };
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/'); // Fallback to landing page
+    }
+  };
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -78,7 +86,7 @@ export default function SignInScreen() {
         {/* Custom Back Button */}
         <TouchableOpacity
           style={[styles.backButton, { top: insets.top + 5 }]} // Position using insets
-          onPress={() => router.back()}
+          onPress={handleBack} // Updated onPress
         >
           <Ionicons name="arrow-back" size={28} color="#1A4B44" />
         </TouchableOpacity>

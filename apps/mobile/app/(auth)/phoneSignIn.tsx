@@ -60,13 +60,21 @@ export default function PhoneSignInScreen() {
     }
   };
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(auth)/signIn');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar style={Platform.OS === 'ios' ? 'dark' : 'light'} />
 
       <TouchableOpacity 
-        onPress={() => router.back()} 
+        onPress={handleBack} 
         style={[styles.backButton, { top: insets.top + 5 }]}
       >
         <Ionicons name="arrow-back" size={28} color="#1A4B44" />
