@@ -11,7 +11,8 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.dynasty.app",
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "useFrameworks": "static"
     },
     "android": {
       "adaptiveIcon": {
@@ -38,6 +39,7 @@
       ],
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
+      "./plugins/withFirebaseAuthFix.js",
       [
         "expo-location",
         {

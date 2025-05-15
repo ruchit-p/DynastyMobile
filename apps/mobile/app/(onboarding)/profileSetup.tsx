@@ -15,9 +15,7 @@ import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../src/contexts/AuthContext'; // Adjust path as needed
 import { functions } from '../../src/lib/firebase'; // For calling cloud functions
-import * as ImagePicker from 'expo-image-picker';
-// You might want a date picker component
-// import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 // You might want a gender picker component (e.g., dropdown)
 
 export default function ProfileSetupScreen() {
@@ -25,12 +23,40 @@ export default function ProfileSetupScreen() {
   const { user, refreshUser } = useAuth();
   const [firstName, setFirstName] = useState(user?.displayName?.split(' ')[0] || '');
   const [lastName, setLastName] = useState(user?.displayName?.split(' ').slice(1).join(' ') || '');
-  const [dobMonth, setDobMonth] = useState('');
-  const [dobDay, setDobDay] = useState('');
-  const [dobYear, setDobYear] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [gender, setGender] = useState(''); // 'male', 'female', 'other', 'unspecified'
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const onChangeDate = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false); // Modal picker on Android, close after interaction
+    }
+
+    if (event.type === 'set') {
+      if (selectedDate) {
+        // Basic validation for future dates, though maximumDate should handle age.
+        const today = new Date();
+        if (selectedDate > today) {
+          setError('Date of birth cannot be in the future.');
+          // Optionally revert to previous date or null
+          // setDateOfBirth(dateOfBirth); // Keep previous valid date if any
+          return;
+        }
+        setDateOfBirth(selectedDate);
+        setError(null); // Clear previous date-related errors
+
+        // Optional: hide iOS spinner after selection
+        // if (Platform.OS === 'ios') {
+        //   setShowDatePicker(false);
+        // }
+      }
+    } else if (event.type === 'dismissed') {
+      // User cancelled. For Android, picker is already closed.
+      // For iOS, if it's a modal, it would be handled. Spinner remains.
+    }
+  };
 
   const handleSubmit = async () => {
     if (!firstName || !lastName) {
@@ -38,17 +64,16 @@ export default function ProfileSetupScreen() {
       return;
     }
     // Basic DOB validation (more robust validation needed for production)
-    let dateOfBirth = null;
-    if (dobYear && dobMonth && dobDay) {
-      const yearNum = parseInt(dobYear, 10);
-      const monthNum = parseInt(dobMonth, 10) -1; // Month is 0-indexed in JS Date
-      const dayNum = parseInt(dobDay, 10);
-      if (yearNum > 1900 && yearNum < new Date().getFullYear() && monthNum >= 0 && monthNum <= 11 && dayNum > 0 && dayNum <= 31) {
-        dateOfBirth = new Date(yearNum, monthNum, dayNum);
-      } else {
-        setError('Please enter a valid date of birth.');
+    let dateOfBirthISO: string | null = null;
+    if (dateOfBirth) {
+      const yearNum = dateOfBirth.getFullYear();
+      // The DateTimePicker's minimumDate and maximumDate props should enforce this range.
+      // This is an additional safeguard or if dateOfBirth could be set by other means.
+      if (yearNum <= 1900 || yearNum > new Date().getFullYear() - 13) { // Ensure they are at least 13
+        setError('Please select a valid date of birth (you must be at least 13 years old).');
         return;
       }
+      dateOfBirthISO = dateOfBirth.toISOString();
     }
 
     setIsLoading(true);
@@ -63,7 +88,7 @@ export default function ProfileSetupScreen() {
         firstName,
         lastName,
         // Ensure dateOfBirth is sent in a format your backend expects (e.g., ISO string or Timestamp)
-        dateOfBirth: dateOfBirth ? dateOfBirth.toISOString() : null, 
+        dateOfBirth: dateOfBirthISO,
         gender: gender || 'unspecified',
         displayName: `${firstName} ${lastName}`.trim(), // Added displayName
       });
@@ -87,6 +112,7 @@ export default function ProfileSetupScreen() {
   };
 
   // TODO: Implement proper Date Picker and Gender Picker (e.g., using a library or custom component)
+  // The Date Picker part is now being addressed by DateTimePicker.
 
   return (
     <>
@@ -112,11 +138,26 @@ export default function ProfileSetupScreen() {
             />
             
             <Text style={styles.label}>Date of Birth (Optional)</Text>
-            <View style={styles.dobContainer}>
-              <TextInput style={[styles.input, styles.dobInput]} placeholder="MM" value={dobMonth} onChangeText={setDobMonth} keyboardType="number-pad" maxLength={2} />
-              <TextInput style={[styles.input, styles.dobInput]} placeholder="DD" value={dobDay} onChangeText={setDobDay} keyboardType="number-pad" maxLength={2} />
-              <TextInput style={[styles.input, styles.dobInput]} placeholder="YYYY" value={dobYear} onChangeText={setDobYear} keyboardType="number-pad" maxLength={4} />
-            </View>
+            <TouchableOpacity 
+              onPress={() => setShowDatePicker(prev => !prev)} 
+              style={styles.datePickerButton}
+            >
+              <Text style={styles.datePickerButtonText}>
+                {dateOfBirth ? dateOfBirth.toLocaleDateString() : 'Select Date'}
+              </Text>
+            </TouchableOpacity>
+
+            {showDatePicker && (
+              <DateTimePicker
+                testID="dateTimePicker"
+                value={dateOfBirth || new Date(new Date().getFullYear() - 18, 0, 1)} // Default to 18 years ago
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onChangeDate}
+                maximumDate={new Date(new Date().getFullYear() - 13, new Date().getMonth(), new Date().getDate())} // Must be at least 13 years old
+                minimumDate={new Date(1900, 0, 1)} // Earliest selectable date
+              />
+            )}
 
             <Text style={styles.label}>Gender (Optional)</Text>
             {/* Replace with a proper Picker component */}
@@ -192,15 +233,20 @@ const styles = StyleSheet.create({
     marginBottom: 5,
     marginLeft: 5, // Small indent for the label
   },
-  dobContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  datePickerButton: {
     width: '100%',
+    height: 50,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 8,
+    justifyContent: 'center',
+    paddingHorizontal: 15,
     marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
-  dobInput: {
-    width: '30%', // Adjust width for MM, DD, YYYY inputs
-    textAlign: 'center',
+  datePickerButtonText: {
+    fontSize: 16,
+    color: '#333', // Color for selected date
   },
   button: {
     width: '100%',

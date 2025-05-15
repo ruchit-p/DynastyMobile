@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
@@ -12,6 +12,54 @@ const HeroSection = () => {
   const ctaRef = useRef<HTMLDivElement>(null);
   const { currentUser } = useAuth();
   const router = useRouter();
+
+  // MARK: Slideshow State and Logic
+  const images = [
+    // You'LL NEED TO UPDATE textTheme for each image based on its content
+    // 'light' for light text (e.g., on darker images/overlay)
+    // 'dark' for dark text (e.g., on very light images if overlay is removed/reduced)
+    { src: '/images/landing-slideshow/image1.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image2.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image3.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image4.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image5.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image6.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image7.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image8.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image9.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image10.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image11.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image12.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image13.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image14.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image15.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image16.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image17.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image18.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image19.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image20.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image21.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image22.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image23.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image24.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image25.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image26.jpg', textTheme: 'light' as const },
+    { src: '/images/landing-slideshow/image27.jpg', textTheme: 'light' as const },
+  ];
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCurrentImageIndex((prevIndex) => (prevIndex + 1) % images.length);
+    }, 8000); // 8 seconds
+
+    return () => clearTimeout(timer);
+  }, [currentImageIndex, images.length]);
+
+  const currentTextTheme = images[currentImageIndex].textTheme;
+  const textColorClass = currentTextTheme === 'light' ? 'text-white' : 'text-dynasty-neutral-darkest';
+  const subTextColorClass = currentTextTheme === 'light' ? 'text-neutral-200' : 'text-dynasty-neutral-dark';
+  // END MARK: Slideshow State and Logic
 
   useEffect(() => {
     const observers: IntersectionObserver[] = [];
@@ -65,31 +113,67 @@ const HeroSection = () => {
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-      {/* Background elements */}
-      <div className="absolute inset-0 bg-gradient-to-b from-dynasty-neutral-light to-dynasty-green-light opacity-50"></div>
-      <div className="absolute inset-0 bg-gradient-to-tr from-dynasty-green/5 via-dynasty-gold/5 to-dynasty-green/10"></div>
+      {/* MARK: Image Slideshow */}
+      {images.map((imageData, index) => (
+        <div
+          key={imageData.src}
+          className={`absolute inset-0 w-full h-full transition-opacity duration-1000 ease-in-out ${
+            index === currentImageIndex ? 'opacity-100' : 'opacity-0'
+          }`}
+          style={{
+            backgroundImage: `url(${imageData.src})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
+      ))}
+      <div className="absolute inset-0 bg-black/50"></div> {/* Increased overlay opacity for better general contrast */}
+      {/* END MARK: Image Slideshow */}
       
-      {/* Decorative elements */}
+      {/* Decorative elements - Removed as they might conflict with the slideshow. 
+           Consider re-adding if they fit the new design.
       <div className="absolute top-20 left-10 w-64 h-64 bg-dynasty-green/5 rounded-full blur-3xl"></div>
       <div className="absolute bottom-20 right-10 w-64 h-64 bg-dynasty-gold/5 rounded-full blur-3xl"></div>
+      */}
       
       {/* Content */}
       <div className="container mx-auto px-6 py-24 pt-32 relative z-10">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-block mb-3 px-3 py-1 bg-dynasty-gold/10 rounded-full border border-dynasty-gold/20">
-            <span className="text-sm font-medium text-dynasty-gold-dark">Connect. Preserve. Celebrate.</span>
+          <div 
+            className={`inline-block mb-3 px-3 py-1 rounded-full border transition-colors duration-500 ${
+              currentTextTheme === 'light' 
+                ? 'bg-white/10 border-white/30' 
+                : 'bg-dynasty-gold/10 border-dynasty-gold/20'
+            }`}
+          >
+            <span className={`text-sm font-medium transition-colors duration-500 ${
+              currentTextTheme === 'light' ? 'text-white' : 'text-dynasty-gold-dark'
+            }`}>
+              Connect. Preserve. Celebrate.
+            </span>
           </div>
           
           <h1 
             ref={headingRef} 
-            className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 opacity-0 text-balance"
+            className={`text-4xl md:text-5xl lg:text-6xl font-bold mb-6 opacity-0 text-balance transition-colors duration-500 ${textColorClass}`}
+            style={{ textShadow: currentTextTheme === 'light' ? '0 2px 4px rgba(0,0,0,0.5)' : '0 1px 2px rgba(0,0,0,0.1)' }}
           >
-            Your Family&apos;s Story, Beautifully Preserved with <span className="text-dynasty-green">Dynasty</span>
+            Your Family&apos;s Story, Beautifully Preserved with <span 
+              className="text-dynasty-green"
+              style={{
+                textShadow: currentTextTheme === 'light' 
+                  // Subtle white glow/outline for the green text when main text is light
+                  ? '0 0 2px rgba(255,255,255,0.2), 0 0 14px rgba(255,255,255,0.2)' 
+                  // Or a very minimal dark shadow if main text is dark, to match parent, or none
+                  : '0 1px 2px rgba(0,0,0,0.2)' 
+              }}
+            >Dynasty</span>
           </h1>
           
           <p 
             ref={subheadingRef}
-            className="text-lg md:text-xl text-dynasty-neutral-dark mb-8 opacity-0 max-w-2xl mx-auto text-balance"
+            className={`text-lg md:text-xl mb-8 opacity-0 max-w-2xl mx-auto text-balance transition-colors duration-500 ${subTextColorClass}`}
+            style={{ textShadow: currentTextTheme === 'light' ? '0 1px 3px rgba(0,0,0,0.5)' : 'none' }}
           >
             Create, share, and preserve your family&apos;s legacy with Dynasty - the digital family tree and history
             book platform for future generations.
@@ -116,7 +200,7 @@ const HeroSection = () => {
               )}
             </div>
             
-            <div className="mt-8 text-sm text-dynasty-neutral-dark">
+            <div className={`mt-8 text-sm transition-colors duration-500 ${subTextColorClass}`}>
               <span>No credit card required · Free forever plan available</span>
             </div>
           </div>

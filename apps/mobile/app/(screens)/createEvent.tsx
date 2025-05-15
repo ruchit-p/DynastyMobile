@@ -249,25 +249,27 @@ const CreateEventScreen = () => {
     }
 
     try {
-      let result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        // allowsEditing: false, // cannot be used with allowsMultipleSelection
-        allowsMultipleSelection: true, 
-        quality: 0.8, // Compress images slightly for faster uploads
-        selectionLimit: 5 - newEvent.photos.length, // Allow selecting remaining number of photos
-        // aspect: [16, 9], // consider if a fixed aspect ratio is desired for covers
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'], // Updated from ImagePicker.MediaTypeOptions.Images
+        allowsMultipleSelection: true, // Allow selecting multiple images up to the limit
+        quality: 0.8,
+        // Calculate remaining allowed selections
+        selectionLimit: 5 - newEvent.photos.length > 0 ? 5 - newEvent.photos.length : 1, 
       });
 
       if (!result.canceled && result.assets) {
         const newPhotos = result.assets.map(asset => ({ uri: asset.uri }));
-        setNewEvent(prev => ({
-          ...prev,
-          photos: [...prev.photos, ...newPhotos].slice(0, 5) // Ensure we don't exceed 5 photos
-        }));
+        // Ensure we don't exceed the total limit of 5 photos
+        const combinedPhotos = [...newEvent.photos, ...newPhotos].slice(0, 5);
+        setNewEvent(prev => ({ ...prev, photos: combinedPhotos }));
+        // Update previews etc. as needed
+        setPhotoPreviewUrls(combinedPhotos.map(p => p.uri));
+        setPhotoUploadProgress(new Array(combinedPhotos.length).fill(0));
+        setPhotoUploadErrors(new Array(combinedPhotos.length).fill(null));
       }
     } catch (error) {
-      console.error("ImagePicker Error: ", error);
-      Alert.alert("Image Picker Error", "Could not select images. Please try again.");
+      console.error("Error picking images: ", error);
+      Alert.alert("Image Picker Error", "Could not select images.");
     }
   };
 
@@ -479,10 +481,8 @@ const CreateEventScreen = () => {
 
   const handleTimeConfirm = (date: Date) => {
     if (timePickerTarget) {
-      const hours = date.getHours().toString().padStart(2, '0');
-      const minutes = date.getMinutes().toString().padStart(2, '0');
-      const timeString = `${hours}:${minutes}`;
-      setNewEvent(prev => ({ ...prev, [timePickerTarget]: timeString }));
+      const formattedTime = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+      setNewEvent(prev => ({ ...prev, [timePickerTarget]: formattedTime }));
     }
     hideTimePicker();
   };
@@ -491,33 +491,36 @@ const CreateEventScreen = () => {
   const getTimeAsDate = (timeString: string): Date => {
     const [hours, minutes] = timeString.split(':').map(Number);
     const date = new Date();
-    date.setHours(hours);
-    date.setMinutes(minutes);
-    date.setSeconds(0);
-    date.setMilliseconds(0);
+    date.setHours(hours, minutes);
     return date;
   };
 
   // Handler to replace a specific photo
   const handleReplaceImage = async (index: number) => {
+    if (mediaLibraryPermission && mediaLibraryPermission.status !== ImagePicker.PermissionStatus.GRANTED && mediaLibraryPermission.canAskAgain) {
+      const permissionResult = await requestMediaLibraryPermission();
+      if (permissionResult.status !== ImagePicker.PermissionStatus.GRANTED) {
+        Alert.alert("Permission Required", "We need access to your photos to replace the image.");
+        return;
+      }
+    }
+
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
+        mediaTypes: ['images'], // Updated from ImagePicker.MediaTypeOptions.Images
+        allowsEditing: false, // Typically replace one image at a time
         quality: 0.8,
-        selectionLimit: 1,
       });
+
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const newUri = result.assets[0].uri;
-        setNewEvent(prev => {
-          const photos = [...prev.photos];
-          photos[index] = { uri: newUri };
-          return { ...prev, photos };
-        });
+        const updatedPhotos = [...newEvent.photos];
+        updatedPhotos[index] = { uri: result.assets[0].uri };
+        setNewEvent(prev => ({ ...prev, photos: updatedPhotos }));
+        setPhotoPreviewUrls(updatedPhotos.map(p => p.uri));
       }
     } catch (error) {
-      console.error("Image replacement error:", error);
-      Alert.alert("Error", "Could not replace the image. Please try again.");
+      console.error("Error replacing image: ", error);
+      Alert.alert("Image Picker Error", "Could not replace the image.");
     }
   };
 

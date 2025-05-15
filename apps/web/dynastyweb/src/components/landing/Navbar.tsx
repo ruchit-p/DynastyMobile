@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, MouseEvent } from 'react';
 import { Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -14,6 +14,11 @@ const Navbar = () => {
   const { currentUser } = useAuth();
   const router = useRouter();
 
+  // MARK: Mouse Hover Effect State
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [isHovering, setIsHovering] = useState(false);
+  // END MARK: Mouse Hover Effect State
+
   useEffect(() => {
     const handleScroll = () => {
       if (window.scrollY > 50) {
@@ -26,6 +31,13 @@ const Navbar = () => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // MARK: Mouse Move Handler for Shine Effect
+  const handleMouseMove = (event: MouseEvent<HTMLElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setMousePosition({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+  };
+  // END MARK: Mouse Move Handler for Shine Effect
 
   // Handle navigation based on auth state
   const handleStartClick = () => {
@@ -42,11 +54,30 @@ const Navbar = () => {
 
   return (
     <nav 
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled ? 'bg-white/90 backdrop-blur-md shadow-sm py-3' : 'bg-transparent py-5'
-      }`}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+      className={`fixed top-4 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-6xl z-50 transition-all duration-300 
+                  bg-white/50 backdrop-blur-lg shadow-xl rounded-xl 
+                  ${isScrolled ? 'py-3' : 'py-4'}`}
+      style={{
+        // Using a pseudo-element for the shine effect is cleaner if possible with Tailwind,
+        // but for direct dynamic control, an inner div is more straightforward with JS.
+        // Here, we'll prepare for an inner div.
+      }}
     >
-      <div className="container mx-auto px-6 flex items-center justify-between">
+      {/* Shine Effect Element */}
+      <div
+        className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none transition-opacity duration-300"
+        style={{
+          background: isHovering 
+            ? `radial-gradient(circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 25%)`
+            : 'transparent',
+          opacity: isHovering ? 1 : 0,
+        }}
+      />
+
+      <div className="container mx-auto px-6 flex items-center justify-between relative z-10"> {/* Added relative z-10 for content to be above shine */}
         <div className="flex items-center">
           <Link href="/" className="flex items-center">
             <Image 
