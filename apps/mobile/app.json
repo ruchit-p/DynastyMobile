@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.dynasty.app",
+      "bundleIdentifier": "com.mydynastyapp.dynasty",
       "googleServicesFile": "./GoogleService-Info.plist",
       "useFrameworks": "static"
     },
@@ -19,7 +19,7 @@
         "foregroundImage": "./assets/images/dynasty.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.dynasty.app",
+      "package": "com.mydynastyapp.dynasty",
       "googleServicesFile": "./google-services.json"
     },
     "web": {

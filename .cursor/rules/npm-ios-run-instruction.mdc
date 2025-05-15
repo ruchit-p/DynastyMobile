@@ -1,0 +1,18 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# NPM Run iOS Execution Directory
+
+This rule specifies the correct directory for executing the `npm run ios` command.
+
+## Directory Requirement
+
+You **MUST** navigate to the `apps/mobile` directory before running the `npm run ios` command.
+
+All commands related to building and running the iOS application via `npm run ios` should be executed from within the `[apps/mobile/](mdc:apps/mobile)` directory.
+
+## Rationale
+
+The mobile application's build process, particularly when using `npm run ios`, is configured to operate from the `apps/mobile` subdirectory. Attempting to run this command from the workspace root or any other location is likely to result in build failures or other unexpected behavior.
