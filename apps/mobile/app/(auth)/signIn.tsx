@@ -207,6 +207,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     borderWidth: 1,
     borderColor: '#E0E0E0',
+    fontFamily: 'Helvetica Neue',
   },
   signInButton: {
     width: '100%',
