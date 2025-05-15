@@ -20,13 +20,14 @@ const dynastyLogo = require('../../assets/images/dynasty.png');
 
 export default function VerifyEmailScreen() {
   const router = useRouter();
-  const { resendVerificationEmail, user, isLoading, signOut } = useAuth(); // Assuming resendVerificationEmail and user exist in AuthContext
+  const { resendVerificationEmail, user, isLoading, signOut, refreshUser } = useAuth(); // Assuming resendVerificationEmail and user exist in AuthContext
   const params = useLocalSearchParams<{ email?: string }>();
   const displayEmail = params.email || user?.email;
 
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false); // New state for manual refresh
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export default function VerifyEmailScreen() {
   }, [user, router]);
 
   const handleResendEmail = async () => {
+    console.log("VerifyEmailScreen: handleResendEmail TRIGGERED");
     if (!user) {
       setError("You need to be signed in to resend a verification email.");
       return;
@@ -58,6 +60,30 @@ export default function VerifyEmailScreen() {
       setError(e.message || "Failed to resend verification email.");
     } finally {
       setIsResending(false);
+    }
+  };
+
+  // New handler for checking verification status manually
+  const handleCheckVerificationStatus = async () => {
+    setError(null);
+    setMessage(null);
+    setIsCheckingStatus(true);
+    console.log("VerifyEmailScreen: Manually checking verification status...");
+    try {
+      await refreshUser(); // Call refreshUser from AuthContext
+      // No explicit navigation here; AuthContext's useEffect should handle it if status changed.
+      // We can set a message if the user is still not verified.
+      if (user && !user.emailVerified) {
+        setMessage("Email is still pending verification. Please check your email or try resending.");
+      } else if (user && user.emailVerified) {
+        setMessage("Email successfully verified! Redirecting..."); 
+        // AuthContext should redirect. If not, router.replace here could be a fallback.
+      }
+    } catch (e: any) {
+      console.error("Check status failed:", e);
+      setError(e.message || "Failed to check verification status.");
+    } finally {
+      setIsCheckingStatus(false);
     }
   };
 
@@ -96,12 +122,25 @@ export default function VerifyEmailScreen() {
           <TouchableOpacity
             style={[styles.button, (isLoading || isResending) && styles.buttonDisabled]}
             onPress={handleResendEmail}
-            disabled={isLoading || isResending}
+            disabled={isLoading || isResending || isCheckingStatus} // Disable if checking status too
           >
             {isResending ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
               <Text style={styles.buttonText}>Resend Verification Email</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* New Button for Manual Refresh */}
+          <TouchableOpacity
+            style={[styles.button, styles.secondaryButton, (isLoading || isCheckingStatus) && styles.buttonDisabled]}
+            onPress={handleCheckVerificationStatus}
+            disabled={isLoading || isCheckingStatus || isResending}
+          >
+            {isCheckingStatus ? (
+              <ActivityIndicator size="small" color="#0A5C36" />
+            ) : (
+              <Text style={[styles.buttonText, styles.secondaryButtonText]}>Refresh Verification Status</Text>
             )}
           </TouchableOpacity>
 
@@ -173,6 +212,13 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     backgroundColor: '#A9A9A9',
+  },
+  secondaryButton: { // Style for the new button
+    backgroundColor: '#E0E0E0',
+    marginTop: 10, // Add some space if needed
+  },
+  secondaryButtonText: { // Style for text on new button
+    color: '#0A5C36',
   },
   errorText: {
     color: 'red',

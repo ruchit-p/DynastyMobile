@@ -14,80 +14,99 @@ import {
 import { useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { commonHeaderOptions } from '../../constants/headerConfig'; // Added import
-// import { auth, db } from '../../src/lib/firebase'; // Commented out Firebase
-// import { doc, setDoc } from "firebase/firestore"; // Commented out Firebase
-// import { useImageUpload } from '../../hooks/useImageUpload'; // Commented out Firebase image upload
-
-// Placeholder for current user data - in a real app, fetch this or get from context
-const initialUserData = {
-  name: 'Ruchit Patel',
-  email: 'user@example.com', // Typically non-editable or handled differently
-  profilePicUrl: null,
-};
+import { commonHeaderOptions } from '../../constants/headerConfig';
+import { useAuth } from '../../src/contexts/AuthContext';
+import { getFirebaseAuth, getFirebaseDb } from '../../src/lib/firebase'; // Import Firebase services
 
 const EditProfileScreen = () => {
   const navigation = useNavigation();
-  const [name, setName] = useState(initialUserData.name);
-  const [avatarUri, setAvatarUri] = useState<string | null>(initialUserData.profilePicUrl);
+  const { user, firestoreUser, refreshUser } = useAuth();
+
+  const [name, setName] = useState(firestoreUser?.displayName || user?.displayName || '');
+  const [editableEmail, setEditableEmail] = useState(user?.email || '');
+  const [avatarUri, setAvatarUri] = useState<string | null>(firestoreUser?.profilePicture || user?.photoURL || null);
   const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
   
-  // const { 
-  //   isUploading: isUploadingImage, 
-  //   uploadProgress, 
-  //   uploadedUrl: profileImageFirebaseUrl,
-  //   error: uploadError,
-  //   uploadImage 
-  // } = useImageUpload(); // Commented out Firebase image upload
-
-  // Mock state for image uploading, since the hook is removed
+  // Mock state for image uploading, since the hook is removed or not used in this step
   const [isUploadingImage, setIsUploadingImage] = useState<boolean>(false);
-  const [uploadProgress, setUploadProgress] = useState<number>(0); // For UI display if needed
-  // const [profileImageFirebaseUrl, setProfileImageFirebaseUrl] = useState<string | null>(null); // This would be set by a mock upload function if needed
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  // const [profileImageFirebaseUrl, setProfileImageFirebaseUrl] = useState<string | null>(null); // This would be set by an upload function
 
   const handleSaveChanges = async () => {
-    // if (!auth.currentUser) { // Commented out Auth Check
-    //   Alert.alert("Error", "You must be logged in to save your profile.");
-    //   return;
-    // }
+    const auth = getFirebaseAuth();
+    const db = getFirebaseDb();
+
+    if (!auth.currentUser) {
+      Alert.alert("Error", "You must be logged in to save your profile.");
+      return;
+    }
     if (isUploadingImage) {
       Alert.alert("Please Wait", "Image is still uploading. Please wait a moment and try again.");
       return;
     }
 
     setIsSavingProfile(true);
-    // try { // Firebase saving logic commented out
-      // const userId = auth.currentUser.uid;
-      // const userDocRef = doc(db, "users", userId);
+    try {
+      const userId = auth.currentUser!.uid;
+      const userDocRef = db.collection("users").doc(userId);
+      let emailChanged = false;
 
-      // const profileDataToSave: { name: string; profilePicture?: string, updatedAt: Date } = { // Removed bio
-      //   name: name,
-      //   updatedAt: new Date(),
-      // };
+      if (editableEmail && editableEmail !== user?.email) {
+        try {
+          await auth.currentUser!.updateEmail(editableEmail);
+          emailChanged = true;
+          Alert.alert("Email Updated", "Your email has been updated. You might need to re-verify it.");
+        } catch (error: any) {
+          console.error("Error updating email in Auth:", error);
+          Alert.alert("Email Update Failed", error.message || "Could not update your email. It might be already in use or invalid.");
+          setIsSavingProfile(false);
+          return;
+        }
+      }
 
-      // if (profileImageFirebaseUrl) { // This would be the uploaded image URL
-      //   profileDataToSave.profilePicture = profileImageFirebaseUrl;
-      // } else if (avatarUri && !avatarUri.startsWith('http')) {
-         // If avatarUri is a local URI and no new Firebase URL, it means no new image was uploaded to Firebase
-         // Depending on logic, you might want to keep the old Firebase URL or handle local URIs differently.
-         // For now, if it's a local URI, we assume it's for display and won't be part of the "saved" data without an upload step.
-      // }
-      // await setDoc(userDocRef, profileDataToSave, { merge: true });
+      const profileDataToUpdate: { name: string; email?: string; profilePicture?: string, updatedAt: Date, displayName?: string } = {
+        name: name,
+        displayName: name,
+        updatedAt: new Date(),
+      };
 
-      // Simulate save
-      console.log('Simulating save:', { name, avatarUri }); // Removed bio
-      Alert.alert('Profile Saved (Simulated)', 'Your changes have been successfully saved.');
+      if (emailChanged) {
+        profileDataToUpdate.email = editableEmail;
+      }
+
+      // if (profileImageFirebaseUrl) { // If using a separate upload hook for avatar
+      //   profileDataToUpdate.profilePicture = profileImageFirebaseUrl;
+      // } else 
+      if (avatarUri && avatarUri !== (firestoreUser?.profilePicture || user?.photoURL)) {
+        // This implies a new local URI was picked but not yet uploaded via a hook.
+        // For now, we're not handling direct upload in this function to keep it focused on text fields.
+        // If you have an `uploadImage` function (like from `useImageUpload`), call it here for `avatarUri`
+        // and then set `profileDataToUpdate.profilePicture` with the returned Firebase URL.
+        // For this example, we assume `avatarUri` might be a Firebase URL if already set, or needs separate upload.
+        // If it's a new local URI, it won't be saved unless you implement the upload and URL retrieval here.
+        console.log("New avatar URI picked, but upload logic needs to be integrated here if it's a local file.");
+        // Example: if (avatarUri.startsWith('file://')) { /* call uploadImage -> get URL -> update profileData... */ }
+        // For now, let's assume if avatarUri exists and is different, it's a new Firebase URL (e.g. from a hypothetical direct upload)
+        // This part needs to be robust based on how you handle image uploads.
+        if (avatarUri.startsWith('http')) { // Simplistic check if it might be a Firebase URL
+            profileDataToUpdate.profilePicture = avatarUri;
+        }
+      }
+
+      await userDocRef.set(profileDataToUpdate, { merge: true });
+
+      if (refreshUser) {
+        await refreshUser();
+      }
+
+      Alert.alert('Profile Saved', 'Your changes have been successfully saved.');
       navigation.goBack();
-    // } catch (error) { // Firebase saving logic commented out
-    //   console.error("Error saving profile:", error);
-    //   Alert.alert("Save Failed", "Could not save your profile. Please try again.");
-    // } finally { // Firebase saving logic commented out
-    //   setIsSavingProfile(false);
-    // }
-    // Simulate save completion
-    setTimeout(() => {
-        setIsSavingProfile(false);
-    }, 1000); 
+    } catch (error: any) {
+      console.error("Error saving profile:", error);
+      Alert.alert("Save Failed", error.message || "Could not save your profile. Please try again.");
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   useEffect(() => {
@@ -106,7 +125,7 @@ const EditProfileScreen = () => {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, name, avatarUri, /*profileImageFirebaseUrl,*/ isSavingProfile, isUploadingImage]); // Removed bio and profileImageFirebaseUrl from deps
+  }, [navigation, name, editableEmail, avatarUri, isSavingProfile, isUploadingImage, refreshUser]);
 
   const handlePickProfileImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -195,8 +214,15 @@ const EditProfileScreen = () => {
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Email</Text>
-          {/* Email usually not editable directly */}
-          <Text style={styles.staticText}>{initialUserData.email}</Text> 
+          <TextInput
+            style={styles.input}
+            value={editableEmail}
+            onChangeText={setEditableEmail}
+            placeholder="your@email.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            placeholderTextColor="#999"
+          />
         </View>
 
       </ScrollView>

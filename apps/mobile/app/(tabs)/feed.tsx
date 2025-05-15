@@ -18,6 +18,7 @@ import { Spacing } from '../../constants/Spacing';
 import type { Story } from '../../src/lib/storyUtils';
 
 const FeedScreen = () => {
+  console.log('--- FeedScreen IS RENDERING ---'); // Added for debugging
   const router = useRouter();
   const { user, firestoreUser } = useAuth();
   

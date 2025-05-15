@@ -523,6 +523,9 @@ export const sendVerificationEmail = onCall({
   secrets: [SENDGRID_APIKEY, SENDGRID_FROMEMAIL, SENDGRID_TEMPLATES_VERIFICATION, FRONTEND_URL],
 }, async (request) => {
   const {userId, email, displayName} = request.data;
+  // Log received data immediately
+  logger.info("sendVerificationEmail: Received data:", { userId, email, displayName }); 
+
   logger.info(`Starting verification email process for user ${userId}`);
 
   try {
@@ -556,11 +559,11 @@ export const sendVerificationEmail = onCall({
 
     // Store the hashed token in Firestore
     const db = getFirestore();
-    await db.collection("users").doc(userId).update({
+    await db.collection("users").doc(userId).set({
       emailVerificationToken: hashedToken,
       emailVerificationExpires: firestoreExpiry,
       emailVerified: false,
-    });
+    }, { merge: true });
 
     // Create verification link
     const verificationLink = `${FRONTEND_URL.value()}/verify-email/confirm?uid=${userId}&token=${verificationToken}`;
