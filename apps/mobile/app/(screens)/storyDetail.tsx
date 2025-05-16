@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -15,7 +15,13 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { fetchAccessibleStoriesMobile, getStoryCommentsMobile } from '../../src/lib/storyUtils';
+import { 
+  fetchAccessibleStoriesMobile, 
+  getStoryCommentsMobile,
+  checkStoryLikeStatusMobile,
+  toggleStoryLikeMobile,
+  addCommentMobile
+} from '../../src/lib/storyUtils';
 import { commonHeaderOptions } from '../../constants/headerConfig';
 import ProfilePicture from '../../components/ui/ProfilePicture';
 import { formatDate, formatTimeAgo } from '../../src/lib/dateUtils';
@@ -33,17 +39,15 @@ interface StoryComment {
 interface StoryDetail {
   id: string;
   userName: string;
-  userAvatar: string;
+  userAvatar: string | undefined;
   timestamp: string;
   date: string; // Full date string
-  title: string;
-  content: string;
-  images?: string[];
+  title: string; // This will be the definitive story title
+  storyBlocks: Array<{ type: string; data: any; localId: string }>; // To store all blocks
   location?: string;
   likesCount: number;
   commentsCount: number;
   isLiked?: boolean;
-  // comments: StoryComment[]; // Full comment objects
 }
 
 const StoryDetailScreen = () => {
@@ -58,94 +62,142 @@ const StoryDetailScreen = () => {
   const [newComment, setNewComment] = useState('');
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
+  const [isLoadingLikeStatus, setIsLoadingLikeStatus] = useState(true);
+  const commentInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
-    // Fetch story detail and comments from backend
-    if (storyId && user?.uid && firestoreUser?.familyTreeId && !story) {
-      navigation.setOptions({ ...commonHeaderOptions, title: 'Loading...', headerRight: () => null });
-      (async () => {
-        try {
-          // Get all accessible stories and find current one
-          const stories = await fetchAccessibleStoriesMobile(user.uid, firestoreUser.familyTreeId);
-          const found = stories.find(s => s.id === storyId);
-          if (!found) {
-            Alert.alert("Story not found", "This story could not be loaded.", [{ text: "OK", onPress: () => router.back() }]);
-            return;
-          }
-          // Build local story detail with formatted dates
-          const detail: StoryDetail = {
-            id: found.id,
-            userName: found.author?.displayName || found.authorID,
-            userAvatar: found.author?.profilePicture || '',
-            date: formatDate(found.createdAt),
-            timestamp: formatTimeAgo(found.createdAt),
-            title: found.blocks.find(b => b.type === 'text')?.data as string || '',
-            content: found.blocks.find(b => b.type === 'text')?.data as string || '',
-            images: found.blocks.filter(b => b.type === 'image').flatMap(b => Array.isArray(b.data) ? b.data : []),
-            location: found.location?.address,
-            likesCount: found.likeCount || 0,
-            commentsCount: found.commentCount || 0,
-            isLiked: false,
-          };
-          setStory(detail);
-          setIsLiked(detail.isLiked || false);
-          setLikesCount(detail.likesCount);
-          // Fetch comments
-          const rawComments = await getStoryCommentsMobile(storyId);
-          const mappedComments: StoryComment[] = rawComments.map(c => {
-            let cDate: Date;
-            if (c.createdAt && typeof (c.createdAt as any).toDate === 'function') {
-              cDate = (c.createdAt as any).toDate();
-            } else if (c.createdAt && (c.createdAt as any).seconds) {
-              cDate = new Date((c.createdAt as any).seconds * 1000);
-            } else {
-              cDate = new Date(c.createdAt as any);
+    if (storyId && user?.uid && firestoreUser?.familyTreeId) {
+      if (!story) {
+        navigation.setOptions({ ...commonHeaderOptions, title: 'Loading...', headerRight: undefined });
+        (async () => {
+          try {
+            const stories = await fetchAccessibleStoriesMobile(user.uid, firestoreUser.familyTreeId);
+            const found = stories.find(s => s.id === storyId);
+            if (!found) {
+              Alert.alert("Story not found", "This story could not be loaded.", [{ text: "OK", onPress: () => router.back() }]);
+              return;
             }
-            return {
-              id: c.id,
-              userName: c.user?.displayName || '',
-              avatarUrl: c.user?.profilePicture || '',
-              commentText: c.text || '',
-              timestamp: cDate.toLocaleTimeString(),
-            };
-          });
-          setComments(mappedComments);
-          // Update header title
-          navigation.setOptions({
-            ...commonHeaderOptions,
-            title: detail.title.length > 25 ? `${detail.title.substring(0, 25)}...` : detail.title,
-            headerRight: () => (
-              <TouchableOpacity onPress={() => Alert.alert("Story Options", "Share, Edit, Delete...")} style={{ paddingHorizontal: 15 }}>
-                <Ionicons name="ellipsis-horizontal" size={24} color="#1A4B44" />
-              </TouchableOpacity>
-            ),
-          });
-        } catch (error) {
-          console.error(error);
-          Alert.alert("Error", "Failed to load story.", [{ text: "OK", onPress: () => router.back() }]);
-        }
-      })();
-    }
-  }, [storyId, user, firestoreUser]);
 
-  const handleLikePress = () => {
-    setIsLiked(!isLiked);
-    setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
-    // TODO: API call to update like status
+            // ---- START DEBUG LOGS ----
+            console.log("[StoryDetailScreen] Raw 'found' story data:", JSON.stringify(found, null, 2));
+            const extractedTitle = (found as any).title;
+            const firstTextBlockData = found.blocks.find(b => b.type === 'text')?.data as string || '';
+            console.log("[StoryDetailScreen] Extracted top-level title:", extractedTitle);
+            console.log("[StoryDetailScreen] First text block data:", firstTextBlockData);
+            // ----  END DEBUG LOGS  ----
+
+            const detail: StoryDetail = {
+              id: found.id,
+              userName: found.author?.displayName || found.authorID,
+              userAvatar: found.author?.profilePicture || undefined,
+              date: formatDate(found.createdAt),
+              timestamp: formatTimeAgo(found.createdAt),
+              title: extractedTitle || firstTextBlockData || '', // Ensure this logic is robust
+              storyBlocks: found.blocks,
+              location: found.location?.address,
+              likesCount: found.likeCount || 0,
+              commentsCount: found.commentCount || 0,
+            };
+            setStory(detail);
+            setLikesCount(found.likeCount || 0);
+
+            setIsLoadingLikeStatus(true);
+            const initialLikeStatus = await checkStoryLikeStatusMobile(storyId);
+            setIsLiked(initialLikeStatus);
+            setIsLoadingLikeStatus(false);
+
+            const rawComments = await getStoryCommentsMobile(storyId);
+            const mappedComments: StoryComment[] = rawComments.map(c => {
+              return {
+                id: c.id,
+                userName: c.user?.displayName || '',
+                avatarUrl: c.user?.profilePicture || '',
+                commentText: c.text || '',
+                timestamp: formatTimeAgo(c.createdAt),
+              };
+            });
+            setComments(mappedComments);
+            navigation.setOptions({
+              ...commonHeaderOptions,
+              title: detail.title.length > 25 ? `${detail.title.substring(0, 25)}...` : detail.title,
+              headerRight: undefined,
+            });
+          } catch (error) {
+            console.error(error);
+            Alert.alert("Error", "Failed to load story details.", [{ text: "OK", onPress: () => router.back() }]);
+            setIsLoadingLikeStatus(false);
+          }
+        })();
+      } else {
+        // Story already loaded, just ensure like status might need refresh if user navigated back and forth
+      }
+    }
+  }, [storyId, user, firestoreUser, story]);
+
+  const handleLikePress = async () => {
+    if (isLoadingLikeStatus || !story) return;
+
+    const originalIsLiked = isLiked;
+    const originalLikesCount = likesCount;
+
+    setIsLiked(!originalIsLiked);
+    setLikesCount(prev => originalIsLiked ? prev - 1 : prev + 1);
+
+    try {
+      await toggleStoryLikeMobile(story.id, originalIsLiked);
+    } catch (error) {
+      console.error("Error toggling like:", error);
+      setIsLiked(originalIsLiked);
+      setLikesCount(originalLikesCount);
+      Alert.alert("Error", "Could not update like status. Please try again.");
+    }
   };
 
-  const handlePostComment = () => {
-    if (newComment.trim().length === 0) return;
-    const commentToAdd: StoryComment = {
-        id: `comm_${Date.now()}`,
-        userName: 'Current User', // Replace with actual user
-        avatarUrl: 'https://via.placeholder.com/30', // Replace
+  const handlePostComment = async () => {
+    if (newComment.trim().length === 0 || !story) return;
+
+    // Optimistic update (basic version)
+    // For a more robust optimistic update, generate a temporary ID, 
+    // then replace with server ID upon successful creation.
+    const tempId = `temp_${Date.now()}`;
+    const optimisticComment: StoryComment = {
+        id: tempId,
+        userName: firestoreUser?.displayName || user?.displayName || 'You', 
+        avatarUrl: firestoreUser?.profilePictureUrl || user?.photoURL || '', 
         commentText: newComment.trim(),
-        timestamp: 'Just now',
+        timestamp: 'Sending...',
     };
-    setComments(prev => [...prev, commentToAdd]);
+    setComments(prev => [optimisticComment, ...prev]); // Add to top for better UX
+    const commentTextToPost = newComment.trim();
     setNewComment('');
-    // TODO: API call to post comment
+
+    try {
+      const newServerComment = await addCommentMobile(story.id, commentTextToPost);
+      if (newServerComment && newServerComment.id) {
+        // Replace optimistic comment with server comment
+        setComments(prevComments => 
+          prevComments.map(c => c.id === tempId ? {
+            id: newServerComment.id,
+            userName: newServerComment.user?.displayName || 'User',
+            avatarUrl: newServerComment.user?.profilePicture || '',
+            commentText: newServerComment.text,
+            timestamp: newServerComment.createdAt ? formatTimeAgo(newServerComment.createdAt) : 'Just now',
+          } : c)
+        );
+      } else {
+        // If server comment doesn't come back as expected, remove optimistic one or mark as failed
+        console.warn("New comment data not returned from server as expected.");
+        setComments(prevComments => prevComments.filter(c => c.id !== tempId)); // Remove optimistic
+        // Optionally, re-add the text to input or show an error specific to comment posting
+        Alert.alert("Comment Error", "Failed to post comment. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error posting comment:", error);
+      // Revert optimistic update or mark as failed
+      setComments(prevComments => prevComments.filter(c => c.id !== tempId));
+      Alert.alert("Error", "Could not post comment. Please try again.");
+      setNewComment(commentTextToPost); // Restore input
+    }
   };
 
   if (!story) {
@@ -173,15 +225,32 @@ const StoryDetailScreen = () => {
                 <View style={styles.dotSeparator} />
                 <Text style={styles.timestamp}>{story.timestamp}</Text>
               </View>
+              {story.title && <Text style={styles.storyTitleMain}>{story.title}</Text>}
             </View>
           </View>
 
-          {story.title && <Text style={styles.storyTitleText}>{story.title}</Text>}
-          <Text style={styles.storyContent}>{story.content}</Text>
-
-          {story.images && story.images.map((imgUri, index) => (
-            <Image key={index} source={{ uri: imgUri }} style={styles.storyImage} />
-          ))}
+          {/* Iterate over all story blocks to render their content */}
+          {story.storyBlocks && story.storyBlocks.map((block, index) => {
+            if (block.type === 'text') {
+              return (
+                <Text key={`block-${block.localId || index}`} style={styles.storyContentBlockText}>
+                  {block.data as string}
+                </Text>
+              );
+            }
+            if (block.type === 'image' && Array.isArray(block.data)) {
+              return (block.data as string[]).map((imgUri, imgIndex) => (
+                <Image
+                  key={`block-${block.localId || index}-img-${imgIndex}`}
+                  source={{ uri: imgUri }}
+                  style={styles.storyImage}
+                />
+              ));
+            }
+            // TODO: Add rendering for other block types like video, audio if needed
+            
+            return null;
+          })}
 
           {story.location && (
             <View style={styles.locationContainer}>
@@ -195,13 +264,9 @@ const StoryDetailScreen = () => {
               <Ionicons name={isLiked ? "heart" : "heart-outline"} size={22} color={isLiked ? '#E91E63' : '#555'} />
               <Text style={styles.actionText}>{likesCount} Likes</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={() => { /* Focus comment input */ }}>
+            <TouchableOpacity style={styles.actionButton} onPress={() => commentInputRef.current?.focus()}>
               <Ionicons name="chatbubble-outline" size={22} color="#555" />
               <Text style={styles.actionText}>{comments.length} Comments</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={() => Alert.alert("Share Story", "Implement sharing")}>
-              <Ionicons name="share-social-outline" size={22} color="#555" />
-              <Text style={styles.actionText}>Share</Text>
             </TouchableOpacity>
           </View>
 
@@ -223,6 +288,7 @@ const StoryDetailScreen = () => {
         
         <View style={styles.commentInputContainer}>
             <TextInput
+                ref={commentInputRef}
                 style={styles.commentInput}
                 placeholder="Add a comment..."
                 value={newComment}
@@ -248,41 +314,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 15,
     backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
   },
   avatar: { width: 45, height: 45, borderRadius: 22.5, marginRight: 12 },
   userInfo: { flex: 1 },
-  userName: { fontSize: 17, fontWeight: 'bold', color: '#333' },
-  timestampContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 3 },
+  userName: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+  timestampContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   datePill: { 
-    fontSize: 11, 
-    color: '#006400',
     backgroundColor: '#E8F5E9',
-    paddingHorizontal: 7,
+    color: '#1A4B44',
+    paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
-    overflow: 'hidden',
+    fontSize: 12,
     fontWeight: '500',
+    overflow: 'hidden',
   },
-  dotSeparator: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#BBB', marginHorizontal: 6 },
+  dotSeparator: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#B0B0B0', marginHorizontal: 6 },
   timestamp: { fontSize: 12, color: '#777' },
-  storyTitleText: {
-      fontSize: 22,
-      fontWeight: 'bold',
-      color: '#222',
-      paddingHorizontal: 15,
-      paddingTop: 10, 
-      paddingBottom: 5,
-      backgroundColor: '#FFFFFF',
+  storyTitleMain: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#222',
+    marginTop: 10,
+    paddingHorizontal: 15,
+    paddingBottom: 5,
   },
   storyContent: { 
     fontSize: 16, 
     lineHeight: 24, 
     color: '#444', 
     paddingHorizontal: 15, 
-    paddingVertical: 15,
+    paddingVertical: 10,
     backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
+  },
+  storyContentBlockText: { // New style for individual text blocks from storyBlocks
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#444',
+    paddingHorizontal: 15,
+    paddingVertical: 10, // Or adjust spacing as needed between blocks
+    backgroundColor: '#FFFFFF', // Assuming blocks are on a white background
   },
   storyImage: {
     width: '100%',
@@ -314,16 +387,17 @@ const styles = StyleSheet.create({
   actionText: { marginLeft: 6, fontSize: 14, color: '#333', fontWeight: '500' },
   commentsSection: {
     marginTop: 10,
+    paddingTop: 20,
     paddingHorizontal: 15,
-    paddingBottom: 20, // Space for last comment before input
+    paddingBottom: 20,
     backgroundColor: '#FFFFFF',
   },
   commentsTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, color: '#333' },
   commentItem: { flexDirection: 'row', marginBottom: 15 },
   commentAvatar: { width: 35, height: 35, borderRadius: 17.5, marginRight: 10 },
-  commentContent: { flex: 1, backgroundColor: '#F7F7F7', padding: 10, borderRadius: 8 },
+  commentContent: { flex: 1, backgroundColor: '#F7F7F7', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#EAEAEA' },
   commentUserName: { fontWeight: 'bold', fontSize: 14, color: '#444', marginBottom: 3 },
-  commentText: { fontSize: 14, color: '#555' }, 
+  commentText: { fontSize: 14, color: '#555', lineHeight: 20 },
   commentTimestamp: { fontSize: 11, color: '#999', marginTop: 4 },
   noCommentsText: { color: '#777', textAlign: 'center', paddingVertical: 10 }, 
   commentInputContainer: {

@@ -146,8 +146,6 @@ const HistoryScreen = () => {
             icon="book-outline"
             title="No Stories Yet"
             description="Your personal history book is empty. Create your first story to get started!"
-            actionLabel="Create Story"
-            onAction={handleCreateStory}
           />
         </View>
       ) : (

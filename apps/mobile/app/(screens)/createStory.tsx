@@ -173,10 +173,6 @@ const CreateStoryScreen = () => {
       Alert.alert('Missing Title', 'Please provide a title for your story.');
       return;
     }
-    if (blocks.length === 0) {
-      Alert.alert('Missing Content', 'Please add some content to your story.');
-      return;
-    }
     
     // Transform blocks to match Firebase structure
     const transformedBlocks = blocks.map(block => {
@@ -580,17 +576,19 @@ const CreateStoryScreen = () => {
 
           {showSubtitle && (
             <>
-              <TextInput
-                style={styles.inputField}
-                placeholder="Subtitle"
-                placeholderTextColor="#B0B0B0"
-                value={subtitle}
-                onChangeText={setSubtitle}
-              />
-              <View style={styles.inputRowValueContainer}>
-                <TouchableOpacity onPress={() => setShowSubtitle(false)} style={{ marginLeft: 10 }}>
-                  <Ionicons name="remove-circle-outline" size={22} color="red" />
-                </TouchableOpacity>
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={[styles.inputField, { flex: 1 }]}
+                  placeholder="Subtitle"
+                  placeholderTextColor="#B0B0B0"
+                  value={subtitle}
+                  onChangeText={setSubtitle}
+                />
+                <View style={styles.inputRowValueContainer}>
+                  <TouchableOpacity onPress={() => setShowSubtitle(false)} style={{ marginLeft: 10 }}>
+                    <Ionicons name="remove-circle-outline" size={22} color="red" />
+                  </TouchableOpacity>
+                </View>
               </View>
               <View style={styles.separatorThinNoMargin} />
             </>
