@@ -1,14 +1,14 @@
-import 'react-native-gesture-handler'; // This MUST be the first import
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
 import { SplashScreen, Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import 'react-native-get-random-values';
+import { connectToEmulators } from '../src/lib/firebase';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -51,6 +51,13 @@ function AppContent() {
 }
 
 export default function RootLayout() {
+  // Call connectToEmulators here, early in the app lifecycle
+  useEffect(() => {
+    if (__DEV__) {
+      connectToEmulators();
+    }
+  }, []); // Empty dependency array ensures this runs once on mount
+
   // RootLayout is now simpler, mainly setting up providers
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

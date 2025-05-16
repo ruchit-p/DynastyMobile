@@ -1,14 +1,18 @@
 import { useState } from 'react';
 import { Alert } from 'react-native';
-// import { getStorage, ref, uploadBytesResumable, getDownloadURL, UploadTaskSnapshot } from "firebase/storage"; // Firebase Storage
-// import { auth, app as firebaseApp } from '../src/lib/firebase'; // Firebase App & Auth
+import { getFirebaseAuth, getFirebaseStorage } from '../src/lib/firebase'; // Use getters from lib
+import storage, { FirebaseStorageTypes, TaskState } from '@react-native-firebase/storage';
 
 interface UseImageUploadResult {
   isUploading: boolean;
-  uploadProgress: number; // Percentage 0-100
+  uploadProgress: number; // Percentage 0-100 for the current upload task
   uploadedUrl: string | null;
   error: Error | null;
-  uploadImage: (uri: string, pathPrefix: string) => Promise<string | null>;
+  uploadImage: (
+    uri: string, 
+    pathPrefix: string, 
+    onProgress?: (progress: number) => void // Optional progress callback
+  ) => Promise<string | null>;
 }
 
 export const useImageUpload = (): UseImageUploadResult => {
@@ -17,101 +21,86 @@ export const useImageUpload = (): UseImageUploadResult => {
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
 
-  const uploadImage = async (uri: string, pathPrefix: string = 'uploads'): Promise<string | null> => {
-    // if (!auth.currentUser) { // Firebase Auth check commented out
-    //   Alert.alert("Authentication Error", "You must be logged in to upload images.");
-    //   setError(new Error("User not authenticated"));
-    //   return null;
-    // }
+  const uploadImage = async (
+    uri: string, 
+    pathPrefix: string = 'uploads',
+    onProgress?: (progress: number) => void
+  ): Promise<string | null> => {
+    const auth = getFirebaseAuth(); // Get auth instance
+    const storage = getFirebaseStorage(); // Get storage instance
 
-    console.log(`[MockUpload] Request to upload: ${uri} with prefix: ${pathPrefix}`);
+    if (!auth.currentUser) {
+      Alert.alert("Authentication Error", "You must be logged in to upload images.");
+      setError(new Error("User not authenticated"));
+      return null;
+    }
+
     setIsUploading(true);
     setUploadProgress(0);
+    if (onProgress) onProgress(0);
     setUploadedUrl(null);
     setError(null);
 
-    // Simulate upload process
-    return new Promise((resolve) => {
-      let currentProgress = 0;
-      const interval = setInterval(() => {
-        currentProgress += 20;
-        setUploadProgress(currentProgress);
-        console.log(`[MockUpload] Progress: ${currentProgress}%`);
-        if (currentProgress >= 100) {
-          clearInterval(interval);
-          setIsUploading(false);
-          setUploadedUrl(uri); // Return the local URI as the "uploaded" URL
-          console.log(`[MockUpload] Complete. Returning local URI: ${uri}`);
-          resolve(uri);
-        }
-      }, 200); // Simulate 1 second upload (200ms * 5 steps)
-    });
+    const fileExtension = uri.split('.').pop() || 'jpg';
+    // Use pathPrefix as the base, then userId, then a timestamp and original extension
+    const fileName = `${pathPrefix}/${auth.currentUser.uid}-${Date.now()}.${fileExtension}`;
+    const reference = storage.ref(fileName);
 
-    /* Firebase Upload Logic - Commented Out
-    try {
-      // --- Fetch Blob --- //
-      const blob: Blob = await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.onload = () => resolve(xhr.response);
-        xhr.onerror = (e) => {
-          console.error("XHR Error:", e);
-          reject(new TypeError("Network request failed"));
-        };
-        xhr.responseType = "blob";
-        xhr.open("GET", uri, true);
-        xhr.send(null);
-      });
+    console.log(`[useImageUpload] Starting upload for: ${uri} to ${fileName}`);
 
-      // --- Prepare Upload --- //
-      const storage = getStorage(firebaseApp);
-      const fileExtension = uri.split('.').pop() || 'jpg';
-      const fileName = `${pathPrefix}/${auth.currentUser.uid}-${Date.now()}.${fileExtension}`;
-      const storageRef = ref(storage, fileName);
-      const uploadTask = uploadBytesResumable(storageRef, blob);
+    return new Promise<string | null>((resolve, reject) => {
+      const task = reference.putFile(uri);
 
-      // --- Monitor Upload --- //
-      return new Promise<string | null>((resolve, reject) => {
-        uploadTask.on('state_changed',
-          (snapshot: UploadTaskSnapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            setUploadProgress(progress);
-            console.log('Upload is ' + progress + '% done');
-          },
-          (uploadError: Error) => {
-            console.error("Upload error:", uploadError);
-            // @ts-ignore - Close blob if possible
-            if (blob.close) { (blob as any).close(); }
-            setError(uploadError); 
-            setIsUploading(false);
-            reject(uploadError);
-          },
-          async () => {
-            // --- Complete --- //
-            // @ts-ignore - Close blob if possible
-            if (blob.close) { (blob as any).close(); }
-            try {
-                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                setUploadedUrl(downloadURL);
-                setIsUploading(false);
-                console.log('File available at', downloadURL);
-                resolve(downloadURL);
-            } catch (finalError) {
-                 console.error("Error getting download URL:", finalError);
-                 setError(finalError as Error);
-                 setIsUploading(false);
-                 reject(finalError);
-            }
+      task.on('state_changed', 
+        (snapshot: FirebaseStorageTypes.TaskSnapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setUploadProgress(progress);
+          if (onProgress) onProgress(progress);
+          console.log(`[useImageUpload] Upload is ${progress}% done`);
+
+          switch (snapshot.state) {
+            case TaskState.PAUSED: // Corrected: Use directly imported TaskState
+              console.log('[useImageUpload] Upload is paused');
+              break;
+            case TaskState.RUNNING: // Corrected: Use directly imported TaskState
+              console.log('[useImageUpload] Upload is running');
+              break;
           }
-        );
-      });
-    } catch (processError) {
-      console.error("Error during upload process: ", processError);
-      setError(processError as Error);
-      setIsUploading(false);
-      Alert.alert("Upload Failed", "Could not upload image. Please try again.");
+        }, 
+        (uploadError: Error) => {
+          console.error("[useImageUpload] Upload error:", uploadError);
+          setError(uploadError);
+          setIsUploading(false);
+          setUploadProgress(0);
+          if (onProgress) onProgress(0);
+          reject(uploadError); // Reject the promise
+        }, 
+        async () => {
+          try {
+            const downloadURL = await reference.getDownloadURL();
+            setUploadedUrl(downloadURL);
+            setIsUploading(false);
+            setUploadProgress(100);
+            if (onProgress) onProgress(100);
+            console.log('[useImageUpload] File available at', downloadURL);
+            resolve(downloadURL); // Resolve the promise with the URL
+          } catch (finalError: any) {
+            console.error("[useImageUpload] Error getting download URL:", finalError);
+            setError(finalError);
+            setIsUploading(false);
+            setUploadProgress(0);
+            if (onProgress) onProgress(0);
+            reject(finalError); // Reject the promise
+          }
+        }
+      );
+    }).catch(err => {
+      // Ensure any rejection from the promise chain is handled and returns null
+      // setError should already be set by the reject handler inside the promise.
+      // setIsUploading and setUploadProgress should also be reset.
+      console.error("[useImageUpload] Promise catch block after upload attempt:", err.message);
       return null;
-    }
-    */
+    });
   };
 
   return { isUploading, uploadProgress, uploadedUrl, error, uploadImage };

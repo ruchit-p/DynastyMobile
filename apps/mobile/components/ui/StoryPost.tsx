@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, StyleSheet, Image, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
+import { View, StyleSheet, Image, TouchableOpacity, StyleProp, ViewStyle, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from './Card';
 import ThemedText from '../ThemedText';
 import ProfilePicture from './ProfilePicture';
 import { Spacing, BorderRadius } from '../../constants/Spacing';
 import type { Story } from '../../src/lib/storyUtils';
+import { formatDate, formatTimeAgo } from '../../src/lib/dateUtils';
 
 export interface StoryPostProps {
   story: Story;
@@ -15,23 +16,11 @@ export interface StoryPostProps {
 }
 
 const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, style }) => {
-  // Parse createdAt robustly whether it's a Firestore Timestamp or raw object
-  let createdDate: Date;
-  if (story.createdAt && typeof (story.createdAt as any).toDate === 'function') {
-    // Firestore Timestamp instance
-    createdDate = (story.createdAt as any).toDate();
-  } else if (story.createdAt && (story.createdAt as any).seconds) {
-    // Serialized Timestamp
-    createdDate = new Date((story.createdAt as any).seconds * 1000);
-  } else {
-    // Fallback for ISO string or number
-    createdDate = new Date(story.createdAt as any);
-  }
-  const diffSeconds = Math.round((Date.now() - createdDate.getTime()) / 1000);
-  const timeLabel = diffSeconds < 60 ? `${diffSeconds}s ago`
-    : diffSeconds < 3600 ? `${Math.round(diffSeconds/60)}m ago`
-    : diffSeconds < 86400 ? `${Math.round(diffSeconds/3600)}h ago`
-    : createdDate.toLocaleDateString();
+  // Directly use story.createdAt with the utility functions
+  // toDate within them will handle conversion and validation.
+  const dateLabel = formatDate(story.createdAt);
+  const timeAgoLabel = formatTimeAgo(story.createdAt);
+  const storyTitle = (story as any).title || (story.blocks.find(b => b.type === 'text')?.data as string || '');
 
   const textBlock = story.blocks.find(b => b.type === 'text');
   const imgBlock = story.blocks.find(b => b.type === 'image');
@@ -51,9 +40,16 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
             <ThemedText variant="bodyMedium" style={styles.authorName}>
               {story.author?.displayName || story.authorID}
             </ThemedText>
-            <ThemedText variant="caption" color="tertiary">
-              {timeLabel}
-            </ThemedText>
+            <View style={styles.timestampContainer}>
+              <Text style={styles.datePill}>{dateLabel}</Text>
+              <View style={styles.dotSeparator} />
+              <Text style={styles.timestamp}>{timeAgoLabel}</Text>
+            </View>
+            {storyTitle && (
+              <ThemedText variant="bodySmall" style={styles.storyTitleText} numberOfLines={2}>
+                {storyTitle}
+              </ThemedText>
+            )}
           </View>
           {onMorePress && (
             <TouchableOpacity onPress={() => onMorePress(story)} style={styles.moreButton}>
@@ -121,6 +117,36 @@ const styles = StyleSheet.create({
   },
   authorName: {
     fontWeight: '600',
+  },
+  timestampContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  datePill: {
+    backgroundColor: '#E8F5E9',
+    color: '#1A4B44',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    fontSize: 11,
+    fontWeight: '500',
+    overflow: 'hidden',
+  },
+  dotSeparator: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#B0B0B0',
+    marginHorizontal: 5,
+  },
+  timestamp: {
+    fontSize: 11,
+    color: '#777',
+  },
+  storyTitleText: {
+    marginTop: Spacing.xxs,
+    fontWeight: '500',
   },
   moreButton: {
     padding: Spacing.xs,

@@ -1,15 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, Platform, Keyboard, ActivityIndicator, Alert, Dimensions, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, Platform, Keyboard, ActivityIndicator, Alert, Dimensions, StatusBar, FlatList } from 'react-native';
 import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, Region } from 'react-native-maps';
+import MapView, { Marker, Region, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import { getFirebaseFunctions } from '../../src/lib/firebase';
 
 // Define the primary green color from the app's theme (assuming it might be used or for consistency)
 const dynastyGreen = '#1A4B44'; 
-// Placeholder for API Key - REMEMBER TO REPLACE THIS
-const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || 'YOUR_GOOGLE_PLACES_API_KEY';
 
 // Default region (Chicago) - will be overridden by user's location if permission granted
 const INITIAL_REGION = {
@@ -25,12 +23,38 @@ interface SelectedPlace {
   longitude: number;
 }
 
+// Interface for place predictions from our Firebase Function
+interface PlacePrediction {
+  description: string;
+  place_id: string;
+  // Add other fields if your function returns them (e.g., structured_formatting)
+}
+
 const SelectLocationScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ currentLocation?: string, previousPath?: string }>();
   
   const [region, setRegion] = useState<Region>(INITIAL_REGION);
+  
+  const [searchInputValue, setSearchInputValue] = useState<string>(() => {
+    if (params.currentLocation) {
+      try {
+        // Check if it's a coordinate object string (e.g., from map press on previous screen)
+        const parsed = JSON.parse(params.currentLocation);
+        if (parsed && typeof parsed.latitude === 'number' && typeof parsed.longitude === 'number') {
+           return ''; // Start with an empty search, reverse geocode will fill it
+        }
+        // If not a coordinate object, assume it's an address string
+        return params.currentLocation; 
+      } catch (e) {
+        // Parsing failed, assume it's an address string
+        return params.currentLocation;
+      }
+    }
+    return '';
+  });
+
   const [selectedPlace, setSelectedPlace] = useState<SelectedPlace | null>(() => {
     if (params.currentLocation) {
       try {
@@ -38,19 +62,86 @@ const SelectLocationScreen = () => {
         if (parsedCoord && typeof parsedCoord.latitude === 'number' && typeof parsedCoord.longitude === 'number') {
           return { address: 'Selected on map', latitude: parsedCoord.latitude, longitude: parsedCoord.longitude };
         }
+        // If not a coordinate object, it's an address. searchInputValue is already set.
+        // We need a fallback lat/lng if only address was passed initially.
+        return { address: params.currentLocation, latitude: INITIAL_REGION.latitude, longitude: INITIAL_REGION.longitude };
       } catch (e) {
-         return { address: params.currentLocation, latitude: INITIAL_REGION.latitude, longitude: INITIAL_REGION.longitude };
+        // Parsing failed, assume it's an address string.
+        return { address: params.currentLocation, latitude: INITIAL_REGION.latitude, longitude: INITIAL_REGION.longitude };
       }
     }
     return null;
   });
+
+  const [placePredictions, setPlacePredictions] = useState<PlacePrediction[]>([]);
+  const [isFetchingPredictions, setIsFetchingPredictions] = useState<boolean>(false);
+  
   const mapRef = useRef<MapView>(null);
-  const searchRef = useRef<any>(null); // Add ref for GooglePlacesAutocomplete
+  const searchInputRef = useRef<TextInput>(null); // Ref for TextInput
   
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Initialize Firebase Functions
+  const functions = getFirebaseFunctions();
+
+  // Debounce timer for search
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Moved handleConfirmLocation earlier as it's used in navigation.setOptions
+  const handleConfirmLocation = () => {
+    if (!selectedPlace || !selectedPlace.address || selectedPlace.address === 'Loading address...' || selectedPlace.address === 'Error fetching address') {
+      Alert.alert("No Location Selected", "Please select a valid location or wait for address to load.");
+      return;
+    }
+    const targetPath = params.previousPath || '..';
+    router.navigate({
+      pathname: targetPath as any, // Expo Router bug, needs 'any' for type safety with '..'
+      params: { 
+        selectedLocation: selectedPlace.address,
+        selectedLocationLat: selectedPlace.latitude.toString(),
+        selectedLocationLng: selectedPlace.longitude.toString(),
+        fromScreen: 'selectLocation'
+      },
+    });
+  };
+
+  // Moved handleReverseGeocode earlier as it's used in initial useEffect
+  const handleReverseGeocode = async (latitude: number, longitude: number, isInitialLoad: boolean = false) => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    try {
+      // TODO: Potentially move reverse geocoding to a Firebase function as well if key exposure is a concern for expo-location
+      // For now, assuming Location.reverseGeocodeAsync() is acceptable or uses a different, less sensitive mechanism.
+      const addressResponse = await Location.reverseGeocodeAsync({ latitude, longitude });
+      let formattedAddress = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+      if (addressResponse && addressResponse.length > 0) {
+        const firstAddress = addressResponse[0];
+        formattedAddress = [
+          firstAddress.name,
+          firstAddress.streetNumber ? `${firstAddress.streetNumber} ${firstAddress.street}` : firstAddress.street,
+          firstAddress.city,
+          firstAddress.region,
+          firstAddress.postalCode,
+        ].filter(Boolean).join(', ');
+      }
+      setSelectedPlace({ address: formattedAddress, latitude, longitude });
+      setSearchInputValue(formattedAddress);
+      
+      if (!isInitialLoad && mapRef.current) { 
+        mapRef.current.animateToRegion({ latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.005 }, 1000);
+      }
+    } catch (error) {
+      console.error("Reverse geocoding error:", error);
+      setErrorMsg("Could not fetch address for the selected point.");
+      setSelectedPlace({ address: 'Error fetching address', latitude, longitude });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
+    // Initial setup logic (uses handleReverseGeocode)
     (async () => {
       setIsLoading(true);
       setErrorMsg(null);
@@ -84,9 +175,16 @@ const SelectLocationScreen = () => {
         }
         // If no place selected yet, and we got user's current location,
         // pre-fill with current location's address
-        if (!selectedPlace) {
+        if (!selectedPlace && !params.currentLocation) { // Only reverse geocode if no pre-selected place/address
             handleReverseGeocode(location.coords.latitude, location.coords.longitude, true);
+        } else if (selectedPlace && selectedPlace.address === 'Selected on map') {
+            // If we have coordinates but no address (e.g. from parsed params)
+            handleReverseGeocode(selectedPlace.latitude, selectedPlace.longitude, true);
         }
+        // If params.currentLocation was an address, selectedPlace would have it.
+        // The map would initially show INITIAL_REGION or user's region.
+        // If user confirms without changing, we'd pass that address back.
+        // If they search/tap map, selectedPlace and searchInputValue get updated.
 
       } catch (e: any) {
         console.error("Error getting current location:", e);
@@ -95,7 +193,7 @@ const SelectLocationScreen = () => {
         setIsLoading(false);
       }
     })();
-  }, []); // Run once on mount
+  }, []);
 
   useEffect(() => {
     navigation.setOptions({
@@ -105,74 +203,113 @@ const SelectLocationScreen = () => {
           <Ionicons name="arrow-back" size={28} color={dynastyGreen} />
         </TouchableOpacity>
       ),
-      headerStyle: { backgroundColor: '#F8F8F8' },
+      headerRight: () => (
+        <TouchableOpacity onPress={handleConfirmLocation} style={{ marginRight: Platform.OS === 'ios' ? 15 : 10, padding:5 }}>
+          <Text style={{ color: dynastyGreen, fontWeight: '600', fontSize: 17 }}>Done</Text>
+        </TouchableOpacity>
+      ),
+      headerStyle: { backgroundColor: '#FFFFFF' },
       headerTintColor: dynastyGreen,
       headerTitleStyle: { fontWeight: '600', color: dynastyGreen },
       headerBackTitleVisible: false,
     });
-  }, [navigation, router]);
+  }, [navigation, router, selectedPlace, handleConfirmLocation]);
   
-  const handleReverseGeocode = async (latitude: number, longitude: number, isInitialLoad: boolean = false) => {
-    setIsLoading(true);
-    setErrorMsg(null);
+  const handleSearch = async (text: string) => {
+    setSearchInputValue(text);
+    setPlacePredictions([]); // Clear previous predictions
+
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+
+    if (text.length < 3) { // Don't search for very short strings
+      setIsFetchingPredictions(false);
+      return;
+    }
+
+    setIsFetchingPredictions(true);
+    debounceTimeoutRef.current = setTimeout(async () => {
+      try {
+        const googlePlacesAutocompleteFn = functions.httpsCallable('googlePlacesAutocomplete');
+        const result = await googlePlacesAutocompleteFn({ input: text });
+        const data = result.data as any;
+        if (data && data.predictions) {
+          setPlacePredictions(data.predictions);
+        } else {
+          setPlacePredictions([]);
+        }
+      } catch (error: any) {
+        console.error("Error fetching place predictions:", error);
+        // Alert.alert("Search Error", error.message || "Could not fetch place suggestions.");
+        setPlacePredictions([]); // Clear predictions on error
+      } finally {
+        setIsFetchingPredictions(false);
+      }
+    }, 500) as unknown as NodeJS.Timeout; // Cast to NodeJS.Timeout to satisfy ref type, though platform setTimeout might return number
+  };
+  
+  const handleSelectPrediction = async (prediction: PlacePrediction) => {
+    Keyboard.dismiss();
+    setSearchInputValue(prediction.description); // Set input to selected prediction
+    setPlacePredictions([]); // Clear predictions
+    setIsLoading(true); // Show loading for place details fetch
+
     try {
-      const addressResponse = await Location.reverseGeocodeAsync({ latitude, longitude });
-      let formattedAddress = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`; // Fallback
-      if (addressResponse && addressResponse.length > 0) {
-        const firstAddress = addressResponse[0];
-        formattedAddress = [
-          firstAddress.name,
-          firstAddress.streetNumber ? `${firstAddress.streetNumber} ${firstAddress.street}` : firstAddress.street,
-          firstAddress.city,
-          firstAddress.region,
-          firstAddress.postalCode,
-        ].filter(Boolean).join(', ');
+      const getGooglePlaceDetailsFn = functions.httpsCallable('getGooglePlaceDetails');
+      const result = await getGooglePlaceDetailsFn({ placeId: prediction.place_id });
+      const data = result.data as any;
+
+      if (data && data.result && data.result.geometry && data.result.geometry.location) {
+        const { lat, lng } = data.result.geometry.location;
+        const address = data.result.formatted_address || prediction.description;
+        
+        setSelectedPlace({ address, latitude: lat, longitude: lng });
+        setSearchInputValue(address); // Update search input with full address
+        
+        const newRegion = {
+          latitude: lat,
+          longitude: lng,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.005,
+        };
+        setRegion(newRegion);
+        if (mapRef.current) {
+          mapRef.current.animateToRegion(newRegion, 1000);
+        }
+      } else {
+        throw new Error("Place details not found or location missing.");
       }
-      setSelectedPlace({ address: formattedAddress, latitude, longitude });
-      if (!isInitialLoad && mapRef.current) { // Avoid re-animating if it's the initial load based on current loc
-        mapRef.current.animateToRegion({ latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.005 }, 1000);
-      }
-    } catch (error) {
-      console.error("Reverse geocoding error:", error);
-      setErrorMsg("Could not fetch address for the selected point.");
-      setSelectedPlace({ address: 'Error fetching address', latitude, longitude });
+    } catch (error: any) {
+      console.error("Error fetching place details:", error);
+      Alert.alert("Error", error.message || "Could not fetch place details.");
+      // Fallback to using the description if details fail, but without precise coords
+      setSelectedPlace({ address: prediction.description, latitude: region.latitude, longitude: region.longitude });
     } finally {
       setIsLoading(false);
     }
   };
 
-
-  const handleConfirmLocation = () => {
-    if (!selectedPlace || !selectedPlace.address) {
-      Alert.alert("No Location", "Please select a location.");
-      return;
-    }
-    const targetPath = params.previousPath || '..';
-    router.navigate({
-      pathname: targetPath as any,
-      params: { 
-        selectedLocation: selectedPlace.address,
-        selectedLocationLat: selectedPlace.latitude.toString(),
-        selectedLocationLng: selectedPlace.longitude.toString(),
-        fromScreen: 'selectLocation'
-      },
-    });
-  };
-
   const handleMapPress = (event: any) => {
     Keyboard.dismiss();
     const { coordinate } = event.nativeEvent;
+    setPlacePredictions([]); // Clear predictions
+    setSearchInputValue(''); // Clear search input
     handleReverseGeocode(coordinate.latitude, coordinate.longitude);
-    // Clear search input when map is pressed
-    if (searchRef.current) {
-      searchRef.current.setAddressText('');
-    }
   };
+
+  const renderPredictionItem = ({ item }: { item: PlacePrediction }) => (
+    <TouchableOpacity style={styles.predictionRow} onPress={() => handleSelectPrediction(item)}>
+      <Ionicons name="location-outline" size={20} color="#555" style={styles.predictionIcon} />
+      <Text style={styles.predictionText}>{item.description}</Text>
+    </TouchableOpacity>
+  );
 
   return (
     <View style={styles.container}>
       <MapView
         ref={mapRef}
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
         style={StyleSheet.absoluteFillObject}
         initialRegion={region}
         onRegionChangeComplete={(newRegion) => !isLoading && setRegion(newRegion)}
@@ -184,190 +321,139 @@ const SelectLocationScreen = () => {
       </MapView>
 
       <SafeAreaView style={styles.overlayContainer}>
-        <GooglePlacesAutocomplete
-          ref={searchRef} // Assign ref
-          placeholder="Search for a place or address"
-          onPress={(data, details = null) => {
-            Keyboard.dismiss();
-            if (details) {
-              const { lat, lng } = details.geometry.location;
-              const address = data.description;
-              setSelectedPlace({ address, latitude: lat, longitude: lng });
-              if (mapRef.current) {
-                mapRef.current.animateToRegion({
-                  latitude: lat,
-                  longitude: lng,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.005,
-                }, 1000);
-              }
-            } else {
-              console.warn("Place details not found, using description:", data.description);
-              // Attempt to geocode the description if details are missing
-              // This requires a geocoding function call here. For now, we'll just set the address.
-              setSelectedPlace({ address: data.description, latitude: region.latitude, longitude: region.longitude });
-            }
-          }}
-          query={{
-            key: GOOGLE_PLACES_API_KEY,
-            language: 'en',
-            components: 'country:us', 
-          }}
-          fetchDetails={true}
-          predefinedPlaces={[]}
-          styles={{
-            container: styles.searchOuterContainer,
-            textInputContainer: styles.searchInputContainer,
-            textInput: styles.searchInput,
-            listView: styles.listView, // Ensure this allows visibility
-            description: styles.description,
-            // poweredContainer: styles.poweredContainer, // Keep if you want to hide "powered by Google"
-          }}
-          textInputProps={{
-            placeholderTextColor: '#A0A0A0',
-            returnKeyType: "search",
-            value: selectedPlace?.address || '', // Control the input value
-            onChangeText: (text) => { // Allow clearing or manual typing
-              if (!text) {
-                // Optionally clear selectedPlace if text is manually cleared
-                // setSelectedPlace(null); 
-              } else if (selectedPlace?.address !== text) {
-                // If user types something different from current selected place,
-                // consider clearing the marker or allowing new search
-                // For now, just let GooglePlacesAutocomplete handle search based on new text
-              }
-            }
-          }}
-          enablePoweredByContainer={false}
-          debounce={200}
-          listUnderlayColor="#EFEFEF"
-          // Keep results list visible until an item is pressed or map is pressed
-          keepResultsAfterBlur={true} 
-          onNotFound={() => Alert.alert("Not Found", "No results found for your search.")}
-          onFail={(error) => {
-            console.error("Google Places API Error:", error);
-            Alert.alert("Search Error", "Could not fetch results. Please check your API key and internet connection.");
-          }}
-        />
+        <View style={styles.searchContainer}>
+          <Ionicons name="search-outline" size={20} color="#888" style={styles.searchIcon} />
+          <TextInput
+            ref={searchInputRef}
+            style={styles.searchInput}
+            placeholder="Search for a place or address"
+            placeholderTextColor="#888"
+            value={searchInputValue}
+            onChangeText={handleSearch}
+            onFocus={() => { if (searchInputValue === (selectedPlace?.address || '')) setPlacePredictions([]); }} // Clear stale predictions on focus if input matches current place
+            autoCorrect={false}
+            spellCheck={false}
+          />
+          {isFetchingPredictions && <ActivityIndicator size="small" color={dynastyGreen} style={styles.activityIndicator} />}
+          {searchInputValue.length > 0 && !isFetchingPredictions && (
+            <TouchableOpacity onPress={() => { setSearchInputValue(''); setPlacePredictions([]); }} style={styles.clearButton}>
+              <Ionicons name="close-circle" size={20} color="#AAA" />
+            </TouchableOpacity>
+          )}
+        </View>
+        {placePredictions.length > 0 && (
+          <FlatList
+            data={placePredictions}
+            renderItem={renderPredictionItem}
+            keyExtractor={(item) => item.place_id}
+            style={styles.predictionsList}
+            keyboardShouldPersistTaps="handled"
+          />
+        )}
       </SafeAreaView>
-      
-      <View style={styles.bottomControlsContainer}>
-        {isLoading && <ActivityIndicator size="small" color={dynastyGreen} style={styles.loadingIndicator} />}
-        {errorMsg && <Text style={styles.errorTextSmall}>{errorMsg}</Text>}
-        <TouchableOpacity 
-          style={[styles.button, (isLoading || !selectedPlace) && styles.disabledButton]} 
-          onPress={handleConfirmLocation}
-          disabled={isLoading || !selectedPlace}
-        >
-          <Text style={styles.buttonText}>Confirm Location</Text>
-        </TouchableOpacity>
-      </View>
+
+      {isLoading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color={dynastyGreen} />
+          <Text style={styles.loadingText}>Fetching location...</Text>
+        </View>
+      )}
+      {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text> /* More prominent error display */}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { // New container for the whole screen
+  container: {
     flex: 1,
+    backgroundColor: '#F0F0F0',
   },
-  overlayContainer: { // SafeAreaView for search and other top elements
+  overlayContainer: {
     position: 'absolute',
-    top: 0,
+    top: Platform.OS === 'android' ? 10 : (Dimensions.get('window').height > 800 ? 50 : 30), // Adjust for notch/status bar
     left: 0,
     right: 0,
-    zIndex: 10, // Ensure it's above the map
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0, // Handle Android status bar
+    marginHorizontal: 15,
+    zIndex: 1,
   },
-  searchOuterContainer: {
-    // flex: 0, // Let it take natural height based on input
-    marginHorizontal: 10,
-    marginTop: 10, // Adjust as needed from top of SafeAreaView
-    backgroundColor: 'transparent', // Or a semi-transparent background
-  },
-  searchInputContainer: {
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    borderBottomWidth: 0, // Remove default border
-    borderTopWidth: 0, // Remove default border
-    elevation: 5, // Android shadow
-    shadowColor: '#000', // iOS shadow
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  searchIcon: {
+    marginRight: 8,
   },
   searchInput: {
-    height: 48,
-    color: '#000',
+    flex: 1,
     fontSize: 16,
-    borderRadius: 8,
-    paddingHorizontal: 10,
+    color: '#333',
   },
-  listView: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    marginTop: 5, // Space between input and list
-    marginHorizontal: 0, // Align with search input container
-    maxHeight: Dimensions.get('window').height * 0.4, // Limit height of results
-    elevation: 5, // Android shadow for list
-    shadowColor: '#000', // iOS shadow for list
+  activityIndicator: {
+    marginLeft: 8,
+  },
+  clearButton: {
+    padding: 5,
+    marginLeft: 5,
+  },
+  predictionsList: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    marginTop: 8,
+    maxHeight: Dimensions.get('window').height * 0.35, // Limit height
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    borderWidth: 0, // Remove border if any from component default
-  },
-  description: {
-    fontWeight: '500',
-    color: '#333',
-    fontSize: 15,
-  },
-  // poweredContainer: {
-  //   display: 'none', // If you want to ensure it's hidden
-  // },
-  map: { // This style is now applied directly using StyleSheet.absoluteFillObject
-    // ...StyleSheet.absoluteFillObject, (This is how it's used directly now)
-    // zIndex: 0, (No longer needed here, map is base layer)
-  },
-  bottomControlsContainer: { // Renamed from confirmButtonContainer for clarity
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 20, // Avoid home indicator / provide padding
-    paddingHorizontal: 20,
-    backgroundColor: 'transparent', // Or a very slight gradient/blur if needed
-    alignItems: 'center', // Center button if it's not full width
-    zIndex: 10, // Ensure above map
-  },
-  button: {
-    backgroundColor: dynastyGreen,
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%', // Make button full width
+    shadowRadius: 5,
     elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
   },
-  buttonText: {
-    color: 'white',
+  predictionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E0E0E0',
+  },
+  predictionIcon: {
+    marginRight: 10,
+  },
+  predictionText: {
+    fontSize: 15,
+    color: '#333',
+    flexShrink: 1, // Allow text to shrink if too long
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2, // Ensure it's above map but below search results if needed
+  },
+  loadingText: {
+    marginTop: 10,
     fontSize: 16,
-    fontWeight: 'bold',
+    color: dynastyGreen,
   },
-  disabledButton: {
-    backgroundColor: '#A0A0A0', // Grey out when disabled
-  },
-  loadingIndicator: {
-    marginBottom: 10, // Space between loader and button if both visible
-  },
-  errorTextSmall: { // For errors near the button
-    color: 'red',
-    fontSize: 12,
+  errorText: { // Simple error display, consider a more robust notification system
     textAlign: 'center',
-    marginBottom: 5,
+    color: 'red',
+    padding: 10,
+    backgroundColor: 'rgba(255,0,0,0.1)',
+    position: 'absolute',
+    bottom: 80, // Adjust if confirm button is present at bottom
+    left: 15,
+    right: 15,
+    zIndex: 2,
+    borderRadius: 5,
   },
 });
 

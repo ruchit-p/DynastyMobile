@@ -17,17 +17,12 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useNavigation, useLocalSearchParams, usePathname } from 'expo-router';
-import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import DateTimePickerModal from "react-native-modal-datetime-picker";
-// import { auth, db } from '../../src/lib/firebase'; // Commented out Firebase
-// import { collection, addDoc, serverTimestamp } from "firebase/firestore"; // Commented out Firebase
+import { getFirebaseAuth, getFirebaseFunctions } from '../../src/lib/firebase'; // Use getFirebaseFunctions from local lib
 import { useImageUpload } from '../../hooks/useImageUpload';
 
 // Custom components
 import FullScreenDatePicker from '../../components/ui/FullScreenDatePicker';
-import SelectorButton from '../../components/ui/SelectorButton';
 import TimePickerModal from '../../components/ui/TimePickerModal';
 
 // Define the primary green color from the app's theme
@@ -141,6 +136,10 @@ const CreateEventScreen = () => {
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [membersError, setMembersError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Initialize Firebase Auth and Functions
+  const auth = getFirebaseAuth();
+  const functions = getFirebaseFunctions(); // Use @react-native-firebase/functions instance
 
   // MARK: - Navigation Setup
   useEffect(() => {
@@ -305,10 +304,10 @@ const CreateEventScreen = () => {
   };
 
   const handleCreateEvent = async () => {
-    // if (!auth.currentUser) { // Commented out auth check
-    //   Alert.alert("Authentication Error", "You need to be logged in to create an event.");
-    //   return;
-    // }
+    if (!auth.currentUser) { 
+      Alert.alert("Authentication Error", "You need to be logged in to create an event.");
+      return;
+    }
     // Basic Validation
     if (!newEvent.title.trim()) {
         Alert.alert('Missing Title', 'Please provide an event title.');
@@ -343,97 +342,154 @@ const CreateEventScreen = () => {
       return;
     }
 
-
     if (isUploadingImage) { // Prevent concurrent actions
         Alert.alert("Please Wait", "Image is currently uploading.");
         return;
     }
 
     setIsCreatingEvent(true);
-    let eventImageUrls: string[] = []; // For multiple photos
+    let eventImageUrls: string[] = []; 
 
     try {
       // Upload images if any are selected
       if (newEvent.photos.length > 0) {
-        // This part needs to be adapted to use `uploadMedia` from web or a similar robust uploader
-        // The current `useImageUpload` hook is for single image and might not be suitable.
-        // For now, simulating upload for all photos.
         console.log('[CreateEvent] Attempting to upload event photos:', newEvent.photos.length);
         
         const uploadPromises = newEvent.photos.map(async (photo, index) => {
           try {
-            // Simulate upload or integrate with a proper upload utility
-            // For now, let's assume uploadImage can handle one by one and we collect URLs
-            // This is a placeholder for actual multi-image upload logic
-            setPhotoUploadProgress(prev => { const p = [...prev]; p[index] = 50; return p; }); // Simulate progress
-            const imageUrl = await uploadImage(photo.uri, `eventImages/${newEvent.title.replace(/\s+/g, '_')}_${index}`); 
+            // setPhotoUploadProgress(prev => { const p = [...prev]; p[index] = 10; return p; }); // Initial progress handled by onProgress(0) in hook
+            const imagePath = `eventImages/${auth.currentUser!.uid}/${newEvent.title.replace(/\s+/g, '_')}_${Date.now()}_${index}`;
+            
+            const imageUrl = await uploadImage(
+              photo.uri, 
+              imagePath,
+              (progressValue) => { // Pass the onProgress callback
+                setPhotoUploadProgress(prev => {
+                  const p = [...prev]; 
+                  p[index] = progressValue; 
+                  return p; 
+                });
+              }
+            ); 
+            
+            // if (imageUrl) { // Progress to 100% is handled by onProgress(100) in hook upon success
+            //   setPhotoUploadProgress(prev => { const p = [...prev]; p[index] = 100; return p; });
+            // }
+            // No need to manually set to 100 here, hook's onProgress(100) on success will do it.
+
             if (imageUrl) {
-              setPhotoUploadProgress(prev => { const p = [...prev]; p[index] = 100; return p; });// Simulate completion
               return imageUrl;
             } else {
-              setPhotoUploadErrors(prev => { const e = [...prev]; e[index] = "Upload failed"; return e; });
-              throw new Error(`Upload failed for photo ${index}`);
+              // Error state for this specific photo is already managed by the hook setting its 'error' state
+              // and by setPhotoUploadErrors if that logic is kept or enhanced.
+              // For Promise.allSettled, a failed upload (null URL) will be a fulfilled promise with value null.
+              setPhotoUploadErrors(prev => { const e = [...prev]; e[index] = "Upload failed (null URL)"; return e; });
+              // throw new Error(`Upload failed for photo ${index}`); // No need to throw if we want allSettled to complete
+              return null; // Explicitly return null for failed uploads to be handled by allSettled
             }
           } catch (error) {
             console.error(`Error uploading photo ${index}:`, error);
             setPhotoUploadErrors(prev => { const e = [...prev]; e[index] = (error as Error).message; return e; });
-            throw error; // Re-throw to fail Promise.all
+            // throw error; // No need to re-throw for Promise.allSettled, let it return a rejected status
+            return null; // Explicitly return null for caught errors to be handled by allSettled
           }
         });
 
         try {
-          eventImageUrls = await Promise.all(uploadPromises.map(p => p.catch(e => null))) as string[];
-          eventImageUrls = eventImageUrls.filter(url => url !== null); // Filter out failed uploads
-          console.log('[CreateEvent] Simulated Upload - Event Image URLs:', eventImageUrls);
-        } catch (uploadError) {
-          console.error("[CreateEvent] One or more image uploads failed:", uploadError);
+          const results = await Promise.allSettled(uploadPromises);
+          eventImageUrls = results
+            .filter(result => result.status === 'fulfilled' && result.value)
+            .map(result => (result as PromiseFulfilledResult<string>).value); // Value here is string | null
+          
+          // Filter out nulls again in case some uploads returned null successfully (handled error internally)
+          eventImageUrls = eventImageUrls.filter(url => url !== null) as string[];
+
+          const failedUploadsCount = results.filter(result => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value)).length;
+          if (failedUploadsCount > 0) {
+            console.warn(`[CreateEvent] ${failedUploadsCount} image(s) failed to upload or returned null.`);
+            // Alert only if all uploads failed, or provide a more nuanced message
+            if (eventImageUrls.length === 0 && newEvent.photos.length > 0) {
+              Alert.alert("Image Upload Failed", "All images failed to upload. Please try again.");
+              setIsCreatingEvent(false);
+              return;
+            } else if (failedUploadsCount > 0 && eventImageUrls.length > 0) {
+              Alert.alert("Partial Upload", `${failedUploadsCount} image(s) failed to upload. Continuing with successful uploads.`);
+            }
+          }
+          console.log('[CreateEvent] Uploaded Event Image URLs:', eventImageUrls);
+        } catch (uploadProcessingError) { 
+          console.error("[CreateEvent] Error during image upload processing:", uploadProcessingError);
           Alert.alert("Image Upload Failed", "Some images could not be uploaded. Please try again.");
           setIsCreatingEvent(false);
           return;
         }
       }
 
+      // Helper to format date to YYYY-MM-DD
+      const formatDateToYYYYMMDD = (date: Date | null): string | null => {
+        if (!date) return null;
+        return date.toISOString().split('T')[0];
+      };
 
-      const eventDataToSave = {
+      const eventPayload = {
         title: newEvent.title.trim(),
-        eventDate: newEvent.eventDate, // Already a Date object
-        endDate: newEvent.isMultiDay ? newEvent.endDate : null,
-        startTime: newEvent.startTime,
-        endTime: newEvent.endTime,
+        eventDate: formatDateToYYYYMMDD(newEvent.eventDate),
+        endDate: newEvent.isMultiDay ? formatDateToYYYYMMDD(newEvent.endDate) : null,
+        startTime: newEvent.startTime, // "HH:MM"
+        endTime: newEvent.endTime, // "HH:MM"
         timezone: newEvent.timezone,
-        location: newEvent.isVirtual ? null : newEvent.selectedLocation, // Use selectedLocation object
+        location: newEvent.isVirtual ? null : newEvent.selectedLocation,
         virtualLink: newEvent.isVirtual ? newEvent.virtualLink.trim() : null,
         isVirtual: newEvent.isVirtual,
         description: newEvent.description.trim(),
-        dressCode: newEvent.dressCode?.trim() || null,
+        dresscode: newEvent.dressCode?.trim() || null, // Field name changed to 'dresscode'
         whatToBring: newEvent.whatToBring?.trim() || null,
+        // additionalInfo: null, // Not currently in mobile form, backend handles as optional
         privacy: newEvent.privacy,
         allowGuestPlusOne: newEvent.allowGuestPlusOne,
         showGuestList: newEvent.showGuestList,
         requireRsvp: newEvent.requireRsvp,
-        rsvpDeadline: newEvent.requireRsvp ? newEvent.rsvpDeadline : null,
-        hostId: 'mockUserId123', // Replace with actual currentUser.uid,
-        // invitedMembers: newEvent.inviteType === "all" ? familyMembers.map(member => member.id) : newEvent.selectedMembers,
-        // ^ This needs familyMembers to be populated
-        invitedMembers: newEvent.inviteType === "all" ? [] : newEvent.selectedMembers, // Placeholder if all family not yet fetched/implemented
-        coverPhotos: eventImageUrls, // Use the array of URLs
-        // createdBy: auth.currentUser.uid, // Firebase Auth commented out
-        createdBy: 'mockUserId123', // Mock user ID
-        // createdAt: serverTimestamp(), // Firebase serverTimestamp commented out
-        createdAt: new Date(), // Mock creation date
-        // updatedAt: serverTimestamp(), // Firebase serverTimestamp commented out
-        updatedAt: new Date(), // Mock update date
+        rsvpDeadline: newEvent.requireRsvp ? formatDateToYYYYMMDD(newEvent.rsvpDeadline) : null,
+        hostId: auth.currentUser.uid,
+        invitedMembers: newEvent.inviteType === "all" 
+            ? familyMembers.map(member => member.id) // Assumes familyMembers is populated correctly
+            : newEvent.selectedMembers,
+        coverPhotos: eventImageUrls, // Array of uploaded image URLs
       };
 
-      // const docRef = await addDoc(collection(db, "events"), eventDataToSave); // Firebase save commented out
-      // console.log("Event created with ID: ", docRef.id);
-      console.log("[CreateEvent] Simulating event creation with data:", eventDataToSave);
-      Alert.alert('Event Created (Simulated)', 'Your event has been successfully created!');
-      router.back();
+      console.log("[CreateEvent] Calling Firebase Function 'createEvent' with payload:", eventPayload);
 
-    } catch (error) {
-      console.error("[CreateEvent] Error during simulated event creation:", error);
-      Alert.alert("Creation Failed (Simulated)", "Could not create your event. Please try again later.");
+      const createEventFunction = functions.httpsCallable('createEvent');
+      const result = await createEventFunction(eventPayload); // Result structure might be directly data
+
+      console.log("[CreateEvent] Firebase Function 'createEvent' response:", result.data);
+
+      // For @react-native-firebase/functions, result often contains { data: yourActualData }
+      // Depending on your cloud function, result.data might be the success flag or the object containing it.
+      // Let's assume result.data is the object { success: true, message: "..." } or similar.
+      const responseData = result.data as any; // Cast to any to access potential properties
+
+      if (responseData && responseData.success) {
+        Alert.alert('Event Created', responseData.message || 'Your event has been successfully created!');
+        router.back();
+      } else {
+        const errorMessage = responseData?.message || "Unknown error from server.";
+        console.error("[CreateEvent] Error from Firebase Function:", errorMessage, responseData?.errorDetails);
+        Alert.alert("Creation Failed", `Could not create your event: ${errorMessage}`);
+      }
+
+    } catch (error: any) {
+      console.error("[CreateEvent] Error during event creation process:", error);
+      let errorMessage = "Could not create your event. Please try again later.";
+      if (error.message) {
+        errorMessage = error.message;
+      }
+      // Check for Firebase Functions specific error details
+      if (error.details) {
+        console.error("Firebase Functions error details:", error.details);
+        // errorMessage += ` Details: ${JSON.stringify(error.details)}`; // Or a more user-friendly message
+      }
+      Alert.alert("Creation Failed", errorMessage);
     } finally {
       setIsCreatingEvent(false);
     }
@@ -1067,12 +1123,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
-  },
-  removePhotoButton: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    zIndex: 2,
   },
   replacePhotoButton: {
     position: 'absolute',
