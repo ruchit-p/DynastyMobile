@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Card from './Card';
 import ThemedText from '../ThemedText';
 import ProfilePicture from './ProfilePicture';
+import ImageGallery from './ImageGallery';
 import { Spacing, BorderRadius } from '../../constants/Spacing';
 import type { Story } from '../../src/lib/storyUtils';
 import { formatDate, formatTimeAgo } from '../../src/lib/dateUtils';
@@ -26,40 +27,63 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
   const imgBlock = story.blocks.find(b => b.type === 'image');
   const mediaCount = story.blocks.filter(b => b.type === 'image' || b.type === 'video').length;
 
+  // Prepare photos for ImageGallery
+  const galleryPhotos = React.useMemo(() => {
+    if (!story || !story.blocks) return [];
+    const photos: Array<{ uri: string }> = [];
+    story.blocks.forEach(block => {
+      if (block.type === 'image' && Array.isArray(block.data)) {
+        (block.data as string[]).forEach(uri => {
+          if (uri) photos.push({ uri });
+        });
+      }
+    });
+    return photos;
+  }, [story]);
+
   return (
-    <TouchableOpacity onPress={() => onPress(story)} style={[styles.container, style]} activeOpacity={0.8}>
+    <View style={[styles.container, style]}>
       <Card variant="elevated" noPadding>
-        <View style={styles.header}>
-          <ProfilePicture 
-            source={story.author?.profilePicture} 
-            name={story.author?.displayName || story.authorID} 
-            size="sm" 
-            style={styles.avatar} 
-          />
-          <View style={styles.headerInfo}>
-            <ThemedText variant="bodyMedium" style={styles.authorName}>
-              {story.author?.displayName || story.authorID}
-            </ThemedText>
-            <View style={styles.timestampContainer}>
-              <Text style={styles.datePill}>{dateLabel}</Text>
-              <View style={styles.dotSeparator} />
-              <Text style={styles.timestamp}>{timeAgoLabel}</Text>
-            </View>
-            {storyTitle && (
-              <ThemedText variant="bodySmall" style={styles.storyTitleText} numberOfLines={2}>
-                {storyTitle}
+        <TouchableOpacity onPress={() => onPress(story)} activeOpacity={0.8}>
+          <View style={styles.header}>
+            <ProfilePicture 
+              source={story.author?.profilePicture} 
+              name={story.author?.displayName || story.authorID} 
+              size="sm" 
+              style={styles.avatar} 
+            />
+            <View style={styles.headerInfo}>
+              <ThemedText variant="bodyMedium" style={styles.authorName}>
+                {story.author?.displayName || story.authorID}
               </ThemedText>
-            )}
+              <View style={styles.timestampContainer}>
+                <Text style={styles.datePill}>{dateLabel}</Text>
+                <View style={styles.dotSeparator} />
+                <Text style={styles.timestamp}>{timeAgoLabel}</Text>
+              </View>
+              {storyTitle && (
+                <ThemedText variant="bodySmall" style={styles.storyTitleText} numberOfLines={2}>
+                  {storyTitle}
+                </ThemedText>
+              )}
+            </View>
           </View>
-        
-        </View>
-        {textBlock && (
-          <ThemedText variant="bodyMedium" style={styles.textContent} numberOfLines={3}>
-            {textBlock.data as string}
-          </ThemedText>
-        )}
-        {imgBlock && Array.isArray(imgBlock.data) && imgBlock.data.length > 0 && (
-          <Image source={{ uri: imgBlock.data[0] }} style={styles.image} />
+          {textBlock && (
+            <ThemedText variant="bodyMedium" style={styles.textContent} numberOfLines={3}>
+              {textBlock.data as string}
+            </ThemedText>
+          )}
+        </TouchableOpacity>
+        {galleryPhotos.length > 0 && (
+          <ImageGallery
+            photos={galleryPhotos}
+            onAddPhoto={() => {}}
+            onRemovePhoto={() => {}}
+            onReplacePhoto={() => {}}
+            showRemoveButton={false}
+            showReplaceButton={false}
+            imageStyle={styles.galleryImage}
+          />
         )}
         {story.location && (
           <View style={styles.locationContainer}>
@@ -69,30 +93,32 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
             </ThemedText>
           </View>
         )}
-        <View style={styles.footer}>
-          <View style={styles.statItem}>
-            <Ionicons name="chatbubbles-outline" size={16} color="#555" />
-            <ThemedText variant="caption" color="secondary" style={styles.statText}>
-              {story.commentCount ?? 0} Comments
-            </ThemedText>
-          </View>
-          <View style={styles.statItem}>
-            <Ionicons name="images-outline" size={16} color="#555" />
-            <ThemedText variant="caption" color="secondary" style={styles.statText}>
-              {mediaCount} Media
-            </ThemedText>
-          </View>
-          {typeof story.likeCount !== 'undefined' && (
+        <TouchableOpacity onPress={() => onPress(story)} activeOpacity={0.8}>
+          <View style={styles.footer}>
             <View style={styles.statItem}>
-              <Ionicons name="heart-outline" size={16} color="#555" />
+              <Ionicons name="chatbubbles-outline" size={16} color="#555" />
               <ThemedText variant="caption" color="secondary" style={styles.statText}>
-                {story.likeCount} Likes
+                {story.commentCount ?? 0} Comments
               </ThemedText>
             </View>
-          )}
-        </View>
+            <View style={styles.statItem}>
+              <Ionicons name="images-outline" size={16} color="#555" />
+              <ThemedText variant="caption" color="secondary" style={styles.statText}>
+                {mediaCount} Media
+              </ThemedText>
+            </View>
+            {typeof story.likeCount !== 'undefined' && (
+              <View style={styles.statItem}>
+                <Ionicons name="heart-outline" size={16} color="#555" />
+                <ThemedText variant="caption" color="secondary" style={styles.statText}>
+                  {story.likeCount} Likes
+                </ThemedText>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
       </Card>
-    </TouchableOpacity>
+    </View>
   );
 };
 
@@ -156,6 +182,10 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: BorderRadius.sm,
     margin: Spacing.md,
+  },
+  galleryImage: {
+    width: '100%',
+    height: '100%',
   },
   locationContainer: {
     flexDirection: 'row',

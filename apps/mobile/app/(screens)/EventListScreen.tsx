@@ -18,7 +18,7 @@ import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/Float
 import AppHeader from '../../components/ui/AppHeader';
 import IconButton, { IconSet } from '../../components/ui/IconButton';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getDbInstance, getAuthInstance } from '../../src/lib/firebase';
+import { getFirebaseDb, getFirebaseAuth } from '../../src/lib/firebase';
 import { Timestamp } from 'firebase/firestore';
 
 // Define Event interface for type safety
@@ -116,8 +116,8 @@ const EventListScreen = () => {
   const [searchText, setSearchText] = useState('');
   const segments = ['Upcoming', 'Past Events', 'My Events'];
   const router = useRouter();
-  const db = getDbInstance();
-  const auth = getAuthInstance();
+  const db = getFirebaseDb();
+  const auth = getFirebaseAuth();
 
   const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState<boolean>(true);

@@ -17,6 +17,7 @@
   },
   "main": "lib/index.js",
   "dependencies": {
+    "@googlemaps/google-maps-services-js": "^3.4.1",
     "@sendgrid/mail": "^8.1.4",
     "@types/dotenv": "^6.1.1",
     "cors": "^2.8.5",

@@ -129,9 +129,6 @@ export default function ProfileSetupScreen() {
     }
   };
 
-  // TODO: Implement proper Date Picker and Gender Picker (e.g., using a library or custom component)
-  // The Date Picker part is now being addressed by DateTimePicker.
-
   return (
     <>
       <Stack.Screen options={{ title: 'Set Up Your Profile', headerShown: false }} />
@@ -270,7 +267,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0E0E0',
     fontFamily: Fonts.type.base,
-    fontWeight: Fonts.weight.regular,
   },
   label: {
     fontSize: 14,

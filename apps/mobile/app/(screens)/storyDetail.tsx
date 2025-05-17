@@ -597,6 +597,8 @@ const StoryDetailScreen = () => {
                 onAddPhoto={() => {}} // Read-only
                 onRemovePhoto={() => {}} // Read-only
                 onReplacePhoto={() => {}} // Read-only
+                showRemoveButton={false} // Ensure remove button is hidden
+                showReplaceButton={false} // Ensure replace button is hidden
                 // Add any other necessary props, possibly for styling or read-only indication if gallery supports it
               />
             </View>
