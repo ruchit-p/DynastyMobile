@@ -601,7 +601,7 @@ const CreateEventScreen = () => {
                     style={styles.removePhotoButton}
                     onPress={() => removePhoto(index)}
                   >
-                    <Ionicons name="close-circle" size={24} color="white" />
+                    <Ionicons name="close" size={20} color={dynastyGreen} />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.replacePhotoButton}
@@ -1069,10 +1069,20 @@ const styles = StyleSheet.create({
   },
   removePhotoButton: {
     position: 'absolute',
-    top: -5,
-    right: -5,
+    top: 8,
+    right: 8,
     backgroundColor: '#FFFFFF',
-    borderRadius: 15,
+    width: 30,
+    height: 30,
+    borderRadius: 15, // Makes it a circle
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 3,
   },
   addAnotherPhotoButton: {
     width: 100,

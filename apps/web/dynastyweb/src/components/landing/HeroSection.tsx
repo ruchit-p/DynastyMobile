@@ -193,13 +193,19 @@ const HeroSection = () => {
           >
             Your Family&apos;s Story, Beautifully Preserved with <span 
               className="text-dynasty-green "
-              style={{
-                textShadow: currentTextTheme === 'light' 
-                  // Subtle white outline for green text on dark background
-                  ? '-1px -1px 0 rgba(255,255,255,0.4), 1px -1px 0 rgba(255,255,255,0.4), -1px 1px 0 rgba(255,255,255,0.4), 1px 1px 0 rgba(255,255,255,0.4)' 
-                  // Subtle dark outline for green text on light background
-                  : '-1px -1px 0 rgba(0,0,0,0.15), 1px -1px 0 rgba(0,0,0,0.15), -1px 1px 0 rgba(0,0,0,0.15), 1px 1px 0 rgba(0,0,0,0.15)'
-              }}
+              style={
+                currentTextTheme === 'light'
+                  ? {
+                      WebkitTextStrokeWidth: '3px',
+                      WebkitTextStrokeColor: 'rgba(255,255,255,0.7)', // White border with 0.7 opacity
+                      paintOrder: 'stroke fill' as React.CSSProperties['paintOrder'], // Ensures stroke is behind fill
+                      textShadow: 'none', // Remove any previous text shadow for this case
+                    }
+                  : {
+                      // Subtle dark outline for green text on light background (dark theme)
+                      textShadow: '-1px -1px 0 rgba(0,0,0,0.15), 1px -1px 0 rgba(0,0,0,0.15), -1px 1px 0 rgba(0,0,0,0.15), 1px 1px 0 rgba(0,0,0,0.15)',
+                    }
+              }
             >Dynasty</span>
           </h1>
           

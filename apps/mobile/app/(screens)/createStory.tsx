@@ -12,6 +12,7 @@ import {
   Alert,
   Modal,
   Button,
+  Linking,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useNavigation, Stack, useLocalSearchParams } from 'expo-router';
@@ -25,8 +26,9 @@ import TagPeopleButton from '../../components/ui/TagPeopleButton';
 import AddDetailsButton from '../../components/ui/AddDetailsButton';
 import AddContentButton from '../../components/ui/AddContentButton';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { createStoryMobile } from '../../src/lib/storyUtils';
+import { createStoryMobile, updateStoryMobile, fetchAccessibleStoriesMobile, Story as FetchedStory, StoryBlock as FetchedStoryBlock } from '../../src/lib/storyUtils';
 import Fonts from '../../constants/Fonts';
+import { useImageUpload } from '../../hooks/useImageUpload';
 
 // MARK: - Types
 type BlockType = "text" | "image" | "video" | "audio";
@@ -47,9 +49,25 @@ const CreateStoryScreen = () => {
   const { user, firestoreUser } = useAuth();
   const router = useRouter();
   const navigation = useNavigation();
-  const params = useLocalSearchParams(); // Get potential returned params
+  const params = useLocalSearchParams<{ storyId?: string; editMode?: string; returnedPurpose?: string; selectedIds?: string; recordedAudioUri?: string; recordedAudioDuration?: string }>(); // Typed params
+
+  const storyIdForEdit = params.storyId;
+  // const isEditing = params.editMode === 'true'; // Will be replaced by isActuallyEditingNow and displayAsEditMode
+
+  // Latch the initial edit mode for header display consistency
+  const [displayAsEditMode] = useState(() => params.editMode === 'true' && !!params.storyId);
+  const isActuallyEditingNow = params.editMode === 'true' && !!params.storyId; // For action logic
+
+  // Image Upload Hook for Cover Photo
+  const { 
+    uploadImage: uploadCoverImage, 
+    isUploading: isCoverPhotoUploading, 
+    uploadProgress: coverPhotoUploadProgress, 
+    error: coverPhotoUploadError 
+  } = useImageUpload();
 
   // MARK: - State Variables
+  const [isLoading, setIsLoading] = useState(false); // For loading state during fetch
   const [storyTitle, setStoryTitle] = useState('');
   
   const [showDate, setShowDate] = useState(false); // Date hidden by default, added via Additional Details
@@ -59,6 +77,7 @@ const CreateStoryScreen = () => {
   const [subtitle, setSubtitle] = useState('');
 
   const [coverPhoto, setCoverPhoto] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [initialCoverImageUrlForEdit, setInitialCoverImageUrlForEdit] = useState<string | null>(null);
 
   const [showLocation, setShowLocation] = useState(false);
   const [location, setLocation] = useState<Location | null>(null);
@@ -85,18 +104,320 @@ const CreateStoryScreen = () => {
     console.log(`isAudioActionSheetVisible changed to: ${isAudioActionSheetVisible}`);
   }, [isAudioActionSheetVisible]);
 
+  // MARK: - Handlers (Moved Up and Wrapped in useCallback)
+
+  const handleSaveStory = useCallback(async () => {
+    if (!storyTitle.trim()) {
+      Alert.alert('Missing Title', 'Please provide a title for your story.');
+      return;
+    }
+    if (!firestoreUser?.familyTreeId) {
+        Alert.alert('Family Tree Error', 'You must be part of a family tree to create stories.');
+        return;
+    }
+
+    setIsLoading(true); 
+
+    let uploadedCoverImageUrl: string | undefined = undefined;
+
+    if (coverPhoto && coverPhoto.uri) {
+      try {
+        const downloadURL = await uploadCoverImage(coverPhoto.uri, 'story-covers');
+        if (downloadURL) {
+          uploadedCoverImageUrl = downloadURL;
+        } else {
+          Alert.alert('Upload Failed', 'Could not upload cover photo. Please try again.');
+          setIsLoading(false);
+          return;
+        }
+      } catch (uploadError) {
+        console.error("Cover photo upload error:", uploadError);
+        Alert.alert('Upload Error', `Failed to upload cover photo: ${ (uploadError as Error).message }`);
+        setIsLoading(false);
+        return;
+      }
+    }
+    
+    const transformedBlocks = blocks.map(block => {
+      if (block.type === 'text') {
+        return {
+          type: 'text',
+          data: block.content,
+          localId: block.id
+        };
+      } else if (block.type === 'image') {
+        return {
+          type: 'image',
+          data: Array.isArray(block.content) ? block.content.map((asset: ImagePicker.ImagePickerAsset) => asset.uri) : [],
+          localId: block.id
+        };
+      } else if (block.type === 'audio') {
+        const audioUri = (typeof block.content === 'object' && block.content.uri) ? block.content.uri : '';
+        return {
+          type: 'audio',
+          data: audioUri, 
+          localId: block.id
+        };
+      } else {
+        return {
+          type: block.type,
+          data: block.content, 
+          localId: block.id
+        };
+      }
+    });
+    
+    const storyBlocks = transformedBlocks.map(({ type, data, localId }) => ({
+      type: type as 'text' | 'image' | 'video' | 'audio',
+      data,
+      localId,
+    }));
+    const storyPayload = {
+      authorID: user?.uid || '',
+      title: storyTitle,
+      subtitle: showSubtitle ? subtitle : undefined,
+      eventDate: showDate && storyDate ? storyDate : undefined,
+      location: showLocation && location ? { lat: location.latitude, lng: location.longitude, address: location.address || '' } : undefined,
+      privacy: (privacy === 'personal' ? 'privateAccess' : privacy) as 'family' | 'privateAccess' | 'custom',
+      customAccessMembers: privacy === 'custom' ? customSelectedViewers : undefined,
+      blocks: storyBlocks,
+      familyTreeId: firestoreUser.familyTreeId, 
+      peopleInvolved: taggedMembers,
+      coverImageURL: uploadedCoverImageUrl, 
+    };
+    
+    console.log('Preparing to save story with coverImageURL:', uploadedCoverImageUrl);
+    console.log('Full story payload:', JSON.stringify(storyPayload, null, 2));
+
+    try {
+      const newStoryId = await createStoryMobile(storyPayload);
+      console.log('Story created with ID:', newStoryId);
+      Alert.alert('Success', 'Your story has been saved.');
+      router.back();
+    } catch (error) {
+      console.error('Error creating story:', error);
+      Alert.alert('Error', `Failed to save your story: ${ (error as Error).message }`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [storyTitle, firestoreUser, user, coverPhoto, uploadCoverImage, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, router, setIsLoading]);
+
+  const handleUpdateStory = useCallback(async () => {
+    if (!storyTitle.trim()) {
+      Alert.alert('Missing Title', 'Please provide a title for your story.');
+      return;
+    }
+    if (!storyIdForEdit || !user?.uid) {
+      Alert.alert('Error', 'Cannot update story. Missing ID or user information.');
+      return;
+    }
+
+    setIsLoading(true);
+    let finalUploadedCoverImageUrl: string | null | undefined = initialCoverImageUrlForEdit; 
+
+    if (coverPhoto && coverPhoto.uri) {
+      if (coverPhoto.uri.startsWith('file:///')) { 
+        try {
+          const downloadURL = await uploadCoverImage(coverPhoto.uri, 'story-covers');
+          if (downloadURL) {
+            finalUploadedCoverImageUrl = downloadURL;
+          } else {
+            Alert.alert('Upload Failed', 'Could not upload new cover photo. Please try again.');
+            setIsLoading(false);
+            return;
+          }
+        } catch (uploadError) {
+          console.error("New cover photo upload error:", uploadError);
+          Alert.alert('Upload Error', `Failed to upload new cover photo: ${ (uploadError as Error).message }`);
+          setIsLoading(false);
+          return;
+        }
+      } else { 
+        finalUploadedCoverImageUrl = coverPhoto.uri; 
+      }
+    } else { 
+      if (initialCoverImageUrlForEdit) { 
+        finalUploadedCoverImageUrl = null; 
+      } else { 
+        finalUploadedCoverImageUrl = undefined; 
+      }
+    }
+    
+    const transformedBlocksForUpdate = blocks.map(block => {
+      if (block.type === 'text') {
+        return { type: 'text', data: block.content, localId: block.id };
+      } else if (block.type === 'image') {
+        const imageUris = (block.content as ImagePicker.ImagePickerAsset[])?.map(asset => asset.uri) || [];
+        return { type: 'image', data: imageUris, localId: block.id };
+      } else if (block.type === 'audio') {
+        const audioUri = (typeof block.content === 'object' && block.content.uri) ? block.content.uri : '';
+        return { type: 'audio', data: audioUri, localId: block.id };
+      }
+      return { type: block.type, data: block.content, localId: block.id };
+    });
+
+    const storyUpdatePayload: Parameters<typeof updateStoryMobile>[2] = {
+      title: storyTitle,
+      subtitle: showSubtitle ? subtitle : undefined,
+      eventDate: showDate && storyDate ? new Date(storyDate) : undefined,
+      location: showLocation && location ? { lat: location.latitude, lng: location.longitude, address: location.address || '' } : undefined,
+      privacy: (privacy === 'personal' ? 'privateAccess' : privacy) as 'family' | 'privateAccess' | 'custom',
+      customAccessMembers: privacy === 'custom' ? customSelectedViewers : undefined,
+      blocks: transformedBlocksForUpdate.map(({ type, data, localId }) => ({
+        type: type as 'text' | 'image' | 'video' | 'audio',
+        data,
+        localId,
+      })),
+      peopleInvolved: taggedMembers,
+    };
+
+    if (finalUploadedCoverImageUrl !== initialCoverImageUrlForEdit) {
+      storyUpdatePayload.coverImageURL = finalUploadedCoverImageUrl; 
+    }
+
+    Object.keys(storyUpdatePayload).forEach(key => {
+      if ((storyUpdatePayload as any)[key] === undefined) {
+        delete (storyUpdatePayload as any)[key];
+      }
+    });
+    
+    console.log('Updating story with payload:', JSON.stringify(storyUpdatePayload, null, 2));
+
+    try {
+      await updateStoryMobile(storyIdForEdit!, user.uid, storyUpdatePayload);
+      Alert.alert('Success', 'Your story has been updated.');
+      router.back();
+    } catch (error) {
+      console.error('Error updating story:', error);
+      Alert.alert('Error', `Failed to update your story: ${ (error as Error).message }`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [storyTitle, storyIdForEdit, user, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, coverPhoto, initialCoverImageUrlForEdit, uploadCoverImage, router, setIsLoading]);
+
+  // MARK: - Load Story Data for Editing
+  useEffect(() => {
+    if (isActuallyEditingNow && storyIdForEdit && user?.uid && firestoreUser?.familyTreeId) {
+      const loadStoryForEdit = async () => {
+        setIsLoading(true);
+        navigation.setOptions({ title: 'Loading Story...' });
+        try {
+          // Assuming fetchAccessibleStoriesMobile can fetch a single story by ID if it's accessible
+          // Or, ideally, have a dedicated getStoryById function.
+          // For now, we'll filter from accessible stories.
+          const stories = await fetchAccessibleStoriesMobile(user.uid, firestoreUser.familyTreeId);
+          const storyToEdit = stories.find(s => s.id === storyIdForEdit);
+
+          if (storyToEdit) {
+            // Populate state with storyToEdit data
+            setStoryTitle(storyToEdit.title || '');
+            
+            if (storyToEdit.subtitle) {
+              setSubtitle(storyToEdit.subtitle);
+              setShowSubtitle(true);
+            }
+            
+            if (storyToEdit.eventDate) {
+              setStoryDate(new Date(storyToEdit.eventDate.seconds * 1000));
+              setShowDate(true);
+            } else {
+              setStoryDate(null);
+              setShowDate(false);
+            }
+            
+            if (storyToEdit.coverImageURL) {
+              setCoverPhoto({ uri: storyToEdit.coverImageURL, width: 0, height: 0, type: 'image' });
+              setInitialCoverImageUrlForEdit(storyToEdit.coverImageURL);
+            } else {
+              setCoverPhoto(null);
+              setInitialCoverImageUrlForEdit(null);
+            }
+            
+            if (storyToEdit.location) {
+              setLocation({
+                latitude: storyToEdit.location.lat,
+                longitude: storyToEdit.location.lng,
+                address: storyToEdit.location.address,
+              });
+              setShowLocation(true);
+            } else {
+              setLocation(null);
+              setShowLocation(false);
+            }
+
+            // Map privacy from 'privateAccess' back to 'personal' for the UI component
+            const uiPrivacy = storyToEdit.privacy === 'privateAccess' ? 'personal' : storyToEdit.privacy;
+            setPrivacy(uiPrivacy as 'family' | 'personal' | 'custom');
+            
+            if (storyToEdit.privacy === 'custom' && storyToEdit.customAccessMembers) {
+              setCustomSelectedViewers(storyToEdit.customAccessMembers);
+            } else {
+              setCustomSelectedViewers([]);
+            }
+            
+            if (storyToEdit.peopleInvolved) {
+              setTaggedMembers(storyToEdit.peopleInvolved);
+            } else {
+              setTaggedMembers([]);
+            }
+
+            // Map FetchedStoryBlock to local StoryBlock
+            const fetchedBlocks = storyToEdit.blocks || [];
+            const mappedBlocks: StoryBlock[] = fetchedBlocks.map((block: FetchedStoryBlock) => {
+              let content: any;
+              if (block.type === 'text') {
+                content = block.data as string;
+              } else if (block.type === 'image') {
+                content = (block.data as string[]).map(uri => ({ uri, type: 'image', width:0, height:0 }) as ImagePicker.ImagePickerAsset);
+              } else if (block.type === 'audio') {
+                // block.data is URI string from backend for audio
+                content = {
+                  uri: block.data as string, 
+                  duration: 0, // Placeholder - duration isn't stored with this model
+                  name: 'Audio Clip', // Placeholder
+                  isRecording: false, // Default
+                };
+              } else {
+                content = block.data; // Fallback for other types
+              }
+              return {
+                id: block.localId || Math.random().toString(36).substr(2, 9), // Use localId or generate new
+                type: block.type as BlockType,
+                content: content,
+              };
+            });
+            setBlocks(mappedBlocks);
+
+          } else {
+            Alert.alert("Error", "Could not find the story to edit.", [{ text: "OK", onPress: () => router.back() }]);
+          }
+        } catch (error) {
+          console.error("Error loading story for editing:", error);
+          Alert.alert("Error", "Failed to load story details for editing.", [{ text: "OK", onPress: () => router.back() }]);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      loadStoryForEdit();
+    }
+  }, [isActuallyEditingNow, storyIdForEdit, user, firestoreUser, navigation, router]);
+
   // MARK: - Navigation Setup & Data Return Handling
   useEffect(() => {
+    const screenTitle = displayAsEditMode ? 'Edit Story' : 'Create Story';
+    const saveButtonText = displayAsEditMode ? 'Update' : 'Save';
+    const saveAction = isActuallyEditingNow ? handleUpdateStory : handleSaveStory;
+
     navigation.setOptions({
-      title: 'Create Story', // Image shows "Edit Story", can be adapted
+      title: isLoading ? 'Loading...' : screenTitle,
       headerLeft: () => (
         <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: Platform.OS === 'ios' ? 15 : 10 }}>
           <Ionicons name="arrow-back" size={26} color="#1A4B44" />
         </TouchableOpacity>
       ),
       headerRight: () => (
-        <TouchableOpacity onPress={handleSaveStory} style={{ marginRight: 15 }}>
-          <Text style={styles.saveButtonTextNavigator}>Save</Text>
+        <TouchableOpacity onPress={saveAction} style={{ marginRight: 15 }} disabled={isLoading}>
+          <Text style={styles.saveButtonTextNavigator}>{isLoading ? '...' : saveButtonText}</Text>
         </TouchableOpacity>
       ),
       headerTitleAlign: 'center',
@@ -105,7 +426,7 @@ const CreateStoryScreen = () => {
       headerTitleStyle: { fontWeight: '600' },
       headerBackTitleVisible: false,
     });
-  }, [navigation, router, storyTitle, blocks, storyDate, subtitle, location, privacy, customSelectedViewers, taggedMembers]); // Add dependencies
+  }, [navigation, router, storyTitle, blocks, storyDate, subtitle, location, privacy, customSelectedViewers, taggedMembers, isActuallyEditingNow, isLoading, displayAsEditMode, handleSaveStory, handleUpdateStory]);
 
   useEffect(() => {
     // Listener for when the screen comes into focus
@@ -140,10 +461,10 @@ const CreateStoryScreen = () => {
   useEffect(() => {
     const recordedAudioUri = params?.recordedAudioUri as string | undefined;
     const recordedAudioDuration = params?.recordedAudioDuration as string | undefined;
-    console.log('Record audio useEffect params:', JSON.stringify(params, null, 2)); // ADDED LOG
-    console.log('Record audio useEffect values:', { recordedAudioUri, recordedAudioDuration }); // ADDED LOG
     
     if (recordedAudioUri) {
+      // Log only when we actually have data and are about to process it
+      console.log('Processing returned audio:', { recordedAudioUri, recordedAudioDuration });
       // Create a new audio block with the recorded audio
       const newBlock: StoryBlock = {
         id: Math.random().toString(36).substr(2, 9),
@@ -154,91 +475,18 @@ const CreateStoryScreen = () => {
           isRecording: true,
         },
       };
-      console.log('Recorded newAudioBlock to add:', JSON.stringify(newBlock, null, 2)); // ADDED LOG
+      console.log('Recorded newAudioBlock to add:', JSON.stringify(newBlock, null, 2)); // This log can stay
       setBlocks(prevBlocks => [...prevBlocks, newBlock]);
       
       // Clear params to avoid re-processing
       router.setParams({ recordedAudioUri: undefined, recordedAudioDuration: undefined });
     }
-  }, [router, params]);
+  }, [params?.recordedAudioUri, params?.recordedAudioDuration, router]); // MODIFIED dependency array
 
   // Log blocks state whenever it changes
   useEffect(() => {
     console.log('Current story blocks state:', JSON.stringify(blocks, null, 2));
   }, [blocks]);
-
-  // MARK: - Handlers
-  const handleSaveStory = async () => {
-    if (!storyTitle.trim()) {
-      Alert.alert('Missing Title', 'Please provide a title for your story.');
-      return;
-    }
-    
-    // Transform blocks to match Firebase structure
-    const transformedBlocks = blocks.map(block => {
-      if (block.type === 'text') {
-        return {
-          type: 'text',
-          data: block.content,
-          localId: block.id
-        };
-      } else if (block.type === 'image') {
-        // For image blocks, we would typically upload the images to Firebase Storage
-        // and then store the URLs in Firestore
-        // For now, we'll just store the local URIs as placeholders
-        return {
-          type: 'image',
-          data: Array.isArray(block.content) ? block.content.map(asset => asset.uri) : [],
-          localId: block.id
-        };
-      } else if (block.type === 'audio') {
-        // Similarly for audio, we would upload the file and store the URL
-        return {
-          type: 'audio',
-          data: typeof block.content === 'object' ? block.content.uri : block.content,
-          duration: typeof block.content === 'object' ? block.content.duration : 0,
-          isRecording: typeof block.content === 'object' ? !!block.content.isRecording : false,
-          localId: block.id
-        };
-      } else {
-        return {
-          type: block.type,
-          data: block.content,
-          localId: block.id
-        };
-      }
-    });
-    
-    // Prepare blocks for backend: only include necessary fields
-    const storyBlocks = transformedBlocks.map(({ type, data, localId }) => ({
-      type: type as 'text' | 'image' | 'video' | 'audio',
-      data,
-      localId,
-    }));
-    const storyPayload = {
-      authorID: user?.uid || '',
-      title: storyTitle,
-      subtitle: showSubtitle ? subtitle : undefined,
-      eventDate: showDate && storyDate ? storyDate : undefined,
-      location: showLocation && location ? { lat: location.latitude, lng: location.longitude, address: location.address || '' } : undefined,
-      privacy: (privacy === 'personal' ? 'privateAccess' : privacy) as 'family' | 'privateAccess' | 'custom',
-      customAccessMembers: privacy === 'custom' ? customSelectedViewers : undefined,
-      blocks: storyBlocks,
-      familyTreeId: firestoreUser?.familyTreeId || '',
-      peopleInvolved: taggedMembers,
-      coverPhoto: coverPhoto ? coverPhoto.uri : undefined,
-    };
-    
-    try {
-      const newStoryId = await createStoryMobile(storyPayload);
-      console.log('Story created with ID:', newStoryId);
-      Alert.alert('Success', 'Your story has been saved.');
-      router.back();
-    } catch (error) {
-      console.error('Error creating story:', error);
-      Alert.alert('Error', 'Failed to save your story. Please try again.');
-    }
-  };
 
   const addBlock = (type: BlockType) => {
     const newBlock: StoryBlock = {
@@ -340,22 +588,51 @@ const CreateStoryScreen = () => {
   };
   
   const handleSelectMediaForBlock = async (blockId: string) => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert("Permission Denied", "You've refused to allow this app to access your photos and videos.");
+    // 1. Check current permission status
+    let permissionResult = await ImagePicker.getMediaLibraryPermissionsAsync();
+
+    if (permissionResult.status === ImagePicker.PermissionStatus.UNDETERMINED) {
+      // 2. If undetermined, request permission
+      permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    }
+
+    // 3. Handle based on the final permission status
+    if (permissionResult.status === ImagePicker.PermissionStatus.DENIED) {
+      Alert.alert(
+        "Permission Denied", 
+        "You've denied access to your photos and videos. Please enable access in Settings.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Open Settings", onPress: () => Linking.openSettings() }
+        ]
+      );
+      setAddContentActionSheetVisible(false); // Close sheet if open
       return;
     }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images', 'videos'], // Updated from ImagePicker.MediaTypeOptions.All
-      allowsMultipleSelection: true,
-      quality: 0.8, // Keep quality reasonable for uploads
-    });
-
-    if (!result.canceled && result.assets) {
-      updateBlockContent(blockId, result.assets);
+    
+    if (permissionResult.status !== ImagePicker.PermissionStatus.GRANTED) {
+        Alert.alert("Permission Required", "Photo and video library access is required.");
+        setAddContentActionSheetVisible(false); // Close sheet if open
+        return;
     }
-    setAddContentActionSheetVisible(false); // Close sheet after action
+
+    // 4. Launch picker if permission is granted
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos'],
+        allowsMultipleSelection: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets) {
+        updateBlockContent(blockId, result.assets);
+      }
+    } catch (error) {
+      console.error("Error launching image library for block media:", error);
+      Alert.alert("Image Picker Error", "Could not open the image library. Please try again.");
+    } finally {
+      setAddContentActionSheetVisible(false); // Close sheet after action
+    }
   };
 
   const handleTagPeople = () => {
@@ -387,23 +664,55 @@ const CreateStoryScreen = () => {
 
   // MARK: - Cover Photo Handler
   const handleSelectCoverPhoto = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permissionResult.granted === false) {
-      Alert.alert("Permission Denied", "You've refused to allow this app to access your photos.");
+    // 1. Check current permission status
+    let permissionResult = await ImagePicker.getMediaLibraryPermissionsAsync();
+
+    if (permissionResult.status === ImagePicker.PermissionStatus.UNDETERMINED) {
+      // 2. If undetermined, request permission
+      permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    }
+
+    // 3. Handle based on the final permission status
+    if (permissionResult.status === ImagePicker.PermissionStatus.DENIED) {
+      Alert.alert(
+        "Permission Denied", 
+        "You've denied access to your photos. Please enable access in Settings to select a cover photo.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Open Settings", onPress: () => Linking.openSettings() }
+        ]
+      );
+      setDetailsActionSheetVisible(false); // Close sheet if open
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], // Updated from ImagePicker.MediaTypeOptions.Images
-      allowsEditing: true,
-      aspect: [16, 9],
-      quality: 1,
-    });
-
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      setCoverPhoto(result.assets[0]);
+    if (permissionResult.status !== ImagePicker.PermissionStatus.GRANTED) {
+        Alert.alert("Permission Required", "Photo library access is required to select a cover photo.");
+        setDetailsActionSheetVisible(false); // Close sheet if open
+        return;
     }
-    setDetailsActionSheetVisible(false); // Close sheet
+    
+    // 4. Launch picker if permission is granted (either fully or limited)
+    // For limited access, iOS itself handles showing the picker to manage selected photos.
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'], // Correctly using string literals
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const selectedAsset = result.assets[0];
+        console.log('Cover photo selected:', JSON.stringify(selectedAsset, null, 2));
+        setCoverPhoto(selectedAsset);
+      }
+    } catch (error) {
+      console.error("Error launching image library for cover photo:", error);
+      Alert.alert("Image Picker Error", "Could not open the image library. Please try again.");
+    } finally {
+      setDetailsActionSheetVisible(false); // Close sheet regardless of outcome
+    }
   };
 
   // MARK: - Additional Details Action Sheet Actions

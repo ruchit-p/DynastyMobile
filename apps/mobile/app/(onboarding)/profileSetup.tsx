@@ -270,6 +270,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0E0E0',
     fontFamily: Fonts.type.base,
+    fontWeight: Fonts.weight.regular,
   },
   label: {
     fontSize: 14,

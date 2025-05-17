@@ -51,11 +51,7 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
               </ThemedText>
             )}
           </View>
-          {onMorePress && (
-            <TouchableOpacity onPress={() => onMorePress(story)} style={styles.moreButton}>
-              <Ionicons name="ellipsis-horizontal" size={20} color="#888" />
-            </TouchableOpacity>
-          )}
+        
         </View>
         {textBlock && (
           <ThemedText variant="bodyMedium" style={styles.textContent} numberOfLines={3}>
