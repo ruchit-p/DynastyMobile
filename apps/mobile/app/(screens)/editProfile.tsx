@@ -17,6 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { commonHeaderOptions } from '../../constants/headerConfig';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { getFirebaseAuth, getFirebaseDb } from '../../src/lib/firebase'; // Import Firebase services
+import Fonts from '../../constants/Fonts'; // ADDED IMPORT
 
 const EditProfileScreen = () => {
   const navigation = useNavigation();
@@ -291,6 +292,7 @@ const styles = StyleSheet.create({
     color: '#333',
     borderWidth: 1,
     borderColor: '#DDD',
+    fontFamily: Fonts.type.base, // ADDED FONT FAMILY
   },
   readOnlyInput: {
     backgroundColor: '#F0F0F0', // Different background for read-only

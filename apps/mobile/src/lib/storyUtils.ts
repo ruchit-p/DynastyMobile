@@ -12,6 +12,8 @@ export interface StoryBlock {
 
 export interface Story {
   id: string;
+  title: string;
+  subtitle?: string;
   authorID: string;
   createdAt: { seconds: number; nanoseconds: number };
   eventDate?: { seconds: number; nanoseconds: number };
@@ -22,13 +24,14 @@ export interface Story {
   familyTreeId: string;
   peopleInvolved: string[];
   isDeleted: boolean;
-  coverPhoto?: string;
+  coverImageURL?: string;
   likeCount?: number;
   commentCount?: number;
   author?: {
     id: string;
     displayName: string;
     profilePicture?: string;
+    subtitle?: string;
   };
 }
 
@@ -74,7 +77,7 @@ export const createStoryMobile = async (storyData: {
   blocks: StoryBlock[];
   familyTreeId: string;
   peopleInvolved: string[];
-  coverPhoto?: string;
+  coverImageURL?: string;
 }): Promise<string> => {
   const functionsInstance = getFirebaseFunctions();
   const functionRef = httpsCallable(functionsInstance, 'createStory');
@@ -98,6 +101,7 @@ export const updateStoryMobile = async (
     customAccessMembers: string[];
     blocks: StoryBlock[];
     peopleInvolved: string[];
+    coverImageURL?: string | null;
   }>
 ): Promise<boolean> => {
   const functionsInstance = getFirebaseFunctions();
@@ -212,16 +216,20 @@ export const addCommentMobile = async (
   storyId: string,
   text: string,
   parentId?: string
-): Promise<any | null> => {
+): Promise<{ success: boolean; comment: any | null; error?: string }> => {
   try {
     const functionsInstance = getFirebaseFunctions();
     const functionRef = httpsCallable(functionsInstance, 'commentOnStory');
     const res = await functionRef({ storyId, text, parentId });
     const data = res.data as { success: boolean; comment: any };
-    return data.success ? data.comment : null;
-  } catch (error) {
+    if (data.success && data.comment) {
+      return { success: true, comment: data.comment };
+    } else {
+      return { success: false, comment: null, error: "Failed to add comment or comment data missing from response." };
+    }
+  } catch (error: any) {
     console.error('Error adding comment:', error);
-    return null;
+    return { success: false, comment: null, error: error.message || "Unknown error adding comment" };
   }
 };
 
@@ -229,22 +237,22 @@ export const addCommentMobile = async (
  * Toggle like on a comment
  */
 export const toggleCommentLikeMobile = async (
-  commentId: string,
-  isCurrentlyLiked: boolean,
-  onCommentUpdated?: (liked: boolean) => void
-): Promise<boolean> => {
-  if (onCommentUpdated) onCommentUpdated(!isCurrentlyLiked);
+  commentId: string
+): Promise<{ success: boolean; liked: boolean; error?: string }> => {
   try {
     const functionsInstance = getFirebaseFunctions();
     const functionRef = httpsCallable(functionsInstance, 'likeComment');
     const res = await functionRef({ commentId });
-    const data = res.data as { success: boolean; liked: boolean };
-    if (!data.success && onCommentUpdated) onCommentUpdated(isCurrentlyLiked);
-    return data.success;
-  } catch (error) {
-    if (onCommentUpdated) onCommentUpdated(isCurrentlyLiked);
+    const data = res.data as { success: boolean; liked: boolean; error?: string };
+    if (typeof data.success === 'boolean' && typeof data.liked === 'boolean') {
+       return { success: data.success, liked: data.liked, error: data.error };
+    } else {
+      console.error('Invalid response structure from likeComment:', data);
+      return { success: false, liked: false, error: "Invalid response from server." };
+    }
+  } catch (error: any) {
     console.error('Error toggling comment like:', error);
-    return false;
+    return { success: false, liked: false, error: error.message || "Unknown error toggling comment like" };
   }
 };
 
