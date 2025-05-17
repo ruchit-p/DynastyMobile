@@ -47,6 +47,14 @@ service firebase.storage {
       allow write: if isSignedIn();
     }
     
+    // New rule for eventImages path used by the mobile app
+    match /eventImages/{userId}/{allPaths=**} {
+      // Allow read if signed in (adjust if more specific read control is needed, e.g., based on event membership)
+      allow read: if isSignedIn(); 
+      // Only the user can upload to their own eventImages/{userId} path
+      allow write: if isOwner(userId);
+    }
+    
     // Family tree media
     match /familyTrees/{treeId}/{mediaType}/{fileName} {
       // Any authenticated user can read (app enforces permissions)

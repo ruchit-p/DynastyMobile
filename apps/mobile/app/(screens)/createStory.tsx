@@ -28,7 +28,6 @@ import AddContentButton from '../../components/ui/AddContentButton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { createStoryMobile, updateStoryMobile, fetchAccessibleStoriesMobile, Story as FetchedStory, StoryBlock as FetchedStoryBlock } from '../../src/lib/storyUtils';
 import Fonts from '../../constants/Fonts';
-import { useImageUpload } from '../../hooks/useImageUpload';
 
 // MARK: - Types
 type BlockType = "text" | "image" | "video" | "audio";
@@ -58,14 +57,6 @@ const CreateStoryScreen = () => {
   const [displayAsEditMode] = useState(() => params.editMode === 'true' && !!params.storyId);
   const isActuallyEditingNow = params.editMode === 'true' && !!params.storyId; // For action logic
 
-  // Image Upload Hook for Cover Photo
-  const { 
-    uploadImage: uploadCoverImage, 
-    isUploading: isCoverPhotoUploading, 
-    uploadProgress: coverPhotoUploadProgress, 
-    error: coverPhotoUploadError 
-  } = useImageUpload();
-
   // MARK: - State Variables
   const [isLoading, setIsLoading] = useState(false); // For loading state during fetch
   const [storyTitle, setStoryTitle] = useState('');
@@ -75,9 +66,6 @@ const CreateStoryScreen = () => {
   
   const [showSubtitle, setShowSubtitle] = useState(false);
   const [subtitle, setSubtitle] = useState('');
-
-  const [coverPhoto, setCoverPhoto] = useState<ImagePicker.ImagePickerAsset | null>(null);
-  const [initialCoverImageUrlForEdit, setInitialCoverImageUrlForEdit] = useState<string | null>(null);
 
   const [showLocation, setShowLocation] = useState(false);
   const [location, setLocation] = useState<Location | null>(null);
@@ -118,26 +106,6 @@ const CreateStoryScreen = () => {
 
     setIsLoading(true); 
 
-    let uploadedCoverImageUrl: string | undefined = undefined;
-
-    if (coverPhoto && coverPhoto.uri) {
-      try {
-        const downloadURL = await uploadCoverImage(coverPhoto.uri, 'story-covers');
-        if (downloadURL) {
-          uploadedCoverImageUrl = downloadURL;
-        } else {
-          Alert.alert('Upload Failed', 'Could not upload cover photo. Please try again.');
-          setIsLoading(false);
-          return;
-        }
-      } catch (uploadError) {
-        console.error("Cover photo upload error:", uploadError);
-        Alert.alert('Upload Error', `Failed to upload cover photo: ${ (uploadError as Error).message }`);
-        setIsLoading(false);
-        return;
-      }
-    }
-    
     const transformedBlocks = blocks.map(block => {
       if (block.type === 'text') {
         return {
@@ -183,10 +151,8 @@ const CreateStoryScreen = () => {
       blocks: storyBlocks,
       familyTreeId: firestoreUser.familyTreeId, 
       peopleInvolved: taggedMembers,
-      coverImageURL: uploadedCoverImageUrl, 
     };
     
-    console.log('Preparing to save story with coverImageURL:', uploadedCoverImageUrl);
     console.log('Full story payload:', JSON.stringify(storyPayload, null, 2));
 
     try {
@@ -200,7 +166,7 @@ const CreateStoryScreen = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [storyTitle, firestoreUser, user, coverPhoto, uploadCoverImage, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, router, setIsLoading]);
+  }, [storyTitle, firestoreUser, user, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, router, setIsLoading]);
 
   const handleUpdateStory = useCallback(async () => {
     if (!storyTitle.trim()) {
@@ -213,35 +179,6 @@ const CreateStoryScreen = () => {
     }
 
     setIsLoading(true);
-    let finalUploadedCoverImageUrl: string | null | undefined = initialCoverImageUrlForEdit; 
-
-    if (coverPhoto && coverPhoto.uri) {
-      if (coverPhoto.uri.startsWith('file:///')) { 
-        try {
-          const downloadURL = await uploadCoverImage(coverPhoto.uri, 'story-covers');
-          if (downloadURL) {
-            finalUploadedCoverImageUrl = downloadURL;
-          } else {
-            Alert.alert('Upload Failed', 'Could not upload new cover photo. Please try again.');
-            setIsLoading(false);
-            return;
-          }
-        } catch (uploadError) {
-          console.error("New cover photo upload error:", uploadError);
-          Alert.alert('Upload Error', `Failed to upload new cover photo: ${ (uploadError as Error).message }`);
-          setIsLoading(false);
-          return;
-        }
-      } else { 
-        finalUploadedCoverImageUrl = coverPhoto.uri; 
-      }
-    } else { 
-      if (initialCoverImageUrlForEdit) { 
-        finalUploadedCoverImageUrl = null; 
-      } else { 
-        finalUploadedCoverImageUrl = undefined; 
-      }
-    }
     
     const transformedBlocksForUpdate = blocks.map(block => {
       if (block.type === 'text') {
@@ -271,10 +208,6 @@ const CreateStoryScreen = () => {
       peopleInvolved: taggedMembers,
     };
 
-    if (finalUploadedCoverImageUrl !== initialCoverImageUrlForEdit) {
-      storyUpdatePayload.coverImageURL = finalUploadedCoverImageUrl; 
-    }
-
     Object.keys(storyUpdatePayload).forEach(key => {
       if ((storyUpdatePayload as any)[key] === undefined) {
         delete (storyUpdatePayload as any)[key];
@@ -293,7 +226,7 @@ const CreateStoryScreen = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [storyTitle, storyIdForEdit, user, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, coverPhoto, initialCoverImageUrlForEdit, uploadCoverImage, router, setIsLoading]);
+  }, [storyTitle, storyIdForEdit, user, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, router, setIsLoading]);
 
   // MARK: - Load Story Data for Editing
   useEffect(() => {
@@ -323,14 +256,6 @@ const CreateStoryScreen = () => {
             } else {
               setStoryDate(null);
               setShowDate(false);
-            }
-            
-            if (storyToEdit.coverImageURL) {
-              setCoverPhoto({ uri: storyToEdit.coverImageURL, width: 0, height: 0, type: 'image' });
-              setInitialCoverImageUrlForEdit(storyToEdit.coverImageURL);
-            } else {
-              setCoverPhoto(null);
-              setInitialCoverImageUrlForEdit(null);
             }
             
             if (storyToEdit.location) {
@@ -426,7 +351,7 @@ const CreateStoryScreen = () => {
       headerTitleStyle: { fontWeight: '600' },
       headerBackTitleVisible: false,
     });
-  }, [navigation, router, storyTitle, blocks, storyDate, subtitle, location, privacy, customSelectedViewers, taggedMembers, isActuallyEditingNow, isLoading, displayAsEditMode, handleSaveStory, handleUpdateStory]);
+  }, [navigation, router, isLoading, displayAsEditMode, handleSaveStory, handleUpdateStory]);
 
   useEffect(() => {
     // Listener for when the screen comes into focus
@@ -662,68 +587,10 @@ const CreateStoryScreen = () => {
   const hideDatePicker = () => setDatePickerVisibility(false);
   const handleDateConfirm = (date: Date) => { setStoryDate(date); hideDatePicker(); };
 
-  // MARK: - Cover Photo Handler
-  const handleSelectCoverPhoto = async () => {
-    // 1. Check current permission status
-    let permissionResult = await ImagePicker.getMediaLibraryPermissionsAsync();
-
-    if (permissionResult.status === ImagePicker.PermissionStatus.UNDETERMINED) {
-      // 2. If undetermined, request permission
-      permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    }
-
-    // 3. Handle based on the final permission status
-    if (permissionResult.status === ImagePicker.PermissionStatus.DENIED) {
-      Alert.alert(
-        "Permission Denied", 
-        "You've denied access to your photos. Please enable access in Settings to select a cover photo.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Open Settings", onPress: () => Linking.openSettings() }
-        ]
-      );
-      setDetailsActionSheetVisible(false); // Close sheet if open
-      return;
-    }
-
-    if (permissionResult.status !== ImagePicker.PermissionStatus.GRANTED) {
-        Alert.alert("Permission Required", "Photo library access is required to select a cover photo.");
-        setDetailsActionSheetVisible(false); // Close sheet if open
-        return;
-    }
-    
-    // 4. Launch picker if permission is granted (either fully or limited)
-    // For limited access, iOS itself handles showing the picker to manage selected photos.
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'], // Correctly using string literals
-        allowsEditing: true,
-        aspect: [16, 9],
-        quality: 1,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const selectedAsset = result.assets[0];
-        console.log('Cover photo selected:', JSON.stringify(selectedAsset, null, 2));
-        setCoverPhoto(selectedAsset);
-      }
-    } catch (error) {
-      console.error("Error launching image library for cover photo:", error);
-      Alert.alert("Image Picker Error", "Could not open the image library. Please try again.");
-    } finally {
-      setDetailsActionSheetVisible(false); // Close sheet regardless of outcome
-    }
-  };
-
   // MARK: - Additional Details Action Sheet Actions
   const detailsActions: ActionSheetAction[] = [
     { title: showSubtitle ? 'Remove Subtitle' : 'Add Subtitle', onPress: () => { setShowSubtitle(!showSubtitle); setDetailsActionSheetVisible(false); } },
     { title: showDate ? 'Remove Date' : 'Add Date', onPress: () => { setShowDate(!showDate); setDetailsActionSheetVisible(false); } },
-    { title: coverPhoto ? 'Remove Cover Photo' : 'Add Cover Photo', onPress: () => {
-        if (coverPhoto) { setCoverPhoto(null); } else { handleSelectCoverPhoto(); }
-        setDetailsActionSheetVisible(false);
-      }
-    },
     { title: showLocation ? 'Remove Location' : 'Add Location', onPress: () => {
         if (showLocation) { setShowLocation(false); setLocation(null); } else { setShowLocation(true); handleAddLocation(); }
         setDetailsActionSheetVisible(false);
@@ -862,7 +729,7 @@ const CreateStoryScreen = () => {
           <Text style={styles.sectionTitle}>Story Details</Text>
           
           {/* Cover Photo */}
-          {coverPhoto && (
+          {/* {coverPhoto && (
             <View style={styles.coverPhotoContainer}>
               <Image source={{ uri: coverPhoto.uri }} style={styles.coverPhoto} />
               <TouchableOpacity 
@@ -872,7 +739,7 @@ const CreateStoryScreen = () => {
                 <Ionicons name="close-circle" size={30} color="white" />
               </TouchableOpacity>
             </View>
-          )}
+          )} */}
 
           <TextInput
             style={styles.inputStoryTitle}
@@ -1258,26 +1125,6 @@ const styles = StyleSheet.create({
     width: '100%',
     borderBottomWidth: 1,
     borderBottomColor: '#EEE',
-  },
-  coverPhotoContainer: {
-    height: 150,
-    width: '100%',
-    borderRadius: 8,
-    marginBottom: 15,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  coverPhoto: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  removeCoverPhotoButton: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 15,
   },
   audioBlockContainer: {
     flexDirection: 'row',
