@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
   },
   overlayContainer: {
     position: 'absolute',
-    top: Platform.OS === 'android' ? 10 : (Dimensions.get('window').height > 800 ? 50 : 30), // Adjust for notch/status bar
+    top: Platform.OS === 'android' ? 10 : (Dimensions.get('window').height > 800 ? 20 : 10), // Adjusted for less padding
     left: 0,
     right: 0,
     marginHorizontal: 15,

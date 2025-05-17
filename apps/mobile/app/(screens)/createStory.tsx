@@ -13,6 +13,7 @@ import {
   Modal,
   Button,
   Linking,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useNavigation, Stack, useLocalSearchParams } from 'expo-router';
@@ -28,6 +29,7 @@ import AddContentButton from '../../components/ui/AddContentButton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { createStoryMobile, updateStoryMobile, fetchAccessibleStoriesMobile, Story as FetchedStory, StoryBlock as FetchedStoryBlock } from '../../src/lib/storyUtils';
 import Fonts from '../../constants/Fonts';
+import { useImageUpload } from '../../hooks/useImageUpload';
 
 // MARK: - Types
 type BlockType = "text" | "image" | "video" | "audio";
@@ -49,6 +51,7 @@ const CreateStoryScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ storyId?: string; editMode?: string; returnedPurpose?: string; selectedIds?: string; recordedAudioUri?: string; recordedAudioDuration?: string }>(); // Typed params
+  const { uploadImage, isUploading: isImageUploading, uploadProgress } = useImageUpload();
 
   const storyIdForEdit = params.storyId;
   // const isEditing = params.editMode === 'true'; // Will be replaced by isActuallyEditingNow and displayAsEditMode
@@ -83,6 +86,11 @@ const CreateStoryScreen = () => {
   const [isAddContentActionSheetVisible, setAddContentActionSheetVisible] = useState(false);
   const [isAudioActionSheetVisible, setAudioActionSheetVisible] = useState(false);
 
+  const [isUploading, setIsUploading] = useState(false);
+  const [overallProgress, setOverallProgress] = useState(0);
+  const [totalUploads, setTotalUploads] = useState(0);
+  const [completedUploads, setCompletedUploads] = useState(0);
+
   // Placeholder for user avatar/name - can be removed if not used
   // const userAvatar = 'https://via.placeholder.com/40';
   // const userName = 'Current User';
@@ -93,6 +101,91 @@ const CreateStoryScreen = () => {
   }, [isAudioActionSheetVisible]);
 
   // MARK: - Handlers (Moved Up and Wrapped in useCallback)
+
+  // Function to upload all images in image blocks and return updated blocks with Firebase Storage URLs
+  const uploadAllImages = async (storyBlocks: Array<{
+    type: string;
+    data: any;
+    localId: string;
+  }>) => {
+    // Count total images that need to be uploaded
+    let imagesToUpload = 0;
+    storyBlocks.forEach(block => {
+      if (block.type === 'image' && Array.isArray(block.data)) {
+        block.data.forEach(uri => {
+          // Only count local file URIs
+          if (typeof uri === 'string' && uri.startsWith('file://')) {
+            imagesToUpload++;
+          }
+        });
+      }
+    });
+    
+    if (imagesToUpload === 0) {
+      // No images to upload, return blocks as is
+      return storyBlocks;
+    }
+    
+    setIsUploading(true);
+    setTotalUploads(imagesToUpload);
+    setCompletedUploads(0);
+    setOverallProgress(0);
+    
+    // Deep copy of blocks to avoid mutating the original
+    const updatedBlocks = JSON.parse(JSON.stringify(storyBlocks));
+    
+    // Process each block
+    for (let i = 0; i < updatedBlocks.length; i++) {
+      const block = updatedBlocks[i];
+      
+      if (block.type === 'image' && Array.isArray(block.data)) {
+        // Create new array for updated image URLs
+        const updatedImageUrls = [];
+        
+        // Process each image in the block
+        for (let j = 0; j < block.data.length; j++) {
+          const uri = block.data[j];
+          
+          if (typeof uri === 'string' && uri.startsWith('file://')) {
+            try {
+              // Upload image to Firebase Storage
+              const uploadedUrl = await uploadImage(
+                uri, 
+                'stories', 
+                (progress) => {
+                  // Update overall progress
+                  const currentTotalProgress = (completedUploads + progress / 100) / totalUploads * 100;
+                  setOverallProgress(currentTotalProgress);
+                }
+              );
+              
+              if (uploadedUrl) {
+                updatedImageUrls.push(uploadedUrl);
+                setCompletedUploads(prev => prev + 1);
+              } else {
+                // If upload failed but we have a URI, use original URI as fallback
+                console.warn(`Failed to upload image ${j} in block ${i}, using original URI as fallback`);
+                updatedImageUrls.push(uri);
+              }
+            } catch (error) {
+              console.error(`Error uploading image ${j} in block ${i}:`, error);
+              // Use original URI as fallback
+              updatedImageUrls.push(uri);
+            }
+          } else {
+            // Not a local file URI, probably already a Firebase URL, keep as is
+            updatedImageUrls.push(uri);
+          }
+        }
+        
+        // Update block with new image URLs
+        block.data = updatedImageUrls;
+      }
+    }
+    
+    setIsUploading(false);
+    return updatedBlocks;
+  };
 
   const handleSaveStory = useCallback(async () => {
     if (!storyTitle.trim()) {
@@ -135,27 +228,25 @@ const CreateStoryScreen = () => {
       }
     });
     
-    const storyBlocks = transformedBlocks.map(({ type, data, localId }) => ({
-      type: type as 'text' | 'image' | 'video' | 'audio',
-      data,
-      localId,
-    }));
-    const storyPayload = {
-      authorID: user?.uid || '',
-      title: storyTitle,
-      subtitle: showSubtitle ? subtitle : undefined,
-      eventDate: showDate && storyDate ? storyDate : undefined,
-      location: showLocation && location ? { lat: location.latitude, lng: location.longitude, address: location.address || '' } : undefined,
-      privacy: (privacy === 'personal' ? 'privateAccess' : privacy) as 'family' | 'privateAccess' | 'custom',
-      customAccessMembers: privacy === 'custom' ? customSelectedViewers : undefined,
-      blocks: storyBlocks,
-      familyTreeId: firestoreUser.familyTreeId, 
-      peopleInvolved: taggedMembers,
-    };
-    
-    console.log('Full story payload:', JSON.stringify(storyPayload, null, 2));
-
     try {
+      // Upload all images to Firebase Storage and get updated blocks with Firebase URLs
+      const updatedBlocks = await uploadAllImages(transformedBlocks);
+      
+      const storyPayload = {
+        authorID: user?.uid || '',
+        title: storyTitle,
+        subtitle: showSubtitle ? subtitle : undefined,
+        eventDate: showDate && storyDate ? storyDate : undefined,
+        location: showLocation && location ? { lat: location.latitude, lng: location.longitude, address: location.address || '' } : undefined,
+        privacy: (privacy === 'personal' ? 'privateAccess' : privacy) as 'family' | 'privateAccess' | 'custom',
+        customAccessMembers: privacy === 'custom' ? customSelectedViewers : undefined,
+        blocks: updatedBlocks,
+        familyTreeId: firestoreUser.familyTreeId, 
+        peopleInvolved: taggedMembers,
+      };
+      
+      console.log('Full story payload:', JSON.stringify(storyPayload, null, 2));
+
       const newStoryId = await createStoryMobile(storyPayload);
       console.log('Story created with ID:', newStoryId);
       Alert.alert('Success', 'Your story has been saved.');
@@ -166,7 +257,7 @@ const CreateStoryScreen = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [storyTitle, firestoreUser, user, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, router, setIsLoading]);
+  }, [storyTitle, firestoreUser, user, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, router, uploadImage]);
 
   const handleUpdateStory = useCallback(async () => {
     if (!storyTitle.trim()) {
@@ -193,30 +284,29 @@ const CreateStoryScreen = () => {
       return { type: block.type, data: block.content, localId: block.id };
     });
 
-    const storyUpdatePayload: Parameters<typeof updateStoryMobile>[2] = {
-      title: storyTitle,
-      subtitle: showSubtitle ? subtitle : undefined,
-      eventDate: showDate && storyDate ? new Date(storyDate) : undefined,
-      location: showLocation && location ? { lat: location.latitude, lng: location.longitude, address: location.address || '' } : undefined,
-      privacy: (privacy === 'personal' ? 'privateAccess' : privacy) as 'family' | 'privateAccess' | 'custom',
-      customAccessMembers: privacy === 'custom' ? customSelectedViewers : undefined,
-      blocks: transformedBlocksForUpdate.map(({ type, data, localId }) => ({
-        type: type as 'text' | 'image' | 'video' | 'audio',
-        data,
-        localId,
-      })),
-      peopleInvolved: taggedMembers,
-    };
-
-    Object.keys(storyUpdatePayload).forEach(key => {
-      if ((storyUpdatePayload as any)[key] === undefined) {
-        delete (storyUpdatePayload as any)[key];
-      }
-    });
-    
-    console.log('Updating story with payload:', JSON.stringify(storyUpdatePayload, null, 2));
-
     try {
+      // Upload all images to Firebase Storage and get updated blocks with Firebase URLs
+      const updatedBlocks = await uploadAllImages(transformedBlocksForUpdate);
+      
+      const storyUpdatePayload: Parameters<typeof updateStoryMobile>[2] = {
+        title: storyTitle,
+        subtitle: showSubtitle ? subtitle : undefined,
+        eventDate: showDate && storyDate ? new Date(storyDate) : undefined,
+        location: showLocation && location ? { lat: location.latitude, lng: location.longitude, address: location.address || '' } : undefined,
+        privacy: (privacy === 'personal' ? 'privateAccess' : privacy) as 'family' | 'privateAccess' | 'custom',
+        customAccessMembers: privacy === 'custom' ? customSelectedViewers : undefined,
+        blocks: updatedBlocks,
+        peopleInvolved: taggedMembers,
+      };
+
+      Object.keys(storyUpdatePayload).forEach(key => {
+        if ((storyUpdatePayload as any)[key] === undefined) {
+          delete (storyUpdatePayload as any)[key];
+        }
+      });
+      
+      console.log('Updating story with payload:', JSON.stringify(storyUpdatePayload, null, 2));
+
       await updateStoryMobile(storyIdForEdit!, user.uid, storyUpdatePayload);
       Alert.alert('Success', 'Your story has been updated.');
       router.back();
@@ -226,7 +316,7 @@ const CreateStoryScreen = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [storyTitle, storyIdForEdit, user, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, router, setIsLoading]);
+  }, [storyTitle, storyIdForEdit, user, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, router, uploadImage]);
 
   // MARK: - Load Story Data for Editing
   useEffect(() => {
@@ -341,8 +431,13 @@ const CreateStoryScreen = () => {
         </TouchableOpacity>
       ),
       headerRight: () => (
-        <TouchableOpacity onPress={saveAction} style={{ marginRight: 15 }} disabled={isLoading}>
-          <Text style={styles.saveButtonTextNavigator}>{isLoading ? '...' : saveButtonText}</Text>
+        <TouchableOpacity onPress={saveAction} style={{ marginRight: 15 }} disabled={isLoading || isUploading}>
+          <Text style={[
+            styles.saveButtonTextNavigator, 
+            (isLoading || isUploading) && { color: '#A0A0A0' }
+          ]}>
+            {isLoading ? '...' : saveButtonText}
+          </Text>
         </TouchableOpacity>
       ),
       headerTitleAlign: 'center',
@@ -351,7 +446,7 @@ const CreateStoryScreen = () => {
       headerTitleStyle: { fontWeight: '600' },
       headerBackTitleVisible: false,
     });
-  }, [navigation, router, isLoading, displayAsEditMode, handleSaveStory, handleUpdateStory]);
+  }, [navigation, router, isLoading, displayAsEditMode, handleSaveStory, handleUpdateStory, isUploading]);
 
   useEffect(() => {
     // Listener for when the screen comes into focus
@@ -697,6 +792,26 @@ const CreateStoryScreen = () => {
     </Modal>
   );
 
+  // Show a loading overlay during image uploads or story creation/update
+  const renderLoadingOverlay = () => {
+    if (isLoading || isUploading) {
+      return (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#1A4B44" />
+          <Text style={styles.loadingText}>
+            {isUploading ? `Uploading images (${Math.round(overallProgress)}%)` : 'Saving story...'}
+          </Text>
+          {isUploading && (
+            <View style={styles.progressBarContainer}>
+              <View style={[styles.progressBar, { width: `${overallProgress}%` }]} />
+            </View>
+          )}
+        </View>
+      );
+    }
+    return null;
+  };
+
   // MARK: - Main Render
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -709,8 +824,17 @@ const CreateStoryScreen = () => {
             </TouchableOpacity>
           ),
           headerRight: () => (
-            <TouchableOpacity onPress={handleSaveStory} style={{ marginRight: 15 }}>
-              <Text style={styles.saveButtonTextNavigator}>Save</Text>
+            <TouchableOpacity 
+              onPress={isActuallyEditingNow ? handleUpdateStory : handleSaveStory} 
+              style={{ marginRight: 15 }}
+              disabled={isLoading || isUploading}
+            >
+              <Text style={[
+                styles.saveButtonTextNavigator, 
+                (isLoading || isUploading) && { color: '#A0A0A0' }
+              ]}>
+                {isActuallyEditingNow ? 'Update' : 'Save'}
+              </Text>
             </TouchableOpacity>
           ),
           headerTitleAlign: 'center',
@@ -929,6 +1053,9 @@ const CreateStoryScreen = () => {
         onCancel={hideDatePicker}
         date={storyDate || new Date()}
       />
+      
+      {/* Loading overlay */}
+      {renderLoadingOverlay()}
     </SafeAreaView>
   );
 };
@@ -1169,6 +1296,35 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     borderWidth: 1,
     borderColor: '#DDDDDD',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#1A4B44',
+    fontWeight: '500',
+  },
+  progressBarContainer: {
+    width: '80%',
+    height: 10,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 5,
+    marginTop: 10,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#1A4B44',
   },
 });
 

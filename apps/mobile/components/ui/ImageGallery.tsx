@@ -26,6 +26,8 @@ interface ImageGalleryProps {
   iconColor?: string; // For the remove icon, defaults to dynastyGreen
   addIconColor?: string; // For the add icon, defaults to #A0A0A0
   replaceIconColor?: string; // For the replace icon, defaults to #FFFFFF
+  showRemoveButton?: boolean; // New prop
+  showReplaceButton?: boolean; // New prop
 }
 
 const ImageGallery: React.FC<ImageGalleryProps> = ({
@@ -39,6 +41,8 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({
   iconColor = Colors.dynastyGreen, // Use from Colors.ts
   addIconColor = '#A0A0A0',
   replaceIconColor = '#FFFFFF',
+  showRemoveButton = true, // Default to true
+  showReplaceButton = true, // Default to true
 }) => {
   const windowWidth = Dimensions.get('window').width;
 
@@ -48,24 +52,29 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({
         <ScrollView
           horizontal
           pagingEnabled
+          nestedScrollEnabled={true}
           showsHorizontalScrollIndicator={false}
           style={{ width: windowWidth }} // Ensure ScrollView takes up the intended width
         >
           {photos.map((photo, index) => (
             <View key={index} style={[styles.imageWrapper, { width: windowWidth }]}>
               <Image source={{ uri: photo.uri }} style={[styles.eventImagePreview, imageStyle]} />
-              <TouchableOpacity
-                style={styles.removePhotoButton}
-                onPress={() => onRemovePhoto(index)}
-              >
-                <Ionicons name="close" size={20} color={iconColor} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.replacePhotoButton}
-                onPress={() => onReplacePhoto(index)}
-              >
-                <MaterialCommunityIcons name="camera-flip-outline" size={20} color={replaceIconColor} />
-              </TouchableOpacity>
+              {showRemoveButton && (
+                <TouchableOpacity
+                  style={styles.removePhotoButton}
+                  onPress={() => onRemovePhoto(index)}
+                >
+                  <Ionicons name="close" size={20} color={iconColor} />
+                </TouchableOpacity>
+              )}
+              {showReplaceButton && (
+                <TouchableOpacity
+                  style={styles.replacePhotoButton}
+                  onPress={() => onReplacePhoto(index)}
+                >
+                  <MaterialCommunityIcons name="camera-flip-outline" size={20} color={replaceIconColor} />
+                </TouchableOpacity>
+              )}
             </View>
           ))}
           {photos.length < maxPhotos && (

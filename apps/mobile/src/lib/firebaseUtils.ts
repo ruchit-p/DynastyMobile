@@ -367,12 +367,147 @@ export const moveVaultItemMobile = async (
 export const deleteVaultItemMobile = async (
   itemId: string
 ): Promise<{ success: boolean }> => {
-  const functionRef = httpsCallable(functionsInstance, 'deleteVaultItem');
   try {
-    const result = await functionRef({ itemId });
-    return result.data as { success: boolean };
+    const functions = getFirebaseFunctions();
+    const deleteVaultItemFunction = httpsCallable(functions, 'deleteVaultItem');
+    const result = await deleteVaultItemFunction({ itemId });
+    return (result.data as { success: boolean });
   } catch (error) {
     console.error("Error deleting vault item:", error);
+    // It's good practice to throw or return an error object that can be handled by the caller
+    // For simplicity here, just re-throwing, but you might want a custom error type or structure
     throw error;
+  }
+};
+
+// MARK: - Event Functions
+
+export interface MobileEventHost {
+  id: string;
+  name: string;
+  avatar?: string | null;
+}
+
+export interface MobileEventAttendee {
+  id: string;
+  name: string;
+  avatar?: string | null;
+  status: 'pending' | 'yes' | 'no' | 'maybe';
+}
+
+export interface MobileEventComment {
+  id: string;
+  text: string;
+  timestamp: any; // Consider using a stricter type like Date or Firebase Timestamp
+  user: {
+    id: string;
+    name: string;
+    avatar?: string | null;
+  };
+}
+
+export interface MobileEventDetails {
+  id: string;
+  title: string;
+  eventDate: string; // Keep as string for now, parsing will happen in component
+  startTime?: string;
+  endTime?: string;
+  timezone?: string;
+  location?: {
+    address: string;
+    lat: number;
+    lng: number;
+  } | null;
+  virtualLink?: string | null;
+  isVirtual: boolean;
+  description?: string;
+  dresscode?: string | null;
+  whatToBring?: string | null;
+  additionalInfo?: string | null;
+  privacy: string;
+  allowGuestPlusOne: boolean;
+  showGuestList: boolean;
+  requireRsvp: boolean;
+  rsvpDeadline?: string | null;
+  host: MobileEventHost;
+  attendees: MobileEventAttendee[];
+  comments: MobileEventComment[];
+  coverPhotoUrls?: string[];
+  userStatus: string; // 'going', 'pending', 'yes', 'no', 'maybe'
+  isCreator: boolean;
+  // Raw Firebase fields, in case they are needed directly or for future use
+  // These come from the 'eventData' spread in the cloud function
+  hostId: string; 
+  invitedMembers: string[];
+  createdAt?: any; 
+  updatedAt?: any;
+}
+
+export const getEventDetailsMobile = async (eventId: string): Promise<MobileEventDetails | null> => {
+  try {
+    const functions = getFirebaseFunctions();
+    // Ensure the function name matches exactly what's exported from your Firebase functions index
+    // Usually, if your exported const is getEventDetailsApi, the callable name is 'getEventDetailsApi'
+    const getEventDetailsFunction = httpsCallable(functions, 'getEventDetailsApi'); 
+    
+    console.log(`[firebaseUtils] Calling getEventDetailsApi for eventId: ${eventId}`);
+    const result = await getEventDetailsFunction({ eventId });
+    console.log('[firebaseUtils] Raw response from getEventDetailsApi:', result.data);
+
+    // The cloud function returns { event: { ...details... } }
+    const eventDataFromServer = (result.data as any)?.event;
+
+    if (!eventDataFromServer) {
+      console.error("Error: Event data not found in function response.", result.data);
+      return null;
+    }
+    
+    // Basic mapping, you might need more sophisticated date parsing or transformations here
+    const mobileEventDetails: MobileEventDetails = {
+      id: eventDataFromServer.id,
+      title: eventDataFromServer.title,
+      eventDate: eventDataFromServer.eventDate, // This is likely a string or Timestamp
+      startTime: eventDataFromServer.startTime,
+      endTime: eventDataFromServer.endTime,
+      timezone: eventDataFromServer.timezone,
+      location: eventDataFromServer.location,
+      virtualLink: eventDataFromServer.virtualLink,
+      isVirtual: eventDataFromServer.isVirtual,
+      description: eventDataFromServer.description,
+      dresscode: eventDataFromServer.dresscode,
+      whatToBring: eventDataFromServer.whatToBring,
+      additionalInfo: eventDataFromServer.additionalInfo,
+      privacy: eventDataFromServer.privacy,
+      allowGuestPlusOne: eventDataFromServer.allowGuestPlusOne,
+      showGuestList: eventDataFromServer.showGuestList,
+      requireRsvp: eventDataFromServer.requireRsvp,
+      rsvpDeadline: eventDataFromServer.rsvpDeadline, // This might need date parsing
+      host: eventDataFromServer.host,
+      attendees: eventDataFromServer.attendees,
+      comments: eventDataFromServer.comments.map((comment: any) => ({
+        ...comment,
+        // Ensure timestamp is handled (e.g., convert to Date if it's a Firebase Timestamp)
+        // timestamp: comment.timestamp?.toDate ? comment.timestamp.toDate() : new Date(comment.timestamp)
+      })),
+      coverPhotoUrls: eventDataFromServer.coverPhotoUrls,
+      userStatus: eventDataFromServer.userStatus,
+      isCreator: eventDataFromServer.isCreator,
+      hostId: eventDataFromServer.hostId,
+      invitedMembers: eventDataFromServer.invitedMembers,
+      createdAt: eventDataFromServer.createdAt,
+      updatedAt: eventDataFromServer.updatedAt,
+    };
+    
+    console.log('[firebaseUtils] Mapped MobileEventDetails:', mobileEventDetails);
+    return mobileEventDetails;
+
+  } catch (error: any) {
+    console.error(`Error fetching event details for ${eventId}:`, error);
+    if (error.code === 'functions/not-found' && error.message.includes('getEventDetailsApi')) {
+        console.error("VERIFY: The function 'getEventDetailsApi' might not be correctly deployed or exported in your Firebase functions index.ts.");
+    } else if (error.details) {
+        console.error("Error details:", error.details);
+    }
+    return null; // Or throw error, depending on how you want to handle it
   }
 };

@@ -16,7 +16,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter, useNavigation, useLocalSearchParams, usePathname } from 'expo-router';
+import { useRouter, useNavigation, useLocalSearchParams, usePathname, router as expoRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { getFirebaseAuth, getFirebaseFunctions } from '../../src/lib/firebase'; // Use getFirebaseFunctions from local lib
 import { useImageUpload } from '../../hooks/useImageUpload';
@@ -86,18 +86,16 @@ const CreateEventScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{
-    // Params from sub-screens like selectLocation, selectVisibility etc.
-    selectedVisibility?: 'family' | 'private', // Matched to new privacy type
-    selectedLocation?: string, // Keep for now, but selectedLocation object is richer
+    selectedVisibility?: 'family' | 'private',
+    selectedLocation?: string, 
     selectedLocationLat?: string,
     selectedLocationLng?: string,
     selectedInviteType?: 'all' | 'select',
-    newSelectedMembers?: string, // Expecting a JSON string of array
+    newSelectedMembers?: string, 
     fromScreen?: string,
-    // New params for calendar day view integration
-    prefillDate?: string, // ISO string of selected date
-    prefillStartTime?: string, // Format HH:MM
-    prefillEndTime?: string, // Format HH:MM
+    prefillDate?: string, 
+    prefillStartTime?: string, 
+    prefillEndTime?: string,
   }>();
   const currentPath = usePathname();
 
@@ -178,6 +176,7 @@ const CreateEventScreen = () => {
 
   // This effect handles parameters passed from other screens (like location or visibility selection)
   useEffect(() => {
+    console.log('[CreateEventScreen] Params received:', JSON.stringify(params, null, 2));
     // Handle prefilled date and time from calendar view
     if (params.prefillDate) {
       try {
@@ -190,8 +189,10 @@ const CreateEventScreen = () => {
             startTime: params.prefillStartTime ?? prev.startTime,
             endTime: params.prefillEndTime ?? prev.endTime,
           }));
-        } else {
-          console.error("Invalid prefillDate:", params.prefillDate);
+        }
+        // Clear prefill params after use
+        if (Platform.OS !== 'web') { // setParams is not available on web with expo-router
+          expoRouter.setParams({ prefillDate: undefined, prefillStartTime: undefined, prefillEndTime: undefined });
         }
       } catch (e) {
         console.error("Failed to parse prefilled date", e);
@@ -199,10 +200,13 @@ const CreateEventScreen = () => {
     }
 
     // Handle selection screen params
+    let paramsUsed = false;
     if (params.fromScreen === 'selectVisibility' && params.selectedVisibility) {
-      // setNewEvent(prev => ({ ...prev, visibility: params.selectedVisibility! })); // Old
+      console.log('[CreateEventScreen] Applying visibility params:', params.selectedVisibility);
       setNewEvent(prev => ({ ...prev, privacy: params.selectedVisibility! }));
+      paramsUsed = true;
     } else if (params.fromScreen === 'selectLocation' && params.selectedLocation) {
+      console.log('[CreateEventScreen] Applying location params:', params.selectedLocation);
       const lat = params.selectedLocationLat ? parseFloat(params.selectedLocationLat) : null;
       const lng = params.selectedLocationLng ? parseFloat(params.selectedLocationLng) : null;
       if (lat !== null && lng !== null) {
@@ -214,7 +218,9 @@ const CreateEventScreen = () => {
       } else {
         setNewEvent(prev => ({ ...prev, location: params.selectedLocation!, selectedLocation: null }));
       }
+      paramsUsed = true;
     } else if (params.fromScreen === 'selectInviteType' && params.selectedInviteType) {
+      console.log('[CreateEventScreen] Applying invite type params:', params.selectedInviteType);
       setNewEvent(prev => ({ ...prev, inviteType: params.selectedInviteType!}));
       if (params.selectedInviteType === 'select' && params.newSelectedMembers) {
         try {
@@ -226,11 +232,22 @@ const CreateEventScreen = () => {
           console.error("Failed to parse selected members from params", e);
         }
       }
+      paramsUsed = true;
     }
-    // Clear params after processing to avoid re-triggering (basic approach)
-    // A more robust solution might involve a navigation state or context
-    // router.setParams({ fromScreen: undefined, selectedVisibility: undefined, selectedLocation: undefined, selectedLocationLat: undefined, selectedLocationLng: undefined, selectedInviteType: undefined, newSelectedMembers: undefined });
-  }, [params.prefillDate, params.prefillStartTime, params.prefillEndTime]);
+
+    if (paramsUsed && Platform.OS !== 'web') {
+      console.log('[CreateEventScreen] Clearing fromScreen params');
+      expoRouter.setParams({
+        fromScreen: undefined,
+        selectedVisibility: undefined,
+        selectedLocation: undefined,
+        selectedLocationLat: undefined,
+        selectedLocationLng: undefined,
+        selectedInviteType: undefined,
+        newSelectedMembers: undefined,
+      });
+    }
+  }, [params]);
 
   const [mediaLibraryPermission, requestMediaLibraryPermission] = ImagePicker.useMediaLibraryPermissions();
 
@@ -836,16 +853,6 @@ const CreateEventScreen = () => {
         cancelText="Cancel"
         is24Hour={false}
       />
-
-      {Platform.OS === 'ios' && (
-        <InputAccessoryView nativeID={inputAccessoryViewID}>
-          <View style={{ alignItems: 'flex-end', backgroundColor: '#EFF0F1', paddingVertical: 5, paddingHorizontal: 10 }}>
-            <TouchableOpacity onPress={() => Keyboard.dismiss()}>
-              <Text style={{ color: dynastyGreen, fontWeight: 'bold' }}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </InputAccessoryView>
-      )}
 
       <View style={styles.createButtonContainerOuter}>
         <TouchableOpacity style={styles.createButton} onPress={handleCreateEvent}>

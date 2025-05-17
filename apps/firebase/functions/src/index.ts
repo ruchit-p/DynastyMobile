@@ -21,3 +21,4 @@ export * from "./events"; // Event management functions
 export * from "./eventsApi";
 export * from "./notifications"; // Notification functions
 export * from "./vault";
+export * from "./placesApi";

@@ -23,12 +23,27 @@ export interface CardProps {
   testID?: string;
 }
 
+// Interface for Card subcomponents
+interface CardSectionProps {
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  testID?: string;
+}
+
+// Define the types for the static properties
+interface CardComponent extends React.FC<CardProps> {
+  Header: React.FC<CardSectionProps>;
+  Content: React.FC<CardSectionProps>;
+  Footer: React.FC<CardSectionProps>;
+}
+
 /**
  * Card Component
  * 
  * A container component with different variants for grouping related content.
  */
-const Card: React.FC<CardProps> = ({
+// Cast the Card component to the CardComponent interface
+const Card: CardComponent = ({
   children,
   variant = 'elevated',
   noPadding = false,
@@ -37,11 +52,12 @@ const Card: React.FC<CardProps> = ({
   testID,
 }) => {
   const colorScheme = useColorScheme();
-  const theme = colorScheme || 'light';
+  // const theme = colorScheme || 'light'; // theme variable not used
   
-  // Get theme colors
-  const backgroundColor = useBackgroundColor('primary');
-  const borderColor = useBorderColor('primary');
+  // Get theme colors - Hooks called at the top level
+  const primaryBackgroundColor = useBackgroundColor('primary');
+  const secondaryBackgroundColor = useBackgroundColor('secondary'); // Moved hook call here
+  const primaryBorderColor = useBorderColor('primary');
   
   // Create style based on variant
   let variantStyle: StyleProp<ViewStyle> = {};
@@ -49,25 +65,25 @@ const Card: React.FC<CardProps> = ({
   switch (variant) {
     case 'elevated':
       variantStyle = {
-        backgroundColor,
+        backgroundColor: primaryBackgroundColor,
         ...Shadows[shadow],
       };
       break;
     case 'outlined':
       variantStyle = {
-        backgroundColor,
+        backgroundColor: primaryBackgroundColor,
         borderWidth: 1,
-        borderColor,
+        borderColor: primaryBorderColor,
       };
       break;
     case 'filled':
       variantStyle = {
-        backgroundColor: useBackgroundColor('secondary'),
+        backgroundColor: secondaryBackgroundColor, // Use variable here
       };
       break;
     case 'flat':
       variantStyle = {
-        backgroundColor,
+        backgroundColor: primaryBackgroundColor,
       };
       break;
   }
@@ -87,13 +103,6 @@ const Card: React.FC<CardProps> = ({
   );
 };
 
-// Subcomponents for Card composition
-interface CardSectionProps {
-  children: ReactNode;
-  style?: StyleProp<ViewStyle>;
-  testID?: string;
-}
-
 // Card.Header component
 const CardHeader: React.FC<CardSectionProps> = ({ children, style, testID }) => (
   <View style={[styles.cardHeader, style]} testID={testID}>
@@ -110,13 +119,13 @@ const CardContent: React.FC<CardSectionProps> = ({ children, style, testID }) =>
 
 // Card.Footer component
 const CardFooter: React.FC<CardSectionProps> = ({ children, style, testID }) => {
-  const borderColor = useBorderColor('primary');
+  const primaryBorderColorFooter = useBorderColor('primary'); // Renamed to avoid conflict if Card is ever a class component with state
   
   return (
     <View 
       style={[
         styles.cardFooter,
-        { borderTopColor: borderColor },
+        { borderTopColor: primaryBorderColorFooter },
         style
       ]} 
       testID={testID}
@@ -144,7 +153,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   cardContent: {
-    flex: 1,
+    // flex: 1, // Temporarily removed to debug layout issues
   },
   cardFooter: {
     marginTop: Spacing.sm,

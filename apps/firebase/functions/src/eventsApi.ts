@@ -1,19 +1,14 @@
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions";
 import {onCall} from "firebase-functions/v2/https";
-import {defineString} from "firebase-functions/params"; // For typed environment variables
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
 import {logger} from "firebase-functions";
 import {getFirestore, FieldValue} from "firebase-admin/firestore";
 import {EventInvitation} from "./events";
 import {getStorage} from "firebase-admin/storage";
-import axios from "axios"; // Import axios
 
 const db = getFirestore();
 const bucket = getStorage().bucket();
-
-// Define Google Places API Key as a secret environment variable
-const GOOGLE_PLACES_API_KEY = defineString("GOOGLE_PLACES_API_KEY");
 
 // Define interface for invitation status
 interface InvitationStatus {
@@ -863,129 +858,3 @@ export const getEventsForFeedApi = onCall({
     );
   }
 });
-
-// MARK: - Google Places API Functions
-
-/**
- * Provides Google Places Autocomplete suggestions.
- */
-export const googlePlacesAutocomplete = onCall({
-  region: DEFAULT_REGION,
-  timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-  secrets: [GOOGLE_PLACES_API_KEY], // Make the secret available to this function
-}, async (request) => {
-  const {auth, data} = request;
-
-  if (!auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "You must be logged in to search for places."
-    );
-  }
-
-  const input = data.input as string;
-  if (!input) {
-    throw new functions.https.HttpsError(
-      "invalid-argument",
-      "Input query is required."
-    );
-  }
-
-  const apiKey = GOOGLE_PLACES_API_KEY.value();
-  if (!apiKey) {
-    logger.error("Google Places API key is not configured.");
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "The Places API key is not configured on the server."
-    );
-  }
-
-  const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(input)}&key=${apiKey}`;
-  // You might want to add more parameters like `types=(cities)`, `components=country:us`, `sessiontoken` etc.
-  // const sessionToken = data.sessionToken; // For billing optimization
-  // if (sessionToken) {
-  //   url += `&sessiontoken=${sessionToken}`;
-  // }
-
-  try {
-    const response = await axios.get(url);
-    if (response.data.status !== "OK" && response.data.status !== "ZERO_RESULTS") {
-      logger.error("Google Places Autocomplete API Error:", response.data);
-      throw new functions.https.HttpsError(
-        "internal",
-        response.data.error_message || "Failed to fetch place suggestions."
-      );
-    }
-    return {predictions: response.data.predictions};
-  } catch (error: any) {
-    logger.error("Error calling Google Places Autocomplete API:", error);
-    throw new functions.https.HttpsError(
-      "internal",
-      "An error occurred while fetching place suggestions.",
-      error.message
-    );
-  }
-});
-
-/**
- * Fetches details for a specific place ID from Google Places API.
- */
-export const getGooglePlaceDetails = onCall({
-  region: DEFAULT_REGION,
-  timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-  secrets: [GOOGLE_PLACES_API_KEY],
-}, async (request) => {
-  const {auth, data} = request;
-
-  if (!auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "You must be logged in to get place details."
-    );
-  }
-
-  const placeId = data.placeId as string;
-  if (!placeId) {
-    throw new functions.https.HttpsError(
-      "invalid-argument",
-      "Place ID is required."
-    );
-  }
-
-  const apiKey = GOOGLE_PLACES_API_KEY.value();
-  if (!apiKey) {
-    logger.error("Google Places API key is not configured.");
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "The Places API key is not configured on the server."
-    );
-  }
-
-  // Specify fields to fetch: address_component, formatted_address, geometry.location, name, place_id
-  const fields = "address_component,formatted_address,geometry,name,place_id";
-  const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=${fields}&key=${apiKey}`;
-  // const sessionToken = data.sessionToken; // For billing optimization (should be same as one used for autocomplete)
-  // if (sessionToken) {
-  //   url += `&sessiontoken=${sessionToken}`;
-  // }
-
-  try {
-    const response = await axios.get(url);
-    if (response.data.status !== "OK") {
-      logger.error("Google Places Details API Error:", response.data);
-      throw new functions.https.HttpsError(
-        "internal",
-        response.data.error_message || "Failed to fetch place details."
-      );
-    }
-    return {result: response.data.result};
-  } catch (error: any) {
-    logger.error("Error calling Google Places Details API:", error);
-    throw new functions.https.HttpsError(
-      "internal",
-      "An error occurred while fetching place details.",
-      error.message
-    );
-  }
-});
-

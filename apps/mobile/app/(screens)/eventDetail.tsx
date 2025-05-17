@@ -1,481 +1,405 @@
-import React, { useEffect, useState } from 'react';
-import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
-  Image,
-  TouchableOpacity,
-  SafeAreaView,
-  Platform,
-  Share,
-  Linking,
-  Alert,
-} from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'; // Added MaterialCommunityIcons
-import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
-
-// Re-define or import Event interface (ensure it matches the one in events.tsx)
-interface Event {
-  id: string;
-  name: string;
-  date: string;
-  time: string;
-  location: string;
-  imageUri?: string;
-  organizer?: string;
-  status?: 'Going' | 'Invited' | null;
-  description?: string;
-  hosts?: { id: string; name: string; role: string; avatarUri?: string }[];
-  attendees?: { id: string; name: string; avatarUri?: string }[];
-  mapPreviewUri?: string; // For a static map image
-  ticketLink?: string;
-  contactInfo?: string;
-}
-
-// Mock function to get event details - replace with actual data fetching
-const getEventDetails = (eventId: string): Event | undefined => {
-  const mockEvents: Event[] = [
-    {
-      id: '1',
-      name: 'Connections & Capital Miami Meetup by Fortress, 10T, & Next Layer Capital @ Regatta Coconut Grove',
-      date: 'Tomorrow',
-      time: '7:30 PM - 9:00 PM',
-      location: 'Regatta Grove',
-      imageUri: 'https://placekitten.com/400/250', // Larger image for detail screen
-      organizer: 'Fortress Calendar',
-      status: 'Going',
-      description: 'Join us at the intersection of digital assets, finance, startups, venture, and capital raising in the #1 Miami business meetup at Regatta in Coconut Grove.\n\nThis event is hosted by Fortress, a private, invite-only network of high-growth investors and capital allocators.',
-      hosts: [
-        { id: 'h1', name: 'Fortress', role: 'The Future of Finance', avatarUri: 'https://placekitten.com/50/50?image=1' },
-        { id: 'h2', name: 'Brandon Turp', role: '', avatarUri: 'https://placekitten.com/50/50?image=2' },
-        { id: 'h3', name: 'Next Layer Capital', role: '', avatarUri: 'https://placekitten.com/50/50?image=3' },
-        { id: 'h4', name: '10T Holdings & 1RT Partners', role: 'Private equity fund run by Dan Tapiero, investing...', avatarUri: 'https://placekitten.com/50/50?image=4' },
-      ],
-      attendees: [
-        { id: 'a1', name: 'Anna Vladi', avatarUri: 'https://placekitten.com/40/40?image=5' },
-        { id: 'a2', name: 'Idael Diaz', avatarUri: 'https://placekitten.com/40/40?image=6' },
-        { id: 'a3', name: 'Dave Boerner', avatarUri: 'https://placekitten.com/40/40?image=7' },
-        { id: 'a4', name: 'Tural Bayev', avatarUri: 'https://placekitten.com/40/40?image=8' },
-      ],
-      mapPreviewUri: 'https://placekitten.com/400/200?image=9', // Placeholder map image
-      ticketLink: '#',
-      contactInfo: 'events@fortress.com',
-    },
-    // Add other mock events if needed
-  ];
-  return mockEvents.find(event => event.id === eventId);
-};
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, ScrollView, Image, TouchableOpacity, Linking, Platform, ActivityIndicator, Share, StyleSheet } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import ThemedText from '@/components/ThemedText';
+import ThemedView from '@/components/ThemedView';
+import AppHeader from '@/components/ui/AppHeader';
+import Screen from '@/components/ui/Screen';
+import Button from '@/components/ui/Button';
+import Avatar from '@/components/ui/Avatar';
+import Card from '@/components/ui/Card';
+import Colors from '@/constants/Colors';
+import { Typography } from '@/constants/Typography';
+import { Spacing, BorderRadius, Shadows } from '@/constants/Spacing';
+import { commonHeaderOptions } from '@/constants/headerConfig';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import { getEventDetailsMobile, MobileEventDetails } from '@src/lib/firebaseUtils';
+import { formatDate, formatTimeAgo, toDate } from '@src/lib/dateUtils';
+import { useAuth } from '@/src/contexts/AuthContext';
 
 const EventDetailScreen = () => {
   const router = useRouter();
-  const navigation = useNavigation();
-  const { eventId } = useLocalSearchParams();
-  const [event, setEvent] = useState<Event | null>(null);
+  const params = useLocalSearchParams<{ eventId: string }>();
+  const eventId = params.eventId;
+  const colorScheme = useColorScheme();
+  const { user } = useAuth();
+
+  const scheme = colorScheme ?? 'light';
+
+  const [eventDetails, setEventDetails] = useState<MobileEventDetails | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (eventId && typeof eventId === 'string') {
-      const fetchedEvent = getEventDetails(eventId);
-      setEvent(fetchedEvent || null);
-      if (fetchedEvent) {
-        navigation.setOptions({
-          title: fetchedEvent.name.length > 30 ? `${fetchedEvent.name.substring(0,27)}...` : fetchedEvent.name, 
-          headerStyle: { backgroundColor: '#F8F8F8' },
-          headerTintColor: '#333333', 
-          headerTitleStyle: { fontWeight: '600', fontSize: 16 },
-          headerBackTitleVisible: false,
-        });
-      } else {
-        navigation.setOptions({ title: 'Event Not Found' });
-      }
+    if (eventId) {
+      const fetchEventData = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+          console.log(`[EventDetailScreen] Fetching details for event: ${eventId}`);
+          const details = await getEventDetailsMobile(eventId);
+          if (details) {
+            console.log('[EventDetailScreen] Event details fetched:', details);
+            setEventDetails(details);
+          } else {
+            console.log('[EventDetailScreen] No event details returned or event not found.');
+            setError('Event not found or an error occurred.');
+          }
+        } catch (err: any) {
+          console.error('[EventDetailScreen] Error fetching event details:', err);
+          setError(err.message || 'Failed to load event details.');
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchEventData();
     } else {
-        navigation.setOptions({ title: 'Event Detail' });
+      setError("Event ID is missing.");
+      setIsLoading(false);
     }
-  }, [eventId, navigation, event]);
-
-  if (!event) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading event details...</Text>
-      </SafeAreaView>
-    );
-  }
+  }, [eventId]);
 
   const handleShareEvent = async () => {
-    if (!event) return;
+    if (!eventDetails) return;
     try {
-      const result = await Share.share({
-        message: `Check out this event: ${event.name}\n${event.description?.substring(0,100)}...\nFind out more: [placeholder-event-url/${event.id}]`, // Replace with actual event URL if available
-        title: `Event: ${event.name}`,
+      await Share.share({
+        message: `Check out this event: ${eventDetails.title} on ${formatDate(toDate(eventDetails.eventDate))}! More info: [Your App Event Link Here] `,
+        title: eventDetails.title,
       });
-      if (result.action === Share.sharedAction) {
-        if (result.activityType) {
-          // shared with activity type of result.activityType
-        } else {
-          // shared
-        }
-      } else if (result.action === Share.dismissedAction) {
-        // dismissed
-      }
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
+    } catch (shareError) {
+      console.error('Error sharing event:', shareError);
     }
   };
 
   const handleOpenMap = () => {
-    if (!event || !event.location) return;
-    const scheme = Platform.select({ ios: 'maps:0,0?q=', android: 'geo:0,0?q=' });
-    const latLng = ''; // If you have lat/lng, use them: `${event.latitude},${event.longitude}`
-    const label = encodeURIComponent(event.name);
-    const address = encodeURIComponent(event.location);
+    if (!eventDetails?.location) return;
+    const { lat, lng, address } = eventDetails.location;
+    const platformScheme = Platform.select({ ios: 'maps:0,0?q=', android: 'geo:0,0?q=' });
+    const latLng = `${lat},${lng}`;
+    const label = encodeURIComponent(address || eventDetails.title);
     const url = Platform.select({
-      ios: `${scheme}${label}@${latLng}${address}`,
-      android: `${scheme}${latLng}(${label})?q=${address}`,
+      ios: `${platformScheme}${label}@${latLng}`,
+      android: `${platformScheme}${latLng}(${label})`,
     });
-    if (url) {
-        Linking.canOpenURL(url).then(supported => {
-            if (supported) {
-                Linking.openURL(url);
-            } else {
-                Alert.alert('Error', "Don't know how to open this map URL: " + url);
-            }
-        }).catch(err => Alert.alert('Error', 'An error occurred: ' + err));
-    }
+    if (url) Linking.openURL(url);
   };
-
+  
   const handleContactHost = () => {
-    if (!event || !event.contactInfo) {
-        Alert.alert('Contact Info', 'No contact information available for this host.');
-        return;
-    }
-    // Assuming contactInfo is an email for now
-    Linking.openURL(`mailto:${event.contactInfo}?subject=Inquiry about ${event.name}`).catch(err => Alert.alert('Error', 'Could not open email client.'));
+    if (!eventDetails?.host?.id || !user) return;
+    console.log("Contacting host:", eventDetails.host.id);
+    // Example: router.push({ pathname: '/(screens)/chatDetail', params: { recipientId: eventDetails.host.id } });
+    alert("Navigate to chat with host: " + eventDetails.host.name);
   };
 
-  const renderHostItem = (host: NonNullable<Event['hosts']>[0]) => (
-    <View key={host.id} style={styles.hostItemContainer}>
-        {host.avatarUri && <Image source={{ uri: host.avatarUri }} style={styles.hostAvatar} />}
-        <View style={styles.hostInfo}>
-            <Text style={styles.hostName}>{host.name}</Text>
-            {host.role && <Text style={styles.hostRole}>{host.role}</Text>}
-        </View>
-        <View style={styles.hostActions}>
-            {/* Placeholder for Instagram/X icons - using generic icons for now */}
-            {host.name.includes('Brandon') && <Ionicons name="logo-instagram" size={24} color="#E0E0E0" style={styles.hostActionIcon} />}
-            <Ionicons name="close-circle-outline" size={24} color="#E0E0E0" style={styles.hostActionIcon} />
-        </View>
+  const renderHostItem = (host: MobileEventDetails['host']) => (
+    <TouchableOpacity onPress={handleContactHost} style={styles.hostItemContainer}>
+      <Avatar source={host.avatar ?? undefined} fallback={host.name?.substring(0,1)} size="md" />
+      <View style={styles.hostInfo}>
+        <ThemedText variant="bodyLarge" style={{ fontWeight: Typography.weight.bold }}>{host.name}</ThemedText>
+        <ThemedText variant="bodySmall" color="secondary">Host</ThemedText>
+      </View>
+      <Ionicons name="chatbubble-ellipses-outline" size={24} color={Colors[scheme].icon.secondary} />
+    </TouchableOpacity>
+  );
+
+  const renderAttendeeAvatar = (attendee: MobileEventDetails['attendees'][0]) => (
+    <View key={attendee.id} style={styles.attendeeAvatarContainer}>
+      <Avatar source={attendee.avatar ?? undefined} fallback={attendee.name?.substring(0,1)} size="sm" />
+      <ThemedText variant="caption" style={styles.attendeeName} numberOfLines={1}>{attendee.name}</ThemedText>
     </View>
   );
 
-  const renderAttendeeAvatar = (attendee: NonNullable<Event['attendees']>[0]) => (
-    <Image key={attendee.id} source={{ uri: attendee.avatarUri }} style={styles.attendeeAvatar} />
+  const headerLeftComponent = () => (
+    <TouchableOpacity 
+      onPress={() => router.back()} 
+      style={styles.headerButton}
+      accessibilityLabel="Go back"
+      accessibilityHint="Returns to the previous screen"
+    >
+      <Ionicons name="chevron-back" size={24} color={Colors[scheme].icon.primary} />
+    </TouchableOpacity>
   );
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContentContainer}>
-        <Image source={{ uri: event.imageUri }} style={styles.eventImage} />
+  const headerRightComponent = () => (
+    <TouchableOpacity 
+      onPress={handleShareEvent} 
+      style={styles.headerButton}
+      accessibilityLabel="Share event"
+      accessibilityHint="Opens sharing options for this event"
+    >
+      <Ionicons name="share-social-outline" size={22} color={Colors[scheme].icon.primary} />
+    </TouchableOpacity>
+  );
+  
+  if (isLoading) {
+    return (
+      <Screen safeArea style={styles.centeredContainer}>
+        <ActivityIndicator size="large" color={Colors[scheme].text.link} />
+        <ThemedText variant="bodyLarge" style={{ marginTop: Spacing.md }}>Loading event details...</ThemedText>
+      </Screen>
+    );
+  }
 
-        <View style={styles.headerContentContainer}>
-          {event.organizer && <Text style={styles.organizerText}>{event.organizer} <Ionicons name="chevron-forward" size={14} color='#A0A0A0' /></Text>}
-          <Text style={styles.eventName}>{event.name}</Text>
-          <View style={styles.dateTimeRow}>
-            <Ionicons name="time-outline" size={18} color="#A0A0A0" />
-            <Text style={styles.dateTimeText}>{event.date}, {event.time}</Text>
-          </View>
-          {event.status && (
-            <View style={styles.statusPill}>
-              <MaterialCommunityIcons name="ticket-confirmation-outline" size={18} color="#81C784" />
-              <Text style={styles.statusPillText}>You are {event.status.toLowerCase()}</Text>
-            </View>
+  if (error) {
+    return (
+      <Screen safeArea style={styles.centeredContainer}>
+        <Ionicons name="alert-circle-outline" size={48} color={Colors[scheme].text.error} />
+        <ThemedText variant="h3" style={{ marginTop: Spacing.md, textAlign: 'center' }}>Error</ThemedText>
+        <ThemedText variant="bodyMedium" style={{ marginTop: Spacing.sm, textAlign: 'center', marginHorizontal: Spacing.lg }}>{error}</ThemedText>
+        <Button title="Go Back" onPress={() => router.back()} style={{ marginTop: Spacing.lg }} variant="primary" />
+      </Screen>
+    );
+  }
+
+  if (!eventDetails) {
+    return (
+      <Screen safeArea style={styles.centeredContainer}>
+        <Ionicons name="information-circle-outline" size={48} color={Colors[scheme].text.secondary} />
+        <ThemedText variant="h3" style={{ marginTop: Spacing.md }}>Event Not Found</ThemedText>
+        <ThemedText variant="bodyMedium" style={{ marginTop: Spacing.sm, textAlign: 'center' }}>The event you are looking for could not be found.</ThemedText>
+        <Button title="Go Back" onPress={() => router.back()} style={{ marginTop: Spacing.lg }} variant="primary" />
+      </Screen>
+    );
+  }
+  
+  const eventDateObject = toDate(eventDetails.eventDate);
+  const formattedDate = eventDateObject ? formatDate(eventDateObject, 'PPPP') : 'Date not available';
+  const formattedTime = eventDetails.startTime ? formatDate(toDate(`1970-01-01T${eventDetails.startTime}Z`), 'p') : 'Time not set';
+  const rsvpDeadlineObject = eventDetails.rsvpDeadline ? toDate(eventDetails.rsvpDeadline) : null;
+  const formattedRsvpDeadline = rsvpDeadlineObject ? `RSVP by ${formatDate(rsvpDeadlineObject, 'MMM d, yyyy')}` : null;
+  
+  // Apply common header styling from headerConfig
+
+  return (
+    <Screen safeArea scroll>
+      <AppHeader 
+        title={eventDetails.title}
+        headerLeft={headerLeftComponent} 
+        headerRight={headerRightComponent}
+        testID="event-detail-header"
+      />
+      <ThemedView style={styles.container} variant="primary">
+        {/* Event Cover Image */}
+        {eventDetails.coverPhotoUrls && eventDetails.coverPhotoUrls.length > 0 ? (
+          <Image source={{ uri: eventDetails.coverPhotoUrls[0] }} style={styles.eventImage} />
+        ) : (
+          <ThemedView style={[styles.eventImage, styles.placeholderImage]} variant="secondary">
+            <Ionicons name="images-outline" size={80} color={Colors[scheme].icon.secondary} />
+            <ThemedText variant="bodyMedium" color="secondary" style={{marginTop: Spacing.sm}}>No event image</ThemedText>
+          </ThemedView>
+        )}
+
+        <View style={styles.contentPadding}>
+          {/* Main Event Details Card */}
+          <Card style={[styles.card, styles.eventDetailsCard]}>
+            <Card.Content>
+              <ThemedText variant="h2" style={styles.eventName}>{eventDetails.title}</ThemedText>
+              
+              <View style={styles.infoRow}>
+                <Ionicons name="calendar-outline" size={20} color={Colors[scheme].icon.primary} style={styles.infoIcon}/>
+                <ThemedText variant="bodyMedium" style={styles.infoText}>{formattedDate} at {formattedTime}</ThemedText>
+              </View>
+
+              {eventDetails.location && (
+                <TouchableOpacity onPress={handleOpenMap} style={styles.infoRow}>
+                  <Ionicons name="location-outline" size={20} color={Colors[scheme].icon.primary} style={styles.infoIcon}/>
+                  <ThemedText variant="bodyMedium" style={styles.infoText} color="link">{eventDetails.location.address}</ThemedText>
+                </TouchableOpacity>
+              )}
+              {eventDetails.isVirtual && eventDetails.virtualLink && (
+                <TouchableOpacity onPress={() => Linking.openURL(eventDetails.virtualLink!)} style={styles.infoRow}>
+                  <Ionicons name="link-outline" size={20} color={Colors[scheme].icon.primary} style={styles.infoIcon}/>
+                  <ThemedText variant="bodyMedium" style={styles.infoText} color="link">Join Virtual Event</ThemedText>
+                </TouchableOpacity>
+              )}
+              
+              {/* RSVP Button */}
+              <View style={styles.rsvpContainer}>
+                <Button 
+                  title={eventDetails.userStatus === 'going' ? "You're Going!" : "RSVP Now"} 
+                  onPress={() => alert('RSVP action')} 
+                  variant="primary"
+                  style={styles.rsvpButton}
+                  leftIcon={eventDetails.userStatus === 'going' ? "checkmark-circle" : "calendar"}
+                />
+                {formattedRsvpDeadline && (
+                  <ThemedText 
+                    variant="caption" 
+                    color="secondary" 
+                    style={styles.rsvpDeadlineText}
+                  >
+                    {formattedRsvpDeadline}
+                  </ThemedText>
+                )}
+              </View>
+            </Card.Content>
+          </Card>
+
+          {/* About Event */}
+          {eventDetails.description && (
+            <Card style={styles.card}>
+              <Card.Header>
+                <ThemedText variant="h4" style={styles.sectionTitleNoMargin}>About this event</ThemedText>
+              </Card.Header>
+              <Card.Content>
+                <ThemedText variant="bodyMedium">{eventDetails.description}</ThemedText>
+              </Card.Content>
+            </Card>
+          )}
+
+          {/* Host Info */}
+          {eventDetails.host && (
+            <Card style={styles.card}>
+              <Card.Header>
+                <ThemedText variant="h4" style={styles.sectionTitleNoMargin}>Host</ThemedText>
+              </Card.Header>
+              <Card.Content>
+                {renderHostItem(eventDetails.host)}
+              </Card.Content>
+            </Card>
+          )}
+
+          {/* Attendees List */}
+          {eventDetails.attendees && eventDetails.attendees.length > 0 && eventDetails.showGuestList && (
+            <Card style={styles.card}>
+              <Card.Header>
+                <ThemedText variant="h4" style={styles.sectionTitleNoMargin}>Attendees ({eventDetails.attendees.length})</ThemedText>
+              </Card.Header>
+              <Card.Content>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.attendeesScrollContainer}>
+                  {eventDetails.attendees.map(renderAttendeeAvatar)}
+                </ScrollView>
+              </Card.Content>
+            </Card>
+          )}
+
+          {/* Comments Section */}
+          {eventDetails.comments && eventDetails.comments.length > 0 && (
+            <Card style={styles.card}>
+              <Card.Header>
+                <ThemedText variant="h4" style={styles.sectionTitleNoMargin}>Comments ({eventDetails.comments.length})</ThemedText>
+              </Card.Header>
+              <Card.Content>
+                {eventDetails.comments.map(comment => (
+                  <ThemedView key={comment.id} style={styles.commentItemContainer} variant="secondary">
+                    <Avatar source={comment.user.avatar ?? undefined} fallback={comment.user.name?.substring(0,1)} size="sm" />
+                    <View style={styles.commentContent}>
+                      <ThemedText variant="bodyMedium" style={{ fontWeight: Typography.weight.bold }}>{comment.user.name}</ThemedText>
+                      <ThemedText variant="bodySmall">{comment.text}</ThemedText>
+                      <ThemedText variant="caption" color="secondary">{formatTimeAgo(toDate(comment.timestamp))}</ThemedText>
+                    </View>
+                  </ThemedView>
+                ))}
+              </Card.Content>
+            </Card>
           )}
         </View>
-
-        <View style={styles.actionButtonsContainer}>
-          <TouchableOpacity style={[styles.actionButton, styles.primaryButton]} onPress={() => Alert.alert('My Ticket', 'Ticket viewing not implemented yet.')}>
-            <MaterialCommunityIcons name="ticket-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.actionButtonTextPrimary}>My Ticket</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={handleContactHost}>
-            <Ionicons name="mail-outline" size={20} color="#E0E0E0" />
-            <Text style={styles.actionButtonText}>Contact</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={handleShareEvent}>
-            <Ionicons name="share-social-outline" size={20} color="#E0E0E0" />
-            <Text style={styles.actionButtonText}>Share</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={() => Alert.alert('More Options', 'More options not implemented yet.')}>
-            <Ionicons name="ellipsis-horizontal" size={20} color="#E0E0E0" />
-            <Text style={styles.actionButtonText}>More</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Location Section */}
-        <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeaderWithAction}>
-                <Text style={styles.sectionTitle}>Location</Text>
-                {/* Optional: Temperature icon or similar */}
-            </View>
-            <Text style={styles.locationAddress}>{event.location}, Miami, Florida</Text> 
-            {/* Assuming Miami, Florida for now */}
-            {event.mapPreviewUri && 
-                <TouchableOpacity onPress={handleOpenMap}>
-                    <Image source={{ uri: event.mapPreviewUri }} style={styles.mapPreviewImage} />
-                </TouchableOpacity>
-            }
-        </View>
-
-        {/* Hosted By Section */}
-        {event.hosts && event.hosts.length > 0 && (
-            <View style={styles.sectionContainer}>
-                <View style={styles.sectionHeaderWithAction}>
-                    <Text style={styles.sectionTitle}>Hosted By</Text>
-                    <TouchableOpacity onPress={handleContactHost}><Text style={styles.sectionActionText}>Contact</Text></TouchableOpacity>
-                </View>
-                {event.hosts.map(renderHostItem)}
-            </View>
-        )}
-
-        {/* Going Section */}
-        {event.attendees && event.attendees.length > 0 && (
-            <View style={styles.sectionContainer}>
-                <Text style={styles.sectionTitle}>{event.attendees.length * 10 + 100} Going</Text> 
-                {/* Example: 144 Going - adjust logic for total */}
-                <View style={styles.attendeesAvatarContainer}>
-                    {event.attendees.slice(0, 4).map(renderAttendeeAvatar)} 
-                    {/* Show first 4, then a +X more indicator */}
-                    {event.attendees.length > 4 && 
-                        <View style={styles.moreAttendeesBadge}>
-                            <Text style={styles.moreAttendeesText}>+{event.attendees.length * 10 + 100 - 4}</Text>
-                        </View>
-                    }
-                </View>
-                <Text style={styles.attendeesSummaryText}>
-                    {event.attendees.map(a => a.name).join(', ')} and {event.attendees.length * 10 + 100 - event.attendees.length} more
-                </Text>
-            </View>
-        )}
-
-        {/* About Event Section */}
-        {event.description && (
-            <View style={styles.sectionContainer}>
-                <Text style={styles.sectionTitle}>About Event</Text>
-                <Text style={styles.descriptionText}>{event.description}</Text>
-            </View>
-        )}
-
-      </ScrollView>
-    </SafeAreaView>
+      </ThemedView>
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#000000',
-  },
-  loadingContainer: {
+  centeredContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000000',
-  },
-  loadingText: {
-    color: '#FFFFFF',
-    fontSize: 18,
+    paddingHorizontal: Spacing.lg,
   },
   container: {
     flex: 1,
   },
-  scrollContentContainer: {
-    paddingBottom: 100, // Ensure space for content above any potential tab bar or FAB
-  },
   eventImage: {
     width: '100%',
-    height: 280, // Adjust height as needed for the detail view image
+    height: 280, // Slightly taller for better visual impact
     resizeMode: 'cover',
+    borderBottomLeftRadius: BorderRadius.sm,
+    borderBottomRightRadius: BorderRadius.sm,
   },
-  headerContentContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: 'rgba(25,25,25,0.8)', // Slightly transparent dark background
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    marginTop: -20, // Pull up to overlap image slightly for a nicer effect
-    zIndex: 1,
+  placeholderImage: {
+    // backgroundColor is applied via ThemedView variant="secondary"
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  organizerText: {
-    fontSize: 14,
-    color: '#A0A0A0',
-    marginBottom: 8,
-    fontWeight: '500',
+  contentPadding: {
+    paddingHorizontal: Spacing.md, 
+    paddingVertical: Spacing.sm, 
+  },
+  card: {
+    marginBottom: Spacing.lg,
+    ...Shadows.sm,
   },
   eventName: {
-    fontSize: 26, // Larger for detail screen
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 10,
-    lineHeight: 32,
+    marginBottom: Spacing.md,
   },
-  dateTimeRow: {
+  infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
-  dateTimeText: {
-    fontSize: 16,
-    color: '#E0E0E0',
-    marginLeft: 8,
+  infoIcon: {
+    marginRight: Spacing.md,
   },
-  statusPill: {
-    flexDirection: 'row',
+  infoText: {
+    flexShrink: 1, 
+  },
+  rsvpContainer: {
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.sm,
     alignItems: 'center',
-    backgroundColor: 'rgba(76, 175, 80, 0.2)', // Semi-transparent green
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
+    paddingHorizontal: Spacing.md,
   },
-  statusPillText: {
-    color: '#81C784', // Light green text
-    marginLeft: 6,
-    fontWeight: '600',
-    fontSize: 14,
+  rsvpButton: {
+    minWidth: 180,
+    marginVertical: Spacing.sm,
   },
-  actionButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 15,
-    paddingHorizontal: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(70, 70, 70, 0.5)',
-    marginBottom: 15,
+  rsvpDeadlineText: {
+    marginTop: Spacing.sm,
+    fontStyle: 'italic',
   },
-  actionButton: {
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: 'rgba(50, 50, 50, 0.7)', // Frosty button background
-    minWidth: 70, // Ensure buttons have some width
-  },
-  primaryButton: {
-    backgroundColor: 'rgba(0, 122, 255, 0.8)', // Accent color for primary button
-  },
-  actionButtonText: {
-    color: '#E0E0E0',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  actionButtonTextPrimary: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    marginTop: 4,
-    fontWeight: 'bold',
-  },
-  sectionContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(70, 70, 70, 0.5)',
-  },
-  sectionHeaderWithAction: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 10,
-  },
-  sectionActionText: {
-      fontSize: 14,
-      color: 'rgba(0, 122, 255, 1)', // Accent color
-      fontWeight: '600',
-  },
-  locationAddress: {
-      fontSize: 16,
-      color: '#E0E0E0',
-      marginBottom: 10,
-  },
-  mapPreviewImage: {
-      width: '100%',
-      height: 180,
-      borderRadius: 10,
-      marginTop: 5,
+  sectionTitleNoMargin: {
   },
   hostItemContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 10,
-      borderBottomWidth: 0.5,
-      borderBottomColor: 'rgba(90, 90, 90, 0.5)',
-  },
-  hostAvatar: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      marginRight: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   hostInfo: {
-      flex: 1,
+    marginLeft: Spacing.md,
+    flex: 1,
   },
-  hostName: {
-      fontSize: 16,
-      color: '#FFFFFF',
-      fontWeight: '600',
+  attendeesScrollContainer: {
+    paddingVertical: Spacing.xs,
   },
-  hostRole: {
-      fontSize: 13,
-      color: '#A0A0A0',
+  attendeeAvatarContainer: {
+    marginRight: Spacing.md,
+    alignItems: 'center',
+    width: 70,
   },
-  hostActions: {
-      flexDirection: 'row',
+  attendeeName: {
+    marginTop: Spacing.xs,
+    textAlign: 'center',
   },
-  hostActionIcon: {
-      marginLeft: 15,
+  commentItemContainer: {
+    flexDirection: 'row',
+    marginBottom: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
   },
-  attendeesAvatarContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 10,
+  commentContent: {
+    marginLeft: Spacing.md,
+    flex: 1,
   },
-  attendeeAvatar: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      marginRight: -10, // Overlap avatars slightly
-      borderWidth: 1.5,
-      borderColor: '#000000', // To make overlap clear
+  headerButton: {
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.sm,
   },
-  moreAttendeesBadge: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: 'rgba(80, 80, 80, 0.9)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginLeft: -10, // Ensure it overlaps correctly
-      borderWidth: 1.5,
-      borderColor: '#000000',
-  },
-  moreAttendeesText: {
-      color: '#FFFFFF',
-      fontSize: 14,
-      fontWeight: 'bold',
-  },
-  attendeesSummaryText: {
-      fontSize: 14,
-      color: '#B0B0B0',
-      lineHeight: 20,
-  },
-  descriptionText: {
-    fontSize: 16,
-    color: '#E0E0E0',
-    lineHeight: 24,
+  eventDetailsCard: {
+    marginTop: -Spacing.xl,
+    zIndex: 1,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
+    ...Shadows.md,
   },
 });
 
