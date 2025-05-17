@@ -24,9 +24,11 @@ import { useImageUpload } from '../../hooks/useImageUpload';
 // Custom components
 import FullScreenDatePicker from '../../components/ui/FullScreenDatePicker';
 import TimePickerModal from '../../components/ui/TimePickerModal';
+import ImageGallery from '../../components/ui/ImageGallery'; // Import the new component
+import { Colors } from '../../constants/Colors'; // Import Colors for dynastyGreen
 
 // Define the primary green color from the app's theme
-const dynastyGreen = '#1A4B44';
+const dynastyGreen = Colors.dynastyGreen; // Use from Colors.ts
 
 // Interface for event creation data
 interface NewEventData {
@@ -444,7 +446,7 @@ const CreateEventScreen = () => {
         description: newEvent.description.trim(),
         dresscode: newEvent.dressCode?.trim() || null, // Field name changed to 'dresscode'
         whatToBring: newEvent.whatToBring?.trim() || null,
-        // additionalInfo: null, // Not currently in mobile form, backend handles as optional
+        additionalInfo: null, // Ensure this is explicitly null if not provided
         privacy: newEvent.privacy,
         allowGuestPlusOne: newEvent.allowGuestPlusOne,
         showGuestList: newEvent.showGuestList,
@@ -587,50 +589,14 @@ const CreateEventScreen = () => {
         contentContainerStyle={styles.scrollContentContainer}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.imagePickerContainer}>
-          {newEvent.photos.length > 0 ? (
-            <ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-            >
-              {newEvent.photos.map((photo, index) => (
-                <View key={index} style={styles.imageWrapper}>
-                  <Image source={{ uri: photo.uri }} style={styles.eventImagePreview} />
-                  <TouchableOpacity
-                    style={styles.removePhotoButton}
-                    onPress={() => removePhoto(index)}
-                  >
-                    <Ionicons name="close" size={20} color={dynastyGreen} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.replacePhotoButton}
-                    onPress={() => handleReplaceImage(index)}
-                  >
-                    <MaterialCommunityIcons name="camera-flip-outline" size={20} color="#FFFFFF" />
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {newEvent.photos.length < 5 && (
-                <TouchableOpacity
-                  style={[styles.imageWrapper, styles.imagePickerPlaceholder]}
-                  onPress={handlePickImage}
-                >
-                  <MaterialCommunityIcons name="camera-plus-outline" size={48} color="#A0A0A0" />
-                  <Text style={styles.imagePickerText}>Add Photo</Text>
-                </TouchableOpacity>
-              )}
-            </ScrollView>
-          ) : (
-            <TouchableOpacity
-              style={styles.imagePickerPlaceholder}
-              onPress={handlePickImage}
-            >
-              <MaterialCommunityIcons name="camera-plus-outline" size={48} color="#A0A0A0" />
-              <Text style={styles.imagePickerText}>Add Event Photo</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <ImageGallery
+          photos={newEvent.photos}
+          onAddPhoto={handlePickImage} 
+          onRemovePhoto={removePhoto}
+          onReplacePhoto={handleReplaceImage}
+          maxPhotos={5} 
+          // iconColor={dynastyGreen} // Default is already dynastyGreen from Colors
+        />
 
         <View style={styles.formSection}>
           <TextInput

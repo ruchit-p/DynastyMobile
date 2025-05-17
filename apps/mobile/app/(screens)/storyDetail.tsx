@@ -29,6 +29,7 @@ import ProfilePicture from '../../components/ui/ProfilePicture';
 import { formatDate, formatTimeAgo } from '../../src/lib/dateUtils';
 import Avatar from '../../components/ui/Avatar';
 import AnimatedActionSheet, { ActionSheetAction } from '../../components/ui/AnimatedActionSheet';
+import ImageGallery from '../../components/ui/ImageGallery';
 
 interface StoryComment {
   id: string;
@@ -87,6 +88,20 @@ const StoryDetailScreen = () => {
   const [isLoadingLikeStatus, setIsLoadingLikeStatus] = useState(true);
   const commentInputRef = useRef<TextInput>(null);
   const [isActionSheetVisible, setActionSheetVisible] = useState(false);
+
+  // Prepare photos for ImageGallery
+  const galleryPhotos = React.useMemo(() => {
+    if (!story || !story.storyBlocks) return [];
+    const photos: Array<{ uri: string }> = [];
+    story.storyBlocks.forEach(block => {
+      if (block.type === 'image' && Array.isArray(block.data)) {
+        (block.data as string[]).forEach(uri => {
+          if (uri) photos.push({ uri });
+        });
+      }
+    });
+    return photos;
+  }, [story]);
 
   useEffect(() => {
     if (storyId && user?.uid && firestoreUser?.familyTreeId) {
@@ -556,7 +571,7 @@ const StoryDetailScreen = () => {
             </View>
           </View>
 
-          {/* Iterate over all story blocks to render their content */}
+          {/* Iterate over story blocks for non-image content */}
           {story.storyBlocks && story.storyBlocks.map((block, index) => {
             if (block.type === 'text') {
               return (
@@ -565,19 +580,27 @@ const StoryDetailScreen = () => {
                 </Text>
               );
             }
-            if (block.type === 'image' && Array.isArray(block.data)) {
-              return (block.data as string[]).map((imgUri, imgIndex) => (
-                <Image
-                  key={`block-${block.localId || index}-img-${imgIndex}`}
-                  source={{ uri: imgUri }}
-                  style={styles.storyImage}
-                />
-              ));
+            // Image blocks are handled by the ImageGallery below
+            if (block.type === 'image') {
+              return null; // Skip rendering individual images here
             }
             // TODO: Add rendering for other block types like video, audio if needed
             
             return null;
           })}
+
+          {/* Render ImageGallery if there are any photos */}
+          {galleryPhotos.length > 0 && (
+            <View style={styles.galleryContainer}>
+              <ImageGallery
+                photos={galleryPhotos}
+                onAddPhoto={() => {}} // Read-only
+                onRemovePhoto={() => {}} // Read-only
+                onReplacePhoto={() => {}} // Read-only
+                // Add any other necessary props, possibly for styling or read-only indication if gallery supports it
+              />
+            </View>
+          )}
 
           {story.location && (
             <View style={styles.locationContainer}>
@@ -708,11 +731,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10, // Or adjust spacing as needed between blocks
     backgroundColor: '#FFFFFF', // Assuming blocks are on a white background
   },
-  storyImage: {
-    width: '100%',
-    aspectRatio: 16/9, // Or a fixed height: height: 250,
-    marginTop: 0, // Assuming content already has padding
-    backgroundColor: '#E0E0E0', // Placeholder background for images
+  galleryContainer: { // Style for the gallery wrapper if needed
+    marginVertical: 10,
+    // backgroundColor: '#FFFFFF', // Optional: if you want a specific background for the gallery area
   },
   locationContainer: {
     flexDirection: 'row',

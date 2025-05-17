@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,13 +10,16 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, Stack } from 'expo-router';
-import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/FloatingActionMenu'; // Corrected path
-import AppHeader from '../../components/ui/AppHeader'; // Corrected path
-import IconButton, { IconSet } from '../../components/ui/IconButton'; // Import IconButton
+import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/FloatingActionMenu';
+import AppHeader from '../../components/ui/AppHeader';
+import IconButton, { IconSet } from '../../components/ui/IconButton';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { getDbInstance, getAuthInstance } from '../../src/lib/firebase';
+import { Timestamp } from 'firebase/firestore';
 
 // Define Event interface for type safety
 interface Event {
@@ -108,11 +111,17 @@ const SegmentedControl: React.FC<SegmentedControlProps> = ({ segments, currentIn
   );
 };
 
-const EventListScreen = () => { // Renamed from EventsScreen
+const EventListScreen = () => {
   const [currentSegment, setCurrentSegment] = useState(0);
   const [searchText, setSearchText] = useState('');
   const segments = ['Upcoming', 'Past Events', 'My Events'];
   const router = useRouter();
+  const db = getDbInstance();
+  const auth = getAuthInstance();
+
+  const [allEvents, setAllEvents] = useState<Event[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // --- Back Action Component ---
   const BackAction = () => (
@@ -120,16 +129,12 @@ const EventListScreen = () => { // Renamed from EventsScreen
       iconSet={IconSet.Ionicons}
       iconName={Platform.OS === 'ios' ? 'chevron-back' : 'arrow-back'}
       size={28}
-      color={"#1A4B44"} // Using the primary color defined in _layout.tsx
-      onPress={() => router.canGoBack() ? router.back() : router.push('/(tabs)/events')} // Navigate to calendar tab if no history
+      color={"#1A4B44"}
+      onPress={() => router.canGoBack() ? router.back() : router.push('/(tabs)/events')}
       accessibilityLabel="Go back"
-      style={{ marginLeft: -5 }} // Adjust as needed for alignment
+      style={{ marginLeft: -5 }}
     />
   );
-
-  const mockEventsData: Event[] = []; // Using mock data as in original
-  const [allEvents, setAllEvents] = useState<Event[]>(mockEventsData);
-  const [isLoadingEvents, setIsLoadingEvents] = useState<boolean>(true);
 
   const eventMenuItems: FabMenuItemAction[] = [
     {
@@ -137,32 +142,98 @@ const EventListScreen = () => { // Renamed from EventsScreen
       text: 'Create Event',
       iconName: 'calendar-plus',
       iconLibrary: 'MaterialCommunityIcons',
-      onPress: () => router.push('/(screens)/createEvent'), // Path remains same if createEvent is in (screens)
+      onPress: () => router.push('/(screens)/createEvent'),
     },
   ];
 
+  const fetchEvents = useCallback(async () => {
+    if (!auth.currentUser) {
+      setIsLoadingEvents(false);
+      setRefreshing(false);
+      setAllEvents([]);
+      return;
+    }
+    setIsLoadingEvents(true);
+    try {
+      const eventsCollection = await db.collection('events')
+        .get();
+
+      const fetchedEvents = eventsCollection.docs.map(doc => {
+        const data = doc.data();
+        
+        let startDate = new Date();
+        if (data.eventDate && data.startTime) {
+          const [hours, minutes] = data.startTime.split(':').map(Number);
+          startDate = new Date(data.eventDate);
+          if (data.eventDate instanceof Timestamp) {
+             startDate = data.eventDate.toDate();
+          }
+          startDate.setHours(hours, minutes);
+        }
+
+        let endDate = new Date(startDate);
+        if (data.endDate && data.endTime) {
+          const [endHours, endMinutes] = data.endTime.split(':').map(Number);
+          endDate = new Date(data.endDate);
+           if (data.endDate instanceof Timestamp) {
+             endDate = data.endDate.toDate();
+          }
+          endDate.setHours(endHours, endMinutes);
+        } else if (data.endTime) {
+            const [endHours, endMinutes] = data.endTime.split(':').map(Number);
+            endDate.setHours(endHours, endMinutes);
+        }
+
+        return {
+          id: doc.id,
+          name: data.title || 'Untitled Event',
+          startDate: startDate,
+          endDate: endDate,
+          location: data.isVirtual ? (data.virtualLink || 'Virtual Event') : (data.location?.address || 'No location'),
+          imageUrl: data.coverPhotos && data.coverPhotos.length > 0 ? data.coverPhotos[0] : undefined,
+          organizer: data.hostId,
+          description: data.description || '',
+          createdBy: data.hostId,
+        } as Event;
+      });
+      setAllEvents(fetchedEvents);
+    } catch (error) {
+      console.error("Error fetching events: ", error);
+      Alert.alert("Error", "Could not fetch events.");
+      setAllEvents([]);
+    } finally {
+      setIsLoadingEvents(false);
+      setRefreshing(false);
+    }
+  }, [auth.currentUser, db]);
+
   useFocusEffect(
-    React.useCallback(() => {
-      setIsLoadingEvents(false); // Using mock data
-    }, [])
+    useCallback(() => {
+      fetchEvents();
+    }, [fetchEvents])
   );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchEvents();
+  }, [fetchEvents]);
 
   const getEventsForSegment = (): Event[] => {
     const now = new Date();
-    let eventsToFilter: Event[] = [];
+    let eventsToFilter: Event[] = allEvents;
 
-    if (currentSegment === 0) { // Upcoming
+    if (currentSegment === 0) {
       eventsToFilter = allEvents
         .filter(event => event.endDate && event.endDate >= now)
         .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
-    } else if (currentSegment === 1) { // Past
+    } else if (currentSegment === 1) {
       eventsToFilter = allEvents
         .filter(event => event.endDate && event.endDate < now)
         .sort((a, b) => b.startDate.getTime() - a.startDate.getTime());
-    } else if (currentSegment === 2) { // My Events
-      const mockCurrentUserId = 'user123';
+    } else if (currentSegment === 2) {
+      const currentUserId = auth.currentUser?.uid;
       eventsToFilter = allEvents
-        .filter(event => event.createdBy === mockCurrentUserId)
+        .filter(event => event.createdBy === currentUserId)
         .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
     }
 
@@ -170,8 +241,7 @@ const EventListScreen = () => { // Renamed from EventsScreen
       const lowerSearchText = searchText.toLowerCase();
       return eventsToFilter.filter((event: Event) =>
         event.name.toLowerCase().includes(lowerSearchText) ||
-        (event.location && event.location.toLowerCase().includes(lowerSearchText)) ||
-        (event.organizer && event.organizer.toLowerCase().includes(lowerSearchText))
+        (event.location && event.location.toLowerCase().includes(lowerSearchText))
       );
     }
     return eventsToFilter;
@@ -179,7 +249,7 @@ const EventListScreen = () => { // Renamed from EventsScreen
 
   const displayedEvents = getEventsForSegment();
 
-  if (isLoadingEvents) {
+  if (isLoadingEvents && !refreshing && allEvents.length === 0) {
     return (
       <SafeAreaView style={styles.safeArea} edges={[ 'left', 'right', 'bottom' ]}>
         <Stack.Screen options={{ headerShown: false }} />
@@ -213,7 +283,11 @@ const EventListScreen = () => { // Renamed from EventsScreen
         onChange={setCurrentSegment}
       />
 
-      <ScrollView style={styles.container}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#0A5C36"]}/>}
+      >
         {displayedEvents.length === 0 ? (
           <View style={styles.noEventsContainer}>
             <MaterialCommunityIcons name="calendar-remove-outline" size={70} color="#D0D0D0" />
@@ -245,12 +319,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F4F4F4',
   },
-  loadingContainer: { // Added for completeness from typical structure
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingText: { // Added for completeness
+  loadingText: {
     marginTop: 10,
     fontSize: 16,
     color: '#333',
@@ -332,23 +406,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333333',
   },
-  container: {
-    flex: 1,
+  scrollContainer: {
+    flexGrow: 1,
   },
-  noEventsContainer: { // Combined from emptyStateContainer
+  noEventsContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    marginTop: 50, // Keep some top margin
+    marginTop: 50,
   },
-  noEventsText: { // Combined from emptyStateText
+  noEventsText: {
     fontSize: 20,
     fontWeight: '600',
     color: '#555555',
     marginTop: 20,
   },
-  noEventsSubText: { // Combined from emptyStateSubText
+  noEventsSubText: {
     fontSize: 16,
     color: '#777777',
     marginTop: 10,
@@ -421,37 +495,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#555555',
     marginLeft: 8,
-  },
-  // Styles from original EventScreen that might be missing or were part of empty state/loading
-  emptyStateContainer: { // Kept if used by noEventsContainer
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    marginTop: 50,
-  },
-  emptyStateIcon: {
-      color: '#B0B0B0',
-  },
-  emptyStateText: { // Kept if used by noEventsText
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#555555',
-    marginTop: 20,
-  },
-  emptyStateSubText: { // Kept if used by noEventsSubText
-    fontSize: 16,
-    color: '#777777',
-    marginTop: 10,
-    textAlign: 'center',
-    marginBottom: 25,
-  },
-  createEventButtonEmptyState: { // This might be specific to an empty state not shown above
-    backgroundColor: '#1A4B44',
-    paddingHorizontal: 30,
-    marginTop: 10,
-    borderRadius: 25,
-    paddingVertical: 15,
   },
 });
 

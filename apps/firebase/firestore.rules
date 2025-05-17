@@ -99,6 +99,17 @@ service cloud.firestore {
                        isFamilyTreeOwner(resource.data.familyTreeId));
     }
     
+    // Events
+    match /events/{eventId} {
+      allow read: if isSignedIn();
+      // Add create, update, delete rules as needed, likely through functions for now.
+      // For client-side creation (if any direct):
+      // allow create: if isSignedIn() && request.resource.data.hostId == request.auth.uid;
+      // For client-side update/delete (if any direct and if host can modify):
+      // allow update: if isSignedIn() && resource.data.hostId == request.auth.uid;
+      // allow delete: if isSignedIn() && resource.data.hostId == request.auth.uid;
+    }
+    
     // Invitations
     match /invitations/{inviteId} {
       allow read: if isSignedIn() && 
