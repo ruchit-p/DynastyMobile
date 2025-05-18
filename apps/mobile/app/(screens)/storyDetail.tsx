@@ -586,11 +586,24 @@ const StoryDetailScreen = () => {
             if (block.type === 'image') {
               const mediaItemsForBlock: Array<{ uri: string; type: 'image' | 'video'; duration?: number; width?: number; height?: number; asset?: ImagePicker.ImagePickerAsset }> = [];
               if (Array.isArray(block.data)) {
-                (block.data as Array<string | { uri: string; width?: number; height?: number }>).forEach(imgData => {
-                  if (typeof imgData === 'string') {
-                    mediaItemsForBlock.push({ uri: imgData, type: 'image' });
-                  } else if (imgData && imgData.uri) {
-                    mediaItemsForBlock.push({ uri: imgData.uri, type: 'image', width: imgData.width, height: imgData.height });
+                (block.data as Array<any>).forEach(mediaData => {
+                  if (typeof mediaData === 'string') {
+                    // Old format: mediaData is a URL string
+                    const url = mediaData;
+                    const isVideo = /\.(mp4|mov|avi|mkv|webm)$/i.test(url.toLowerCase());
+                    const mediaType: 'image' | 'video' = isVideo ? 'video' : 'image';
+                    // For old format, width, height, duration might not be available or need default
+                    mediaItemsForBlock.push({ uri: url, type: mediaType, duration: isVideo ? 0 : undefined });
+                  } else if (typeof mediaData === 'object' && mediaData !== null && mediaData.uri) {
+                    // New format: mediaData is an object { uri: string, type: 'image'|'video', ... }
+                    mediaItemsForBlock.push({
+                      uri: mediaData.uri,
+                      type: mediaData.type || (/\.(mp4|mov|avi|mkv|webm)$/i.test(mediaData.uri?.toLowerCase() || '') ? 'video' : 'image'), // Infer if type missing
+                      width: mediaData.width,
+                      height: mediaData.height,
+                      duration: mediaData.duration,
+                      // Asset is not stored/retrieved from Firestore for display purposes here
+                    });
                   }
                 });
               }

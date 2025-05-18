@@ -34,17 +34,31 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
     if (!story || !story.blocks) return [];
     const items: Array<{ uri: string; type: 'image' | 'video'; width?: number; height?: number; duration?: number; asset?: ImagePicker.ImagePickerAsset }> = [];
     story.blocks.forEach(block => {
+      // Expect 'image' type blocks to contain an array of media item objects or an array of URI strings (old format)
       if (block.type === 'image' && Array.isArray(block.data)) {
-        (block.data as Array<string | { uri: string; width?: number; height?: number }>).forEach(imgData => {
-          if (typeof imgData === 'string') {
-            items.push({ uri: imgData, type: 'image' });
-          } else if (imgData && imgData.uri) {
-            items.push({ uri: imgData.uri, type: 'image', width: imgData.width, height: imgData.height });
+        (block.data as Array<any>).forEach(mediaData => {
+          if (typeof mediaData === 'string') {
+            // Old format: mediaData is a URL string
+            const url = mediaData;
+            const isVideo = /\.(mp4|mov|avi|mkv|webm)$/i.test(url.toLowerCase());
+            const mediaType: 'image' | 'video' = isVideo ? 'video' : 'image';
+            items.push({ uri: url, type: mediaType, duration: isVideo ? 0 : undefined });
+          } else if (typeof mediaData === 'object' && mediaData !== null && mediaData.uri) {
+            // New format: mediaData is an object { uri: string, type: 'image'|'video', ... }
+            items.push({
+              uri: mediaData.uri,
+              type: mediaData.type || (/\.(mp4|mov|avi|mkv|webm)$/i.test(mediaData.uri?.toLowerCase() || '') ? 'video' : 'image'), // Infer if type missing
+              width: mediaData.width,
+              height: mediaData.height,
+              duration: mediaData.duration,
+              // Asset is not expected here as this is for display from fetched data
+            });
           }
         });
+      } else if (block.type === 'video' && typeof block.data === 'string') {
+        // Handle dedicated 'video' blocks if they exist (though current logic focuses on 'image' blocks for galleries)
+        // TODO: Implement video handling if needed
       }
-      // TODO: Handle video blocks if story.blocks can include them for MediaGallery
-      // e.g., else if (block.type === 'video' && block.data?.uri) { items.push({ ... }); }
     });
     return items;
   }, [story]);

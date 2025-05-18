@@ -48,27 +48,44 @@ interface MediaGalleryProps {
 const VideoItemRenderer: React.FC<{ item: MediaItem; style?: StyleProp<ViewStyle> }> = ({ item, style }) => {
   const player = useVideoPlayer(item.uri, (player) => {
     player.loop = false;
+    console.log(`[VideoItemRenderer] Player initialized for URI: ${item.uri}`);
   });
 
   const [isPlaying, setIsPlaying] = React.useState(player.playing);
   const [status, setStatus] = React.useState<VideoPlayerStatusType>(player.status);
 
   React.useEffect(() => {
+    console.log(`[VideoItemRenderer] Mounted for URI: ${item.uri}, Initial Status: ${player.status}, Initial IsPlaying: ${player.playing}`);
+
     const playingSubscription = player.addListener('playingChange', () => {
+      console.log(`[VideoItemRenderer] Event: playingChange - New isPlaying: ${player.playing} for ${item.uri}`);
       setIsPlaying(player.playing);
     });
     const statusSubscription = player.addListener('statusChange', (event) => {
+      console.log(`[VideoItemRenderer] Event: statusChange - New Status: ${event.status}, Error: ${event.error?.message || 'null'} for ${item.uri}`);
       setStatus(event.status);
+      if (event.error) {
+        console.error(`[VideoItemRenderer] Player Error for ${item.uri}:`, event.error);
+      }
     });
+    const sourceLoadSubscription = player.addListener('sourceLoad', (event) => {
+      console.log(`[VideoItemRenderer] Event: sourceLoad - URI: ${item.uri}, Duration: ${event.duration}, AV Tracks: ${event.availableVideoTracks?.length}, Subtitle Tracks: ${event.availableSubtitleTracks?.length}`);
+    });
+
     return () => {
+      console.log(`[VideoItemRenderer] Unmounting for URI: ${item.uri}. Cleaning up listeners.`);
       playingSubscription.remove();
       statusSubscription.remove();
+      sourceLoadSubscription.remove();
+      // player.release(); // Consider if player should be released here or if useVideoPlayer handles it.
+                         // useVideoPlayer hook should handle the release automatically on component unmount.
     };
-  }, [player]);
+  }, [player, item.uri]);
   
   const togglePlay = () => {
+    console.log(`[VideoItemRenderer] togglePlay called for ${item.uri}. Current status: ${status}, isPlaying: ${isPlaying}`);
     if (status === 'error') { // Use string literal for status comparison
-      console.warn("Video player error, cannot play");
+      console.warn(`[VideoItemRenderer] Video player error, cannot play ${item.uri}`);
       return;
     }
     if (isPlaying) {
