@@ -101,15 +101,10 @@ const VideoItemRenderer: React.FC<{ item: MediaItem; style?: StyleProp<ViewStyle
         player={player}
         style={[styles.mediaPreview, styles.videoPreview, style]}
         contentFit="cover"
-        allowsFullscreen={false} // Keep false for gallery view, can be true for a detail view
+        allowsFullscreen={true} // MODIFIED: Allow fullscreen
         showsTimecodes // Optional: if you want timecodes without full native controls
-        nativeControls={false} // Using custom overlay for play/pause
+        nativeControls={true} // MODIFIED: Enable native controls
       />
-      {!isPlaying && status !== 'error' && status !== 'loading' && (
-        <TouchableOpacity style={styles.videoOverlay} onPress={togglePlay}>
-          <Ionicons name="play-circle" size={48} color="rgba(255, 255, 255, 0.8)" />
-        </TouchableOpacity>
-      )}
       {item.duration ? (
         <Text style={styles.durationText}>
           {Math.floor(item.duration / 60000)}:{(Math.floor(item.duration / 1000) % 60).toString().padStart(2, '0')}
