@@ -38,7 +38,7 @@ type BlockType = "text" | "image" | "video" | "audio";
 interface StoryBlock {
   id: string;
   type: BlockType;
-  content: any; // string for text, ImagePicker.ImagePickerAsset[] for media, etc.
+  content: any; // string for text, MediaItem[] for image type blocks, object for audio, etc.
 }
 
 interface Location {
@@ -118,22 +118,21 @@ const CreateStoryScreen = () => {
   // Function to upload all images in image blocks and return updated blocks with Firebase Storage URLs
   const uploadAllMedia = async (storyBlocks: Array<{
     type: string;
-    data: any;
+    data: any; // For 'image' blocks, this will be Array<{uri: string, type: 'image'|'video', ...}>
+               // For 'audio'/'video' (dedicated), this will be a string URI
     localId: string;
   }>) => {
     // Count total media items that need to be uploaded
     let mediaToUploadCount = 0;
     storyBlocks.forEach(block => {
-      // MODIFIED: Now specifically looking at 'image' blocks for multi-media upload
-      // 'video' and 'audio' blocks if they contain single URIs might be handled differently or need their own upload logic if not covered by useImageUpload
       if (block.type === 'image' && Array.isArray(block.data)) {
-        block.data.forEach(uri => {
-          if (typeof uri === 'string' && (uri.startsWith('file://') || uri.startsWith('content://'))) {
+        // block.data is an array of MediaItem-like objects
+        (block.data as Array<{ uri: string }>).forEach(item => { // Cast to check URI
+          if (typeof item.uri === 'string' && (item.uri.startsWith('file://') || item.uri.startsWith('content://'))) {
             mediaToUploadCount++;
           }
         });
       } else if ((block.type === 'video' || block.type === 'audio') && typeof block.data === 'string' && (block.data.startsWith('file://') || block.data.startsWith('content://'))) {
-        // Assuming single URI for dedicated audio/video blocks if they are local files
         mediaToUploadCount++;
       }
     });
@@ -153,34 +152,35 @@ const CreateStoryScreen = () => {
       const block = updatedBlocks[i];
       
       if (block.type === 'image' && Array.isArray(block.data)) {
-        const updatedMediaUrls = [];
+        const processedMediaItems = []; // Will store media items with updated URIs
         for (let j = 0; j < block.data.length; j++) {
-          const uri = block.data[j];
-          if (typeof uri === 'string' && (uri.startsWith('file://') || uri.startsWith('content://'))) {
+          const mediaItem = block.data[j] as MediaItem; // Expect MediaItem like structure
+          if (typeof mediaItem.uri === 'string' && (mediaItem.uri.startsWith('file://') || mediaItem.uri.startsWith('content://'))) {
             try {
               const uploadedUrl = await uploadImage(
-                uri, 
+                mediaItem.uri, 
                 'stories', 
                 (progress) => {
+                  // Progress reporting needs to be accurate based on items, not just overall percentage
                   const currentTotalProgress = (completedUploads + progress / 100) / totalUploads * 100;
                   setOverallProgress(currentTotalProgress);
                 }
               );
               if (uploadedUrl) {
-                updatedMediaUrls.push(uploadedUrl);
+                processedMediaItems.push({ ...mediaItem, uri: uploadedUrl }); // Update URI, keep other props
                 setCompletedUploads(prev => prev + 1);
               } else {
-                updatedMediaUrls.push(uri); // Fallback
+                processedMediaItems.push(mediaItem); // Fallback, keep original item with local URI
               }
             } catch (error) {
-              console.error(`Error uploading media ${uri} in block ${i}:`, error);
-              updatedMediaUrls.push(uri); // Fallback
+              console.error(`Error uploading media ${mediaItem.uri} in block ${block.localId}, item index ${j}:`, error);
+              processedMediaItems.push(mediaItem); // Fallback
             }
           } else {
-            updatedMediaUrls.push(uri); // Already an uploaded URL
+            processedMediaItems.push(mediaItem); // Already an uploaded URL or not a local file string
           }
         }
-        block.data = updatedMediaUrls;
+        block.data = processedMediaItems; // block.data is now an array of MediaItem-like objects with updated URIs
       } else if ((block.type === 'video' || block.type === 'audio') && typeof block.data === 'string' && (block.data.startsWith('file://') || block.data.startsWith('content://'))) {
         // Handle single media URI upload for dedicated 'video' or 'audio' blocks
         try {
@@ -230,18 +230,26 @@ const CreateStoryScreen = () => {
           localId: block.id
         };
       } else if (block.type === 'image') {
-        // content is MediaItem[]
-        const imageUris = (block.content as MediaItem[] || []).map(item => item.uri);
+        // block.content is MediaItem[]
+        // Preserve essential details of each media item for storage
+        const mediaItemsToSave = (block.content as MediaItem[] || []).map(item => ({
+          uri: item.uri,
+          type: item.type,
+          width: item.width,
+          height: item.height,
+          duration: item.duration,
+          // Do not save the full 'asset' object to Firestore, only essential serializable data
+        }));
         return {
-          type: 'image',
-          data: imageUris, // Array of local URIs for uploadAllMedia
+          type: 'image', // This block type signifies a gallery
+          data: mediaItemsToSave, // Array of media item objects
           localId: block.id
         };
       } else if (block.type === 'audio') {
-        const audioUri = (typeof block.content === 'object' && block.content.uri) ? block.content.uri : '';
+        const audioContent = block.content as { uri: string; duration?: number; name?: string; isRecording?: boolean };
         return {
           type: 'audio',
-          data: audioUri, 
+          data: audioContent, 
           localId: block.id
         };
       } else {
@@ -300,12 +308,23 @@ const CreateStoryScreen = () => {
       if (block.type === 'text') {
         return { type: 'text', data: block.content, localId: block.id };
       } else if (block.type === 'image') {
-        // content is MediaItem[]
-        const imageUris = (block.content as MediaItem[] || []).map(item => item.uri);
-        return { type: 'image', data: imageUris, localId: block.id };
+        // block.content is MediaItem[]
+        // Preserve essential details of each media item for storage
+        const mediaItemsToSave = (block.content as MediaItem[] || []).map(item => ({
+          uri: item.uri,
+          type: item.type,
+          width: item.width,
+          height: item.height,
+          duration: item.duration,
+        }));
+        return {
+          type: 'image', // This block type signifies a gallery
+          data: mediaItemsToSave, // Array of media item objects
+          localId: block.id
+        };
       } else if (block.type === 'audio') {
-        const audioUri = (typeof block.content === 'object' && block.content.uri) ? block.content.uri : '';
-        return { type: 'audio', data: audioUri, localId: block.id };
+        const audioContent = block.content as { uri: string; duration?: number; name?: string; isRecording?: boolean };
+        return { type: 'audio', data: audioContent, localId: block.id };
       }
       return { type: block.type, data: block.content, localId: block.id };
     });
@@ -409,22 +428,48 @@ const CreateStoryScreen = () => {
               if (fb.type === 'text') {
                 contentValue = fb.data as string;
               } else if (fb.type === 'image') {
-                contentValue = (fb.data as string[] || []).map(url => {
-                  const isVideo = /\.(mp4|mov|avi|mkv|webm)$/i.test(url.toLowerCase());
-                  const mediaTypeExt = isVideo ? 'video' : 'image';
-                  return {
-                    uri: url,
-                    type: mediaTypeExt,
-                    asset: undefined, // Set asset to undefined for items loaded from URL
-                    duration: isVideo ? 0 : undefined // Placeholder for MediaItem duration
-                  } as MediaItem;
-                });
+                // fb.data could be string[] (old) or Array of MediaItem-like objects (new)
+                if (Array.isArray(fb.data)) {
+                  if (fb.data.length > 0 && typeof fb.data[0] === 'string') {
+                    // Old format: array of URIs
+                    contentValue = (fb.data as string[]).map(url => {
+                      const isVideo = /\.(mp4|mov|avi|mkv|webm)$/i.test(url.toLowerCase());
+                      const mediaTypeExt = isVideo ? 'video' : 'image';
+                      return {
+                        uri: url,
+                        type: mediaTypeExt,
+                        asset: undefined, // Asset is not stored in Firestore
+                        width: undefined, // Attempt to get from asset if available, or default
+                        height: undefined,
+                        duration: isVideo ? 0 : undefined // Placeholder
+                      } as MediaItem;
+                    });
+                  } else if (fb.data.length > 0 && typeof fb.data[0] === 'object' && fb.data[0] !== null && 'uri' in fb.data[0]) {
+                    // New format: array of MediaItem-like objects
+                    contentValue = (fb.data as Array<any>).map(itemData => ({
+                      uri: itemData.uri,
+                      type: itemData.type || (/\.(mp4|mov|avi|mkv|webm)$/i.test(itemData.uri?.toLowerCase() || '') ? 'video' : 'image'), // Infer if type missing
+                      asset: undefined,
+                      width: itemData.width,
+                      height: itemData.height,
+                      duration: itemData.duration,
+                    } as MediaItem));
+                  } else {
+                    // Empty array or unrecognized format within array
+                    contentValue = [];
+                  }
+                } else {
+                  // fb.data is not an array (should not happen for image blocks)
+                  console.warn(`Story ${storyToEdit.id}, block ${fb.localId || 'unknown'}: image block data is not an array.`, fb.data);
+                  contentValue = [];
+                }
               } else if (fb.type === 'audio') {
+                const audioData = fb.data as any; // Could be string URI or an object
                 contentValue = {
-                  uri: fb.data as string,
-                  duration: 0, // Placeholder - duration isn't stored with this model
-                  name: 'Audio Clip', // Placeholder
-                  isRecording: false, // Default
+                  uri: audioData.uri,
+                  duration: audioData.duration,
+                  name: audioData.name,
+                  isRecording: audioData.isRecording,
                 };
               } else {
                 contentValue = fb.data; // Fallback for other types
@@ -837,7 +882,7 @@ const CreateStoryScreen = () => {
   // MARK: - Add Content Action Sheet Actions
   const addContentActions: ActionSheetAction[] = [
     { title: 'Add Text', onPress: () => addBlock('text') },
-    { title: 'Add Images', onPress: () => addBlock('image') },
+    { title: 'Add Media', onPress: () => addBlock('image') },
     { title: 'Cancel', onPress: () => setAddContentActionSheetVisible(false), style: 'cancel' },
   ];
 
@@ -939,7 +984,7 @@ const CreateStoryScreen = () => {
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#1A4B44" />
           <Text style={styles.loadingText}>
-            {isUploading ? `Uploading images (${Math.round(overallProgress)}%)` : 'Saving story...'}
+            {isUploading ? `Uploading Media (${Math.round(overallProgress)}%)` : 'Saving Story...'}
           </Text>
           {isUploading && (
             <View style={styles.progressBarContainer}>

@@ -9,7 +9,13 @@ This document provides general styling guidelines for the Dynasty Mobile applica
 
 ## 1. Theming and Constants
 
-- **Centralized Theme**: Colors, fonts, spacing units, and other style-related constants **MUST** be defined in a central location (e.g., `apps/mobile/constants/Theme.ts`, `apps/mobile/constants/Colors.ts`, `apps/mobile/constants/Fonts.ts`).
+- **Centralized Constants**: Colors, fonts, spacing units, and other style-related constants **MUST** be defined in dedicated files within the `[apps/mobile/constants/](mdc:apps/mobile/constants)` directory. Key files include:
+    - `[Colors.ts](mdc:apps/mobile/constants/Colors.ts)` for all color definitions.
+    - `[Fonts.ts](mdc:apps/mobile/constants/Fonts.ts)` for font family definitions.
+    - `[Typography.ts](mdc:apps/mobile/constants/Typography.ts)` for defining text styles (heading sizes, body text, etc.).
+    - `[Spacing.ts](mdc:apps/mobile/constants/Spacing.ts)` for defining margins, paddings, and layout gaps.
+    - `[Layout.ts](mdc:apps/mobile/constants/Layout.ts)` for screen layout dimensions or breakpoints (if applicable).
+    - If a general `Theme.ts` file exists, its purpose should be clarified (e.g., for switching between light/dark mode themes or aggregating other constants).
     - *Rationale*: Facilitates easy updates and maintains consistency. Avoid hardcoding style values directly in components.
 - **Usage**: Always import and use these predefined constants in your stylesheets.
 
@@ -50,7 +56,7 @@ This document provides general styling guidelines for the Dynasty Mobile applica
 
 ## 8. File Structure for Styling Assets:
 
-- Theme and constants: `[constants/](mdc:apps/mobile/constants)` (e.g., `Colors.ts`, `Fonts.ts`, `Theme.ts`, `Layout.ts`)
+- Styling constants and theme files: `[constants/](mdc:apps/mobile/constants)` (e.g., `Colors.ts`, `Fonts.ts`, `Typography.ts`, `Spacing.ts`, `Layout.ts`)
 - Shared UI components with their styles: `[components/ui/](mdc:apps/mobile/components/ui)`
 - Font assets: `[assets/fonts/](mdc:apps/mobile/assets/fonts)`
 - Image assets: `[assets/images/](mdc:apps/mobile/assets/images)`

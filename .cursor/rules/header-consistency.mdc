@@ -15,7 +15,7 @@ This document outlines the rules for implementing consistent headers across the 
 
 ## 2. Header Title
 
-- **Font and Styling**: Header titles should use a consistent font family, size, and weight. Refer to [styling-guidelines.mdc](mdc:.cursor/rules/styling-guidelines.mdc) for font definitions.
+- **Font and Styling**: Header titles should use a consistent font family, size, and weight. Font definitions and typography guidelines are specified in `[styling-guidelines.mdc](mdc:.cursor/rules/styling-guidelines.mdc)` and utilize constants from `[apps/mobile/constants/Fonts.ts](mdc:apps/mobile/constants/Fonts.ts)` and `[apps/mobile/constants/Typography.ts](mdc:apps/mobile/constants/Typography.ts)`.
 - **Capitalization**: Use title case for header titles (e.g., "User Profile", "Settings Page").
 - **Length**: Keep titles concise and descriptive. Avoid overly long titles that might truncate on smaller screens.
 
@@ -31,8 +31,8 @@ This document outlines the rules for implementing consistent headers across the 
 
 ## 4. Styling
 
-- **Background Color**: Header background color should be consistent, potentially derived from a central theme file (e.g., `apps/mobile/constants/Colors.ts` or `apps/mobile/constants/Theme.ts`).
-- **Border/Shadow**: If headers use a bottom border or shadow, this style should be applied uniformly.
+- **Background Color**: Header background color should be consistent, primarily derived from `[apps/mobile/constants/Colors.ts](mdc:apps/mobile/constants/Colors.ts)`. Other general theming aspects might be influenced by files within the `[apps/mobile/constants/](mdc:apps/mobile/constants)` directory.
+- **Border/Shadow**: If headers use a bottom border or shadow, this style should be applied uniformly, with relevant values (like spacing or color) also sourced from the `[apps/mobile/constants/](mdc:apps/mobile/constants)` directory (e.g., `Spacing.ts`, `Colors.ts`).
 
 ## 5. Accessibility
 
