@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useMemo } from 'react';
 import { 
   getFirebaseAuth, 
   getFirebaseFunctions, 
@@ -126,12 +126,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     // Connect to emulators once when the app/provider mounts, if in DEV mode
-    if (__DEV__) { // Ensure emulators are only connected in development
-      connectToEmulators();
-    }
+    connectToEmulators(); 
   }, []); // Empty dependency array ensures this runs once on mount
 
-  const fetchFirestoreUserData = useCallback(async (uid: string) => {
+  const fetchFirestoreUserData = async (uid: string) => {
     if (!uid) return null;
     setIsFetchingFirestoreUser(true);
     try {
@@ -154,43 +152,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } finally {
       setIsFetchingFirestoreUser(false);
     }
-  }, [db]); // Added db as dependency
+  };
   
-  const refreshUser = useCallback(async () => {
+  const refreshUser = async () => {
     // 'auth' instance is now from useMemo
     if (auth.currentUser) { 
       setIsLoading(true);
-      try { // Added try/catch for reload
-        await auth.currentUser.reload();
-        const freshUser = auth.currentUser;
-        setUser(freshUser);
-        if (freshUser) {
-          await fetchFirestoreUserData(freshUser.uid);
-        }
-      } catch (error) {
-        console.error("AuthContext: Error reloading user:", error);
-        // Decide how to handle reload error, maybe sign out user or show message
-      } finally {
-        setIsLoading(false);
+      await auth.currentUser.reload();
+      const freshUser = auth.currentUser;
+      setUser(freshUser);
+      if (freshUser) {
+        await fetchFirestoreUserData(freshUser.uid);
       }
+      setIsLoading(false);
     }
-  }, [auth, fetchFirestoreUserData]); // Added dependencies
+  };
 
   useEffect(() => {
     // 'auth' instance is now from useMemo
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser: FirebaseUser | null) => { 
       console.log('Auth state changed. User UID:', firebaseUser?.uid, 'Email Verified:', firebaseUser?.emailVerified);
       if (firebaseUser) {
-        // It's often better to trust the firebaseUser object from the callback first
-        // and then reload if necessary, or let refreshUser handle explicit reloads.
-        // For now, keeping reload but it's a point of attention.
-        try {
-            await firebaseUser.reload();
-        } catch (reloadError) {
-            console.error("Error reloading user during onAuthStateChanged:", reloadError);
-            // If reload fails, it might be critical (e.g. user disabled)
-            // Consider signing out or handling this state. For now, proceed with potentially stale data or let it fail.
-        }
+        await firebaseUser.reload();
         const freshUser = auth.currentUser; // Use the auth instance from useMemo
         setUser(freshUser);
         if (freshUser) {
@@ -205,7 +188,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(false);
     });
     return () => unsubscribe();
-  }, [auth, db, fetchFirestoreUserData]); // Added fetchFirestoreUserData
+  }, [auth, db]); // Added auth and db to dependency array
 
   useEffect(() => {
     const routeInfo = {
@@ -257,65 +240,83 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (!user) {
       const canBeOnPageWithoutAuth = inAuthGroup || isLandingPageEquivalent || isConfirmEmailScreen || currentRoute === '(auth)/signIn' || currentRoute === '(auth)/signUp' || currentRoute === '(auth)/phoneSignIn' || currentRoute === '(auth)/verifyOtp';
       if (!canBeOnPageWithoutAuth) {
-        const targetPath = '/';
-        if (currentRoute !== targetPath) {
-            console.log(`[AuthNavEffect !user] Redirecting to ${targetPath} (landing page). Current route: ${currentRoute}`);
-            router.replace(targetPath);
-        }
+        console.log(`[AuthNavEffect !user] Redirecting to / (landing page). Current route: ${currentRoute}`);
+        router.replace('/');
       }
     } else { // User exists
 
       // 1. PRIORITIZE EMAIL VERIFICATION
       if (user.email && !user.emailVerified) {
-        const targetPath = '/(auth)/verifyEmail';
         // If email is not verified, user MUST go to verification screen
         // unless they are already there or in a related flow (like confirmEmail).
-        if (currentRoute !== targetPath && !isConfirmEmailScreen && currentRoute !== '(auth)/signIn' /* Allow signIn if they want to re-auth */) { // Adjusted condition
-          console.log(`[AuthNavEffect] User email ${user.email} NOT VERIFIED. Redirecting to ${targetPath}. Current route: ${currentRoute}`);
-          router.replace({ pathname: targetPath, params: { email: user.email } });
+        // This also prevents redirection if they are in the onboarding group, as email verification should come first.
+        if (!isVerifyEmailScreen && !isConfirmEmailScreen && currentRoute !== '(auth)/verifyEmail' && !inAuthGroup) {
+          console.log(`[AuthNavEffect] User email ${user.email} NOT VERIFIED. Redirecting to /(auth)/verifyEmail. Current route: ${currentRoute}`);
+          router.replace({ pathname: '/(auth)/verifyEmail', params: { email: user.email } });
           return; // Exit after redirect
-        } else if (currentRoute === targetPath || isConfirmEmailScreen) {
+        } else if (isVerifyEmailScreen || isConfirmEmailScreen || (inAuthGroup && currentRoute !== '(auth)/verifyEmail')) {
           console.log(`[AuthNavEffect] User email ${user.email} NOT VERIFIED, but staying on current auth-related page or verification flow: ${currentRoute}`);
+          // Allow user to stay on verification-related pages or other auth pages if email not verified.
+          // No further navigation logic should execute if email is not verified and they are on an appropriate page.
           return; 
         }
+        // If in onboarding group but email not verified, they shouldn't be. The above should catch and redirect to verifyEmail.
+        // If somehow they are in onboarding with unverified email, the !inAuthGroup above should redirect them.
       } else { 
         // EMAIL IS VERIFIED (or no email to verify, e.g., phone auth only) - Proceed to Onboarding/Feed Logic
-        const onboardingTargetPath = '/(onboarding)/profileSetup';
-        const feedTargetPath = '/(tabs)/feed';
 
         // 2. Handle Onboarding (only if email is verified or not applicable)
         if (firestoreUser && firestoreUser.onboardingCompleted === false) { 
-          if (currentRoute !== onboardingTargetPath && !inOnboardingGroup && currentRoute !== '(auth)/signIn') { // if not already on an onboarding path and not trying to sign-in (which might reset state)
-            console.log('[AuthNavEffect] User email VERIFIED, Onboarding INCOMPLETE. Redirecting to onboarding. Current route:', currentRoute);
-            router.replace(onboardingTargetPath);
+          if (!inOnboardingGroup && !inAuthGroup) { 
+            console.log('[AuthNavEffect] User email VERIFIED, Onboarding INCOMPLETE. Redirecting to /onboarding/profileSetup. Current route:', currentRoute);
+            router.replace('/(onboarding)/profileSetup');
             return; // Exit after redirect
           }
         } else if (firestoreUser && firestoreUser.onboardingCompleted === true) {
           // 3. Handle Post-Onboarding (User is onboarded AND email verified/not applicable)
           // If they are on auth, onboarding, or landing pages, redirect to feed.
-          if (currentRoute !== feedTargetPath && (inAuthGroup || inOnboardingGroup || isLandingPageEquivalent) ) {
-            console.log('[AuthNavEffect] User email VERIFIED, ONBOARDED. Redirecting to feed. Current route:', currentRoute);
-            router.replace(feedTargetPath);
+          if (inAuthGroup || inOnboardingGroup || isLandingPageEquivalent ) {
+            console.log('[AuthNavEffect] User email VERIFIED, ONBOARDED. Redirecting to /(tabs)/feed. Current route:', currentRoute);
+            router.replace('/(tabs)/feed');
             return; // Exit after redirect
           }
         } else if (!firestoreUser && !isFetchingFirestoreUser) {
-          console.log("[AuthNavEffect] User email VERIFIED (or N/A), but firestoreUser data is null and not fetching...");
-          // This case means email is verified (or no email like phone auth), but firestoreUser is null (and not loading).
-          // This can happen briefly after signup before firestore doc is created/read, or if user doc is missing.
-          // If they are on auth pages (and not trying to sign-in) or landing page, they should be moved towards onboarding as a default next step.
-          if ((inAuthGroup || isLandingPageEquivalent) && currentRoute !== '(auth)/signIn') {
-             if (currentRoute !== onboardingTargetPath) {
-                console.log('[AuthNavEffect] Email verified, firestoreUser null (and not fetching), on auth/landing. Redirecting to onboarding as a likely next step.');
-                router.replace(onboardingTargetPath); 
+          console.log("[AuthNavEffect] User email VERIFIED (or N/A), but firestoreUser data is null and not fetching. This might be an intermediate state before onboarding or if no Firestore document exists yet.");
+          // If onboarding is truly required next and firestoreUser is null, this state might mean
+          // we need to ensure the handleSignUp/handleGoogleSignIn correctly creates a base firestoreUser doc with onboardingCompleted: false
+          // For now, if email is verified, allow progression, assuming an onboarding check or firestore sync will handle it.
+          // If they are on auth pages at this point (and email is verified), they should be moved.
+          if (inAuthGroup || isLandingPageEquivalent) {
+            // This is a tricky spot. If email is verified, and firestore user is null (not loading),
+            // and they are stuck on an auth page, where should they go?
+            // Assuming that if onboarding is next, the firestoreUser.onboardingCompleted === false check should trigger once data loads.
+            // If they're here, it means firestoreUser is null.
+            // Let's assume they should proceed towards onboarding if applicable, or feed if somehow firestore user is delayed but onboarding is done.
+            // This might require the onboarding/profileSetup page to be robust if firestoreUser is still loading.
+            console.log('[AuthNavEffect] Email verified, firestoreUser null, on auth/landing. Potential redirect to onboarding if not yet completed, or feed. Holding for now, relying on subsequent firestoreUser updates.');
+            // To prevent loops if firestoreUser never loads but onboarding is false:
+            // This state needs careful consideration. If they are on (auth)/login, and email is verified, they should not stay.
+            // They should at least go to onboarding or feed.
+            // A simple redirect to a "default" screen if firestoreUser remains null and onboarding status is unknown might be needed.
+            // For now, if they are on auth/landing and email is verified, let's push them towards where onboarding check would happen or feed.
+            // This assumes firestoreUser will eventually load. If not, it's a data issue.
+            // Let's cautiously redirect to a place where onboarding state would be re-evaluated or is the default start.
+            // This could still cause a loop if firestoreUser doesn't load and onboarding is false.
+            // A better way: If email verified and on auth/landing, and firestoreUser is null (not loading),
+            // perhaps redirect to a loading/default page or trigger a refresh of firestore data.
+            // For now, to avoid loops from login to login:
+             if (inAuthGroup || isLandingPageEquivalent) {
+                console.log('[AuthNavEffect] Email verified, firestoreUser null (and not fetching), on auth/landing. Redirecting to /onboarding/profileSetup as a likely next step or to break loop from auth pages.');
+                router.replace('/(onboarding)/profileSetup'); // Or a dedicated loading/transition screen
                 return;
              }
           }
         }
       }
     }
-  }, [user, firestoreUser, isLoading, isFetchingFirestoreUser, segments, router, phoneAuthConfirmation, db]); // Added db as it's used by fetchFirestoreUserData which affects firestoreUser
+  }, [user, firestoreUser, isLoading, isFetchingFirestoreUser, segments, router, phoneAuthConfirmation]);
 
-  const signIn = useCallback(async (email: string, pass: string) => {
+  const signIn = async (email: string, pass: string) => {
     setIsLoading(true);
     try {
       await auth.signInWithEmailAndPassword(email, pass); // auth from useMemo
@@ -328,9 +329,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [auth]);
+  };
 
-  const triggerSendVerificationEmail = useCallback(async (userId: string, email: string, displayName: string) => {
+  const triggerSendVerificationEmail = async (userId: string, email: string, displayName: string) => {
     if (!functions) {
       console.error("AuthContext: Firebase functions not initialized for triggerSendVerificationEmail.");
       throw new Error("Functions service not available.");
@@ -342,18 +343,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log("AuthContext: 'sendVerificationEmail' cloud function result:", result.data);
     } catch (error: any) {
       console.error("AuthContext: Error calling 'sendVerificationEmail' cloud function:", error);
+      // Don't throw an error that stops the signup flow, but log it.
+      // Alert.alert("Verification Email", "Could not send verification email. Please try resending from the verify email page.");
     }
-  }, [functions]);
+  };
 
-  const signUp = useCallback(async (newEmail: string, newPass: string) => {
+  const signUp = async (newEmail: string, newPass: string) => {
     setIsLoading(true);
     try {
       console.log("AuthContext: Attempting sign-up via 'handleSignUp' cloud function for:", newEmail);
       const handleSignUpFunction = functions.httpsCallable('handleSignUp');
+      // Cast the result to the expected type
       const result = await handleSignUpFunction({ email: newEmail, password: newPass }) as { data: HandleSignUpResultData };
 
       if (result.data.success && result.data.userId) {
         console.log('AuthContext: Cloud function handleSignUp successful, User UID:', result.data.userId);
+        // ... other comments ...
         console.log("AuthContext: SignUp successful. User state will be updated by onAuthStateChanged.");
       } else {
         const errorMessage = result.data?.message || 'Signup failed due to an unknown server error.';
@@ -370,260 +375,327 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [functions]);
+  };
 
-  const resendVerificationEmail = useCallback(async () => {
-    if (!auth.currentUser) { 
+  const resendVerificationEmail = async () => {
+    if (!auth.currentUser) { // auth from useMemo
       console.error("Resend Verification: No user found");
-      // Using Alert.alert for user feedback
-      Alert.alert("Error", "No user found. Please sign in again.");
+      alert("No user found. Please sign in again.");
     } else {
-      const userForEmail = auth.currentUser; 
+      // Assuming user is available from state or auth.currentUser
+      const userForEmail = auth.currentUser; // auth from useMemo
       if (userForEmail && userForEmail.email) {
+        // Ensure displayName is a string, provide a fallback.
         await triggerSendVerificationEmail(userForEmail.uid, userForEmail.email, userForEmail.displayName || 'User');
-        Alert.alert("Verification Email Sent", "A new verification email has been sent to your address."); // User feedback
       }
     }
-  }, [auth, triggerSendVerificationEmail]);
+  };
 
-  const confirmEmailVerificationLink = useCallback(async (uid: string, token: string) => {
+  const confirmEmailVerificationLink = async (uid: string, token: string) => {
+    // This function might be specific to a custom flow or a Firebase extension.
+    // Standard email verification is usually handle by Firebase automatically when user clicks the link.
+    // If this is for a custom verification backend function:
     setIsLoading(true);
     try {
-      // Assuming a cloud function 'confirmEmailVerification' exists
-      const confirmFunction = functions.httpsCallable('confirmEmailVerification');
-      const result = await confirmFunction({ uid, token });
-      console.log("Email verification confirmation result:", result.data);
-      await refreshUser(); // Refresh user data to reflect verified status
-      Alert.alert("Success", "Email successfully verified!");
+      const confirmEmailFunction = functions.httpsCallable('confirmEmailVerification'); // functions from useMemo
+      const result = await confirmEmailFunction({ uid, token });
+      console.log("AuthContext: Custom email verification result:", result.data);
+      
+      // Reload the user to get the latest emailVerified status
+      if (auth.currentUser) { // auth from useMemo
+        await auth.currentUser.reload(); // auth from useMemo
+        setUser(auth.currentUser); // auth from useMemo
+      }
+      alert("Email verified successfully! You can now sign in.");
     } catch (error: any) {
-      console.error("Error confirming email verification link:", error);
-      Alert.alert("Error", error.message || "Could not verify email. The link may be invalid or expired.");
+      console.error("Error confirming email verification:", error);
+      throw new Error(error.data?.message || error.message || 'Failed to confirm email verification.');
     } finally {
       setIsLoading(false);
     }
-  }, [functions, refreshUser]); // Added refreshUser
+  };
 
-  const signOut = useCallback(async () => {
-    console.log("AuthContext: Signing out user...");
+  const signOut = async () => {
     setIsLoading(true);
     try {
-      // Optional: Call a backend function if you need to clear tokens or do server-side cleanup
-      // const customSignOutFunction = functions.httpsCallable('customSignOut');
-      // await customSignOutFunction();
-
-      await auth.signOut();
-      // Clear local state immediately after sign out, onAuthStateChanged will also trigger
+      // Check if Google Sign-In was used
+      // Use getCurrentUser() which returns the user object or null
+      if (GoogleSignin) { // Ensure GoogleSignin module is available
+        const currentGoogleUser = await GoogleSignin.getCurrentUser();
+        if (currentGoogleUser) {
+          console.log("AuthContext: Google user is signed in, attempting full Google sign out.");
+          if (typeof GoogleSignin.revokeAccess === 'function') {
+            await GoogleSignin.revokeAccess();
+            console.log("AuthContext: Google access revoked.");
+          } else {
+            console.warn("AuthContext: GoogleSignin.revokeAccess function is not available.");
+          }
+          if (typeof GoogleSignin.signOut === 'function') {
+            await GoogleSignin.signOut();
+            console.log("AuthContext: Google user signed out from Google.");
+          } else {
+            console.warn("AuthContext: GoogleSignin.signOut function is not available.");
+          }
+        } else {
+          console.log("AuthContext: No current Google user found via getCurrentUser(). Skipping Google-specific sign out steps.");
+        }
+      } else {
+        console.warn("AuthContext: GoogleSignin module is not available. Skipping Google sign out check.");
+      }
+      
+      await auth.signOut(); // auth from useMemo
       setUser(null);
       setFirestoreUser(null);
-      setPhoneAuthConfirmation(null); // Clear phone auth confirmation state
-      
-      // Navigate to a public route, e.g., login or landing page
-      // This should ideally be handled by the navigation useEffect, but an explicit redirect here can be a fallback.
-      // However, it's better to let the main navigation effect handle this to avoid conflicting navigations.
-      // router.replace('/(auth)/signIn'); // Example - but better to let the effect do its job.
-      console.log("AuthContext: User signed out successfully.");
+      setPhoneAuthConfirmation(null);
+      // Navigation will be handled by useEffect hook
     } catch (error: any) {
-      console.error("AuthContext: Error signing out:", error);
-      Alert.alert("Sign Out Error", error.message || "Could not sign out at this time.");
+      console.error("Sign out error", error);
+      throw new Error(error.message || 'Failed to sign out.');
     } finally {
       setIsLoading(false);
     }
-  }, [auth, functions]); // Added functions if customSignOut is used
+  };
 
-  const signInWithGoogle = useCallback(async () => {
+  const signInWithGoogle = async () => {
     setIsLoading(true);
-    console.log("AuthContext: Attempting Google Sign-In...");
+
+    // Type guard for SignInSuccessResponse
+    function isSignInSuccessResponse(response: SignInResponse): response is SignInSuccessResponse {
+      if (!response) return false;
+      // A success response should have an idToken (string) and a user object.
+      // An error response or cancellation often has a 'code' or specific 'type'.
+      // If 'code' exists, it's likely not a direct success object from this perspective.
+      if (typeof (response as any).code !== 'undefined') {
+        return false;
+      }
+      // If 'type' is 'cancelled', it's not a success.
+      if ((response as any).type === 'cancelled') {
+        return false;
+      }
+      // Check for core success properties
+      const successCandidate = response as any;
+      return typeof successCandidate.idToken === 'string' && successCandidate.user != null;
+    }
+
     try {
-      // Check for Play Services
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true } as HasPlayServicesParams);
-      console.log("AuthContext: Google Play Services available.");
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const signInResponse = await GoogleSignin.signIn(); // This is of type SignInResponse
 
-      const signInResult = await GoogleSignin.signIn();
-      
-      // Using 'as any' temporarily due to persistent linter issues with SignInSuccessResponse type definition.
-      // This assumes signInResult on success contains idToken and user.
-      const idToken = (signInResult as any).idToken;
-      const googleUser = (signInResult as any).user;
-
-      console.log("AuthContext: Google Sign-In successful, received ID token and user info.", { idTokenNotNull: !!idToken, googleUser });
-
-      if (!idToken) {
-        throw new Error("Google Sign-In failed: No ID token received.");
+      // Scenario 1: User cancelled (detected from response object structure)
+      // Based on logs, cancellation can result in: { "data": null, "type": "cancelled" }
+      if (signInResponse && (signInResponse as any).type === 'cancelled') {
+        console.log("AuthContext: Google Sign-In cancelled by user (detected from response.type).");
+        Alert.alert("Google Sign-In", "Sign in was cancelled.");
+        // No error needs to be thrown, allow to proceed to finally block.
+        return; // Gracefully exit the function.
       }
 
-      // Create a Google credential with the token
-      const googleCredential = RNAuth.GoogleAuthProvider.credential(idToken);
-      console.log("AuthContext: Created Google credential for Firebase.");
+      // Scenario 2: Successful sign-in
+      if (isSignInSuccessResponse(signInResponse)) {
+        const idToken: string = (signInResponse as any).idToken; 
+        const userDetails: LibGoogleSignInUser = (signInResponse as any).user;
 
-      // Sign-in the user with the credential
-      const firebaseUserCredential = await auth.signInWithCredential(googleCredential);
-      console.log("AuthContext: Firebase sign-in with Google credential successful. User UID:", firebaseUserCredential.user?.uid);
-      
-      // User state will be updated by onAuthStateChanged, which also calls fetchFirestoreUserData
-      // If you need to do something specific immediately after Google Sign-In (like checking if new user for custom welcome)
-      // you can do it here, but onAuthStateChanged should handle the main user/firestoreUser state updates.
+        console.log("AuthContext: Google User ID Token acquired.");
+        console.log("AuthContext: Google User Details Email:", (userDetails as any).email);
+        console.log("AuthContext: Google User Details Name:", (userDetails as any).name);
+        console.log("AuthContext: Google User Details Photo:", (userDetails as any).photo);
 
-      // Example: Check if this is a new user from Google Sign-In perspective
-      const isNewUser = firebaseUserCredential.additionalUserInfo?.isNewUser;
-      if (isNewUser) {
-        console.log("AuthContext: New user signed up with Google. Firestore document might need to be created or checked by fetchFirestoreUserData.");
-        // Additional logic for new Google users if needed, e.g. calling a specific cloud function.
-        // The handleSignUp logic usually covers new user document creation for email/pass.
-        // For Google/Apple, ensure your backend or onAuthStateChanged + fetchFirestoreUserData correctly provisions new users.
-        // This might involve ensuring a 'users/{uid}' document is created with 'onboardingCompleted: false'.
-      }
+        const googleCredential = RNAuth.GoogleAuthProvider.credential(idToken);
+        const userCredential = await auth.signInWithCredential(googleCredential);
+        const firebaseUser = userCredential.user;
+        setUser(firebaseUser);
 
-    } catch (error: any) {
-      console.error("AuthContext: Google Sign-In Error", error);
-      let errorMessage = "Google Sign-In failed.";
-      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-        errorMessage = "Google Sign-In was cancelled.";
-        // console.log(errorMessage); // Don't throw, user cancelled
-      } else if (error.code === statusCodes.IN_PROGRESS) {
-        errorMessage = "Google Sign-In is already in progress.";
-        Alert.alert("Sign-In In Progress", errorMessage);
-      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        errorMessage = "Google Play Services not available or outdated.";
-        Alert.alert("Play Services Error", errorMessage);
-      } else {
-        // some other error happened
-        if (error.message) {
-          errorMessage = error.message;
+        if (firebaseUser && functions) {
+          const handleGoogleSignIn = functions.httpsCallable('handleGoogleSignIn');
+          await handleGoogleSignIn({
+            userId: firebaseUser.uid,
+            email: (userDetails as any).email,
+            displayName: (userDetails as any).name || '',
+            photoURL: (userDetails as any).photo || null
+          });
         }
-        Alert.alert("Google Sign-In Error", errorMessage);
+        // Successful completion, allow to proceed to finally block.
       }
-      // Don't set isLoading(false) here as onAuthStateChanged will handle it, or if error is final.
-      // If the error is not a cancellation, then set loading to false.
-      if (error.code !== statusCodes.SIGN_IN_CANCELLED) {
-         setIsLoading(false); // Set loading false only if it's a real error not a user cancel
-      }
-    } 
-    // setIsLoading(false) is generally handled by onAuthStateChanged or final error block.
-    // If sign-in is successful, onAuthStateChanged will set isLoading false.
-    // If it fails before Firebase auth (e.g., Google pop-up error), need to ensure isLoading is reset.
-  }, [auth]);
+      // Scenario 3: Sign-in returned an object with an error code
+      else if (signInResponse && (signInResponse as any).code !== undefined) {
+        const errorCode = (signInResponse as any).code as string | number;
+        let errorMessage = "Google Sign-In error";
 
-  const signInWithPhoneNumber = useCallback(async (phoneNumber: string): Promise<FirebaseAuthTypes.ConfirmationResult | null> => {
+        if (statusCodes[errorCode as keyof typeof statusCodes]) {
+            errorMessage = `Google Sign-In failed: ${statusCodes[errorCode as keyof typeof statusCodes]}`;
+        } else {
+            errorMessage = `Google Sign-In failed with code: ${errorCode}`;
+        }
+        
+        // Check if this returned code is specifically SIGN_IN_CANCELLED
+        if (errorCode === statusCodes.SIGN_IN_CANCELLED || String(errorCode) === String(statusCodes.SIGN_IN_CANCELLED)) {
+            console.log("AuthContext: Google Sign-In was cancelled by the user (detected from signInResponse.code).");
+            Alert.alert("Google Sign-In", "Sign in was cancelled.");
+            return; // Gracefully exit
+        } else {
+            console.error("AuthContext: " + errorMessage, signInResponse);
+            Alert.alert("Google Sign-In Error", errorMessage);
+            throw new Error(errorMessage); // This is an actual error from Google's side.
+        }
+      } 
+      // Scenario 4: signInResponse is neither success, nor known cancellation, nor known error code structure
+      else {
+        console.error("AuthContext: Google Sign-In cancelled or failed with unexpected response structure.", signInResponse);
+        Alert.alert("Google Sign-In Error", "Google Sign-In cancelled or failed with an unexpected response.");
+        // Avoid throwing a new generic error if signInResponse is null or undefined after cancellation
+        // as this might be the state after a cancellation that didn't fit other checks.
+        // If signInResponse is truly unexpected and not a cancellation, this path is problematic.
+        // For now, assume this can also be a form of cancellation/failure not throwing an error.
+        return; 
+      }
+    } catch (error: any) {
+      // This catch block handles errors THROWN by GoogleSignin.hasPlayServices(), GoogleSignin.signIn(),
+      // or errors thrown by our logic above (e.g., from Scenario 3).
+      console.error("Google sign in error caught in outer catch block:", error); // Log the original error
+      
+      const errorCode = error.code; // error.code can be a number or string
+      const errorCodeString = String(errorCode);
+
+      if (errorCode === statusCodes.SIGN_IN_CANCELLED || errorCodeString === String(statusCodes.SIGN_IN_CANCELLED)) {
+        console.log("AuthContext: Google Sign-In was cancelled by the user (detected from thrown error.code).");
+        Alert.alert("Google Sign-In", "Sign in was cancelled.");
+        // No re-throw for cancellation.
+      } else if (errorCode === statusCodes.IN_PROGRESS || errorCodeString === String(statusCodes.IN_PROGRESS)) {
+        console.log("AuthContext: Google Sign-In operation already in progress.");
+        Alert.alert("Google Sign-In", "Sign in is already in progress.");
+        // No re-throw.
+      } else if (errorCode === statusCodes.PLAY_SERVICES_NOT_AVAILABLE || errorCodeString === String(statusCodes.PLAY_SERVICES_NOT_AVAILABLE)) {
+        console.log("AuthContext: Google Play Services not available or outdated.");
+        Alert.alert("Google Sign-In Error", "Play services not available or outdated. Please update Google Play Services.");
+        // No re-throw, user is alerted.
+      } else {
+        // For other errors (network errors, unexpected issues from the library, or our own re-thrown errors)
+        const displayMessage = error.message || 'An unknown error occurred during Google sign in.';
+        console.error("AuthContext: Unhandled Google Sign-In error in catch block:", displayMessage, error);
+        Alert.alert("Google Sign-In Error", displayMessage);
+        // To prevent crashing the app, we will not re-throw here. The error is logged and user is alerted.
+      }
+    } finally {
+        setIsLoading(false); // Ensure isLoading is always reset
+    }
+  };
+
+  const signInWithPhoneNumber = async (phoneNumber: string): Promise<FirebaseAuthTypes.ConfirmationResult | null> => {
     setIsLoading(true);
     try {
-      console.log(`AuthContext: Attempting to sign in with phone number: ${phoneNumber}`);
       const confirmation = await auth.signInWithPhoneNumber(phoneNumber);
-      setPhoneAuthConfirmation(confirmation); // Store confirmation for OTP step
-      console.log("AuthContext: Phone number verification code sent. Confirmation object stored.");
-      Alert.alert("OTP Sent", `An OTP has been sent to ${phoneNumber}.`);
+      setPhoneAuthConfirmation(confirmation);
+      console.log("AuthContext: Phone number verification code sent, confirmation object set in context.");
+      
+      // Schedule navigation to allow state update to propagate
+      setTimeout(() => {
+        router.replace({ 
+          pathname: '/(auth)/verifyOtp',
+          params: { phoneNumberSent: phoneNumber }
+        });
+        console.log(`AuthContext: Navigating (replace) to verifyOtp for ${phoneNumber} (after timeout)`);
+      }, 0);
+      
       return confirmation;
     } catch (error: any) {
-      console.error("AuthContext: Sign in with phone number error:", error);
-      let message = "Could not initiate phone sign-in. Please check the number and try again.";
-      if (error.code === 'auth/invalid-phone-number') {
-        message = 'Invalid phone number. Please enter a valid number.';
-      } else if (error.code === 'auth/too-many-requests') {
-        message = 'Too many requests. Please try again later.';
-      }
-      Alert.alert("Phone Sign-In Error", message);
-      setPhoneAuthConfirmation(null);
-      setIsLoading(false); // Ensure loading is false on error here
-      return null;
+      console.error(`Phone sign in error: ${error.message}`);
+      Alert.alert("OTP Send Error", error.message || 'Failed to send OTP. Please try again.');
+      throw new Error(error.message || 'Failed to send OTP.');
     } finally {
-      // setIsLoading(false); // isLoading should be managed by OTP confirmation or error.
-      // If successful, user is not yet signed in, so isLoading might still be true or handled by subsequent steps.
+      // Crucially, ensure isLoading is set to false *after* the timeout might have run
+      // or structure so that isLoading doesn't prematurely affect AuthNavEffect before navigation occurs.
+      // However, the navigation is now in a timeout, so setIsLoading(false) here is fine.
+      setIsLoading(false);
     }
-  }, [auth]);
+  };
 
-  const confirmPhoneCode = useCallback(async (phoneNumber: string, code: string) => {
+  const confirmPhoneCode = async (phoneNumber: string, code: string) => {
     if (!phoneAuthConfirmation) {
-      Alert.alert("Error", "No phone verification in progress or confirmation result is missing.");
-      throw new Error("Phone confirmation result is missing.");
+      console.error("AuthContext: phoneAuthConfirmation is null. Cannot confirm code.");
+      throw new Error("Verification session expired or not found. Please request a new OTP.");
     }
+    
     setIsLoading(true);
     try {
-      console.log(`AuthContext: Attempting to confirm phone code: ${code} for number: ${phoneNumber}`);
-      await phoneAuthConfirmation.confirm(code);
-      console.log("AuthContext: Phone number verified and user signed in successfully.");
-      // User is now signed in. onAuthStateChanged will handle user state, firestore data, and isLoading.
-      setPhoneAuthConfirmation(null); // Clear confirmation state
-      // Let onAuthStateChanged handle setIsLoading(false) and navigation
-    } catch (error: any) {
-      console.error("AuthContext: Confirm phone code error:", error);
-      let message = "Could not verify OTP. Please check the code and try again.";
-      if (error.code === 'auth/invalid-verification-code') {
-        message = 'Invalid OTP. Please enter the correct code.';
-      } else if (error.code === 'auth/code-expired') {
-        message = 'The OTP has expired. Please request a new one.';
+      // 'phoneAuthConfirmation' from useState
+      // 'functions' from useMemo
+      const userCredential = await phoneAuthConfirmation.confirm(code);
+      console.log(`AuthContext: Phone OTP confirmed. Firebase User UID: ${userCredential?.user?.uid}`);
+      
+      if (userCredential && userCredential.user) {
+        const firebaseUser = userCredential.user;
+        console.log(`AuthContext: Calling handlePhoneSignIn cloud function for UID: ${firebaseUser.uid}`);
+        
+        const handlePhoneSignInFn = functions.httpsCallable('handlePhoneSignIn');
+        const result = await handlePhoneSignInFn({ uid: firebaseUser.uid, phoneNumber: phoneNumber });
+        
+        console.log('AuthContext: handlePhoneSignIn cloud function result:', result.data);
+        await fetchFirestoreUserData(firebaseUser.uid);
+      } else {
+        throw new Error("Failed to confirm OTP: No user credential received.");
       }
-      Alert.alert("OTP Verification Error", message);
-      setIsLoading(false); // Set loading false on error here
-      throw new Error(message); // Re-throw to indicate failure
-    }
-  }, [auth, phoneAuthConfirmation]);
-
-  const signInWithApple = useCallback(async () => {
-    setIsLoading(true);
-    console.log("AuthContext: Attempting Apple Sign-In...");
-    try {
-      // Apple Sign-In logic here using @react-native-firebase/auth appleprovider
-      // This is a placeholder, actual implementation is needed
-      // Example structure:
-      // const appleAuthRequestResponse = await appleAuth.performRequest(...);
-      // const { identityToken } = appleAuthRequestResponse;
-      // if (identityToken) {
-      //   const appleCredential = auth.AppleAuthProvider.credential(identityToken, rawNonce);
-      //   await auth.signInWithCredential(appleCredential);
-      // } else {
-      //   throw new Error("Apple Sign-In failed: No identity token.");
-      // }
-      console.warn("AuthContext: signInWithApple is not fully implemented.");
-      throw new Error("Apple Sign-In is not implemented yet.");
-      // onAuthStateChanged will handle user state updates
+      
+      setPhoneAuthConfirmation(null);
     } catch (error: any) {
-      console.error("AuthContext: Apple Sign-In Error", error);
-      Alert.alert("Apple Sign-In Error", error.message || "Could not sign in with Apple at this time.");
-      setIsLoading(false); // Ensure loading is false on error
+      console.error("AuthContext: Error during confirmPhoneCode", error);
+      setIsLoading(false);
+      throw error;
     }
-  }, [auth]);
+  };
 
-  const sendPasswordReset = useCallback(async (email: string) => {
+  const signInWithApple = async () => {
+    setIsLoading(true);
+    console.log("AuthContext: Apple Sign-In initiated (placeholder).");
+    // Placeholder for Apple Sign-In logic
+    // See https://rnfirebase.io/auth/social-auth#apple
+    // const appleAuthRequestResponse = await appleAuth.performRequest({...});
+    // const { identityToken } = appleAuthRequestResponse;
+    // const appleCredential = auth.AppleAuthProvider.credential(identityToken);
+    // await auth.signInWithCredential(appleCredential);
+    Alert.alert("Apple Sign-In", "Apple Sign-In is not yet implemented.");
+    setIsLoading(false);
+  };
+
+  const sendPasswordReset = async (email: string) => {
     setIsLoading(true);
     try {
+      console.log("AuthContext: Attempting to send password reset email to:", email);
       await auth.sendPasswordResetEmail(email);
-      Alert.alert("Password Reset", "If your email is registered, you will receive a password reset link shortly.");
+      console.log("AuthContext: Password reset email sent successfully to:", email);
+      Alert.alert("Password Reset", "Password reset email sent. Please check your inbox.");
+      router.back(); // Navigate back after sending email
     } catch (error: any) {
-      console.error("Send password reset error", error);
-      Alert.alert("Error", error.message || "Could not send password reset email.");
+      console.error("AuthContext: Password reset error for:", email, error);
+      Alert.alert("Password Reset Failed", error.message || "Could not send password reset email.");
     } finally {
       setIsLoading(false);
     }
-  }, [auth]);
-
-  const value = useMemo(() => ({
-    user,
-    isLoading,
-    firestoreUser,
-    app, auth, functions, db,
-    signIn,
-    signUp,
-    signOut,
-    signInWithGoogle,
-    signInWithPhoneNumber,
-    confirmPhoneCode,
-    phoneAuthConfirmation,
-    setPhoneAuthConfirmation,
-    resendVerificationEmail,
-    confirmEmailVerificationLink,
-    refreshUser,
-    signInWithApple,
-    sendPasswordReset,
-    triggerSendVerificationEmail,
-  }), [
-    user, isLoading, firestoreUser, app, auth, functions, db,
-    signIn, signUp, signOut, signInWithGoogle, signInWithPhoneNumber, confirmPhoneCode,
-    phoneAuthConfirmation, resendVerificationEmail, confirmEmailVerificationLink,
-    refreshUser, signInWithApple, sendPasswordReset, triggerSendVerificationEmail
-  ]);
-
+  };
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{
+      user,
+      isLoading,
+      firestoreUser,
+      app, // Provide the app instance
+      auth, // Explicitly type auth
+      functions, // Explicitly type functions
+      db, // Explicitly type db
+      signIn,
+      signUp,
+      signOut,
+      signInWithGoogle,
+      signInWithPhoneNumber,
+      confirmPhoneCode,
+      phoneAuthConfirmation,
+      setPhoneAuthConfirmation,
+      resendVerificationEmail,
+      confirmEmailVerificationLink,
+      refreshUser,
+      signInWithApple,
+      sendPasswordReset,
+      triggerSendVerificationEmail
+    }}>
       {children}
     </AuthContext.Provider>
   );
