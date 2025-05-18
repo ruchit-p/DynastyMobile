@@ -20,6 +20,7 @@ import IconButton, { IconSet } from '../../components/ui/IconButton';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getFirebaseDb, getFirebaseAuth } from '../../src/lib/firebase';
 import { Timestamp } from 'firebase/firestore';
+import MediaGallery, { MediaItem } from '../../components/ui/MediaGallery';
 
 // Define Event interface for type safety
 interface Event {
@@ -28,8 +29,9 @@ interface Event {
   startDate: Date;
   endDate: Date;
   location: string;
-  imageUrl?: string;
+  coverPhotos?: MediaItem[];
   organizer?: string;
+  organizerName?: string;
   status?: 'Going' | 'Invited' | null;
   description?: string;
   createdBy?: string;
@@ -48,33 +50,51 @@ const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
     return `${dateString}, ${timeString}`;
   };
 
+  // ADDED: Diagnostic log
+  console.log(`[EventCard] Rendering for event "${event.name}". Cover photos:`, JSON.stringify(event.coverPhotos, null, 2));
+
   return (
-    <TouchableOpacity style={styles.eventCard} onPress={onPress}>
-      <Image
-        source={{ uri: event.imageUrl || 'https://placekitten.com/300/200' }}
-        style={styles.eventImage}
-      />
-      {event.status && (
-        <View style={[
-            styles.statusBadge,
-            event.status === 'Going' ? styles.statusGoing : styles.statusInvited,
-        ]}>
-          <Text style={styles.statusText}>{event.status}</Text>
-        </View>
+    <View style={styles.eventCard}>
+      {event.coverPhotos && event.coverPhotos.length > 0 && (
+        <MediaGallery
+          media={event.coverPhotos}
+          onAddMedia={() => {}}
+          onRemoveMedia={() => {}}
+          onReplaceMedia={() => {}}
+          showRemoveButton={false}
+          showReplaceButton={false}
+          allowAddingMore={false}
+          style={styles.eventMediaGallery}
+        />
       )}
-      <View style={styles.eventInfoContainer}>
-        {event.organizer && <Text style={styles.eventOrganizerText}>{event.organizer}</Text>}
-        <Text style={styles.eventNameText} numberOfLines={2} ellipsizeMode="tail">{event.name}</Text>
-        <View style={styles.eventDetailRow}>
-          <Ionicons name="time-outline" size={16} color={styles.eventDetailIcon.color} />
-          <Text style={styles.eventDetailText}>{formatEventDateTime(event.startDate)}</Text>
+      <TouchableOpacity onPress={onPress}>
+        {event.status && (
+          <View style={[
+              styles.statusBadge,
+              event.status === 'Going' ? styles.statusGoing : styles.statusInvited,
+          ]}>
+            <Text style={styles.statusText}>{event.status}</Text>
+          </View>
+        )}
+        <View style={styles.eventInfoContainer}>
+          <Text style={styles.eventNameText} numberOfLines={2} ellipsizeMode="tail">{event.name}</Text>
+          {event.organizerName && (
+            <View style={styles.eventDetailRow}>
+              <Ionicons name="person-outline" size={16} color={styles.eventDetailIcon.color} />
+              <Text style={styles.eventDetailText}>Hosted by {event.organizerName}</Text>
+            </View>
+          )}
+          <View style={styles.eventDetailRow}>
+            <Ionicons name="time-outline" size={16} color={styles.eventDetailIcon.color} />
+            <Text style={styles.eventDetailText}>{formatEventDateTime(event.startDate)}</Text>
+          </View>
+          <View style={styles.eventDetailRow}>
+            <Ionicons name="location-outline" size={16} color={styles.eventDetailIcon.color} />
+            <Text style={styles.eventDetailText}>{event.location}</Text>
+          </View>
         </View>
-        <View style={styles.eventDetailRow}>
-          <Ionicons name="location-outline" size={16} color={styles.eventDetailIcon.color} />
-          <Text style={styles.eventDetailText}>{event.location}</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </View>
   );
 };
 // --- End EventCard Component ---
@@ -158,7 +178,7 @@ const EventListScreen = () => {
       const eventsCollection = await db.collection('events')
         .get();
 
-      const fetchedEvents = eventsCollection.docs.map(doc => {
+      const fetchedEventsPromises = eventsCollection.docs.map(async (doc) => {
         const data = doc.data();
         
         let startDate = new Date();
@@ -184,18 +204,53 @@ const EventListScreen = () => {
             endDate.setHours(endHours, endMinutes);
         }
 
+        // Process coverPhotos for MediaGallery
+        let eventCoverPhotos: MediaItem[] = [];
+        if (data.coverPhotoUrls && Array.isArray(data.coverPhotoUrls)) {
+          eventCoverPhotos = data.coverPhotoUrls.map((photoUrl: string) => {
+            const uri = photoUrl;
+            const type: 'image' | 'video' = /\.(mp4|mov|avi|mkv|webm)(?:\?|$)/i.test(uri.toLowerCase()) ? 'video' : 'image';
+            return {
+              uri: uri,
+              type: type,
+            };
+          }).filter(item => item.uri);
+        } else if (data.imageUrl) {
+          eventCoverPhotos = [{
+            uri: data.imageUrl,
+            type: /\.(mp4|mov|avi|mkv|webm)(?:\?|$)/i.test(data.imageUrl.toLowerCase()) ? 'video' : 'image',
+          }];
+        }
+
+        let organizerName = 'Unknown Host';
+        if (data.hostId) {
+          try {
+            const userDoc = await db.collection('users').doc(data.hostId).get();
+            if (userDoc.exists) {
+              const userData = userDoc.data();
+              if (userData) {
+                organizerName = userData.displayName || `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Unknown Host';
+              }
+            }
+          } catch (userError) {
+            console.error(`Error fetching host details for ${data.hostId}:`, userError);
+          }
+        }
+
         return {
           id: doc.id,
           name: data.title || 'Untitled Event',
           startDate: startDate,
           endDate: endDate,
           location: data.isVirtual ? (data.virtualLink || 'Virtual Event') : (data.location?.address || 'No location'),
-          imageUrl: data.coverPhotos && data.coverPhotos.length > 0 ? data.coverPhotos[0] : undefined,
+          coverPhotos: eventCoverPhotos,
           organizer: data.hostId,
+          organizerName: organizerName,
           description: data.description || '',
           createdBy: data.hostId,
         } as Event;
       });
+      const fetchedEvents = await Promise.all(fetchedEventsPromises);
       setAllEvents(fetchedEvents);
     } catch (error) {
       console.error("Error fetching events: ", error);
@@ -444,6 +499,11 @@ const styles = StyleSheet.create({
   eventImage: {
     width: '100%',
     height: 150,
+  },
+  eventMediaGallery: {
+    height: 180,
+    width: '100%',
+    marginBottom: 10,
   },
   statusBadge: {
     position: 'absolute',
