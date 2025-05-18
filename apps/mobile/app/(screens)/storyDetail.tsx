@@ -71,6 +71,7 @@ interface StoryDetail {
   commentsCount: number;
   isLiked?: boolean;
   authorId: string;
+  subtitle?: string;
 }
 
 const StoryDetailScreen = () => {
@@ -91,33 +92,33 @@ const StoryDetailScreen = () => {
   const [isActionSheetVisible, setActionSheetVisible] = useState(false);
 
   // Prepare media for MediaGallery
-  const galleryMediaItems = React.useMemo(() => {
-    if (!story || !story.storyBlocks) return [];
-    const items: Array<{ uri: string; type: 'image' | 'video'; duration?: number; width?: number; height?: number; asset?: ImagePicker.ImagePickerAsset }> = [];
-    story.storyBlocks.forEach(block => {
-      if (block.type === 'image' && Array.isArray(block.data)) {
-        // Assuming block.data for images is an array of URIs or objects with URIs
-        (block.data as Array<string | { uri: string; width?: number; height?: number }>).forEach(imgData => {
-          if (typeof imgData === 'string') {
-            items.push({ uri: imgData, type: 'image' });
-          } else if (imgData && imgData.uri) {
-            items.push({ uri: imgData.uri, type: 'image', width: imgData.width, height: imgData.height });
-          }
-        });
-      }
-      // Placeholder for video block handling if stories can include videos
-      // else if (block.type === 'video' && block.data && typeof block.data.uri === 'string') {
-      //   items.push({ 
-      //     uri: block.data.uri, 
-      //     type: 'video', 
-      //     duration: block.data.duration, 
-      //     width: block.data.width, 
-      //     height: block.data.height 
-      //   });
-      // }
-    });
-    return items;
-  }, [story]);
+  // const galleryMediaItems = React.useMemo(() => {
+  //   if (!story || !story.storyBlocks) return [];
+  //   const items: Array<{ uri: string; type: 'image' | 'video'; duration?: number; width?: number; height?: number; asset?: ImagePicker.ImagePickerAsset }> = [];
+  //   story.storyBlocks.forEach(block => {
+  //     if (block.type === 'image' && Array.isArray(block.data)) {
+  //       // Assuming block.data for images is an array of URIs or objects with URIs
+  //       (block.data as Array<string | { uri: string; width?: number; height?: number }>).forEach(imgData => {
+  //         if (typeof imgData === 'string') {
+  //           items.push({ uri: imgData, type: 'image' });
+  //         } else if (imgData && imgData.uri) {
+  //           items.push({ uri: imgData.uri, type: 'image', width: imgData.width, height: imgData.height });
+  //         }
+  //       });
+  //     }
+  //     // Placeholder for video block handling if stories can include videos
+  //     // else if (block.type === 'video' && block.data && typeof block.data.uri === 'string') {
+  //     //   items.push({ 
+  //     //     uri: block.data.uri, 
+  //     //     type: 'video', 
+  //     //     duration: block.data.duration, 
+  //     //     width: block.data.width, 
+  //     //     height: block.data.height 
+  //     //   });
+  //     // }
+  //   });
+  //   return items;
+  // }, [story]);
 
   useEffect(() => {
     if (storyId && user?.uid && firestoreUser?.familyTreeId) {
@@ -152,6 +153,7 @@ const StoryDetailScreen = () => {
               likesCount: found.likeCount || 0,
               commentsCount: found.commentCount || 0,
               authorId: found.authorID,
+              subtitle: (found as any).subtitle || undefined,
             };
             setStory(detail);
             setLikesCount(found.likeCount || 0);
@@ -575,15 +577,29 @@ const StoryDetailScreen = () => {
       >
         <ScrollView style={styles.scrollContainer}>
           <View style={styles.storyHeader}>
-            <ProfilePicture source={story.userAvatar} name={story.userName} size={45} style={styles.avatar} />
-            <View style={styles.userInfo}>
-              <Text style={styles.userName}>{story.userName}</Text>
-              <View style={styles.timestampContainer}>
-                <Text style={styles.datePill}>{story.date}</Text>
-                <View style={styles.dotSeparator} />
-                <Text style={styles.timestamp}>{story.timestamp}</Text>
+            {/* Row 1: Avatar and User Info (Name, Timestamp) */}
+            <View style={styles.topRowInfo}>
+              <ProfilePicture source={story.userAvatar} name={story.userName} size={45} style={styles.avatar} />
+              <View style={styles.userNameAndTimestamp}>
+                <Text style={styles.userName}>{story.userName}</Text>
+                <View style={styles.timestampContainer}>
+                  <Text style={styles.datePill}>{story.date}</Text>
+                  <View style={styles.dotSeparator} />
+                  <Text style={styles.timestamp}>{story.timestamp}</Text>
+                </View>
               </View>
+            </View>
+
+            {/* Row 2: Title and Subtitle */}
+            <View style={styles.titleSubtitleContainer}>
               {story.title && <Text style={styles.storyTitleMain}>{story.title}</Text>}
+              {story.subtitle && <Text style={styles.storySubtitle}>{story.subtitle}</Text>}
+              {story.location && (
+                <View style={styles.locationContainerInHeader}>
+                  <Ionicons name="location-sharp" size={16} color="#555" />
+                  <Text style={styles.locationText}>{story.location}</Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -596,9 +612,33 @@ const StoryDetailScreen = () => {
                 </Text>
               );
             }
-            // Image blocks are handled by the ImageGallery below
             if (block.type === 'image') {
-              return null; // Skip rendering individual images here
+              const mediaItemsForBlock: Array<{ uri: string; type: 'image' | 'video'; duration?: number; width?: number; height?: number; asset?: ImagePicker.ImagePickerAsset }> = [];
+              if (Array.isArray(block.data)) {
+                (block.data as Array<string | { uri: string; width?: number; height?: number }>).forEach(imgData => {
+                  if (typeof imgData === 'string') {
+                    mediaItemsForBlock.push({ uri: imgData, type: 'image' });
+                  } else if (imgData && imgData.uri) {
+                    mediaItemsForBlock.push({ uri: imgData.uri, type: 'image', width: imgData.width, height: imgData.height });
+                  }
+                });
+              }
+              if (mediaItemsForBlock.length > 0) {
+                return (
+                  <View key={`block-gallery-${block.localId || index}`} style={styles.galleryContainer}>
+                    <MediaGallery
+                      media={mediaItemsForBlock}
+                      onAddMedia={() => {}} // Not used in detail view
+                      onRemoveMedia={() => {}} // Not used in detail view
+                      onReplaceMedia={() => {}} // Not used in detail view
+                      showRemoveButton={false}
+                      showReplaceButton={false}
+                      allowAddingMore={false}
+                    />
+                  </View>
+                );
+              }
+              return null; // No images in this image block
             }
             // TODO: Add rendering for other block types like video, audio if needed
             
@@ -606,7 +646,7 @@ const StoryDetailScreen = () => {
           })}
 
           {/* Render MediaGallery if there are any media items */}
-          {galleryMediaItems.length > 0 && (
+          {/* {galleryMediaItems.length > 0 && (
             <View style={styles.galleryContainer}>
               <MediaGallery
                 media={galleryMediaItems}
@@ -618,14 +658,14 @@ const StoryDetailScreen = () => {
                 allowAddingMore={false}
               />
             </View>
-          )}
+          )} */}
 
-          {story.location && (
+          {/* {story.location && (
             <View style={styles.locationContainer}>
               <Ionicons name="location-sharp" size={16} color="#555" />
               <Text style={styles.locationText}>{story.location}</Text>
             </View>
-          )}
+          )} */}
 
           <View style={styles.actionsContainer}>
             <TouchableOpacity style={styles.actionButton} onPress={handleLikePress}>
@@ -702,15 +742,32 @@ const styles = StyleSheet.create({
   scrollContainer: { flex: 1, backgroundColor: '#F9F9F9' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' }, 
   storyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     padding: 15,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
   },
-  avatar: { width: 45, height: 45, borderRadius: 22.5, marginRight: 12 },
-  userInfo: { flex: 1 },
+  topRowInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  avatar: { 
+    width: 45, 
+    height: 45, 
+    borderRadius: 22.5, 
+  },
+  userNameAndTimestamp: {
+    flexDirection: 'column',
+    justifyContent: 'flex-start',
+    marginLeft: 12,
+    flex: 1,
+  },
+  userInfo: { 
+    flex: 1 
+  },
   userName: { fontSize: 16, fontWeight: 'bold', color: '#333' },
   timestampContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   datePill: { 
@@ -725,13 +782,19 @@ const styles = StyleSheet.create({
   },
   dotSeparator: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#B0B0B0', marginHorizontal: 6 },
   timestamp: { fontSize: 12, color: '#777' },
+  titleSubtitleContainer: {
+    marginTop: 10,
+    width: '100%',
+  },
   storyTitleMain: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#222',
-    marginTop: 10,
-    paddingHorizontal: 15,
-    paddingBottom: 5,
+  },
+  storySubtitle: { 
+    fontSize: 15,
+    color: '#555',
+    marginTop: 4,
   },
   storyContent: { 
     fontSize: 16, 
@@ -741,17 +804,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: '#FFFFFF',
   },
-  storyContentBlockText: { // New style for individual text blocks from storyBlocks
+  storyContentBlockText: {
     fontSize: 16,
     lineHeight: 24,
     color: '#444',
     paddingHorizontal: 15,
-    paddingVertical: 10, // Or adjust spacing as needed between blocks
-    backgroundColor: '#FFFFFF', // Assuming blocks are on a white background
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
   },
-  galleryContainer: { // Style for the gallery wrapper if needed
+  galleryContainer: {
     marginVertical: 10,
-    // backgroundColor: '#FFFFFF', // Optional: if you want a specific background for the gallery area
+    backgroundColor: '#FFFFFF',
   },
   locationContainer: {
     flexDirection: 'row',
@@ -761,6 +824,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1, 
     borderTopColor: '#EEE',
+  },
+  locationContainerInHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
   },
   locationText: { fontSize: 14, color: '#555', marginLeft: 8 },
   actionsContainer: {
@@ -788,7 +856,7 @@ const styles = StyleSheet.create({
   commentContent: { flex: 1, backgroundColor: '#F7F7F7', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#EAEAEA' },
   commentUserName: { fontWeight: 'bold', fontSize: 14, color: '#444', marginBottom: 3 },
   commentText: { fontSize: 14, color: '#555', lineHeight: 20 },
-  commentTimestamp: { fontSize: 11, color: '#999', /* Removed marginTop: 4, alignment handled by footer */ }, 
+  commentTimestamp: { fontSize: 11, color: '#999', }, 
   noCommentsText: { color: '#777', textAlign: 'center', paddingVertical: 10 }, 
   commentFooter: { 
     flexDirection: 'row',
@@ -796,13 +864,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
-  commentActionsGroup: { // New style for grouping like and reply
+  commentActionsGroup: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   commentInputContainer: {
     flexDirection: 'column', 
-    paddingHorizontal: 0, // Remove horizontal padding here, will be on inner container
+    paddingHorizontal: 0,
     paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: '#D0D0D0',
@@ -812,7 +880,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    paddingHorizontal: 10, // Add horizontal padding here
+    paddingHorizontal: 10,
   },
   replyingToBanner: {
     flexDirection: 'row',
@@ -832,8 +900,8 @@ const styles = StyleSheet.create({
     color: '#444', 
     fontWeight: '500',
   },
-  replyingToCloseButton: { // Added style for the close button touchable area
-    padding: 5, // Increase touchable area
+  replyingToCloseButton: {
+    padding: 5,
   },
   commentInput: {
     flex: 1,
@@ -842,7 +910,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F0F0',
     borderRadius: 20,
     paddingHorizontal: 15,
-    paddingTop: 10, // Ensure consistent padding with multiline
+    paddingTop: 10,
     paddingBottom: 10, 
     fontSize: 15,
     marginRight: 8,
@@ -859,15 +927,12 @@ const styles = StyleSheet.create({
     color: '#555',
   },
   repliesContainer: {
-    // Styles for the container of replies if needed, e.g., more left margin
-    // marginLeft: 10, // Additional indent for replies container itself
     borderLeftWidth: 1,
     borderLeftColor: '#DDD',
     paddingLeft: 10,
     marginTop: 10,
   },
-  commentItemContainer: { // Wrapper for each comment item and its replies block
-    // No specific style here, just for structure, margin is applied directly in component
+  commentItemContainer: {
   },
 });
 

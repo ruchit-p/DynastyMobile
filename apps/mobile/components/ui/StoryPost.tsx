@@ -23,6 +23,7 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
   const dateLabel = formatDate(story.createdAt);
   const timeAgoLabel = formatTimeAgo(story.createdAt);
   const storyTitle = (story as any).title || (story.blocks.find(b => b.type === 'text')?.data as string || '');
+  const storySubtitle = (story as any).subtitle;
 
   const textBlock = story.blocks.find(b => b.type === 'text');
   const imgBlock = story.blocks.find(b => b.type === 'image');
@@ -53,33 +54,42 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
       <Card variant="elevated" noPadding>
         <TouchableOpacity onPress={() => onPress(story)} activeOpacity={0.8}>
           <View style={styles.header}>
-            <ProfilePicture 
-              source={story.author?.profilePicture} 
-              name={story.author?.displayName || story.authorID} 
-              size="sm" 
-              style={styles.avatar} 
-            />
-            <View style={styles.headerInfo}>
-              <ThemedText variant="bodyMedium" style={styles.authorName}>
-                {story.author?.displayName || story.authorID}
-              </ThemedText>
-              <View style={styles.timestampContainer}>
-                <Text style={styles.datePill}>{dateLabel}</Text>
-                <View style={styles.dotSeparator} />
-                <Text style={styles.timestamp}>{timeAgoLabel}</Text>
+            <View style={styles.topRowInfo}>
+              <ProfilePicture 
+                source={story.author?.profilePicture} 
+                name={story.author?.displayName || story.authorID} 
+                size="sm" 
+                style={styles.avatar} 
+              />
+              <View style={styles.userNameAndTimestamp}>
+                <ThemedText variant="bodyMedium" style={styles.authorName}>
+                  {story.author?.displayName || story.authorID}
+                </ThemedText>
+                <View style={styles.timestampContainer}>
+                  <Text style={styles.datePill}>{dateLabel}</Text>
+                  <View style={styles.dotSeparator} />
+                  <Text style={styles.timestamp}>{timeAgoLabel}</Text>
+                </View>
               </View>
+            </View>
+            <View style={styles.titleSubtitleContainer}>
               {storyTitle && (
                 <ThemedText variant="bodySmall" style={styles.storyTitleText} numberOfLines={2}>
                   {storyTitle}
                 </ThemedText>
               )}
+              {storySubtitle && (
+                <ThemedText variant="caption" style={styles.storySubtitleText} numberOfLines={2}>
+                  {storySubtitle}
+                </ThemedText>
+              )}
             </View>
           </View>
-          {textBlock && (
+          {/* {textBlock && (
             <ThemedText variant="bodyMedium" style={styles.textContent} numberOfLines={3}>
               {textBlock.data as string}
             </ThemedText>
-          )}
+          )} */}
         </TouchableOpacity>
         {galleryMediaItems.length > 0 && (
           <MediaGallery
@@ -135,12 +145,23 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm, // Reduced from md (16) to sm (8)
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     padding: Spacing.md,
   },
+  topRowInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    width: '100%',
+  },
   avatar: {
-    marginRight: Spacing.sm,
+    // marginRight: Spacing.sm, // This should be removed
+  },
+  userNameAndTimestamp: {
+    flexDirection: 'column',
+    justifyContent: 'flex-start',
+    marginLeft: Spacing.sm,
+    flex: 1,
   },
   headerInfo: {
     flex: 1,
@@ -174,9 +195,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#777',
   },
+  titleSubtitleContainer: {
+    marginTop: Spacing.sm,
+    width: '100%',
+  },
   storyTitleText: {
-    marginTop: Spacing.xxs,
     fontWeight: '500',
+  },
+  storySubtitleText: {
+    marginTop: Spacing.xxs / 2,
+    color: '#555',
   },
   moreButton: {
     padding: Spacing.xs,
@@ -198,6 +226,7 @@ const styles = StyleSheet.create({
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: Spacing.sm,
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.sm,
   },
