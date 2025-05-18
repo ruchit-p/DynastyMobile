@@ -24,7 +24,7 @@ import { useImageUpload } from '../../hooks/useImageUpload';
 // Custom components
 import FullScreenDatePicker from '../../components/ui/FullScreenDatePicker';
 import TimePickerModal from '../../components/ui/TimePickerModal';
-import ImageGallery from '../../components/ui/ImageGallery'; // Import the new component
+import MediaGallery from '../../components/ui/MediaGallery'; // MODIFIED: Changed import alias
 import { Colors } from '../../constants/Colors'; // Import Colors for dynastyGreen
 
 // Define the primary green color from the app's theme
@@ -62,8 +62,16 @@ interface NewEventData {
   requireRsvp: boolean;
   rsvpDeadline: Date | null;
   
-  // Cover photos - now an array of Files/URIs
-  photos: Array<{ uri: string; file?: File /* for web, RN uses URI */}>; 
+  // Cover photos - now an array of MediaItem-like objects
+  photos: Array<{
+    uri: string;
+    type: 'image' | 'video';
+    asset?: ImagePicker.ImagePickerAsset;
+    duration?: number;
+    width?: number;
+    height?: number;
+    file?: File; // for web, RN uses URI and asset
+  }>;
   
   // Invite settings
   inviteType: 'all' | 'select';
@@ -249,53 +257,81 @@ const CreateEventScreen = () => {
     }
   }, [params]);
 
-  const [mediaLibraryPermission, requestMediaLibraryPermission] = ImagePicker.useMediaLibraryPermissions();
+  // Permissions state (added for clarity, can be part of useEffect)
+  const [mediaLibraryPermission, setMediaLibraryPermission] = useState<ImagePicker.PermissionStatus | null>(null);
+
+  // Request permissions on mount
+  useEffect(() => {
+    (async () => {
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        setMediaLibraryPermission(status);
+        if (status !== ImagePicker.PermissionStatus.GRANTED) {
+          // Alert.alert('Permission Required', 'We need access to your photos to select cover images.');
+          // You might want to inform the user here or disable photo functionality if not granted.
+        }
+      }
+    })();
+  }, []);
+
+  // MARK: - Photo Handling Logic
+
+  const maxPhotos = 5; // Define maxPhotos, used by picker and gallery
 
   const handlePickImage = async () => {
-    // Request permission if not granted or undetermined
-    if (mediaLibraryPermission && mediaLibraryPermission.status !== ImagePicker.PermissionStatus.GRANTED && mediaLibraryPermission.canAskAgain) {
-      const permissionResult = await requestMediaLibraryPermission();
-      if (permissionResult.status !== ImagePicker.PermissionStatus.GRANTED) {
-        Alert.alert("Permission Required", "We need access to your photos to select cover images.");
+    if (Platform.OS !== 'web' && mediaLibraryPermission !== ImagePicker.PermissionStatus.GRANTED) {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      setMediaLibraryPermission(status);
+      if (status !== ImagePicker.PermissionStatus.GRANTED) {
+        Alert.alert("Permission Required", "We need access to your photos to add images.");
         return;
       }
     }
 
-    if (newEvent.photos.length >= 5) {
-      Alert.alert("Limit Reached", "You can upload a maximum of 5 photos.");
+    if (newEvent.photos.length >= maxPhotos) {
+      Alert.alert("Maximum Photos Reached", `You can only add up to ${maxPhotos} photos.`);
       return;
     }
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'], // Updated from ImagePicker.MediaTypeOptions.Images
-        allowsMultipleSelection: true, // Allow selecting multiple images up to the limit
+        mediaTypes: ImagePicker.MediaTypeOptions.Images, // For now, only images for events. Change to .All to include videos.
+        allowsMultipleSelection: true,
+        selectionLimit: maxPhotos - newEvent.photos.length,
         quality: 0.8,
-        // Calculate remaining allowed selections
-        selectionLimit: 5 - newEvent.photos.length > 0 ? 5 - newEvent.photos.length : 1, 
+        // MODIFICATION: Include asset information if needed by MediaGallery or for uploads
+        // exif: false, // example of other options
+        // base64: false, // example of other options
       });
 
       if (!result.canceled && result.assets) {
-        const newPhotos = result.assets.map(asset => ({ uri: asset.uri }));
-        // Ensure we don't exceed the total limit of 5 photos
-        const combinedPhotos = [...newEvent.photos, ...newPhotos].slice(0, 5);
-        setNewEvent(prev => ({ ...prev, photos: combinedPhotos }));
-        // Update previews etc. as needed
-        setPhotoPreviewUrls(combinedPhotos.map(p => p.uri));
-        setPhotoUploadProgress(new Array(combinedPhotos.length).fill(0));
-        setPhotoUploadErrors(new Array(combinedPhotos.length).fill(null));
+        const newMediaItems = result.assets.map(asset => ({
+          uri: asset.uri,
+          type: 'image' as 'image' | 'video', // Explicitly 'image'
+          asset: asset, // Store the original asset
+          width: asset.width,
+          height: asset.height,
+          // duration: asset.duration // Only if mediaTypes can include video
+        }));
+        
+        setNewEvent(prev => ({
+          ...prev,
+          photos: [...prev.photos, ...newMediaItems].slice(0, maxPhotos)
+        }));
+        // photoPreviewUrls might be redundant if MediaGallery handles previews directly
+        // setPhotoPreviewUrls(prev => [...prev, ...newMediaItems.map(p => p.uri)].slice(0, maxPhotos));
       }
     } catch (error) {
       console.error("Error picking images: ", error);
-      Alert.alert("Image Picker Error", "Could not select images.");
+      Alert.alert("Image Picker Error", "Could not load images from library.");
     }
   };
 
   const removePhoto = (index: number) => {
-    setNewEvent(prev => ({
-      ...prev,
-      photos: prev.photos.filter((_, i) => i !== index)
-    }));
+    const updatedPhotos = [...newEvent.photos];
+    updatedPhotos.splice(index, 1);
+    setNewEvent(prev => ({ ...prev, photos: updatedPhotos }));
+    // setPhotoPreviewUrls(updatedPhotos.map(p => p.uri));
   };
 
   const formatDate = (date: Date | null): string => {
@@ -572,9 +608,10 @@ const CreateEventScreen = () => {
 
   // Handler to replace a specific photo
   const handleReplaceImage = async (index: number) => {
-    if (mediaLibraryPermission && mediaLibraryPermission.status !== ImagePicker.PermissionStatus.GRANTED && mediaLibraryPermission.canAskAgain) {
-      const permissionResult = await requestMediaLibraryPermission();
-      if (permissionResult.status !== ImagePicker.PermissionStatus.GRANTED) {
+    if (Platform.OS !== 'web' && mediaLibraryPermission !== ImagePicker.PermissionStatus.GRANTED) {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      setMediaLibraryPermission(status);
+      if (status !== ImagePicker.PermissionStatus.GRANTED) {
         Alert.alert("Permission Required", "We need access to your photos to replace the image.");
         return;
       }
@@ -582,16 +619,23 @@ const CreateEventScreen = () => {
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'], // Updated from ImagePicker.MediaTypeOptions.Images
-        allowsEditing: false, // Typically replace one image at a time
+        mediaTypes: ImagePicker.MediaTypeOptions.Images, // Assuming replace with image
+        allowsEditing: false, 
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
+        const replacedAsset = result.assets[0];
         const updatedPhotos = [...newEvent.photos];
-        updatedPhotos[index] = { uri: result.assets[0].uri };
+        updatedPhotos[index] = {
+          uri: replacedAsset.uri,
+          type: 'image', // Explicitly 'image'
+          asset: replacedAsset,
+          width: replacedAsset.width,
+          height: replacedAsset.height,
+        };
         setNewEvent(prev => ({ ...prev, photos: updatedPhotos }));
-        setPhotoPreviewUrls(updatedPhotos.map(p => p.uri));
+        // setPhotoPreviewUrls(updatedPhotos.map(p => p.uri));
       }
     } catch (error) {
       console.error("Error replacing image: ", error);
@@ -606,13 +650,16 @@ const CreateEventScreen = () => {
         contentContainerStyle={styles.scrollContentContainer}
         keyboardShouldPersistTaps="handled"
       >
-        <ImageGallery
-          photos={newEvent.photos}
-          onAddPhoto={handlePickImage} 
-          onRemovePhoto={removePhoto}
-          onReplacePhoto={handleReplaceImage}
-          maxPhotos={5} 
-          // iconColor={dynastyGreen} // Default is already dynastyGreen from Colors
+        <MediaGallery
+          media={newEvent.photos} // MODIFIED: Prop name and data structure
+          onAddMedia={handlePickImage} 
+          onRemoveMedia={removePhoto}
+          onReplaceMedia={handleReplaceImage}
+          maxMedia={maxPhotos} // MODIFIED: Prop name
+          // iconColor={dynastyGreen} // Retained if specific styling is desired
+          // addIconColor, replaceIconColor can be customized if needed
+          // showRemoveButton, showReplaceButton default to true
+          // allowAddingMore defaults to true
         />
 
         <View style={styles.formSection}>

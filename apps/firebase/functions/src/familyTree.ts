@@ -4,6 +4,7 @@ import {logger} from "firebase-functions";
 import * as crypto from "crypto";
 import sgMail from "@sendgrid/mail";
 import {defineSecret} from "firebase-functions/params";
+import { DEFAULT_REGION, FUNCTION_TIMEOUT, DEFAULT_MEMORY } from "./common";
 
 // MARK: - Secret Definitions
 const SENDGRID_APIKEY = defineSecret("SENDGRID_APIKEY");
@@ -12,9 +13,6 @@ const SENDGRID_TEMPLATES_INVITE = defineSecret("SENDGRID_TEMPLATES_INVITE");
 const FRONTEND_URL = defineSecret("FRONTEND_URL");
 
 // MARK: - Function Configuration
-const DEFAULT_REGION = "us-central1";
-const DEFAULT_MEMORY = "256MiB";
-const DEFAULT_TIMEOUT = 60; // 60 seconds
 
 // MARK: - Helper function to initialize SendGrid within each function
 const initSendGrid = () => {
@@ -149,8 +147,8 @@ function isBloodRelated(memberId: string, currentUserId: string, docs: FirebaseF
  */
 export const getFamilyTreeData = onCall({
   region: DEFAULT_REGION,
-  memory: DEFAULT_MEMORY,
-  timeoutSeconds: DEFAULT_TIMEOUT,
+  memory: DEFAULT_MEMORY.SHORT,
+  timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   secrets: [FRONTEND_URL],
 }, async (request) => {
   try {
@@ -271,8 +269,8 @@ export const getFamilyTreeData = onCall({
  */
 export const updateFamilyRelationships = onCall({
   region: DEFAULT_REGION,
-  memory: DEFAULT_MEMORY,
-  timeoutSeconds: DEFAULT_TIMEOUT,
+  memory: DEFAULT_MEMORY.SHORT,
+  timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
 }, async (request) => {
   try {
     const {userId, updates} = request.data;
@@ -325,8 +323,8 @@ export const updateFamilyRelationships = onCall({
  */
 export const createFamilyMember = onCall({
   region: DEFAULT_REGION,
-  memory: DEFAULT_MEMORY,
-  timeoutSeconds: DEFAULT_TIMEOUT,
+  memory: DEFAULT_MEMORY.SHORT,
+  timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   secrets: [SENDGRID_APIKEY, SENDGRID_FROMEMAIL, SENDGRID_TEMPLATES_INVITE, FRONTEND_URL],
 }, async (request) => {
   try {
@@ -568,8 +566,8 @@ export const createFamilyMember = onCall({
  */
 export const deleteFamilyMember = onCall({
   region: DEFAULT_REGION,
-  memory: DEFAULT_MEMORY,
-  timeoutSeconds: DEFAULT_TIMEOUT,
+  memory: DEFAULT_MEMORY.SHORT,
+  timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
 }, async (request) => {
   try {
     const {memberId, familyTreeId, currentUserId} = request.data;
@@ -803,8 +801,8 @@ export const deleteFamilyMember = onCall({
  */
 export const updateFamilyMember = onCall({
   region: DEFAULT_REGION,
-  memory: DEFAULT_MEMORY,
-  timeoutSeconds: DEFAULT_TIMEOUT,
+  memory: DEFAULT_MEMORY.SHORT,
+  timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   secrets: [SENDGRID_APIKEY, SENDGRID_FROMEMAIL, SENDGRID_TEMPLATES_INVITE, FRONTEND_URL],
 }, async (request) => {
   try {
@@ -969,8 +967,8 @@ export const updateFamilyMember = onCall({
  */
 export const promoteToAdmin = onCall({
   region: DEFAULT_REGION,
-  memory: DEFAULT_MEMORY,
-  timeoutSeconds: DEFAULT_TIMEOUT,
+  memory: DEFAULT_MEMORY.SHORT,
+  timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
 }, async (request) => {
   try {
     const {memberId, familyTreeId} = request.data;
@@ -1036,8 +1034,8 @@ export const promoteToAdmin = onCall({
  */
 export const demoteToMember = onCall({
   region: DEFAULT_REGION,
-  memory: DEFAULT_MEMORY,
-  timeoutSeconds: DEFAULT_TIMEOUT,
+  memory: DEFAULT_MEMORY.SHORT,
+  timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
 }, async (request) => {
   try {
     const {memberId, familyTreeId} = request.data;
@@ -1095,8 +1093,8 @@ export const demoteToMember = onCall({
  */
 export const getFamilyManagementData = onCall({
   region: DEFAULT_REGION,
-  memory: DEFAULT_MEMORY,
-  timeoutSeconds: DEFAULT_TIMEOUT,
+  memory: DEFAULT_MEMORY.SHORT,
+  timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
 }, async (request) => {
   try {
     const db = getFirestore();

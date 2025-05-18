@@ -4,7 +4,8 @@ import {
   View, 
   Alert,
   Platform,
-  RefreshControl
+  RefreshControl,
+  ScrollView
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 
@@ -123,13 +124,7 @@ const HistoryScreen = () => {
   return (
     <Screen
       safeArea
-      scroll={{
-        enabled: true,
-        refreshing: isRefreshing,
-        onRefresh: handleRefresh,
-        showsVerticalScrollIndicator: false,
-      }}
-      padding
+      scroll={false}
     >
       {isLoadingStories && userStories.length === 0 ? (
         <View style={styles.loadingStateContainer}>
@@ -150,15 +145,26 @@ const HistoryScreen = () => {
         </View>
       ) : (
         <View style={styles.storiesContainer}>
-          {userStories.map(story => (
-            <StoryPost
-              key={story.id}
-              story={story}
-              onPress={handleStoryPress}
-              onMorePress={handleMoreOptions}
-              style={styles.storyItem}
-            />
-          ))}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: Spacing.xl + Spacing.lg }}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+              />
+            }
+          >
+            {userStories.map(story => (
+              <StoryPost
+                key={story.id}
+                story={story}
+                onPress={handleStoryPress}
+                onMorePress={handleMoreOptions}
+                style={styles.storyItem}
+              />
+            ))}
+          </ScrollView>
         </View>
       )}
       
@@ -180,7 +186,7 @@ const styles = StyleSheet.create({
     minHeight: 400,
   },
   storiesContainer: {
-    paddingBottom: Spacing.xl + Spacing.lg, // Extra padding at bottom for FAB and to ensure last post is fully visible
+    flex: 1,
   },
   storyItem: {
     marginBottom: Spacing.sm, // Reduced spacing between posts from md (16) to sm (8)

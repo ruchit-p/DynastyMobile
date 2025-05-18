@@ -26,6 +26,7 @@ import SelectViewers from '../../components/ui/SelectViewers';
 import TagPeopleButton from '../../components/ui/TagPeopleButton';
 import AddDetailsButton from '../../components/ui/AddDetailsButton';
 import AddContentButton from '../../components/ui/AddContentButton';
+import MediaGallery, { MediaItem } from '../../components/ui/MediaGallery';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { createStoryMobile, updateStoryMobile, fetchAccessibleStoriesMobile, Story as FetchedStory, StoryBlock as FetchedStoryBlock } from '../../src/lib/storyUtils';
 import Fonts from '../../constants/Fonts';
@@ -103,83 +104,93 @@ const CreateStoryScreen = () => {
   // MARK: - Handlers (Moved Up and Wrapped in useCallback)
 
   // Function to upload all images in image blocks and return updated blocks with Firebase Storage URLs
-  const uploadAllImages = async (storyBlocks: Array<{
+  const uploadAllMedia = async (storyBlocks: Array<{
     type: string;
     data: any;
     localId: string;
   }>) => {
-    // Count total images that need to be uploaded
-    let imagesToUpload = 0;
+    // Count total media items that need to be uploaded
+    let mediaToUploadCount = 0;
     storyBlocks.forEach(block => {
+      // MODIFIED: Now specifically looking at 'image' blocks for multi-media upload
+      // 'video' and 'audio' blocks if they contain single URIs might be handled differently or need their own upload logic if not covered by useImageUpload
       if (block.type === 'image' && Array.isArray(block.data)) {
         block.data.forEach(uri => {
-          // Only count local file URIs
-          if (typeof uri === 'string' && uri.startsWith('file://')) {
-            imagesToUpload++;
+          if (typeof uri === 'string' && (uri.startsWith('file://') || uri.startsWith('content://'))) {
+            mediaToUploadCount++;
           }
         });
+      } else if ((block.type === 'video' || block.type === 'audio') && typeof block.data === 'string' && (block.data.startsWith('file://') || block.data.startsWith('content://'))) {
+        // Assuming single URI for dedicated audio/video blocks if they are local files
+        mediaToUploadCount++;
       }
     });
     
-    if (imagesToUpload === 0) {
-      // No images to upload, return blocks as is
+    if (mediaToUploadCount === 0) {
       return storyBlocks;
     }
     
     setIsUploading(true);
-    setTotalUploads(imagesToUpload);
+    setTotalUploads(mediaToUploadCount);
     setCompletedUploads(0);
     setOverallProgress(0);
     
-    // Deep copy of blocks to avoid mutating the original
     const updatedBlocks = JSON.parse(JSON.stringify(storyBlocks));
     
-    // Process each block
     for (let i = 0; i < updatedBlocks.length; i++) {
       const block = updatedBlocks[i];
       
       if (block.type === 'image' && Array.isArray(block.data)) {
-        // Create new array for updated image URLs
-        const updatedImageUrls = [];
-        
-        // Process each image in the block
+        const updatedMediaUrls = [];
         for (let j = 0; j < block.data.length; j++) {
           const uri = block.data[j];
-          
-          if (typeof uri === 'string' && uri.startsWith('file://')) {
+          if (typeof uri === 'string' && (uri.startsWith('file://') || uri.startsWith('content://'))) {
             try {
-              // Upload image to Firebase Storage
               const uploadedUrl = await uploadImage(
                 uri, 
                 'stories', 
                 (progress) => {
-                  // Update overall progress
                   const currentTotalProgress = (completedUploads + progress / 100) / totalUploads * 100;
                   setOverallProgress(currentTotalProgress);
                 }
               );
-              
               if (uploadedUrl) {
-                updatedImageUrls.push(uploadedUrl);
+                updatedMediaUrls.push(uploadedUrl);
                 setCompletedUploads(prev => prev + 1);
               } else {
-                // If upload failed but we have a URI, use original URI as fallback
-                console.warn(`Failed to upload image ${j} in block ${i}, using original URI as fallback`);
-                updatedImageUrls.push(uri);
+                updatedMediaUrls.push(uri); // Fallback
               }
             } catch (error) {
-              console.error(`Error uploading image ${j} in block ${i}:`, error);
-              // Use original URI as fallback
-              updatedImageUrls.push(uri);
+              console.error(`Error uploading media ${uri} in block ${i}:`, error);
+              updatedMediaUrls.push(uri); // Fallback
             }
           } else {
-            // Not a local file URI, probably already a Firebase URL, keep as is
-            updatedImageUrls.push(uri);
+            updatedMediaUrls.push(uri); // Already an uploaded URL
           }
         }
-        
-        // Update block with new image URLs
-        block.data = updatedImageUrls;
+        block.data = updatedMediaUrls;
+      } else if ((block.type === 'video' || block.type === 'audio') && typeof block.data === 'string' && (block.data.startsWith('file://') || block.data.startsWith('content://'))) {
+        // Handle single media URI upload for dedicated 'video' or 'audio' blocks
+        try {
+          const uploadedUrl = await uploadImage(
+            block.data,
+            'stories',
+            (progress) => {
+              // Simplified progress for single file upload in a block
+              const baseProgress = completedUploads / totalUploads * 100;
+              const itemProgress = progress / totalUploads;
+              setOverallProgress(baseProgress + itemProgress);
+            }
+          );
+          if (uploadedUrl) {
+            block.data = uploadedUrl;
+            setCompletedUploads(prev => prev + 1);
+          }
+          // Fallback: original URI remains if upload fails
+        } catch (error) {
+          console.error(`Error uploading media ${block.data} in block ${i}:`, error);
+          // Fallback: original URI remains
+        }
       }
     }
     
@@ -207,9 +218,11 @@ const CreateStoryScreen = () => {
           localId: block.id
         };
       } else if (block.type === 'image') {
+        // content is MediaItem[]
+        const imageUris = (block.content as MediaItem[] || []).map(item => item.uri);
         return {
           type: 'image',
-          data: Array.isArray(block.content) ? block.content.map((asset: ImagePicker.ImagePickerAsset) => asset.uri) : [],
+          data: imageUris, // Array of local URIs for uploadAllMedia
           localId: block.id
         };
       } else if (block.type === 'audio') {
@@ -230,13 +243,13 @@ const CreateStoryScreen = () => {
     
     try {
       // Upload all images to Firebase Storage and get updated blocks with Firebase URLs
-      const updatedBlocks = await uploadAllImages(transformedBlocks);
+      const updatedBlocks = await uploadAllMedia(transformedBlocks);
       
       const storyPayload = {
         authorID: user?.uid || '',
         title: storyTitle,
         subtitle: showSubtitle ? subtitle : undefined,
-        eventDate: showDate && storyDate ? storyDate : undefined,
+        eventDate: showDate && storyDate ? storyDate.toISOString() : undefined,
         location: showLocation && location ? { lat: location.latitude, lng: location.longitude, address: location.address || '' } : undefined,
         privacy: (privacy === 'personal' ? 'privateAccess' : privacy) as 'family' | 'privateAccess' | 'custom',
         customAccessMembers: privacy === 'custom' ? customSelectedViewers : undefined,
@@ -275,7 +288,8 @@ const CreateStoryScreen = () => {
       if (block.type === 'text') {
         return { type: 'text', data: block.content, localId: block.id };
       } else if (block.type === 'image') {
-        const imageUris = (block.content as ImagePicker.ImagePickerAsset[])?.map(asset => asset.uri) || [];
+        // content is MediaItem[]
+        const imageUris = (block.content as MediaItem[] || []).map(item => item.uri);
         return { type: 'image', data: imageUris, localId: block.id };
       } else if (block.type === 'audio') {
         const audioUri = (typeof block.content === 'object' && block.content.uri) ? block.content.uri : '';
@@ -286,12 +300,12 @@ const CreateStoryScreen = () => {
 
     try {
       // Upload all images to Firebase Storage and get updated blocks with Firebase URLs
-      const updatedBlocks = await uploadAllImages(transformedBlocksForUpdate);
+      const updatedBlocks = await uploadAllMedia(transformedBlocksForUpdate);
       
       const storyUpdatePayload: Parameters<typeof updateStoryMobile>[2] = {
         title: storyTitle,
         subtitle: showSubtitle ? subtitle : undefined,
-        eventDate: showDate && storyDate ? new Date(storyDate) : undefined,
+        eventDate: showDate && storyDate ? new Date(storyDate).toISOString() : undefined,
         location: showLocation && location ? { lat: location.latitude, lng: location.longitude, address: location.address || '' } : undefined,
         privacy: (privacy === 'personal' ? 'privateAccess' : privacy) as 'family' | 'privateAccess' | 'custom',
         customAccessMembers: privacy === 'custom' ? customSelectedViewers : undefined,
@@ -378,27 +392,35 @@ const CreateStoryScreen = () => {
 
             // Map FetchedStoryBlock to local StoryBlock
             const fetchedBlocks = storyToEdit.blocks || [];
-            const mappedBlocks: StoryBlock[] = fetchedBlocks.map((block: FetchedStoryBlock) => {
-              let content: any;
-              if (block.type === 'text') {
-                content = block.data as string;
-              } else if (block.type === 'image') {
-                content = (block.data as string[]).map(uri => ({ uri, type: 'image', width:0, height:0 }) as ImagePicker.ImagePickerAsset);
-              } else if (block.type === 'audio') {
-                // block.data is URI string from backend for audio
-                content = {
-                  uri: block.data as string, 
+            const mappedBlocks: StoryBlock[] = fetchedBlocks.map((fb: FetchedStoryBlock) => {
+              let contentValue: any;
+              if (fb.type === 'text') {
+                contentValue = fb.data as string;
+              } else if (fb.type === 'image') {
+                contentValue = (fb.data as string[] || []).map(url => {
+                  const isVideo = /\.(mp4|mov|avi|mkv|webm)$/i.test(url.toLowerCase());
+                  const mediaTypeExt = isVideo ? 'video' : 'image';
+                  return {
+                    uri: url,
+                    type: mediaTypeExt,
+                    asset: undefined, // Set asset to undefined for items loaded from URL
+                    duration: isVideo ? 0 : undefined // Placeholder for MediaItem duration
+                  } as MediaItem;
+                });
+              } else if (fb.type === 'audio') {
+                contentValue = {
+                  uri: fb.data as string,
                   duration: 0, // Placeholder - duration isn't stored with this model
                   name: 'Audio Clip', // Placeholder
                   isRecording: false, // Default
                 };
               } else {
-                content = block.data; // Fallback for other types
+                contentValue = fb.data; // Fallback for other types
               }
               return {
-                id: block.localId || Math.random().toString(36).substr(2, 9), // Use localId or generate new
-                type: block.type as BlockType,
-                content: content,
+                id: fb.localId || Math.random().toString(36).substr(2, 9), // Use localId or generate new
+                type: fb.type as BlockType,
+                content: contentValue,
               };
             });
             setBlocks(mappedBlocks);
@@ -545,7 +567,7 @@ const CreateStoryScreen = () => {
       // On iOS we can use ImagePicker for audio files
       if (Platform.OS === 'ios') {
         const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ['images', 'videos'], // Use 'All' since 'Audio' is not available, but 'All' includes video which might have audio.
+          mediaTypes: ['images', 'videos'],
           quality: 1.0,
         });
         console.log('iOS ImagePicker result:', JSON.stringify(result, null, 2)); // ADDED LOG
@@ -607,52 +629,93 @@ const CreateStoryScreen = () => {
     setAudioActionSheetVisible(false);
   };
   
-  const handleSelectMediaForBlock = async (blockId: string) => {
-    // 1. Check current permission status
+  // Handle selecting media for a specific block (now used by MediaGallery)
+  const handleSelectMediaForImageBlock = async (blockId: string, replaceIndex?: number) => {
     let permissionResult = await ImagePicker.getMediaLibraryPermissionsAsync();
-
     if (permissionResult.status === ImagePicker.PermissionStatus.UNDETERMINED) {
-      // 2. If undetermined, request permission
       permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     }
 
-    // 3. Handle based on the final permission status
     if (permissionResult.status === ImagePicker.PermissionStatus.DENIED) {
       Alert.alert(
         "Permission Denied", 
-        "You've denied access to your photos and videos. Please enable access in Settings.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Open Settings", onPress: () => Linking.openSettings() }
-        ]
+        "Access to photos and videos is needed. Please enable it in Settings.",
+        [{ text: "Cancel", style: "cancel" }, { text: "Open Settings", onPress: () => Linking.openSettings() }]
       );
-      setAddContentActionSheetVisible(false); // Close sheet if open
       return;
     }
     
     if (permissionResult.status !== ImagePicker.PermissionStatus.GRANTED) {
         Alert.alert("Permission Required", "Photo and video library access is required.");
-        setAddContentActionSheetVisible(false); // Close sheet if open
         return;
     }
 
-    // 4. Launch picker if permission is granted
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images', 'videos'],
-        allowsMultipleSelection: true,
+        allowsMultipleSelection: typeof replaceIndex === 'undefined', 
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets) {
-        updateBlockContent(blockId, result.assets);
+        const newMediaItems: MediaItem[] = result.assets.map(asset => {
+          // Heuristic to determine media type based on duration
+          // asset.duration is in milliseconds for video, null or 0 for images
+          const resolvedMediaType: 'image' | 'video' = (asset.duration && asset.duration > 0) ? 'video' : 'image';
+          
+          return {
+            uri: asset.uri,
+            type: resolvedMediaType,
+            asset: asset, 
+            duration: asset.duration === null ? undefined : asset.duration,
+            width: asset.width,
+            height: asset.height,
+          };
+        });
+
+        setBlocks(prevBlocks =>
+          prevBlocks.map(b => {
+            if (b.id === blockId && b.type === 'image') { // Ensure we only modify image blocks here
+              let currentContent = (b.content as MediaItem[] || []);
+              if (typeof replaceIndex !== 'undefined') {
+                if (newMediaItems.length > 0) { 
+                  currentContent.splice(replaceIndex, 1, newMediaItems[0]);
+                }
+              } else {
+                currentContent = [...currentContent, ...newMediaItems];
+              }
+              return { ...b, content: currentContent };
+            }
+            return b;
+          })
+        );
       }
     } catch (error) {
-      console.error("Error launching image library for block media:", error);
-      Alert.alert("Image Picker Error", "Could not open the image library. Please try again.");
-    } finally {
-      setAddContentActionSheetVisible(false); // Close sheet after action
+      console.error("Error launching media library:", error);
+      Alert.alert("Media Picker Error", "Could not open the media library.");
     }
+  };
+
+  // Specific handlers for MediaGallery within an image block
+  const addMediaToImageBlock = (blockId: string) => {
+    handleSelectMediaForImageBlock(blockId);
+  };
+
+  const removeMediaFromImageBlock = (blockId: string, mediaIndex: number) => {
+    setBlocks(prevBlocks =>
+      prevBlocks.map(b => {
+        if (b.id === blockId && b.type === 'image') {
+          const currentContent = (b.content as MediaItem[] || []);
+          const updatedContent = currentContent.filter((_, index) => index !== mediaIndex);
+          return { ...b, content: updatedContent };
+        }
+        return b;
+      })
+    );
+  };
+
+  const replaceMediaInImageBlock = (blockId: string, mediaIndex: number) => {
+    handleSelectMediaForImageBlock(blockId, mediaIndex);
   };
 
   const handleTagPeople = () => {
@@ -983,31 +1046,24 @@ const CreateStoryScreen = () => {
                   />
                 )}
                 {block.type === 'image' && (
-                  <View>
-                    <TouchableOpacity onPress={() => handleSelectMediaForBlock(block.id)} style={styles.mediaUploadButton}>
-                      <Ionicons name="images-outline" size={24} color="#1A4B44" />
-                      <Text style={{color: "#1A4B44", marginLeft: 5}}>
-                        {block.content && block.content.length > 0 ? `${block.content.length} media selected` : "Add Images/Videos"}
-                      </Text>
-                    </TouchableOpacity>
-                    {block.content && block.content.length > 0 && (
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mediaPreviewContainer}>
-                        {block.content.map((asset: ImagePicker.ImagePickerAsset, index: number) => (
-                          <Image key={index} source={{ uri: asset.uri }} style={styles.previewImage} />
-                        ))}
-                      </ScrollView>
-                    )}
-                  </View>
+                  <MediaGallery
+                    media={(block.content as MediaItem[] || [])}
+                    onAddMedia={() => addMediaToImageBlock(block.id)}
+                    onRemoveMedia={(index) => removeMediaFromImageBlock(block.id, index)}
+                    onReplaceMedia={(index) => replaceMediaInImageBlock(block.id, index)}
+                    maxMedia={10} // Example: max 10 media items per gallery block
+                    // Add other props like style, iconColor if needed
+                  />
                 )}
                 {block.type === 'audio' && (
                   renderAudioBlock(block)
                 )}
                  {/* Video block can be similar to image or have specific handling */}
                  {block.type === 'video' && (
-                    <TouchableOpacity onPress={() => handleSelectMediaForBlock(block.id)} style={styles.mediaUploadButton}>
+                    <TouchableOpacity onPress={() => handleSelectMediaForImageBlock(block.id)} style={styles.mediaUploadButton}>
                       <Ionicons name="film-outline" size={24} color="#1A4B44" />
                       <Text style={{color: "#1A4B44", marginLeft: 5}}>
-                        {block.content && block.content.length > 0 ? `${block.content.length} video(s) selected` : "Add Videos"}
+                        {block.content && Array.isArray(block.content) && block.content.length > 0 ? `${block.content.length} video(s) selected` : "Add Videos"}
                       </Text>
                     </TouchableOpacity>
                  )}

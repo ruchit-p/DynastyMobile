@@ -26,15 +26,14 @@ service firebase.storage {
     }
     
     // Story media (images, videos, audio)
-    match /stories/{storyId}/{mediaType}/{fileName} {
+    match /stories/{fileIdentifier} {
       // For read access, we can only check basic authentication
       // Detailed permission checks happen in the app code and Firestore rules
       allow read: if isSignedIn();
       
-      // For write operations, only allow if the user is authenticated
-      // We can't verify the story author at upload time since metadata isn't provided
-      // The app handles proper verification when creating the story document
-      allow write: if isSignedIn();
+      // For write operations, allow if the user is authenticated 
+      // and the first part of the filename (before a '-') matches their UID.
+      allow write: if isSignedIn() && fileIdentifier.split('-')[0] == request.auth.uid;
     }
     
     // Event cover photos and media

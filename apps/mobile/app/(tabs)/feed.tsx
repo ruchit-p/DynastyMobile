@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Alert, View, StyleSheet, Share, TouchableOpacity, Image, Text } from 'react-native';
+import { Alert, View, StyleSheet, Share, TouchableOpacity, Image, Text, ScrollView, RefreshControl } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { fetchAccessibleStoriesMobile } from '../../src/lib/storyUtils';
@@ -184,13 +184,7 @@ const FeedScreen = () => {
   return (
     <Screen
       safeArea
-      scroll={{
-        enabled: true,
-        refreshing: isRefreshing,
-        onRefresh: handleRefresh,
-        showsVerticalScrollIndicator: false,
-      }}
-      padding
+      scroll={false}
     >
       {isLoadingFeed && feedItems.length === 0 ? (
         <View style={styles.loadingStateContainer}>
@@ -211,38 +205,49 @@ const FeedScreen = () => {
         </View>
       ) : (
         <View style={styles.feedContainer}>
-          {feedItems.map(item => {
-            if (item.type === 'story') {
-              return (
-                <StoryPost
-                  key={`story-${item.id}`}
-                  story={item as StoryType}
-                  onPress={() => handleFeedItemPress(item)}
-                  onMorePress={() => handleMoreOptions(item)}
-                  style={styles.feedItem}
-                />
-              );
-            } else if (item.type === 'event') {
-              const event = item as FeedEvent;
-              return (
-                <TouchableOpacity 
-                    key={`event-${event.id}`} 
-                    style={[styles.feedItem, styles.eventFeedItem]} 
-                    onPress={() => handleFeedItemPress(event)}
-                >
-                  {event.imageUrl && <Image source={{uri: event.imageUrl}} style={styles.eventFeedImage} />}
-                  <View style={styles.eventFeedContent}>
-                    <Text style={styles.eventFeedTitle}>{event.name}</Text>
-                    <Text style={styles.eventFeedDate}>{event.startDate.toLocaleDateString()} - {event.location}</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => handleMoreOptions(event)} style={styles.moreOptionsButtonEvent}>
-                      <Ionicons name="ellipsis-horizontal" size={24} color="#666" />
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              );
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: Spacing.xl + Spacing.lg }}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+              />
             }
-            return null;
-          })}
+          >
+            {feedItems.map(item => {
+              if (item.type === 'story') {
+                return (
+                  <StoryPost
+                    key={`story-${item.id}`}
+                    story={item as StoryType}
+                    onPress={() => handleFeedItemPress(item)}
+                    onMorePress={() => handleMoreOptions(item)}
+                    style={styles.feedItem}
+                  />
+                );
+              } else if (item.type === 'event') {
+                const event = item as FeedEvent;
+                return (
+                  <TouchableOpacity 
+                      key={`event-${event.id}`} 
+                      style={[styles.feedItem, styles.eventFeedItem]} 
+                      onPress={() => handleFeedItemPress(event)}
+                  >
+                    {event.imageUrl && <Image source={{uri: event.imageUrl}} style={styles.eventFeedImage} />}
+                    <View style={styles.eventFeedContent}>
+                      <Text style={styles.eventFeedTitle}>{event.name}</Text>
+                      <Text style={styles.eventFeedDate}>{event.startDate.toLocaleDateString()} - {event.location}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => handleMoreOptions(event)} style={styles.moreOptionsButtonEvent}>
+                        <Ionicons name="ellipsis-horizontal" size={24} color="#666" />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                );
+              }
+              return null;
+            })}
+          </ScrollView>
         </View>
       )}
       
@@ -293,7 +298,7 @@ const styles = StyleSheet.create({
     minHeight: 400,
   },
   feedContainer: {
-    paddingBottom: Spacing.xl + Spacing.lg,
+    flex: 1,
   },
   feedItem: {
     marginBottom: Spacing.sm,
