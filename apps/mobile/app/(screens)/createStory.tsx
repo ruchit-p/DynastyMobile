@@ -454,7 +454,6 @@ const CreateStoryScreen = () => {
   // MARK: - Navigation Setup & Data Return Handling
   useEffect(() => {
     const screenTitle = displayAsEditMode ? 'Edit Story' : 'Create Story';
-    const saveButtonText = displayAsEditMode ? 'Update' : 'Save';
     const saveAction = isActuallyEditingNow ? handleUpdateStory : handleSaveStory;
 
     navigation.setOptions({
@@ -465,19 +464,35 @@ const CreateStoryScreen = () => {
         </TouchableOpacity>
       ),
       headerRight: () => (
-        <TouchableOpacity onPress={saveAction} style={{ marginRight: 15 }} disabled={isLoading || isUploading}>
-          <Text style={[
-            styles.saveButtonTextNavigator, 
-            (isLoading || isUploading) && { color: '#A0A0A0' }
-          ]}>
-            {isLoading ? '...' : saveButtonText}
-          </Text>
+        <TouchableOpacity 
+          onPress={saveAction} 
+          style={{ 
+            marginRight: 10,
+            paddingHorizontal: 5,
+            paddingVertical: 2,
+          }} 
+          disabled={isLoading || isUploading}
+        >
+          {displayAsEditMode ? (
+            <Ionicons 
+              name="checkmark-circle-outline" 
+              size={28} 
+              color={(isLoading || isUploading) ? '#A0A0A0' : '#1A4B44'} 
+            />
+          ) : (
+            <Text style={[
+              styles.saveButtonTextNavigator, 
+              (isLoading || isUploading) && { color: '#A0A0A0' }
+            ]}>
+              {isLoading ? '...' : 'Save'} 
+            </Text>
+          )}
         </TouchableOpacity>
       ),
       headerTitleAlign: 'center',
-      headerStyle: { backgroundColor: '#F8F8F8' },
+      headerStyle: { backgroundColor: '#F8F8F8' }, 
       headerTintColor: '#333333',
-      headerTitleStyle: { fontWeight: '600' },
+      headerTitleStyle: { fontWeight: '600' }, 
       headerBackTitleVisible: false,
     });
   }, [navigation, router, isLoading, displayAsEditMode, handleSaveStory, handleUpdateStory, isUploading]);
@@ -951,7 +966,11 @@ const CreateStoryScreen = () => {
           headerRight: () => (
             <TouchableOpacity 
               onPress={isActuallyEditingNow ? handleUpdateStory : handleSaveStory} 
-              style={{ marginRight: 15 }}
+              style={{ 
+                marginRight: 10,
+                paddingHorizontal: 5,
+                paddingVertical: 2,
+              }} 
               disabled={isLoading || isUploading}
             >
               <Text style={[
@@ -1316,6 +1335,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1,
     borderColor: '#E0E0E0',
+    position: 'relative',
+    marginTop: 10,
   },
   textBlockInput: {
     fontSize: 16,
@@ -1344,7 +1365,12 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   removeBlockButton: {
-    paddingLeft: 10, // Space from content to button
+    position: 'absolute',
+    top: -12,
+    right: -12,
+    zIndex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.0)',
+    padding: 2,
   },
   // Modal Styles
   modalOverlay: {

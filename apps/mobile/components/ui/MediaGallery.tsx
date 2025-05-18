@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -130,7 +130,12 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
   showReplaceButton = true,
   allowAddingMore = true, // Default to true to maintain current behavior elsewhere
 }) => {
-  const windowWidth = Dimensions.get('window').width;
+  const [measuredWidth, setMeasuredWidth] = useState(Dimensions.get('window').width);
+
+  const onLayout = (event: any) => {
+    const { width } = event.nativeEvent.layout;
+    setMeasuredWidth(width);
+  };
 
   const renderMediaItem = (item: MediaItem, index: number) => {
     if (item.type === 'image') {
@@ -143,17 +148,17 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
   };
 
   return (
-    <View style={[styles.galleryContainer, style]}>
+    <View style={[styles.galleryContainer, style]} onLayout={onLayout}>
       {media.length > 0 ? (
         <ScrollView
           horizontal
           pagingEnabled
           nestedScrollEnabled={true}
           showsHorizontalScrollIndicator={false}
-          style={{ width: windowWidth }} // Ensure ScrollView takes up the intended width
+          style={{ width: measuredWidth }}
         >
           {media.map((item, index) => (
-            <View key={`${item.uri}-${index}`} style={[styles.mediaWrapper, { width: windowWidth }]}>
+            <View key={`${item.uri}-${index}`} style={[styles.mediaWrapper, { width: measuredWidth }]}>
               {renderMediaItem(item, index)}
               {showRemoveButton && (
                 <TouchableOpacity
@@ -175,7 +180,7 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
           ))}
           {allowAddingMore && media.length < maxMedia && (
             <TouchableOpacity
-              style={[styles.mediaWrapper, styles.addMoreButtonPlaceholder, { width: windowWidth }]}
+              style={[styles.mediaWrapper, styles.addMoreButtonPlaceholder, { width: measuredWidth }]}
               onPress={onAddMedia}
             >
               <MaterialCommunityIcons name="camera-plus-outline" size={48} color={addIconColor} />
@@ -186,14 +191,14 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
       ) : (
         allowAddingMore ? (
           <TouchableOpacity
-            style={[styles.galleryPlaceholder, { width: windowWidth }]}
+            style={[styles.galleryPlaceholder, { width: measuredWidth }]}
             onPress={onAddMedia}
           >
             <MaterialCommunityIcons name="camera-plus-outline" size={48} color={addIconColor} />
             <Text style={[styles.galleryPlaceholderText, { color: addIconColor }]}>Add Photos/Videos</Text>
           </TouchableOpacity>
         ) : (
-          <View style={[styles.galleryPlaceholder, { width: windowWidth}]}>
+          <View style={[styles.galleryPlaceholder, { width: measuredWidth}]}>
             <Text style={styles.galleryPlaceholderText}>No media</Text>
           </View>
         )
