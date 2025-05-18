@@ -1,7 +1,7 @@
 import * as functions from "firebase-functions";
 import {onCall} from "firebase-functions/v2/https";
 import {Client} from "@googlemaps/google-maps-services-js";
-import {defineString} from "firebase-functions/params"; // Import defineString
+import {defineSecret} from "firebase-functions/params"; // Changed from defineString
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common"; // Assuming common config file
 import {logger} from "firebase-functions";
 
@@ -9,7 +9,7 @@ import {logger} from "firebase-functions";
 const mapsClient = new Client({});
 
 // Define Google Places API Key as a secret environment variable
-const GOOGLE_PLACES_API_KEY_SECRET = defineString("GOOGLE_PLACES_API_KEY");
+const GOOGLE_PLACES_API_KEY = defineSecret("GOOGLE_PLACES_API_KEY"); // Changed variable name and function
 
 /**
  * Google Places Autocomplete (Callable Function)
@@ -25,7 +25,7 @@ export const googlePlacesAutocomplete = onCall(
   },
   async (request) => {
     const {auth, data} = request;
-    const apiKey = GOOGLE_PLACES_API_KEY_SECRET.value(); // Access the secret value
+    const apiKey = GOOGLE_PLACES_API_KEY.value(); // Access the secret value
 
     if (!auth) {
       throw new functions.https.HttpsError(
@@ -118,7 +118,7 @@ export const getGooglePlaceDetails = onCall(
   },
   async (request) => {
     const {auth, data} = request;
-    const apiKey = GOOGLE_PLACES_API_KEY_SECRET.value(); // Access the secret value
+    const apiKey = GOOGLE_PLACES_API_KEY.value(); // Access the secret value
 
     if (!auth) {
       throw new functions.https.HttpsError(

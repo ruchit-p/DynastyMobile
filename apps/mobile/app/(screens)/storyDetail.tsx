@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
+import * as ImagePicker from 'expo-image-picker';
 import { 
   fetchAccessibleStoriesMobile, 
   getStoryCommentsMobile,
@@ -29,7 +30,7 @@ import ProfilePicture from '../../components/ui/ProfilePicture';
 import { formatDate, formatTimeAgo } from '../../src/lib/dateUtils';
 import Avatar from '../../components/ui/Avatar';
 import AnimatedActionSheet, { ActionSheetAction } from '../../components/ui/AnimatedActionSheet';
-import ImageGallery from '../../components/ui/ImageGallery';
+import MediaGallery from '../../components/ui/MediaGallery';
 
 interface StoryComment {
   id: string;
@@ -89,18 +90,33 @@ const StoryDetailScreen = () => {
   const commentInputRef = useRef<TextInput>(null);
   const [isActionSheetVisible, setActionSheetVisible] = useState(false);
 
-  // Prepare photos for ImageGallery
-  const galleryPhotos = React.useMemo(() => {
+  // Prepare media for MediaGallery
+  const galleryMediaItems = React.useMemo(() => {
     if (!story || !story.storyBlocks) return [];
-    const photos: Array<{ uri: string }> = [];
+    const items: Array<{ uri: string; type: 'image' | 'video'; duration?: number; width?: number; height?: number; asset?: ImagePicker.ImagePickerAsset }> = [];
     story.storyBlocks.forEach(block => {
       if (block.type === 'image' && Array.isArray(block.data)) {
-        (block.data as string[]).forEach(uri => {
-          if (uri) photos.push({ uri });
+        // Assuming block.data for images is an array of URIs or objects with URIs
+        (block.data as Array<string | { uri: string; width?: number; height?: number }>).forEach(imgData => {
+          if (typeof imgData === 'string') {
+            items.push({ uri: imgData, type: 'image' });
+          } else if (imgData && imgData.uri) {
+            items.push({ uri: imgData.uri, type: 'image', width: imgData.width, height: imgData.height });
+          }
         });
       }
+      // Placeholder for video block handling if stories can include videos
+      // else if (block.type === 'video' && block.data && typeof block.data.uri === 'string') {
+      //   items.push({ 
+      //     uri: block.data.uri, 
+      //     type: 'video', 
+      //     duration: block.data.duration, 
+      //     width: block.data.width, 
+      //     height: block.data.height 
+      //   });
+      // }
     });
-    return photos;
+    return items;
   }, [story]);
 
   useEffect(() => {
@@ -589,17 +605,17 @@ const StoryDetailScreen = () => {
             return null;
           })}
 
-          {/* Render ImageGallery if there are any photos */}
-          {galleryPhotos.length > 0 && (
+          {/* Render MediaGallery if there are any media items */}
+          {galleryMediaItems.length > 0 && (
             <View style={styles.galleryContainer}>
-              <ImageGallery
-                photos={galleryPhotos}
-                onAddPhoto={() => {}} // Read-only
-                onRemovePhoto={() => {}} // Read-only
-                onReplacePhoto={() => {}} // Read-only
-                showRemoveButton={false} // Ensure remove button is hidden
-                showReplaceButton={false} // Ensure replace button is hidden
-                // Add any other necessary props, possibly for styling or read-only indication if gallery supports it
+              <MediaGallery
+                media={galleryMediaItems}
+                onAddMedia={() => {}}
+                onRemoveMedia={() => {}}
+                onReplaceMedia={() => {}}
+                showRemoveButton={false}
+                showReplaceButton={false}
+                allowAddingMore={false}
               />
             </View>
           )}

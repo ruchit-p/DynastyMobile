@@ -70,7 +70,7 @@ export const createStoryMobile = async (storyData: {
   authorID: string;
   title: string;
   subtitle?: string;
-  eventDate?: Date;
+  eventDate?: string | Date;
   location?: { lat: number; lng: number; address: string };
   privacy: 'family' | 'privateAccess' | 'custom';
   customAccessMembers?: string[];
@@ -95,7 +95,7 @@ export const updateStoryMobile = async (
   updates: Partial<{
     title: string;
     subtitle: string;
-    eventDate: Date;
+    eventDate: string | Date;
     location: { lat: number; lng: number; address: string };
     privacy: 'family' | 'privateAccess' | 'custom';
     customAccessMembers: string[];

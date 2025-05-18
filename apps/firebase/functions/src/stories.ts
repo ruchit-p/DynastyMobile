@@ -1,6 +1,7 @@
 import {onCall} from "firebase-functions/v2/https";
 import {getFirestore, Timestamp, FieldValue} from "firebase-admin/firestore";
 import {logger} from "firebase-functions";
+import * as functions from "firebase-functions";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
 
 // MARK: - Types
@@ -126,18 +127,18 @@ export const getAccessibleStories = onCall({
     const {userId, familyTreeId} = request.data;
     const callerUid = request.auth?.uid;
     if (!callerUid) {
-      throw new Error("Authentication required");
+      throw new functions.https.HttpsError("unauthenticated", "Authentication required");
     }
 
     if (!userId) {
-      throw new Error("User ID is required");
+      throw new functions.https.HttpsError("invalid-argument", "User ID is required");
     }
     // Ensure the user is requesting with their own ID
     if (userId !== callerUid) {
-      throw new Error("You can only access stories with your own user ID");
+      throw new functions.https.HttpsError("permission-denied", "You can only access stories with your own user ID");
     }
     if (!familyTreeId) {
-      throw new Error("Family tree ID is required");
+      throw new functions.https.HttpsError("invalid-argument", "Family tree ID is required");
     }
 
     const db = getFirestore();
@@ -192,7 +193,8 @@ export const getAccessibleStories = onCall({
     return {stories: accessibleStories};
   } catch (error) {
     logger.error("Error in getAccessibleStories:", error);
-    throw new Error(error instanceof Error ? error.message : "Failed to fetch accessible stories");
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError("internal", error instanceof Error ? error.message : "Failed to fetch accessible stories");
   }
 });
 
@@ -209,12 +211,12 @@ export const getUserStories = onCall({
     const callerUid = request.auth?.uid;
 
     if (!callerUid) {
-      throw new Error("Authentication required");
+      throw new functions.https.HttpsError("unauthenticated", "Authentication required");
     }
 
     // Ensure the user is requesting their own stories
     if (userId && userId !== callerUid) {
-      throw new Error("You can only access your own stories");
+      throw new functions.https.HttpsError("permission-denied", "You can only access your own stories");
     }
 
     const uid = callerUid;
@@ -253,7 +255,8 @@ export const getUserStories = onCall({
     return {stories: enrichedStories};
   } catch (error) {
     logger.error("Error in getUserStories:", error);
-    throw new Error(error instanceof Error ? error.message : "Unknown error");
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError("internal", error instanceof Error ? error.message : "Unknown error fetching user stories");
   }
 });
 
@@ -282,47 +285,81 @@ export const createStory = onCall({
 
     const callerUid = request.auth?.uid;
     if (!callerUid) {
-      throw new Error("Authentication required");
+      throw new functions.https.HttpsError("unauthenticated", "Authentication required");
     }
 
     // Validate request data
     if (!authorID || authorID !== callerUid) {
-      throw new Error("Invalid authorID");
+      throw new functions.https.HttpsError("invalid-argument", "Invalid authorID");
     }
-
     if (!title || !title.trim()) {
-      throw new Error("Title is required");
+      throw new functions.https.HttpsError("invalid-argument", "Title is required");
     }
-
     if (!familyTreeId) {
-      throw new Error("Family tree ID is required");
+      throw new functions.https.HttpsError("invalid-argument", "Family tree ID is required");
     }
 
-    // Verify user has access to the family tree
     const db = getFirestore();
     const userDoc = await db.collection("users").doc(callerUid).get();
-
     if (!userDoc.exists) {
-      throw new Error("User not found");
+      throw new functions.https.HttpsError("not-found", "User not found");
     }
-
     const userData = userDoc.data();
-
     if (userData?.familyTreeId !== familyTreeId) {
-      throw new Error("User does not have access to this family tree");
+      throw new functions.https.HttpsError("permission-denied", "User does not have access to this family tree");
     }
+
+    // MARK: - Robust eventDate processing
+    let finalEventDateForFirestore: Timestamp | null = null;
+
+    if (eventDate !== undefined && eventDate !== null && eventDate !== "") {
+      logger.info(`[createStory] Raw eventDate received: '${eventDate}', type: ${typeof eventDate}`);
+      // Attempt to create a JS Date object. new Date() can accept string, number, or Date.
+      const jsDate = new Date(eventDate as string | number | Date);
+
+      if (isNaN(jsDate.getTime())) {
+        // This means new Date(eventDate) resulted in an "Invalid Date" object
+        logger.error(`[createStory] Failed to parse eventDate '${eventDate}' (type: ${typeof eventDate}) into a valid JavaScript Date. jsDate.getTime() is NaN.`);
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          `The provided eventDate '${eventDate}' is not a valid date format. Please ensure it's an ISO 8601 string or a valid millisecond timestamp.`
+        );
+      } else {
+        // The JS Date object seems valid (getTime() is not NaN)
+        logger.info(`[createStory] Successfully parsed eventDate '${eventDate}' into jsDate.toISOString(): ${jsDate.toISOString()}, jsDate.getTime(): ${jsDate.getTime()}`);
+        try {
+          finalEventDateForFirestore = Timestamp.fromDate(jsDate);
+          logger.info(`[createStory] Successfully converted jsDate to Firestore Timestamp for eventDate: '${eventDate}'.`);
+        } catch (timestampError: any) {
+          // This block catches errors specifically from Timestamp.fromDate()
+          logger.error(
+            "[createStory] Firestore Timestamp.fromDate(jsDate) FAILED even though jsDate.getTime() was not NaN. " +
+            `jsDate.toISOString(): ${jsDate.toISOString()}, jsDate.getTime(): ${jsDate.getTime()}. Original eventDate: '${eventDate}'. Error: ${timestampError.message}`,
+            {errorDetail: timestampError}
+          );
+          throw new functions.https.HttpsError(
+            "internal",
+            `Failed to convert parsed date to Firestore Timestamp. Input was '${eventDate}'. Parsed date was '${jsDate.toISOString()}'. Error: ${timestampError.message}`
+          );
+        }
+      }
+    } else {
+      logger.info(`[createStory] eventDate is null, undefined, or empty. Skipping Timestamp creation. Value: '${eventDate}'`);
+      // finalEventDateForFirestore remains null, which is acceptable
+    }
+    // END MARK: - Robust eventDate processing
 
     // Create story data object
-    const storyData = {
+    const storyData: any = { // Use 'any' temporarily if fields are conditional
       authorID,
       blocks,
       createdAt: FieldValue.serverTimestamp(),
-      eventDate: eventDate ? Timestamp.fromDate(new Date(eventDate)) : null,
+      eventDate: finalEventDateForFirestore, // Use the fully processed and validated timestamp
       familyTreeId,
       isDeleted: false,
       location,
       peopleInvolved,
-      privacy: privacy === "privateAccess" ? "privateAccess" : privacy,
+      privacy,
       subtitle: subtitle?.trim(),
       title: title.trim(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -330,22 +367,27 @@ export const createStory = onCall({
       coverImageURL,
     };
 
-    // Remove any undefined or null fields
+    // Refined removal of undefined/null fields to ensure eventDate: null is preserved if it was intentionally null
     Object.keys(storyData).forEach((key) => {
-      if (storyData[key as keyof typeof storyData] === undefined ||
-          storyData[key as keyof typeof storyData] === null) {
+      if (storyData[key as keyof typeof storyData] === undefined) {
         delete storyData[key as keyof typeof storyData];
       }
     });
 
-    // Add the story to Firestore
     const docRef = await db.collection("stories").add(storyData);
-
-    // Return success response
     return {id: docRef.id};
   } catch (error) {
-    logger.error("Error in createStory:", error);
-    throw new Error(error instanceof Error ? error.message : "Unknown error");
+    // Log the error regardless of its type before re-throwing
+    if (error instanceof functions.https.HttpsError) {
+      logger.error(`[createStory] HttpsError: ${error.code} - ${error.message}`, {details: error.details});
+      throw error;
+    } else if (error instanceof Error) {
+      logger.error(`[createStory] Generic Error: ${error.message}`, {stack: error.stack});
+      throw new functions.https.HttpsError("internal", `An unexpected error occurred in createStory: ${error.message}`);
+    } else {
+      logger.error("[createStory] Unknown error occurred.", {errorInfo: error});
+      throw new functions.https.HttpsError("internal", "An unknown error occurred in createStory.");
+    }
   }
 });
 
@@ -362,16 +404,16 @@ export const updateStory = onCall({
     const callerUid = request.auth?.uid;
 
     if (!callerUid) {
-      throw new Error("Authentication required");
+      throw new functions.https.HttpsError("unauthenticated", "Authentication required");
     }
 
     // Validate request data
     if (!storyId) {
-      throw new Error("Story ID is required");
+      throw new functions.https.HttpsError("invalid-argument", "Story ID is required");
     }
 
     if (!userId || userId !== callerUid) {
-      throw new Error("Invalid user ID");
+      throw new functions.https.HttpsError("invalid-argument", "Invalid user ID");
     }
 
     // Get Firestore instance
@@ -382,12 +424,12 @@ export const updateStory = onCall({
     const storyDoc = await storyRef.get();
 
     if (!storyDoc.exists) {
-      throw new Error("Story not found");
+      throw new functions.https.HttpsError("not-found", "Story not found");
     }
 
     const storyData = storyDoc.data();
     if (storyData?.authorID !== userId) {
-      throw new Error("You don't have permission to edit this story");
+      throw new functions.https.HttpsError("permission-denied", "You don't have permission to edit this story");
     }
 
     // Prepare update data
@@ -414,7 +456,8 @@ export const updateStory = onCall({
     return {success: true, id: storyId};
   } catch (error) {
     logger.error("Error in updateStory:", error);
-    throw new Error(error instanceof Error ? error.message : "Unknown error");
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError("internal", error instanceof Error ? error.message : "Unknown error updating story");
   }
 });
 
@@ -431,16 +474,16 @@ export const deleteStory = onCall({
     const callerUid = request.auth?.uid;
 
     if (!callerUid) {
-      throw new Error("Authentication required");
+      throw new functions.https.HttpsError("unauthenticated", "Authentication required");
     }
 
     // Validate request data
     if (!storyId) {
-      throw new Error("Story ID is required");
+      throw new functions.https.HttpsError("invalid-argument", "Story ID is required");
     }
 
     if (!userId || userId !== callerUid) {
-      throw new Error("Invalid user ID");
+      throw new functions.https.HttpsError("invalid-argument", "Invalid user ID");
     }
 
     // Get Firestore instance
@@ -451,12 +494,12 @@ export const deleteStory = onCall({
     const storyDoc = await storyRef.get();
 
     if (!storyDoc.exists) {
-      throw new Error("Story not found");
+      throw new functions.https.HttpsError("not-found", "Story not found");
     }
 
     const storyData = storyDoc.data();
     if (storyData?.authorID !== userId) {
-      throw new Error("You don't have permission to delete this story");
+      throw new functions.https.HttpsError("permission-denied", "You don't have permission to delete this story");
     }
 
     // Soft delete the story
@@ -469,7 +512,8 @@ export const deleteStory = onCall({
     return {success: true};
   } catch (error) {
     logger.error("Error in deleteStory:", error);
-    throw new Error(error instanceof Error ? error.message : "Unknown error");
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError("internal", error instanceof Error ? error.message : "Unknown error deleting story");
   }
 });
 
@@ -484,14 +528,14 @@ export const likeStory = onCall({
 }, async (request) => {
   // Ensure authenticated
   if (!request.auth) {
-    throw new Error("Authentication required");
+    throw new functions.https.HttpsError("unauthenticated", "Authentication required");
   }
 
   const userId = request.auth.uid;
   const {storyId} = request.data;
 
   if (!storyId) {
-    throw new Error("Story ID is required");
+    throw new functions.https.HttpsError("invalid-argument", "Story ID is required");
   }
 
   const db = getFirestore();
@@ -523,7 +567,8 @@ export const likeStory = onCall({
     }
   } catch (error) {
     logger.error("Error toggling story like:", error);
-    throw new Error("Failed to toggle like on story");
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError("internal", "Failed to toggle like on story");
   }
 });
 
@@ -536,13 +581,13 @@ export const getStoryLikes = onCall({
 }, async (request) => {
   // Ensure authenticated
   if (!request.auth) {
-    throw new Error("Authentication required");
+    throw new functions.https.HttpsError("unauthenticated", "Authentication required");
   }
 
   const {storyId} = request.data;
 
   if (!storyId) {
-    throw new Error("Story ID is required");
+    throw new functions.https.HttpsError("invalid-argument", "Story ID is required");
   }
 
   const db = getFirestore();
@@ -573,7 +618,8 @@ export const getStoryLikes = onCall({
     return {likes};
   } catch (error) {
     logger.error("Error getting story likes:", error);
-    throw new Error("Failed to get story likes");
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError("internal", "Failed to get story likes");
   }
 });
 
@@ -588,14 +634,14 @@ export const commentOnStory = onCall({
 }, async (request) => {
   // Ensure authenticated
   if (!request.auth) {
-    throw new Error("Authentication required");
+    throw new functions.https.HttpsError("unauthenticated", "Authentication required");
   }
 
   const userId = request.auth.uid;
   const {storyId, text, parentId} = request.data;
 
   if (!storyId || !text) {
-    throw new Error("Story ID and comment text are required");
+    throw new functions.https.HttpsError("invalid-argument", "Story ID and comment text are required");
   }
 
   const db = getFirestore();
@@ -606,7 +652,7 @@ export const commentOnStory = onCall({
     // Get the story to make sure it exists
     const storyDoc = await storyRef.get();
     if (!storyDoc.exists) {
-      throw new Error("Story not found");
+      throw new functions.https.HttpsError("not-found", "Story not found");
     }
 
     // Create the comment
@@ -625,7 +671,7 @@ export const commentOnStory = onCall({
     if (parentId) {
       const parentComment = await db.collection("comments").doc(parentId).get();
       if (!parentComment.exists) {
-        throw new Error("Parent comment not found");
+        throw new functions.https.HttpsError("not-found", "Parent comment not found");
       }
 
       const parentData = parentComment.data() || {};
@@ -670,7 +716,8 @@ export const commentOnStory = onCall({
     };
   } catch (error) {
     logger.error("Error adding comment:", error);
-    throw new Error("Failed to add comment");
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError("internal", error instanceof Error ? error.message : "Failed to add comment");
   }
 });
 
@@ -683,14 +730,14 @@ export const getStoryComments = onCall({
 }, async (request) => {
   // Ensure authenticated
   if (!request.auth) {
-    throw new Error("Authentication required");
+    throw new functions.https.HttpsError("unauthenticated", "Authentication required");
   }
 
   const userId = request.auth.uid;
   const {storyId} = request.data;
 
   if (!storyId) {
-    throw new Error("Story ID is required");
+    throw new functions.https.HttpsError("invalid-argument", "Story ID is required");
   }
 
   const db = getFirestore();
@@ -787,12 +834,8 @@ export const getStoryComments = onCall({
     };
   } catch (error) {
     logger.error("Error getting story comments:", error);
-    return {
-      status: "error",
-      message: "Failed to get story comments",
-      error: error instanceof Error ? error.message : "Unknown error",
-      comments: [],
-    };
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError("internal", error instanceof Error ? error.message : "Failed to get story comments");
   }
 });
 
@@ -805,14 +848,14 @@ export const likeComment = onCall({
 }, async (request) => {
   // Ensure authenticated
   if (!request.auth) {
-    throw new Error("Authentication required");
+    throw new functions.https.HttpsError("unauthenticated", "Authentication required");
   }
 
   const userId = request.auth.uid;
   const {commentId} = request.data;
 
   if (!commentId) {
-    throw new Error("Comment ID is required");
+    throw new functions.https.HttpsError("invalid-argument", "Comment ID is required");
   }
 
   const db = getFirestore();
@@ -822,12 +865,12 @@ export const likeComment = onCall({
     // Get the comment
     const commentDoc = await commentRef.get();
     if (!commentDoc.exists) {
-      throw new Error("Comment not found");
+      throw new functions.https.HttpsError("not-found", "Comment not found");
     }
 
     const commentData = commentDoc.data();
     if (!commentData) {
-      throw new Error("Comment data not found");
+      throw new functions.https.HttpsError("internal", "Comment data not found after existence check");
     }
 
     const likes = commentData.likes || [];
@@ -848,7 +891,8 @@ export const likeComment = onCall({
     }
   } catch (error) {
     logger.error("Error toggling comment like:", error);
-    throw new Error("Failed to toggle like on comment");
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError("internal", "Failed to toggle like on comment");
   }
 });
 
@@ -861,13 +905,13 @@ export const getCommentLikes = onCall({
 }, async (request) => {
   // Ensure authenticated
   if (!request.auth) {
-    throw new Error("Authentication required");
+    throw new functions.https.HttpsError("unauthenticated", "Authentication required");
   }
 
   const {commentId} = request.data;
 
   if (!commentId) {
-    throw new Error("Comment ID is required");
+    throw new functions.https.HttpsError("invalid-argument", "Comment ID is required");
   }
 
   const db = getFirestore();
@@ -876,7 +920,7 @@ export const getCommentLikes = onCall({
     // Get the comment
     const commentDoc = await db.collection("comments").doc(commentId).get();
     if (!commentDoc.exists) {
-      throw new Error("Comment not found");
+      throw new functions.https.HttpsError("not-found", "Comment not found");
     }
 
     const commentData = commentDoc.data();
@@ -898,7 +942,8 @@ export const getCommentLikes = onCall({
     return {likes};
   } catch (error) {
     logger.error("Error getting comment likes:", error);
-    throw new Error("Failed to get comment likes");
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError("internal", "Failed to get comment likes");
   }
 });
 
@@ -911,14 +956,14 @@ export const deleteComment = onCall({
 }, async (request) => {
   // Ensure authenticated
   if (!request.auth) {
-    throw new Error("Authentication required");
+    throw new functions.https.HttpsError("unauthenticated", "Authentication required");
   }
 
   const userId = request.auth.uid;
   const {commentId} = request.data;
 
   if (!commentId) {
-    throw new Error("Comment ID is required");
+    throw new functions.https.HttpsError("invalid-argument", "Comment ID is required");
   }
 
   const db = getFirestore();
@@ -928,17 +973,17 @@ export const deleteComment = onCall({
     // Get the comment
     const commentDoc = await commentRef.get();
     if (!commentDoc.exists) {
-      throw new Error("Comment not found");
+      throw new functions.https.HttpsError("not-found", "Comment not found");
     }
 
     const commentData = commentDoc.data();
     if (!commentData) {
-      throw new Error("Comment data not found");
+      throw new functions.https.HttpsError("internal", "Comment data not found after existence check");
     }
 
     // Check if the user is the comment author
     if (commentData.userId !== userId) {
-      throw new Error("You can only delete your own comments");
+      throw new functions.https.HttpsError("permission-denied", "You can only delete your own comments");
     }
 
     // Get the story reference to update comment count
@@ -976,7 +1021,8 @@ export const deleteComment = onCall({
     };
   } catch (error) {
     logger.error("Error deleting comment:", error);
-    throw new Error(error instanceof Error ? error.message : "Failed to delete comment");
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError("internal", error instanceof Error ? error.message : "Failed to delete comment");
   }
 });
 
@@ -989,14 +1035,14 @@ export const checkStoryLikeStatus = onCall({
 }, async (request) => {
   // Ensure authenticated
   if (!request.auth) {
-    throw new Error("Authentication required");
+    throw new functions.https.HttpsError("unauthenticated", "Authentication required");
   }
 
   const userId = request.auth.uid;
   const {storyId} = request.data;
 
   if (!storyId) {
-    throw new Error("Story ID is required");
+    throw new functions.https.HttpsError("invalid-argument", "Story ID is required");
   }
 
   const db = getFirestore();
@@ -1006,7 +1052,8 @@ export const checkStoryLikeStatus = onCall({
     return {isLiked: likeDoc.exists};
   } catch (error) {
     logger.error("Error checking story like status:", error);
-    throw new Error("Failed to check story like status");
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError("internal", "Failed to check story like status");
   }
 });
 
@@ -1019,7 +1066,7 @@ export const syncPendingStories = onCall({
 }, async (request) => {
   // Ensure authenticated
   if (!request.auth) {
-    throw new Error("Authentication required");
+    throw new functions.https.HttpsError("unauthenticated", "Authentication required");
   }
 
   const userId = request.auth.uid;
@@ -1166,6 +1213,7 @@ export const syncPendingStories = onCall({
     };
   } catch (error) {
     logger.error("Error syncing pending stories:", error);
-    throw new Error(error instanceof Error ? error.message : "Failed to sync pending stories");
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError("internal", error instanceof Error ? error.message : "Failed to sync pending stories");
   }
 });

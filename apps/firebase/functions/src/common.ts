@@ -13,8 +13,8 @@ export const FUNCTION_TIMEOUT = {
 };
 
 export const DEFAULT_MEMORY = {
-  SHORT: "256MiB",
-  MEDIUM: "512MiB",
+  SHORT: "256MiB" as const,
+  MEDIUM: "512MiB" as const,
 };
 
 // CORS settings

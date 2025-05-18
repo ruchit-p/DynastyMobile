@@ -233,7 +233,7 @@ const VaultScreen = () => {
             { text: 'Cancel', onPress: () => {} },
             { 
               text: 'Create Folder', 
-              onPress: async (folderName) => {
+              onPress: async (folderName?: string) => {
                 if (folderName && folderName.trim()) {
                   try {
                     await createVaultFolderMobile(folderName.trim(), currentPathId);
@@ -373,7 +373,7 @@ const VaultScreen = () => {
       `Enter new name for "${item.name}"`,
       [
         { text: 'Cancel' },
-        { text: 'Rename', onPress: async (newName) => {
+        { text: 'Rename', onPress: async (newName?: string) => {
             if (newName && newName.trim() !== '' && newName.trim() !== item.name) {
               try {
                 await renameVaultItemMobile(item.id, newName.trim());
@@ -469,7 +469,7 @@ const VaultScreen = () => {
           <FlatList
             data={items}
             renderItem={renderItem}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item: UIVaultItem) => item.id}
             contentContainerStyle={styles.listContentContainer}
           />
         )}

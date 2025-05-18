@@ -4,10 +4,11 @@ import { Ionicons } from '@expo/vector-icons';
 import Card from './Card';
 import ThemedText from '../ThemedText';
 import ProfilePicture from './ProfilePicture';
-import ImageGallery from './ImageGallery';
+import MediaGallery from './MediaGallery';
 import { Spacing, BorderRadius } from '../../constants/Spacing';
 import type { Story } from '../../src/lib/storyUtils';
 import { formatDate, formatTimeAgo } from '../../src/lib/dateUtils';
+import * as ImagePicker from 'expo-image-picker';
 
 export interface StoryPostProps {
   story: Story;
@@ -27,18 +28,24 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
   const imgBlock = story.blocks.find(b => b.type === 'image');
   const mediaCount = story.blocks.filter(b => b.type === 'image' || b.type === 'video').length;
 
-  // Prepare photos for ImageGallery
-  const galleryPhotos = React.useMemo(() => {
+  // Prepare media for MediaGallery
+  const galleryMediaItems = React.useMemo(() => {
     if (!story || !story.blocks) return [];
-    const photos: Array<{ uri: string }> = [];
+    const items: Array<{ uri: string; type: 'image' | 'video'; width?: number; height?: number; duration?: number; asset?: ImagePicker.ImagePickerAsset }> = [];
     story.blocks.forEach(block => {
       if (block.type === 'image' && Array.isArray(block.data)) {
-        (block.data as string[]).forEach(uri => {
-          if (uri) photos.push({ uri });
+        (block.data as Array<string | { uri: string; width?: number; height?: number }>).forEach(imgData => {
+          if (typeof imgData === 'string') {
+            items.push({ uri: imgData, type: 'image' });
+          } else if (imgData && imgData.uri) {
+            items.push({ uri: imgData.uri, type: 'image', width: imgData.width, height: imgData.height });
+          }
         });
       }
+      // TODO: Handle video blocks if story.blocks can include them for MediaGallery
+      // e.g., else if (block.type === 'video' && block.data?.uri) { items.push({ ... }); }
     });
-    return photos;
+    return items;
   }, [story]);
 
   return (
@@ -74,14 +81,15 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
             </ThemedText>
           )}
         </TouchableOpacity>
-        {galleryPhotos.length > 0 && (
-          <ImageGallery
-            photos={galleryPhotos}
-            onAddPhoto={() => {}}
-            onRemovePhoto={() => {}}
-            onReplacePhoto={() => {}}
+        {galleryMediaItems.length > 0 && (
+          <MediaGallery
+            media={galleryMediaItems}
+            onAddMedia={() => {}}
+            onRemoveMedia={() => {}}
+            onReplaceMedia={() => {}}
             showRemoveButton={false}
             showReplaceButton={false}
+            allowAddingMore={false}
             imageStyle={styles.galleryImage}
           />
         )}
