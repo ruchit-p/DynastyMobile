@@ -16,7 +16,7 @@ import { Colors } from '../../constants/Colors';
 import { BorderRadius, Spacing } from '../../constants/Spacing';
 import ThemedText from '../../components/ThemedText';
 import { commonHeaderOptions } from '../../constants/headerConfig';
-import { functions as firebaseFunctionsInstance, auth as firebaseAuthInstance } from '../../src/lib/firebase'; // Added auth instance
+import { getFirebaseFunctions as firebaseFunctionsInstance, getFirebaseAuth as firebaseAuthInstance } from '../../src/lib/firebase';
 
 interface Member {
   id: string;
@@ -70,7 +70,8 @@ const SelectMembersScreen = () => {
       setIsLoading(true);
       setError(null); // Clear previous errors
       try {
-        const getFamilyManagementDataFn = firebaseFunctionsInstance.httpsCallable(
+        const functionsInstance = firebaseFunctionsInstance(); // Call the getter
+        const getFamilyManagementDataFn = functionsInstance.httpsCallable(
           'getFamilyManagementData'
         );
         
@@ -78,7 +79,8 @@ const SelectMembersScreen = () => {
         const result = await getFamilyManagementDataFn();
         const data = result.data as { members: FirebaseMember[] };
 
-        const currentUser = firebaseAuthInstance.currentUser;
+        const authService = firebaseAuthInstance(); // Call the getter to get the auth service
+        const currentUser = authService.currentUser; // Then access currentUser
         const currentUserId = currentUser ? currentUser.uid : null;
 
         if (data && Array.isArray(data.members)) {

@@ -51,7 +51,19 @@ const CreateStoryScreen = () => {
   const { user, firestoreUser } = useAuth();
   const router = useRouter();
   const navigation = useNavigation();
-  const params = useLocalSearchParams<{ storyId?: string; editMode?: string; returnedPurpose?: string; selectedIds?: string; recordedAudioUri?: string; recordedAudioDuration?: string }>(); // Typed params
+  const params = useLocalSearchParams<{ 
+    storyId?: string; 
+    editMode?: string; 
+    returnedPurpose?: string; 
+    selectedIds?: string; 
+    recordedAudioUri?: string; 
+    recordedAudioDuration?: string;
+    // Added params from selectLocation
+    selectedLocation?: string;
+    selectedLocationLat?: string;
+    selectedLocationLng?: string;
+    fromScreen?: string;
+  }>(); 
   const { uploadImage, isUploading: isImageUploading, uploadProgress } = useImageUpload();
 
   const storyIdForEdit = params.storyId;
@@ -263,7 +275,7 @@ const CreateStoryScreen = () => {
       const newStoryId = await createStoryMobile(storyPayload);
       console.log('Story created with ID:', newStoryId);
       Alert.alert('Success', 'Your story has been saved.');
-      router.back();
+      router.navigate('/(tabs)/feed');
     } catch (error) {
       console.error('Error creating story:', error);
       Alert.alert('Error', `Failed to save your story: ${ (error as Error).message }`);
@@ -323,7 +335,7 @@ const CreateStoryScreen = () => {
 
       await updateStoryMobile(storyIdForEdit!, user.uid, storyUpdatePayload);
       Alert.alert('Success', 'Your story has been updated.');
-      router.back();
+      router.navigate('/(tabs)/feed');
     } catch (error) {
       console.error('Error updating story:', error);
       Alert.alert('Error', `Failed to update your story: ${ (error as Error).message }`);
@@ -476,6 +488,12 @@ const CreateStoryScreen = () => {
       // Check for returned parameters from selectMembersScreen
       const returnedPurpose = params?.returnedPurpose as string | undefined;
       const returnedSelectedIds = params?.selectedIds as string | undefined;
+      
+      // Check for returned parameters from selectLocationScreen
+      const returnedLocationAddress = params?.selectedLocation as string | undefined;
+      const returnedLocationLat = params?.selectedLocationLat as string | undefined;
+      const returnedLocationLng = params?.selectedLocationLng as string | undefined;
+      const fromScreen = params?.fromScreen as string | undefined;
 
       if (returnedSelectedIds) {
         try {
@@ -492,6 +510,28 @@ const CreateStoryScreen = () => {
           }
         } catch (e) {
           console.error("Error processing returned member IDs:", e);
+        }
+      }
+
+      if (fromScreen === 'selectLocation' && returnedLocationAddress && returnedLocationLat && returnedLocationLng) {
+        const lat = parseFloat(returnedLocationLat);
+        const lng = parseFloat(returnedLocationLng);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          setLocation({
+            latitude: lat,
+            longitude: lng,
+            address: returnedLocationAddress,
+          });
+          setShowLocation(true); // Ensure the location section is visible
+          // Clear params to avoid re-processing
+          router.setParams({ 
+            selectedLocation: undefined, 
+            selectedLocationLat: undefined, 
+            selectedLocationLng: undefined,
+            fromScreen: undefined 
+          });
+        } else {
+          console.error("Error parsing returned location coordinates:", {returnedLocationLat, returnedLocationLng});
         }
       }
     });
@@ -723,11 +763,20 @@ const CreateStoryScreen = () => {
   };
 
   const handleAddLocation = () => {
-    // Placeholder for map integration
-    Alert.alert("Add Location", "Apple Maps integration for location selection will be implemented here.");
-    // For now, let's simulate selecting a location
-    // setLocation({ latitude: 37.78825, longitude: -122.4324, address: "San Francisco, CA" });
-    // setShowLocation(true); // Or toggle it from the details modal
+    // Navigate to SelectLocationScreen
+    // Pass current location if available, so the map can focus there initially
+    const currentLocationParam = location 
+      ? JSON.stringify({ latitude: location.latitude, longitude: location.longitude }) 
+      : undefined;
+
+    router.push({
+      pathname: '/selectLocation',
+      params: { 
+        previousPath: '/(screens)/createStory', // ADDED leading slash
+        currentLocation: location?.address || currentLocationParam, // Pass address if available, else coords string
+      }
+    } as any);
+    // Location state will be updated by the useEffect hook when returning from selectLocation
   };
 
   // MARK: - Date Formatting
@@ -749,12 +798,25 @@ const CreateStoryScreen = () => {
   const detailsActions: ActionSheetAction[] = [
     { title: showSubtitle ? 'Remove Subtitle' : 'Add Subtitle', onPress: () => { setShowSubtitle(!showSubtitle); setDetailsActionSheetVisible(false); } },
     { title: showDate ? 'Remove Date' : 'Add Date', onPress: () => { setShowDate(!showDate); setDetailsActionSheetVisible(false); } },
-    { title: showLocation ? 'Remove Location' : 'Add Location', onPress: () => {
-        if (showLocation) { setShowLocation(false); setLocation(null); } else { setShowLocation(true); handleAddLocation(); }
+    { title: showLocation ? 'Edit Location' : 'Add Location', onPress: () => {
+        handleAddLocation(); 
         setDetailsActionSheetVisible(false);
       }
     },
-    { title: 'Cancel', onPress: () => setDetailsActionSheetVisible(false), style: 'cancel' },
+    // Conditionally add "Remove Location" action
+    ...(showLocation ? 
+      [{
+        title: 'Remove Location', 
+        onPress: () => { 
+          setShowLocation(false); 
+          setLocation(null); 
+          setDetailsActionSheetVisible(false); 
+        }, 
+        style: 'destructive' as const 
+      } as ActionSheetAction] 
+      : []
+    ),
+    { title: 'Cancel', onPress: () => setDetailsActionSheetVisible(false), style: 'cancel' as const },
   ];
 
   // MARK: - Add Content Action Sheet Actions
@@ -980,9 +1042,8 @@ const CreateStoryScreen = () => {
             <>
               <View style={styles.inputRow}>
                 <MaterialIcons name="location-pin" size={24} color={styles.inputIcon.color} style={styles.inputIcon} />
-                <Text style={styles.inputRowText}>Location</Text>
                 <View style={styles.inputRowValueContainer}>
-                  <Text style={styles.inputRowValueText} numberOfLines={1}>{location?.address || 'No location set'}</Text>
+                  <Text style={styles.inputRowValueText}>{location?.address || 'No location set'}</Text>
                   <TouchableOpacity onPress={() => { setShowLocation(false); setLocation(null); }} style={{ marginLeft: 10 }}>
                     <Ionicons name="remove-circle-outline" size={22} color="red" />
                   </TouchableOpacity>
@@ -1166,25 +1227,28 @@ const styles = StyleSheet.create({
   },
   inputRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start', 
     paddingVertical: 12,
   },
   inputIcon: {
     marginRight: 12,
     color: '#1A4B44', 
+    marginTop: Platform.OS === 'ios' ? 0 : 2, // Slight adjustment for Android icon alignment with flex-start
   },
   inputRowText: { 
     fontSize: 16,
     color: '#222222', 
-    flex: 1, 
+    marginRight: 8, // Added margin for spacing
   },
   inputRowValueContainer: { 
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start', // Changed to flex-start for better multiline text alignment with button
+    flex: 1, // Added flex: 1 to allow this container to take available space
   },
   inputRowValueText: { 
     fontSize: 16,
     color: '#555555', 
+    flexShrink: 1, // Added to allow text to wrap and not push the button
   },
   inputRowChevron: { // Kept for potential future use
     marginLeft: 8,
