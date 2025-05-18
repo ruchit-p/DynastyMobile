@@ -1020,7 +1020,7 @@ const CreateStoryScreen = () => {
 
           {showSubtitle && (
             <>
-              <View style={styles.inputRow}>
+              <View style={[styles.inputRow, styles.subtitleInputRow]}> 
                 <TextInput
                   style={[styles.inputField, { flex: 1 }]}
                   placeholder="Subtitle"
@@ -1028,11 +1028,9 @@ const CreateStoryScreen = () => {
                   value={subtitle}
                   onChangeText={setSubtitle}
                 />
-                <View style={styles.inputRowValueContainer}>
-                  <TouchableOpacity onPress={() => setShowSubtitle(false)} style={{ marginLeft: 10 }}>
-                    <Ionicons name="remove-circle-outline" size={22} color="red" />
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity onPress={() => setShowSubtitle(false)} style={styles.removeButtonOnlyContainer}>
+                  <Ionicons name="remove-circle-outline" size={22} color="red" />
+                </TouchableOpacity>
               </View>
               <View style={styles.separatorThinNoMargin} />
             </>
@@ -1041,14 +1039,14 @@ const CreateStoryScreen = () => {
           {showDate && (
             <>
               <TouchableOpacity
-                style={styles.inputRow}
+                style={styles.inputRow} // Keep alignItems: 'flex-start' for this row if text can wrap
                 onPress={showDatePicker}
               >
                 <MaterialCommunityIcons name="calendar-month-outline" size={24} color={styles.inputIcon.color} style={styles.inputIcon} />
                 <Text style={styles.inputRowText}>Story Date</Text>
-                <View style={styles.inputRowValueContainer}>
+                <View style={[styles.inputRowValueContainer, styles.valueContainerWithRightButton]}>
                   <Text style={styles.inputRowValueText}>{formatDate(storyDate)}</Text>
-                  <TouchableOpacity onPress={() => setShowDate(false)} style={{ marginLeft: 10 }}>
+                  <TouchableOpacity onPress={() => setShowDate(false)} style={styles.removeButtonAlignedRight}>
                     <Ionicons name="remove-circle-outline" size={22} color="red" />
                   </TouchableOpacity>
                 </View>
@@ -1059,11 +1057,13 @@ const CreateStoryScreen = () => {
           
           {showLocation && (
             <>
-              <View style={styles.inputRow}>
+              <View style={styles.inputRow}> {/* Keep alignItems: 'flex-start' for this row if text can wrap */}
                 <MaterialIcons name="location-pin" size={24} color={styles.inputIcon.color} style={styles.inputIcon} />
-                <View style={styles.inputRowValueContainer}>
-                  <Text style={styles.inputRowValueText}>{location?.address || 'No location set'}</Text>
-                  <TouchableOpacity onPress={() => { setShowLocation(false); setLocation(null); }} style={{ marginLeft: 10 }}>
+                <View style={[styles.inputRowValueContainer, styles.valueContainerWithRightButton]}>
+                  <Text style={styles.inputRowValueText} numberOfLines={3} ellipsizeMode="tail">
+                    {location?.address || 'No location set'}
+                  </Text>
+                  <TouchableOpacity onPress={() => { setShowLocation(false); setLocation(null); }} style={styles.removeButtonAlignedRight}>
                     <Ionicons name="remove-circle-outline" size={22} color="red" />
                   </TouchableOpacity>
                 </View>
@@ -1249,6 +1249,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start', 
     paddingVertical: 12,
   },
+  subtitleInputRow: { // Added for subtitle specific alignment
+    alignItems: 'center', // Vertically center items in subtitle row
+  },
   inputIcon: {
     marginRight: 12,
     color: '#1A4B44', 
@@ -1263,11 +1266,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start', // Changed to flex-start for better multiline text alignment with button
     flex: 1, // Added flex: 1 to allow this container to take available space
+    // justifyContent: 'space-between', // Avoid using this here if text needs to be left-aligned primarily
+  },
+  valueContainerWithRightButton: { // New style for date and location value + button
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between', // Push button to the right
+    alignItems: 'flex-start', // Align items at the start of the cross axis (top for row)
   },
   inputRowValueText: { 
     fontSize: 16,
     color: '#555555', 
     flexShrink: 1, // Added to allow text to wrap and not push the button
+    marginRight: 8, // Add some space between text and button if they are close
+  },
+  removeButtonOnlyContainer: { // For subtitle's remove button
+    marginLeft: 10, // Keep existing margin
+    // Vertical centering is handled by subtitleInputRow's alignItems: 'center'
+  },
+  removeButtonAlignedRight: { // For date and location remove buttons
+    // marginLeft: 10, // No longer needed as justifyContent: 'space-between' handles spacing
+    // alignItems: 'center' is not needed as the parent valueContainerWithRightButton handles vertical alignment of its children
   },
   inputRowChevron: { // Kept for potential future use
     marginLeft: 8,
