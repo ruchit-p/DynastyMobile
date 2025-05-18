@@ -24,7 +24,7 @@ import { useImageUpload } from '../../hooks/useImageUpload';
 // Custom components
 import FullScreenDatePicker from '../../components/ui/FullScreenDatePicker';
 import TimePickerModal from '../../components/ui/TimePickerModal';
-import MediaGallery from '../../components/ui/MediaGallery'; // MODIFIED: Changed import alias
+import MediaGallery, { MediaItem } from '../../components/ui/MediaGallery';
 import { Colors } from '../../constants/Colors'; // Import Colors for dynastyGreen
 
 // Define the primary green color from the app's theme
@@ -62,16 +62,8 @@ interface NewEventData {
   requireRsvp: boolean;
   rsvpDeadline: Date | null;
   
-  // Cover photos - now an array of MediaItem-like objects
-  photos: Array<{
-    uri: string;
-    type: 'image' | 'video';
-    asset?: ImagePicker.ImagePickerAsset;
-    duration?: number;
-    width?: number;
-    height?: number;
-    file?: File; // for web, RN uses URI and asset
-  }>;
+  // MODIFIED: Cover photos now explicitly MediaItem[]
+  photos: MediaItem[]; 
   
   // Invite settings
   inviteType: 'all' | 'select';
@@ -127,17 +119,12 @@ const CreateEventScreen = () => {
     showGuestList: true,
     requireRsvp: true,
     rsvpDeadline: new Date(new Date().setDate(new Date().getDate() + 7)), // Default 1 week from now
-    photos: [],
+    photos: [], // Initialize as empty MediaItem array
     inviteType: 'all',
     selectedMembers: [],
   });
 
   const [isCreatingEvent, setIsCreatingEvent] = useState<boolean>(false);
-
-  // Cover photo specific states
-  const [photoPreviewUrls, setPhotoPreviewUrls] = useState<string[]>([]);
-  const [photoUploadProgress, setPhotoUploadProgress] = useState<number[]>([]); // Progress per photo
-  const [photoUploadErrors, setPhotoUploadErrors] = useState<(string | null)[]>([]); // Error per photo
 
   // Family members state
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
@@ -274,88 +261,183 @@ const CreateEventScreen = () => {
     })();
   }, []);
 
-  // MARK: - Photo Handling Logic
+  // MARK: - Photo Handling Logic (Adapted for MediaGallery)
 
-  const maxPhotos = 5; // Define maxPhotos, used by picker and gallery
+  const maxPhotos = 5; 
 
-  const handlePickImage = async () => {
+  // New handler for adding media via MediaGallery's request
+  const handlePickMediaForEvent = async () => {
     if (Platform.OS !== 'web' && mediaLibraryPermission !== ImagePicker.PermissionStatus.GRANTED) {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       setMediaLibraryPermission(status);
       if (status !== ImagePicker.PermissionStatus.GRANTED) {
-        Alert.alert("Permission Required", "We need access to your photos to add images.");
+        Alert.alert("Permission Required", "Access to your photos and videos is needed.");
         return;
       }
     }
 
     if (newEvent.photos.length >= maxPhotos) {
-      Alert.alert("Maximum Photos Reached", `You can only add up to ${maxPhotos} photos.`);
+      Alert.alert("Maximum Media Reached", `You can only add up to ${maxPhotos} photos/videos.`);
       return;
     }
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images, // For now, only images for events. Change to .All to include videos.
+        mediaTypes: ImagePicker.MediaTypeOptions.All, // Allow images and videos
         allowsMultipleSelection: true,
         selectionLimit: maxPhotos - newEvent.photos.length,
         quality: 0.8,
-        // MODIFICATION: Include asset information if needed by MediaGallery or for uploads
-        // exif: false, // example of other options
-        // base64: false, // example of other options
+        // videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720, // Example for video quality control
       });
 
       if (!result.canceled && result.assets) {
-        const newMediaItems = result.assets.map(asset => ({
-          uri: asset.uri,
-          type: 'image' as 'image' | 'video', // Explicitly 'image'
-          asset: asset, // Store the original asset
-          width: asset.width,
-          height: asset.height,
-          // duration: asset.duration // Only if mediaTypes can include video
-        }));
+        const newMediaItems: MediaItem[] = result.assets.map(asset => {
+          const mediaType: 'image' | 'video' = (asset.duration && asset.duration > 0) ? 'video' : 'image';
+          return {
+            uri: asset.uri,
+            type: mediaType,
+            asset: asset, // Store the original asset for potential use by useImageUpload
+            width: asset.width,
+            height: asset.height,
+            duration: mediaType === 'video' ? (asset.duration === null ? undefined : asset.duration) : undefined,
+          };
+        });
         
         setNewEvent(prev => ({
           ...prev,
           photos: [...prev.photos, ...newMediaItems].slice(0, maxPhotos)
         }));
-        // photoPreviewUrls might be redundant if MediaGallery handles previews directly
-        // setPhotoPreviewUrls(prev => [...prev, ...newMediaItems.map(p => p.uri)].slice(0, maxPhotos));
       }
     } catch (error) {
-      console.error("Error picking images: ", error);
-      Alert.alert("Image Picker Error", "Could not load images from library.");
+      console.error("Error picking media: ", error);
+      Alert.alert("Media Picker Error", "Could not load items from library.");
     }
   };
 
-  const removePhoto = (index: number) => {
-    const updatedPhotos = [...newEvent.photos];
-    updatedPhotos.splice(index, 1);
-    setNewEvent(prev => ({ ...prev, photos: updatedPhotos }));
-    // setPhotoPreviewUrls(updatedPhotos.map(p => p.uri));
+  // New handler for removing media, called by MediaGallery
+  const handleRemoveMediaFromEvent = (index: number) => {
+    setNewEvent(prev => ({
+      ...prev,
+      photos: prev.photos.filter((_, i) => i !== index)
+    }));
+  };
+  
+  // New handler for replacing media, called by MediaGallery
+  const handleReplaceMediaInEvent = async (index: number) => {
+    if (Platform.OS !== 'web' && mediaLibraryPermission !== ImagePicker.PermissionStatus.GRANTED) {
+      // ... (permission check as in handlePickMediaForEvent)
+      Alert.alert("Permission Required", "Access to your photos and videos is needed.");
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        allowsEditing: false, // Typically false for replacement to keep it simple
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const replacedAsset = result.assets[0];
+        const mediaType: 'image' | 'video' = (replacedAsset.duration && replacedAsset.duration > 0) ? 'video' : 'image';
+        
+        const newMediaItem: MediaItem = {
+          uri: replacedAsset.uri,
+          type: mediaType,
+          asset: replacedAsset,
+          width: replacedAsset.width,
+          height: replacedAsset.height,
+          duration: mediaType === 'video' ? (replacedAsset.duration === null ? undefined : replacedAsset.duration) : undefined,
+        };
+
+        setNewEvent(prev => ({
+          ...prev,
+          photos: prev.photos.map((item, i) => i === index ? newMediaItem : item)
+        }));
+      }
+    } catch (error) {
+      console.error("Error replacing media: ", error);
+      Alert.alert("Media Picker Error", "Could not replace the item.");
+    }
   };
 
-  const formatDate = (date: Date | null): string => {
-    if (!date) return '';
-    // Example format: Wed, May 7 at 5:00 AM (adjust options as needed for exact format)
-    return date.toLocaleDateString('en-US', { // Using toLocaleDateString for just date part
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
+  // ADAPTED from createStory.tsx: Function to upload all media items (images/videos)
+  const uploadAllEventMedia = async (mediaItems: MediaItem[]) => {
+    const localMediaToUpload = mediaItems.filter(
+      item => typeof item.uri === 'string' && (item.uri.startsWith('file://') || item.uri.startsWith('content://'))
+    );
 
-  const formatTime = (timeString: string): string => {
-    if (!timeString) return '';
-    const [hours, minutes] = timeString.split(':');
-    const date = new Date();
-    date.setHours(parseInt(hours, 10));
-    date.setMinutes(parseInt(minutes, 10));
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
+    if (localMediaToUpload.length === 0) {
+      // Return URLs of already uploaded media (if any) mixed with local non-uploadable URIs (e.g. http)
+      return mediaItems.map(item => item.uri);
+    }
+
+    setIsUploading(true);
+    setTotalUploads(localMediaToUpload.length);
+    setCompletedUploads(0);
+    setOverallProgress(0);
+
+    const uploadedUrls: string[] = [];
+    // Keep track of all items, replacing local URIs with remote ones upon successful upload
+    const finalMediaUris = [...mediaItems.map(item => item.uri)]; 
+
+    for (let i = 0; i < mediaItems.length; i++) {
+      const item = mediaItems[i];
+      if (typeof item.uri === 'string' && (item.uri.startsWith('file://') || item.uri.startsWith('content://'))) {
+        try {
+          const uniqueFileName = `${auth.currentUser!.uid}-${Date.now()}-${i}-${item.uri.split('/').pop()}`;
+          const storagePath = `eventImages/${auth.currentUser!.uid}/${newEvent.title.replace(/\s+/g, '_')}_${Date.now()}_${i}/${uniqueFileName}`;
+          
+          console.log(`[uploadAllEventMedia] Uploading: ${item.uri} to ${storagePath}`);
+          const imageUrl = await uploadImage(
+            item.uri,
+            storagePath, // Pass the full path for the file name to be included by uploadImage
+            (progress) => {
+              // Progress for this single item
+              // Overall progress needs to sum up fractions from each item
+              // This simplified approach updates overall based on completed items + current item's progress
+              const currentItemProgressFraction = progress / 100 / totalUploads;
+              const completedItemsFraction = completedUploads / totalUploads;
+              setOverallProgress((completedItemsFraction + currentItemProgressFraction) * 100);
+            }
+          );
+
+          if (imageUrl) {
+            console.log(`[uploadAllEventMedia] Uploaded ${item.uri} to ${imageUrl}`);
+            finalMediaUris[i] = imageUrl; // Update the URI in the final list
+            uploadedUrls.push(imageUrl); // Collect successfully uploaded URLs for the payload
+            setCompletedUploads(prev => prev + 1);
+            // Ensure progress reflects full completion for this item
+             setOverallProgress( (completedUploads + 1) / totalUploads * 100);
+
+          } else {
+            console.warn(`[uploadAllEventMedia] Upload failed for ${item.uri}, URL was null.`);
+            // finalMediaUris[i] remains the local URI, it won't be in uploadedUrls
+          }
+        } catch (error) {
+          console.error(`[uploadAllEventMedia] Error uploading media ${item.uri}:`, error);
+          // finalMediaUris[i] remains local URI
+        }
+      } else {
+        // This URI is not local (e.g. already an http URL), so it's considered "uploaded" or pre-existing.
+        // It's already in finalMediaUris. If it's a non-local URI that should be part of coverPhotos,
+        // ensure it's also included in a way that your backend/display logic can handle it.
+        // For simplicity, we only add to uploadedUrls if it was processed by this function.
+        // If you need to pass ALL uris (local (failed) + remote (successful) + pre-existing http) to backend, adjust below.
+      }
+    }
+    
+    // After loop, ensure progress is 100% if all attempted uploads are done (success or fail)
+    setOverallProgress(100); 
+    setIsUploading(false);
+    
+    // IMPORTANT: The backend `createEvent` function expects `coverPhotos` to be an array of URLs.
+    // We should return the URLs of *successfully uploaded* media.
+    // If an existing photo was already a URL, it should also be included if it's still in newEvent.photos.
+    // `finalMediaUris` contains original URIs, with local ones replaced by remote ones if upload was successful.
+    // We need to decide what goes to the backend: just newly uploaded, or all current URIs.
+    // Assuming we want to save ALL current URIs that are in newEvent.photos, where local ones are replaced if uploaded.
+    return finalMediaUris; 
   };
 
   const handleCreateEvent = async () => {
@@ -403,82 +485,25 @@ const CreateEventScreen = () => {
     }
 
     setIsCreatingEvent(true);
-    let eventImageUrls: string[] = []; 
 
     try {
-      // Upload images if any are selected
-      if (newEvent.photos.length > 0) {
-        console.log('[CreateEvent] Attempting to upload event photos:', newEvent.photos.length);
-        
-        const uploadPromises = newEvent.photos.map(async (photo, index) => {
-          try {
-            // setPhotoUploadProgress(prev => { const p = [...prev]; p[index] = 10; return p; }); // Initial progress handled by onProgress(0) in hook
-            const imagePath = `eventImages/${auth.currentUser!.uid}/${newEvent.title.replace(/\s+/g, '_')}_${Date.now()}_${index}`;
-            
-            const imageUrl = await uploadImage(
-              photo.uri, 
-              imagePath,
-              (progressValue) => { // Pass the onProgress callback
-                setPhotoUploadProgress(prev => {
-                  const p = [...prev]; 
-                  p[index] = progressValue; 
-                  return p; 
-                });
-              }
-            ); 
-            
-            // if (imageUrl) { // Progress to 100% is handled by onProgress(100) in hook upon success
-            //   setPhotoUploadProgress(prev => { const p = [...prev]; p[index] = 100; return p; });
-            // }
-            // No need to manually set to 100 here, hook's onProgress(100) on success will do it.
+      // Upload all media (images and videos) from newEvent.photos
+      const allCoverMediaUrls = await uploadAllEventMedia(newEvent.photos);
+      
+      // Simplified check for upload failures: if there were local photos to upload,
+      // but none of them resulted in an HTTP URL in the final list from uploadAllEventMedia.
+      const localPhotosAttempted = newEvent.photos.some(p => p.uri.startsWith('file://') || p.uri.startsWith('content://'));
+      const successfulHttpUploads = allCoverMediaUrls.some(url => url.startsWith('http'));
 
-            if (imageUrl) {
-              return imageUrl;
-            } else {
-              // Error state for this specific photo is already managed by the hook setting its 'error' state
-              // and by setPhotoUploadErrors if that logic is kept or enhanced.
-              // For Promise.allSettled, a failed upload (null URL) will be a fulfilled promise with value null.
-              setPhotoUploadErrors(prev => { const e = [...prev]; e[index] = "Upload failed (null URL)"; return e; });
-              // throw new Error(`Upload failed for photo ${index}`); // No need to throw if we want allSettled to complete
-              return null; // Explicitly return null for failed uploads to be handled by allSettled
-            }
-          } catch (error) {
-            console.error(`Error uploading photo ${index}:`, error);
-            setPhotoUploadErrors(prev => { const e = [...prev]; e[index] = (error as Error).message; return e; });
-            // throw error; // No need to re-throw for Promise.allSettled, let it return a rejected status
-            return null; // Explicitly return null for caught errors to be handled by allSettled
-          }
-        });
-
-        try {
-          const results = await Promise.allSettled(uploadPromises);
-          eventImageUrls = results
-            .filter(result => result.status === 'fulfilled' && result.value)
-            .map(result => (result as PromiseFulfilledResult<string>).value); // Value here is string | null
-          
-          // Filter out nulls again in case some uploads returned null successfully (handled error internally)
-          eventImageUrls = eventImageUrls.filter(url => url !== null) as string[];
-
-          const failedUploadsCount = results.filter(result => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value)).length;
-          if (failedUploadsCount > 0) {
-            console.warn(`[CreateEvent] ${failedUploadsCount} image(s) failed to upload or returned null.`);
-            // Alert only if all uploads failed, or provide a more nuanced message
-            if (eventImageUrls.length === 0 && newEvent.photos.length > 0) {
-              Alert.alert("Image Upload Failed", "All images failed to upload. Please try again.");
-              setIsCreatingEvent(false);
-              return;
-            } else if (failedUploadsCount > 0 && eventImageUrls.length > 0) {
-              Alert.alert("Partial Upload", `${failedUploadsCount} image(s) failed to upload. Continuing with successful uploads.`);
-            }
-          }
-          console.log('[CreateEvent] Uploaded Event Image URLs:', eventImageUrls);
-        } catch (uploadProcessingError) { 
-          console.error("[CreateEvent] Error during image upload processing:", uploadProcessingError);
-          Alert.alert("Image Upload Failed", "Some images could not be uploaded. Please try again.");
-          setIsCreatingEvent(false);
-          return;
-        }
+      if (localPhotosAttempted && !successfulHttpUploads && newEvent.photos.length > 0) {
+        // This condition implies that an attempt was made to upload local files, but no HTTP URLs were produced.
+        // This could mean all uploads failed.
+        Alert.alert("Upload Failed", "Some media items failed to upload. Please check and try again.");
+        setIsCreatingEvent(false); // Stop event creation
+        return; // Exit if critical uploads failed
       }
+      // Further partial failure warnings can be added here if needed, by comparing
+      // the number of initial local files vs the number of http links in allCoverMediaUrls.
 
       // Helper to format date to YYYY-MM-DD
       const formatDateToYYYYMMDD = (date: Date | null): string | null => {
@@ -509,10 +534,10 @@ const CreateEventScreen = () => {
         invitedMembers: newEvent.inviteType === "all" 
             ? familyMembers.map(member => member.id) // Assumes familyMembers is populated correctly
             : newEvent.selectedMembers,
-        coverPhotos: eventImageUrls, // Array of uploaded image URLs
+        coverPhotos: allCoverMediaUrls, 
       };
 
-      console.log("[CreateEvent] Calling Firebase Function 'createEvent' with payload:", eventPayload);
+      console.log("[CreateEvent] Calling Firebase Function 'createEvent' with payload:", JSON.stringify(eventPayload, null, 2));
 
       const createEventFunction = functions.httpsCallable('createEvent');
       const result = await createEventFunction(eventPayload); // Result structure might be directly data
@@ -606,41 +631,33 @@ const CreateEventScreen = () => {
     return date;
   };
 
-  // Handler to replace a specific photo
-  const handleReplaceImage = async (index: number) => {
-    if (Platform.OS !== 'web' && mediaLibraryPermission !== ImagePicker.PermissionStatus.GRANTED) {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      setMediaLibraryPermission(status);
-      if (status !== ImagePicker.PermissionStatus.GRANTED) {
-        Alert.alert("Permission Required", "We need access to your photos to replace the image.");
-        return;
-      }
-    }
+  const [isUploading, setIsUploading] = useState(false); // General uploading state for all media
+  const [overallProgress, setOverallProgress] = useState(0); // Overall progress for all media
+  const [totalUploads, setTotalUploads] = useState(0); // Total number of media items to upload
+  const [completedUploads, setCompletedUploads] = useState(0); // Number of successfully uploaded media items
 
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images, // Assuming replace with image
-        allowsEditing: false, 
-        quality: 0.8,
-      });
+  // Re-add formatDate and formatTime as they are used for event date/time display
+  const formatDate = (date: Date | null): string => {
+    if (!date) return '';
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const replacedAsset = result.assets[0];
-        const updatedPhotos = [...newEvent.photos];
-        updatedPhotos[index] = {
-          uri: replacedAsset.uri,
-          type: 'image', // Explicitly 'image'
-          asset: replacedAsset,
-          width: replacedAsset.width,
-          height: replacedAsset.height,
-        };
-        setNewEvent(prev => ({ ...prev, photos: updatedPhotos }));
-        // setPhotoPreviewUrls(updatedPhotos.map(p => p.uri));
-      }
-    } catch (error) {
-      console.error("Error replacing image: ", error);
-      Alert.alert("Image Picker Error", "Could not replace the image.");
-    }
+  const formatTime = (timeString: string): string => {
+    if (!timeString) return '';
+    const [hours, minutes] = timeString.split(':');
+    const date = new Date();
+    date.setHours(parseInt(hours, 10));
+    date.setMinutes(parseInt(minutes, 10));
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
   return (
@@ -651,15 +668,12 @@ const CreateEventScreen = () => {
         keyboardShouldPersistTaps="handled"
       >
         <MediaGallery
-          media={newEvent.photos} // MODIFIED: Prop name and data structure
-          onAddMedia={handlePickImage} 
-          onRemoveMedia={removePhoto}
-          onReplaceMedia={handleReplaceImage}
-          maxMedia={maxPhotos} // MODIFIED: Prop name
-          // iconColor={dynastyGreen} // Retained if specific styling is desired
-          // addIconColor, replaceIconColor can be customized if needed
-          // showRemoveButton, showReplaceButton default to true
-          // allowAddingMore defaults to true
+          media={newEvent.photos}
+          onAddMedia={handlePickMediaForEvent}
+          onRemoveMedia={handleRemoveMediaFromEvent}
+          onReplaceMedia={handleReplaceMediaInEvent}
+          maxMedia={maxPhotos}
+          style={styles.mediaGallerySection}
         />
 
         <View style={styles.formSection}>
@@ -1168,6 +1182,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
+  },
+  mediaGallerySection: {
+    marginTop: 20,
+    marginHorizontal: 15,
+    backgroundColor: '#FFFFFF', 
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05, 
+    shadowRadius: 3,
+    elevation: 2,
   },
 });
 

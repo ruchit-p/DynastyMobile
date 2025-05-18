@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, ScrollView, Image, TouchableOpacity, Linking, Platform, ActivityIndicator, Share, StyleSheet } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { View, ScrollView, Image, TouchableOpacity, Linking, Platform, ActivityIndicator, Share, StyleSheet, Alert } from 'react-native';
+import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import ThemedText from '@/components/ThemedText';
 import ThemedView from '@/components/ThemedView';
-import AppHeader from '@/components/ui/AppHeader';
 import Screen from '@/components/ui/Screen';
 import Button from '@/components/ui/Button';
 import Avatar from '@/components/ui/Avatar';
@@ -17,9 +16,12 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { getEventDetailsMobile, MobileEventDetails } from '@src/lib/firebaseUtils';
 import { formatDate, formatTimeAgo, toDate } from '@src/lib/dateUtils';
 import { useAuth } from '@/src/contexts/AuthContext';
+import AnimatedActionSheet, { ActionSheetAction } from '@/components/ui/AnimatedActionSheet';
+import MediaGallery, { MediaItem } from '@/components/ui/MediaGallery';
 
 const EventDetailScreen = () => {
   const router = useRouter();
+  const navigation = useNavigation();
   const params = useLocalSearchParams<{ eventId: string }>();
   const eventId = params.eventId;
   const colorScheme = useColorScheme();
@@ -30,25 +32,67 @@ const EventDetailScreen = () => {
   const [eventDetails, setEventDetails] = useState<MobileEventDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isActionSheetVisible, setActionSheetVisible] = useState(false);
 
   useEffect(() => {
     if (eventId) {
       const fetchEventData = async () => {
         setIsLoading(true);
         setError(null);
+        navigation.setOptions({ title: 'Loading Event...' });
         try {
           console.log(`[EventDetailScreen] Fetching details for event: ${eventId}`);
           const details = await getEventDetailsMobile(eventId);
           if (details) {
             console.log('[EventDetailScreen] Event details fetched:', details);
             setEventDetails(details);
+
+            const isHost = user?.uid === details.hostId;
+            navigation.setOptions({
+              ...commonHeaderOptions,
+              headerTitle: details.title.length > 25 ? `${details.title.substring(0, 22)}...` : details.title,
+              headerLeft: () => (
+                <TouchableOpacity 
+                  onPress={() => router.back()} 
+                  style={styles.headerButton}
+                  accessibilityLabel="Go back"
+                  accessibilityHint="Returns to the previous screen"
+                >
+                  <Ionicons name="arrow-back" size={24} color={commonHeaderOptions.headerTintColor || Colors[scheme].icon.primary} />
+                </TouchableOpacity>
+              ),
+              headerRight: () => (
+                <View style={styles.headerRightContainer}>
+                  <TouchableOpacity 
+                    onPress={handleShareEventInternal}
+                    style={styles.headerButton}
+                    accessibilityLabel="Share event"
+                    accessibilityHint="Opens sharing options for this event"
+                  >
+                    <Ionicons name="share-social-outline" size={22} color={commonHeaderOptions.headerTintColor || Colors[scheme].icon.primary} />
+                  </TouchableOpacity>
+                  {isHost && (
+                    <TouchableOpacity 
+                      onPress={() => setActionSheetVisible(true)} 
+                      style={[styles.headerButton, { marginLeft: Spacing.sm }]}
+                      accessibilityLabel="Event options"
+                      accessibilityHint="Opens options to edit or delete the event"
+                    >
+                      <Ionicons name="ellipsis-horizontal" size={24} color={commonHeaderOptions.headerTintColor || Colors[scheme].icon.primary} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ),
+            });
           } else {
             console.log('[EventDetailScreen] No event details returned or event not found.');
             setError('Event not found or an error occurred.');
+            navigation.setOptions({ title: 'Error' });
           }
         } catch (err: any) {
           console.error('[EventDetailScreen] Error fetching event details:', err);
           setError(err.message || 'Failed to load event details.');
+          navigation.setOptions({ title: 'Error' });
         } finally {
           setIsLoading(false);
         }
@@ -57,10 +101,11 @@ const EventDetailScreen = () => {
     } else {
       setError("Event ID is missing.");
       setIsLoading(false);
+      navigation.setOptions({ title: 'Error' });
     }
-  }, [eventId]);
+  }, [eventId, navigation, router, user, scheme]);
 
-  const handleShareEvent = async () => {
+  const handleShareEventInternal = async () => {
     if (!eventDetails) return;
     try {
       await Share.share({
@@ -69,8 +114,61 @@ const EventDetailScreen = () => {
       });
     } catch (shareError) {
       console.error('Error sharing event:', shareError);
+      Alert.alert('Error', 'Could not share the event.');
     }
   };
+
+  const handleEditEvent = () => {
+    if (!eventDetails) return;
+    router.push({
+      pathname: '/(screens)/createEvent',
+      params: { eventId: eventDetails.id, editMode: 'true' },
+    });
+    setActionSheetVisible(false);
+  };
+
+  const handleDeleteEvent = async () => {
+    if (!eventDetails || !user) return;
+    setActionSheetVisible(false);
+    Alert.alert(
+      "Delete Event",
+      "Are you sure you want to delete this event? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              Alert.alert("Placeholder", "Delete functionality to be implemented.");
+            } catch (error) {
+              console.error("Error deleting event:", error);
+              Alert.alert("Error", "An unexpected error occurred while deleting the event.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const eventHostActions: ActionSheetAction[] = [
+    {
+      title: 'Edit Event',
+      icon: 'create-outline',
+      onPress: handleEditEvent,
+    },
+    {
+      title: 'Delete Event',
+      icon: 'trash-outline',
+      style: 'destructive',
+      onPress: handleDeleteEvent,
+    },
+    {
+      title: 'Cancel',
+      style: 'cancel',
+      onPress: () => setActionSheetVisible(false),
+    },
+  ];
 
   const handleOpenMap = () => {
     if (!eventDetails?.location) return;
@@ -88,7 +186,6 @@ const EventDetailScreen = () => {
   const handleContactHost = () => {
     if (!eventDetails?.host?.id || !user) return;
     console.log("Contacting host:", eventDetails.host.id);
-    // Example: router.push({ pathname: '/(screens)/chatDetail', params: { recipientId: eventDetails.host.id } });
     alert("Navigate to chat with host: " + eventDetails.host.name);
   };
 
@@ -110,28 +207,6 @@ const EventDetailScreen = () => {
     </View>
   );
 
-  const headerLeftComponent = () => (
-    <TouchableOpacity 
-      onPress={() => router.back()} 
-      style={styles.headerButton}
-      accessibilityLabel="Go back"
-      accessibilityHint="Returns to the previous screen"
-    >
-      <Ionicons name="chevron-back" size={24} color={Colors[scheme].icon.primary} />
-    </TouchableOpacity>
-  );
-
-  const headerRightComponent = () => (
-    <TouchableOpacity 
-      onPress={handleShareEvent} 
-      style={styles.headerButton}
-      accessibilityLabel="Share event"
-      accessibilityHint="Opens sharing options for this event"
-    >
-      <Ionicons name="share-social-outline" size={22} color={Colors[scheme].icon.primary} />
-    </TouchableOpacity>
-  );
-  
   if (isLoading) {
     return (
       <Screen safeArea style={styles.centeredContainer}>
@@ -169,29 +244,34 @@ const EventDetailScreen = () => {
   const rsvpDeadlineObject = eventDetails.rsvpDeadline ? toDate(eventDetails.rsvpDeadline) : null;
   const formattedRsvpDeadline = rsvpDeadlineObject ? `RSVP by ${formatDate(rsvpDeadlineObject, 'MMM d, yyyy')}` : null;
   
-  // Apply common header styling from headerConfig
-
   return (
     <Screen safeArea scroll>
-      <AppHeader 
-        title={eventDetails.title}
-        headerLeft={headerLeftComponent} 
-        headerRight={headerRightComponent}
-        testID="event-detail-header"
-      />
       <ThemedView style={styles.container} variant="primary">
-        {/* Event Cover Image */}
+        {/* Event Cover Media Gallery */}
         {eventDetails.coverPhotoUrls && eventDetails.coverPhotoUrls.length > 0 ? (
-          <Image source={{ uri: eventDetails.coverPhotoUrls[0] }} style={styles.eventImage} />
+          <MediaGallery
+            media={eventDetails.coverPhotoUrls.map(url => ({
+              uri: url,
+              type: 'image', // Assuming all coverPhotoUrls are images for now
+              // Add other MediaItem props if available or derivable, e.g., width, height, duration for videos
+            }))}
+            // Props to make it display-only, similar to storyDetail.tsx if applicable
+            onAddMedia={() => {}} // No action
+            onRemoveMedia={() => {}} // No action
+            onReplaceMedia={() => {}} // No action
+            showRemoveButton={false}
+            showReplaceButton={false}
+            allowAddingMore={false}
+            style={styles.mediaGalleryStyle} // Added a style for the gallery container itself if needed
+          />
         ) : (
-          <ThemedView style={[styles.eventImage, styles.placeholderImage]} variant="secondary">
+          <ThemedView style={[styles.eventImagePlaceholder, styles.placeholderImage]} variant="secondary"> {/* Changed style name for clarity */}
             <Ionicons name="images-outline" size={80} color={Colors[scheme].icon.secondary} />
             <ThemedText variant="bodyMedium" color="secondary" style={{marginTop: Spacing.sm}}>No event image</ThemedText>
           </ThemedView>
         )}
 
         <View style={styles.contentPadding}>
-          {/* Main Event Details Card */}
           <Card style={[styles.card, styles.eventDetailsCard]}>
             <Card.Content>
               <ThemedText variant="h2" style={styles.eventName}>{eventDetails.title}</ThemedText>
@@ -214,7 +294,6 @@ const EventDetailScreen = () => {
                 </TouchableOpacity>
               )}
               
-              {/* RSVP Button */}
               <View style={styles.rsvpContainer}>
                 <Button 
                   title={eventDetails.userStatus === 'going' ? "You're Going!" : "RSVP Now"} 
@@ -236,7 +315,6 @@ const EventDetailScreen = () => {
             </Card.Content>
           </Card>
 
-          {/* About Event */}
           {eventDetails.description && (
             <Card style={styles.card}>
               <Card.Header>
@@ -248,7 +326,6 @@ const EventDetailScreen = () => {
             </Card>
           )}
 
-          {/* Host Info */}
           {eventDetails.host && (
             <Card style={styles.card}>
               <Card.Header>
@@ -260,7 +337,6 @@ const EventDetailScreen = () => {
             </Card>
           )}
 
-          {/* Attendees List */}
           {eventDetails.attendees && eventDetails.attendees.length > 0 && eventDetails.showGuestList && (
             <Card style={styles.card}>
               <Card.Header>
@@ -274,7 +350,6 @@ const EventDetailScreen = () => {
             </Card>
           )}
 
-          {/* Comments Section */}
           {eventDetails.comments && eventDetails.comments.length > 0 && (
             <Card style={styles.card}>
               <Card.Header>
@@ -294,8 +369,78 @@ const EventDetailScreen = () => {
               </Card.Content>
             </Card>
           )}
+
+          {/* Additional Information Section */}
+          {(eventDetails.dresscode || eventDetails.whatToBring || eventDetails.additionalInfo) && (
+            <Card style={styles.card}>
+              <Card.Header>
+                <ThemedText variant="h4" style={styles.sectionTitleNoMargin}>Additional Information</ThemedText>
+              </Card.Header>
+              <Card.Content>
+                {eventDetails.dresscode && (
+                  <View style={styles.detailItemRow}>
+                    <Ionicons name="shirt-outline" size={20} color={Colors[scheme].icon.primary} style={styles.detailItemIcon} />
+                    <View style={styles.detailItemTextContainer}>
+                      <ThemedText variant="bodyMedium" style={styles.detailItemLabel}>Dress Code</ThemedText>
+                      <ThemedText variant="bodyMedium" color="secondary">{eventDetails.dresscode}</ThemedText>
+                    </View>
+                  </View>
+                )}
+                {eventDetails.whatToBring && (
+                  <View style={styles.detailItemRow}>
+                    <Ionicons name="briefcase-outline" size={20} color={Colors[scheme].icon.primary} style={styles.detailItemIcon} />
+                    <View style={styles.detailItemTextContainer}>
+                      <ThemedText variant="bodyMedium" style={styles.detailItemLabel}>What to Bring</ThemedText>
+                      <ThemedText variant="bodyMedium" color="secondary">{eventDetails.whatToBring}</ThemedText>
+                    </View>
+                  </View>
+                )}
+                {eventDetails.additionalInfo && (
+                  <View style={styles.detailItemRow}>
+                    <Ionicons name="information-circle-outline" size={20} color={Colors[scheme].icon.primary} style={styles.detailItemIcon} />
+                    <View style={styles.detailItemTextContainer}>
+                      <ThemedText variant="bodyMedium" style={styles.detailItemLabel}>More Info</ThemedText>
+                      <ThemedText variant="bodyMedium" color="secondary">{eventDetails.additionalInfo}</ThemedText>
+                    </View>
+                  </View>
+                )}
+              </Card.Content>
+            </Card>
+          )}
+
+          {/* Guest Options Section - Example for allowGuestPlusOne */}
+          <Card style={styles.card}>
+            <Card.Header>
+              <ThemedText variant="h4" style={styles.sectionTitleNoMargin}>Guest Options</ThemedText>
+            </Card.Header>
+            <Card.Content>
+              <View style={styles.detailItemRow}>
+                <Ionicons name="people-outline" size={20} color={Colors[scheme].icon.primary} style={styles.detailItemIcon} />
+                <View style={styles.detailItemTextContainer}>
+                  <ThemedText variant="bodyMedium" style={styles.detailItemLabel}>Guests Can Bring a +1</ThemedText>
+                  <ThemedText variant="bodyMedium" color="secondary">{eventDetails.allowGuestPlusOne ? 'Yes' : 'No'}</ThemedText>
+                </View>
+              </View>
+              <View style={styles.detailItemRow}>
+                <Ionicons name="eye-outline" size={20} color={Colors[scheme].icon.primary} style={styles.detailItemIcon} />
+                <View style={styles.detailItemTextContainer}>
+                  <ThemedText variant="bodyMedium" style={styles.detailItemLabel}>Guest List Visible</ThemedText>
+                  <ThemedText variant="bodyMedium" color="secondary">{eventDetails.showGuestList ? 'Yes' : 'No'}</ThemedText>
+                </View>
+              </View>
+            </Card.Content>
+          </Card>
         </View>
       </ThemedView>
+      {eventDetails && user?.uid === eventDetails.hostId && (
+        <AnimatedActionSheet
+          isVisible={isActionSheetVisible}
+          onClose={() => setActionSheetVisible(false)}
+          actions={eventHostActions}
+          title="Event Options"
+          message="Manage your event."
+        />
+      )}
     </Screen>
   );
 };
@@ -310,17 +455,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  eventImage: {
+  mediaGalleryStyle: { // Style for the MediaGallery container
     width: '100%',
-    height: 280, // Slightly taller for better visual impact
+    height: 280, // Match previous eventImage height or adjust as needed
+    borderBottomLeftRadius: BorderRadius.sm, // Apply to gallery if it's the top element
+    borderBottomRightRadius: BorderRadius.sm,
+  },
+  eventImagePlaceholder: { // Renamed from eventImage for clarity when it is a placeholder
+    width: '100%',
+    height: 280,
     resizeMode: 'cover',
     borderBottomLeftRadius: BorderRadius.sm,
     borderBottomRightRadius: BorderRadius.sm,
-  },
-  placeholderImage: {
-    // backgroundColor is applied via ThemedView variant="secondary"
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  placeholderImage: { // This style is for the content *inside* the placeholder
+    // justifyContent: 'center', // Handled by eventImagePlaceholder
+    // alignItems: 'center', // Handled by eventImagePlaceholder
   },
   contentPadding: {
     paddingHorizontal: Spacing.md, 
@@ -392,10 +544,29 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     padding: Spacing.sm,
-    borderRadius: BorderRadius.sm,
+  },
+  headerRightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  detailItemRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: Spacing.md,
+  },
+  detailItemIcon: {
+    marginRight: Spacing.md,
+    marginTop: Spacing.xxs, // Align icon better with multi-line text
+  },
+  detailItemTextContainer: {
+    flex: 1,
+  },
+  detailItemLabel: {
+    fontWeight: Typography.weight.semiBold,
+    marginBottom: Spacing.xxs,
   },
   eventDetailsCard: {
-    marginTop: -Spacing.xl,
+    marginTop: -Spacing.xl, // Keep the overlap effect
     zIndex: 1,
     borderTopLeftRadius: BorderRadius.lg,
     borderTopRightRadius: BorderRadius.lg,

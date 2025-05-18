@@ -46,16 +46,32 @@ interface MediaGalleryProps {
 
 // Internal component for rendering a single video item with its own player state
 const VideoItemRenderer: React.FC<{ item: MediaItem; style?: StyleProp<ViewStyle> }> = ({ item, style }) => {
+  // Hooks must be called at the top level
   const player = useVideoPlayer(item.uri, (player) => {
     player.loop = false;
-    console.log(`[VideoItemRenderer] Player initialized for URI: ${item.uri}`);
+    // console.log(`[VideoItemRenderer] Player initialized for URI: ${item.uri}`); // Initializing log can be noisy if URI is invalid initially
   });
 
   const [isPlaying, setIsPlaying] = React.useState(player.playing);
   const [status, setStatus] = React.useState<VideoPlayerStatusType>(player.status);
+  const [isValidUri, setIsValidUri] = React.useState(true); // State to track URI validity
 
   React.useEffect(() => {
-    console.log(`[VideoItemRenderer] Mounted for URI: ${item.uri}, Initial Status: ${player.status}, Initial IsPlaying: ${player.playing}`);
+    // Validate URI when component mounts or item.uri changes
+    if (!item.uri || typeof item.uri !== 'string' || item.uri.trim() === '') {
+      console.error(`[VideoItemRenderer] Invalid or empty URI for video item:`, item);
+      setIsValidUri(false);
+      if (player.status !== 'idle') player.replace(null); // Use replace(null) to clear source
+      return;
+    } else {
+      setIsValidUri(true);
+      // The useVideoPlayer hook will handle URI changes if item.uri reference changes.
+      // If player.uri is not the current item.uri, useVideoPlayer should already be re-evaluating.
+      // Forcing a replace here might be redundant if the hook is already processing the new URI.
+      console.log(`[VideoItemRenderer] Player URI is being managed by useVideoPlayer for: ${item.uri}`);
+    }
+
+    console.log(`[VideoItemRenderer] Mounted/Updated for URI: ${item.uri}, Initial Status: ${player.status}, Initial IsPlaying: ${player.playing}`);
 
     const playingSubscription = player.addListener('playingChange', () => {
       console.log(`[VideoItemRenderer] Event: playingChange - New isPlaying: ${player.playing} for ${item.uri}`);
@@ -80,8 +96,20 @@ const VideoItemRenderer: React.FC<{ item: MediaItem; style?: StyleProp<ViewStyle
       // player.release(); // Consider if player should be released here or if useVideoPlayer handles it.
                          // useVideoPlayer hook should handle the release automatically on component unmount.
     };
-  }, [player, item.uri]);
+  }, [player, item.uri]); // item.uri added to dependency array for re-validation
   
+  // Early return for invalid URI after hooks
+  if (!isValidUri) {
+    return (
+      <View style={[styles.mediaPreview, styles.videoPreview, styles.videoContainer, style]}>
+        <View style={styles.videoOverlay}>
+          <MaterialCommunityIcons name="alert-circle-outline" size={48} color="rgba(255,0,0,0.8)" />
+          <Text style={styles.errorText}>Invalid video source</Text>
+        </View>
+      </View>
+    );
+  }
+
   const togglePlay = () => {
     console.log(`[VideoItemRenderer] togglePlay called for ${item.uri}. Current status: ${status}, isPlaying: ${isPlaying}`);
     if (status === 'error') { // Use string literal for status comparison

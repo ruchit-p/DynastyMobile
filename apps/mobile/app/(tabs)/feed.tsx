@@ -79,15 +79,28 @@ const FeedScreen = () => {
 
     try {
       const stories = await fetchAccessibleStoriesMobile(user.uid, firestoreUser.familyTreeId);
-      const mappedStories: FeedStory[] = stories.map(story => ({
-        ...story,
-        type: 'story',
-        primaryDate: story.createdAt instanceof Timestamp 
-            ? story.createdAt.toDate() 
-            : (story.createdAt && typeof story.createdAt === 'object' && 'seconds' in story.createdAt && 'nanoseconds' in story.createdAt) 
-                ? new Timestamp(story.createdAt.seconds, story.createdAt.nanoseconds).toDate() 
-                : new Date(story.createdAt as any),
-      }));
+      const mappedStories: FeedStory[] = stories.map(story => {
+        let storyCreationDateForSorting: Date;
+        const createdAt = story.createdAt; // Cache for clarity
+
+        if (createdAt instanceof Timestamp) {
+            storyCreationDateForSorting = createdAt.toDate();
+        } else if (createdAt && typeof createdAt === 'object' && 'seconds' in createdAt && 'nanoseconds' in createdAt) {
+            storyCreationDateForSorting = new Timestamp(createdAt.seconds, createdAt.nanoseconds).toDate();
+        } else {
+            const parsedDate = new Date(createdAt as any);
+            if (isNaN(parsedDate.getTime())) {
+                storyCreationDateForSorting = new Date(0); // Default to epoch for invalid/missing createdAt
+            } else {
+                storyCreationDateForSorting = parsedDate;
+            }
+        }
+        return {
+          ...story,
+          type: 'story',
+          primaryDate: storyCreationDateForSorting,
+        };
+      });
 
       const eventsCollection = await db.collection('events').get();
       const fetchedEvents: FeedEvent[] = eventsCollection.docs.map(doc => {
@@ -124,6 +137,23 @@ const FeedScreen = () => {
             endDate.setHours(endHours, endMinutes, 0, 0);
         }
 
+        // Determine primaryDate for sorting using the event's creation time
+        let eventCreationDateForSorting: Date;
+        const createdAt = data.createdAt; // Cache for clarity, assuming events have createdAt
+
+        if (createdAt instanceof Timestamp) {
+            eventCreationDateForSorting = createdAt.toDate();
+        } else if (createdAt && typeof createdAt === 'object' && 'seconds' in createdAt && 'nanoseconds' in createdAt) {
+            eventCreationDateForSorting = new Timestamp(createdAt.seconds, createdAt.nanoseconds).toDate();
+        } else {
+            const parsedDate = new Date(createdAt as any);
+            if (isNaN(parsedDate.getTime())) {
+                eventCreationDateForSorting = new Date(0); // Default to epoch for invalid/missing createdAt
+            } else {
+                eventCreationDateForSorting = parsedDate;
+            }
+        }
+
         return {
           id: doc.id,
           type: 'event',
@@ -133,7 +163,7 @@ const FeedScreen = () => {
           location: data.isVirtual ? (data.virtualLink || 'Virtual Event') : (data.location?.address || 'No location'),
           imageUrl: data.coverPhotos && data.coverPhotos.length > 0 ? data.coverPhotos[0] : undefined,
           createdBy: data.hostId,
-          primaryDate: startDate,
+          primaryDate: eventCreationDateForSorting, // Use creation date for sorting
         };
       });
 
