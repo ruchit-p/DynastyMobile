@@ -91,35 +91,6 @@ const StoryDetailScreen = () => {
   const commentInputRef = useRef<TextInput>(null);
   const [isActionSheetVisible, setActionSheetVisible] = useState(false);
 
-  // Prepare media for MediaGallery
-  // const galleryMediaItems = React.useMemo(() => {
-  //   if (!story || !story.storyBlocks) return [];
-  //   const items: Array<{ uri: string; type: 'image' | 'video'; duration?: number; width?: number; height?: number; asset?: ImagePicker.ImagePickerAsset }> = [];
-  //   story.storyBlocks.forEach(block => {
-  //     if (block.type === 'image' && Array.isArray(block.data)) {
-  //       // Assuming block.data for images is an array of URIs or objects with URIs
-  //       (block.data as Array<string | { uri: string; width?: number; height?: number }>).forEach(imgData => {
-  //         if (typeof imgData === 'string') {
-  //           items.push({ uri: imgData, type: 'image' });
-  //         } else if (imgData && imgData.uri) {
-  //           items.push({ uri: imgData.uri, type: 'image', width: imgData.width, height: imgData.height });
-  //         }
-  //       });
-  //     }
-  //     // Placeholder for video block handling if stories can include videos
-  //     // else if (block.type === 'video' && block.data && typeof block.data.uri === 'string') {
-  //     //   items.push({ 
-  //     //     uri: block.data.uri, 
-  //     //     type: 'video', 
-  //     //     duration: block.data.duration, 
-  //     //     width: block.data.width, 
-  //     //     height: block.data.height 
-  //     //   });
-  //     // }
-  //   });
-  //   return items;
-  // }, [story]);
-
   useEffect(() => {
     if (storyId && user?.uid && firestoreUser?.familyTreeId) {
       if (!story) {
