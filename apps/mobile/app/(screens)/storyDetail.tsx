@@ -23,7 +23,8 @@ import {
   toggleStoryLikeMobile,
   addCommentMobile,
   toggleCommentLikeMobile,
-  deleteStoryMobile
+  deleteStoryMobile,
+  Story as FetchedStory, // Assuming Story type is exported from storyUtils
 } from '../../src/lib/storyUtils';
 import { commonHeaderOptions } from '../../constants/headerConfig';
 import ProfilePicture from '../../components/ui/ProfilePicture';
@@ -31,47 +32,55 @@ import { formatDate, formatTimeAgo } from '../../src/lib/dateUtils';
 import Avatar from '../../components/ui/Avatar';
 import AnimatedActionSheet, { ActionSheetAction } from '../../components/ui/AnimatedActionSheet';
 import MediaGallery from '../../components/ui/MediaGallery';
+import TaggedPeopleBadges, { PersonInfo as BadgePersonInfo } from '../../components/ui/TaggedPeopleBadges';
+import { fetchUserProfilesByIds, UserProfile } from '../../src/lib/userUtils'; // Import fetch function
 
 interface StoryComment {
   id: string;
-  user: UserInfo; // Combined from backend's UserInfo
+  user: UserInfo; 
   text: string;
-  createdAt: any; // Timestamp or string after formatting
-  timestamp: string; // Formatted time ago
+  createdAt: any; 
+  timestamp: string; 
   parentId?: string | null;
   depth: number;
-  likes: string[]; // Array of user IDs who liked
+  likes: string[]; 
   isLikedByMe?: boolean;
   replies: StoryComment[];
-  // For optimistic updates
   isOptimistic?: boolean;
-  avatarUrl?: string; // Keep for optimistic or fallback
-  userName?: string; // Keep for optimistic or fallback
-  commentText?: string; // Keep for optimistic or fallback
+  avatarUrl?: string; 
+  userName?: string; 
+  commentText?: string; 
 }
 
-// Renamed from StoryDetail's UserInfo to avoid conflict if any, or use a shared type
 interface UserInfo {
   id: string;
   displayName: string;
   profilePicture?: string;
 }
 
-// Local story detail type used by this screen
+// No need for PersonInfoForDetail, use BadgePersonInfo directly or UserProfile from userUtils
+// interface PersonInfoForDetail {
+//   id: string;
+//   displayName: string;
+//   profilePicture?: string;
+// }
+
 interface StoryDetail {
   id: string;
   userName: string;
   userAvatar: string | undefined;
   timestamp: string;
-  date: string; // Full date string
-  title: string; // This will be the definitive story title
-  storyBlocks: Array<{ type: string; data: any; localId: string }>; // To store all blocks
+  date: string; 
+  title: string; 
+  storyBlocks: Array<{ type: string; data: any; localId: string }>; 
   location?: string;
   likesCount: number;
   commentsCount: number;
   isLiked?: boolean;
   authorId: string;
   subtitle?: string;
+  peopleInvolved?: BadgePersonInfo[]; // Store fetched user details here
+  peopleInvolvedIds?: string[]; // Store the raw IDs from the story
 }
 
 const StoryDetailScreen = () => {
@@ -90,98 +99,115 @@ const StoryDetailScreen = () => {
   const [isLoadingLikeStatus, setIsLoadingLikeStatus] = useState(true);
   const commentInputRef = useRef<TextInput>(null);
   const [isActionSheetVisible, setActionSheetVisible] = useState(false);
+  const [isLoadingStory, setIsLoadingStory] = useState(true); // For overall story loading
 
   useEffect(() => {
+    let isMounted = true;
     if (storyId && user?.uid && firestoreUser?.familyTreeId) {
-      if (!story) {
-        navigation.setOptions({ ...commonHeaderOptions, title: 'Loading...', headerRight: undefined });
-        (async () => {
-          try {
-            const stories = await fetchAccessibleStoriesMobile(user.uid, firestoreUser.familyTreeId);
-            const found = stories.find(s => s.id === storyId);
-            if (!found) {
-              Alert.alert("Story not found", "This story could not be loaded.", [{ text: "OK", onPress: () => router.back() }]);
-              return;
+      navigation.setOptions({ ...commonHeaderOptions, title: 'Loading...', headerRight: undefined });
+      setIsLoadingStory(true);
+      (async () => {
+        try {
+          const stories = await fetchAccessibleStoriesMobile(user.uid, firestoreUser.familyTreeId);
+          const foundStory = stories.find(s => s.id === storyId) as FetchedStory | undefined;
+
+          if (!isMounted) return;
+          if (!foundStory) {
+            Alert.alert("Story not found", "This story could not be loaded.", [{ text: "OK", onPress: () => router.back() }]);
+            setIsLoadingStory(false);
+            return;
+          }
+
+          const extractedTitle = (foundStory as any).title;
+          const firstTextBlockData = foundStory.blocks.find(b => b.type === 'text')?.data as string || '';
+          const peopleIds = (foundStory as any).peopleInvolved as string[] || [];
+
+          let fetchedPeopleDetails: BadgePersonInfo[] = [];
+          if (peopleIds.length > 0) {
+            try {
+              fetchedPeopleDetails = (await fetchUserProfilesByIds(peopleIds)) as BadgePersonInfo[];
+            } catch (peopleError) {
+              console.error("Error fetching tagged people for StoryDetail:", peopleError);
+              // Continue without people details if fetch fails
             }
+          }
+          
+          if (!isMounted) return;
 
-            // ---- START DEBUG LOGS ----
-            console.log("[StoryDetailScreen] Raw 'found' story data:", JSON.stringify(found, null, 2));
-            const extractedTitle = (found as any).title;
-            const firstTextBlockData = found.blocks.find(b => b.type === 'text')?.data as string || '';
-            console.log("[StoryDetailScreen] Extracted top-level title:", extractedTitle);
-            console.log("[StoryDetailScreen] First text block data:", firstTextBlockData);
-            // ----  END DEBUG LOGS  ----
+          const detail: StoryDetail = {
+            id: foundStory.id,
+            userName: foundStory.author?.displayName || foundStory.authorID,
+            userAvatar: foundStory.author?.profilePicture || undefined,
+            date: formatDate(foundStory.createdAt),
+            timestamp: formatTimeAgo(foundStory.createdAt),
+            title: extractedTitle || firstTextBlockData || '',
+            storyBlocks: foundStory.blocks,
+            location: foundStory.location?.address,
+            likesCount: foundStory.likeCount || 0,
+            commentsCount: foundStory.commentCount || 0,
+            authorId: foundStory.authorID,
+            subtitle: (foundStory as any).subtitle || undefined,
+            peopleInvolvedIds: peopleIds,
+            peopleInvolved: fetchedPeopleDetails,
+          };
+          setStory(detail);
+          setLikesCount(foundStory.likeCount || 0);
 
-            const detail: StoryDetail = {
-              id: found.id,
-              userName: found.author?.displayName || found.authorID,
-              userAvatar: found.author?.profilePicture || undefined,
-              date: formatDate(found.createdAt),
-              timestamp: formatTimeAgo(found.createdAt),
-              title: extractedTitle || firstTextBlockData || '', // Ensure this logic is robust
-              storyBlocks: found.blocks,
-              location: found.location?.address,
-              likesCount: found.likeCount || 0,
-              commentsCount: found.commentCount || 0,
-              authorId: found.authorID,
-              subtitle: (found as any).subtitle || undefined,
-            };
-            setStory(detail);
-            setLikesCount(found.likeCount || 0);
+          // Fetch like status and comments after basic story is set
+          setIsLoadingLikeStatus(true);
+          checkStoryLikeStatusMobile(storyId).then(status => {
+            if (isMounted) setIsLiked(status);
+          }).catch(err => console.error("Failed to get like status", err))
+            .finally(() => { if (isMounted) setIsLoadingLikeStatus(false); });
 
-            setIsLoadingLikeStatus(true);
-            const initialLikeStatus = await checkStoryLikeStatusMobile(storyId);
-            setIsLiked(initialLikeStatus);
-            setIsLoadingLikeStatus(false);
-
-            const rawComments = await getStoryCommentsMobile(storyId);
-            
+          getStoryCommentsMobile(storyId).then(rawComments => {
+            if (!isMounted) return;
             const mapRawCommentsRecursively = (raw: any[], parentDepth = 0): StoryComment[] => {
-              // Map comments and their replies
-              let mapped = raw.map(c => ({
+              return raw.map(c => ({
                 id: c.id,
                 user: c.user || { id: c.userId, displayName: 'Unknown' },
                 text: c.text || '',
                 createdAt: c.createdAt,
                 timestamp: formatTimeAgo(c.createdAt),
                 parentId: c.parentId,
-                depth: c.depth || parentDepth, // Use parentDepth if not specified
+                depth: c.depth || parentDepth,
                 likes: c.likes || [],
                 isLikedByMe: c.isLikedByMe || false,
                 replies: c.replies && c.replies.length > 0 
-                           ? mapRawCommentsRecursively(c.replies, (c.depth || parentDepth) + 1).reverse() // Also reverse replies
+                           ? mapRawCommentsRecursively(c.replies, (c.depth || parentDepth) + 1).reverse()
                            : [],
               }));
-              return mapped;
             };
-            // Backend sorts newest first (desc), so reverse here for oldest first (asc)
             setComments(mapRawCommentsRecursively(rawComments).reverse());
+          }).catch(err => console.error("Failed to get comments", err));
 
-            navigation.setOptions({
-              ...commonHeaderOptions,
-              title: detail.title.length > 25 ? `${detail.title.substring(0, 25)}...` : detail.title,
-              headerRight: () => {
-                if (user?.uid === detail.authorId) {
-                  return (
-                    <TouchableOpacity onPress={() => setActionSheetVisible(true)} style={{ marginRight: 15 }}>
-                      <Ionicons name="ellipsis-horizontal" size={24} color={commonHeaderOptions.headerTintColor} />
-                    </TouchableOpacity>
-                  );
-                }
-                return null;
-              },
-            });
-          } catch (error) {
+          navigation.setOptions({
+            ...commonHeaderOptions,
+            title: detail.title.length > 25 ? `${detail.title.substring(0, 25)}...` : detail.title,
+            headerRight: () => {
+              if (user?.uid === detail.authorId) {
+                return (
+                  <TouchableOpacity onPress={() => setActionSheetVisible(true)} style={{ marginRight: 15 }}>
+                    <Ionicons name="ellipsis-horizontal" size={24} color={commonHeaderOptions.headerTintColor} />
+                  </TouchableOpacity>
+                );
+              }
+              return null;
+            },
+          });
+
+        } catch (error) {
+          if (isMounted) {
             console.error(error);
             Alert.alert("Error", "Failed to load story details.", [{ text: "OK", onPress: () => router.back() }]);
-            setIsLoadingLikeStatus(false);
           }
-        })();
-      } else {
-        // Story already loaded, just ensure like status might need refresh if user navigated back and forth
-      }
+        } finally {
+          if (isMounted) setIsLoadingStory(false);
+        }
+      })();
     }
-  }, [storyId, user, firestoreUser, story]);
+    return () => { isMounted = false; };
+  }, [storyId, user, firestoreUser, navigation, router]); // Removed story from dependencies to avoid re-fetch loop on setStory
 
   const handleLikePress = async () => {
     if (isLoadingLikeStatus || !story) return;
@@ -218,16 +244,14 @@ const StoryDetailScreen = () => {
         createdAt: new Date().toISOString(),
         timestamp: 'Sending...',
         parentId: parentId,
-        depth: 0, // This will be adjusted if it's a reply
+        depth: 0, 
         likes: [],
         isLikedByMe: false,
         replies: [],
         isOptimistic: true,
     };
 
-    // Optimistic update logic needs to handle nesting
     if (parentId) {
-      // Find the parent and add to its replies
       const addReplyToParent = (existingComments: StoryComment[]): StoryComment[] => {
         return existingComments.map(comment => {
           if (comment.id === parentId) {
@@ -248,12 +272,11 @@ const StoryDetailScreen = () => {
       };
       setComments(prev => addReplyToParent(prev));
     } else {
-      // Append new top-level comment
       setComments(prev => [...prev, optimisticComment]);
     }
     
     setNewComment('');
-    setReplyingTo(null); // Clear replying state
+    setReplyingTo(null);
 
     try {
       const serverResponse = await addCommentMobile(story.id, commentTextToPost, parentId);
@@ -270,19 +293,17 @@ const StoryDetailScreen = () => {
           depth: serverComment.depth || 0,
           likes: serverComment.likes || [],
           isLikedByMe: serverComment.likes?.includes(user?.uid || ''),
-          replies: [], // Assuming new comments from server don't have replies yet
+          replies: [],
         };
 
-        // Replace optimistic comment with server comment
         const replaceOptimistic = (existingComments: StoryComment[]): StoryComment[] => {
           return existingComments.map(c => {
             if (c.id === tempId) {
-              return finalComment; // Replace the comment if ID matches
+              return finalComment;
             }
-            // Recursively search in replies
             if (c.replies && c.replies.length > 0) {
               const updatedReplies = replaceOptimistic(c.replies);
-              if (updatedReplies !== c.replies) { // Check if any reply was updated
+              if (updatedReplies !== c.replies) {
                 return { ...c, replies: updatedReplies };
               }
             }
@@ -294,7 +315,6 @@ const StoryDetailScreen = () => {
       } else {
         console.warn("Failed to post comment. Server response issue. Data:", JSON.stringify(serverResponse, null, 2));
         Alert.alert("Comment Error", serverResponse?.error || "Failed to post comment. Please try again.");
-        // Revert optimistic update
         const removeOptimistic = (existingComments: StoryComment[]): StoryComment[] => {
           return existingComments.filter(c => c.id !== tempId).map(c => {
             if (c.replies) {
@@ -317,20 +337,19 @@ const StoryDetailScreen = () => {
       };
       setComments(prev => removeOptimisticOnError(prev));
       Alert.alert("Error", "Could not post comment. Please try again.");
-      setNewComment(commentTextToPost); // Restore input
-      if (parentId) setReplyingTo({ parentId, userName: 'previous user' }); // Restore replying state partially
+      setNewComment(commentTextToPost);
+      if (parentId) setReplyingTo({ parentId, userName: 'previous user' });
     }
   };
 
   const handleToggleCommentLike = async (commentId: string) => {
-    // Find the comment and update its like status optimistically
     let originalCommentState: StoryComment | undefined;
     let parentCommentForReplyRevert: StoryComment | undefined;
 
     const updateLikeStatusRecursively = (commentsToSearch: StoryComment[], parent?: StoryComment): StoryComment[] => {
       return commentsToSearch.map(comment => {
         if (comment.id === commentId) {
-          originalCommentState = { ...comment, likes: [...(comment.likes || [])] }; // Deep copy for revert
+          originalCommentState = { ...comment, likes: [...(comment.likes || [])] };
           parentCommentForReplyRevert = parent;
           
           const newIsLiked = !comment.isLikedByMe;
@@ -353,23 +372,18 @@ const StoryDetailScreen = () => {
     setComments(prev => updateLikeStatusRecursively(prev));
 
     try {
-      // You'll need to create toggleCommentLikeMobile in storyUtils.ts
-      // It should call the `likeComment` Firebase function and return Promise<{ success: boolean, liked: boolean, error?: string }>
-      const result = await toggleCommentLikeMobile(commentId); // Call with only commentId now
+      const result = await toggleCommentLikeMobile(commentId);
 
       if (!result || !result.success) {
-        // If result is not an object, or success is false, construct an error
         const errorMessage = result?.error || "Failed to toggle like on server. Unknown error.";
         throw new Error(errorMessage);
       }
 
-      // Server confirmed, result.success is true and result.liked is available
       setComments(prevComments => {
         const reconcileLikes = (commentsToSearch: StoryComment[]): StoryComment[] => {
           return commentsToSearch.map(c => {
             if (c.id === commentId) {
               let reconciledLikes = c.likes || [];
-              // Use result.liked directly as the source of truth from the server
               if (result.liked && !reconciledLikes.includes(user!.uid)) {
                 reconciledLikes = [...reconciledLikes, user!.uid];
               } else if (!result.liked && reconciledLikes.includes(user!.uid)) {
@@ -388,7 +402,6 @@ const StoryDetailScreen = () => {
 
     } catch (error) {
       console.error("Error toggling comment like:", error);
-      // Revert optimistic update if server call failed
       if (originalCommentState) {
         const revertLikeStatus = (commentsToSearch: StoryComment[]): StoryComment[] => {
           return commentsToSearch.map(c => {
@@ -396,7 +409,6 @@ const StoryDetailScreen = () => {
               return originalCommentState!;
             }
             if (c.replies && c.replies.length > 0) {
-              // If the modified comment was a reply, its parent also needs its replies array reverted.
               if (parentCommentForReplyRevert && parentCommentForReplyRevert.id === c.id) {
                 const originalReplyIndex = parentCommentForReplyRevert.replies.findIndex(r => r.id === commentId);
                 if (originalReplyIndex !== -1) {
@@ -418,7 +430,6 @@ const StoryDetailScreen = () => {
 
   const handleEditStory = () => {
     if (!story) return;
-    // Navigate to the existing createStory screen in edit mode
     router.push({
       pathname: '/(screens)/createStory',
       params: { storyId: story.id, editMode: 'true' },
@@ -441,7 +452,7 @@ const StoryDetailScreen = () => {
               const success = await deleteStoryMobile(story.id, user.uid);
               if (success) {
                 Alert.alert("Story Deleted", "The story has been successfully deleted.");
-                router.back(); // Navigate back after deletion
+                router.back();
               } else {
                 Alert.alert("Error", "Failed to delete the story. Please try again.");
               }
@@ -474,7 +485,6 @@ const StoryDetailScreen = () => {
     },
   ];
 
-  // Helper function to get initials from a name
   const getInitials = (name?: string): string => {
     if (!name || name.trim() === '') {
       return '?'; 
@@ -484,7 +494,6 @@ const StoryDetailScreen = () => {
       return parts[0].charAt(0).toUpperCase();
     }
     if (parts.length > 1) {
-      // Use first letter of the first part and first letter of the last part
       return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
     }
     return '?';
@@ -531,7 +540,7 @@ const StoryDetailScreen = () => {
     );
   };
 
-  if (!story) {
+  if (isLoadingStory || !story) { // Check isLoadingStory here
     return (
         <SafeAreaView style={styles.safeArea}>
             <View style={styles.loadingContainer}><Text>Loading story...</Text></View>
@@ -548,20 +557,24 @@ const StoryDetailScreen = () => {
       >
         <ScrollView style={styles.scrollContainer}>
           <View style={styles.storyHeader}>
-            {/* Row 1: Avatar and User Info (Name, Timestamp) */}
             <View style={styles.topRowInfo}>
-              <ProfilePicture source={story.userAvatar} name={story.userName} size={45} style={styles.avatar} />
-              <View style={styles.userNameAndTimestamp}>
-                <Text style={styles.userName}>{story.userName}</Text>
-                <View style={styles.timestampContainer}>
-                  <Text style={styles.datePill}>{story.date}</Text>
-                  <View style={styles.dotSeparator} />
-                  <Text style={styles.timestamp}>{story.timestamp}</Text>
+              <View style={styles.userInfoContainer}>
+                <ProfilePicture source={story.userAvatar} name={story.userName} size={45} style={styles.avatar} />
+                <View style={styles.userNameAndTimestamp}>
+                  <Text style={styles.userName}>{story.userName}</Text>
+                  <View style={styles.timestampContainer}>
+                    <Text style={styles.datePill}>{story.date}</Text>
+                    <View style={styles.dotSeparator} />
+                    <Text style={styles.timestamp}>{story.timestamp}</Text>
+                  </View>
                 </View>
               </View>
+              {/* Display badges if peopleInvolved (fetched details) exist and are not empty */}
+              {story.peopleInvolved && story.peopleInvolved.length > 0 && (
+                <TaggedPeopleBadges people={story.peopleInvolved} badgeSize={24} fontSize={10} />
+              )}
             </View>
 
-            {/* Row 2: Title and Subtitle */}
             <View style={styles.titleSubtitleContainer}>
               {story.title && <Text style={styles.storyTitleMain}>{story.title}</Text>}
               {story.subtitle && <Text style={styles.storySubtitle}>{story.subtitle}</Text>}
@@ -574,7 +587,6 @@ const StoryDetailScreen = () => {
             </View>
           </View>
 
-          {/* Iterate over story blocks for non-image content */}
           {story.storyBlocks && story.storyBlocks.map((block, index) => {
             if (block.type === 'text') {
               return (
@@ -588,21 +600,17 @@ const StoryDetailScreen = () => {
               if (Array.isArray(block.data)) {
                 (block.data as Array<any>).forEach(mediaData => {
                   if (typeof mediaData === 'string') {
-                    // Old format: mediaData is a URL string
                     const url = mediaData;
                     const isVideo = /\.(mp4|mov|avi|mkv|webm)$/i.test(url.toLowerCase());
                     const mediaType: 'image' | 'video' = isVideo ? 'video' : 'image';
-                    // For old format, width, height, duration might not be available or need default
                     mediaItemsForBlock.push({ uri: url, type: mediaType, duration: isVideo ? 0 : undefined });
                   } else if (typeof mediaData === 'object' && mediaData !== null && mediaData.uri) {
-                    // New format: mediaData is an object { uri: string, type: 'image'|'video', ... }
                     mediaItemsForBlock.push({
                       uri: mediaData.uri,
-                      type: mediaData.type || (/\.(mp4|mov|avi|mkv|webm)$/i.test(mediaData.uri?.toLowerCase() || '') ? 'video' : 'image'), // Infer if type missing
+                      type: mediaData.type || (/\.(mp4|mov|avi|mkv|webm)$/i.test(mediaData.uri?.toLowerCase() || '') ? 'video' : 'image'),
                       width: mediaData.width,
                       height: mediaData.height,
                       duration: mediaData.duration,
-                      // Asset is not stored/retrieved from Firestore for display purposes here
                     });
                   }
                 });
@@ -612,9 +620,9 @@ const StoryDetailScreen = () => {
                   <View key={`block-gallery-${block.localId || index}`} style={styles.galleryContainer}>
                     <MediaGallery
                       media={mediaItemsForBlock}
-                      onAddMedia={() => {}} // Not used in detail view
-                      onRemoveMedia={() => {}} // Not used in detail view
-                      onReplaceMedia={() => {}} // Not used in detail view
+                      onAddMedia={() => {}} 
+                      onRemoveMedia={() => {}}
+                      onReplaceMedia={() => {}}
                       showRemoveButton={false}
                       showReplaceButton={false}
                       allowAddingMore={false}
@@ -622,34 +630,10 @@ const StoryDetailScreen = () => {
                   </View>
                 );
               }
-              return null; // No images in this image block
+              return null;
             }
-            // TODO: Add rendering for other block types like video, audio if needed
-            
             return null;
           })}
-
-          {/* Render MediaGallery if there are any media items */}
-          {/* {galleryMediaItems.length > 0 && (
-            <View style={styles.galleryContainer}>
-              <MediaGallery
-                media={galleryMediaItems}
-                onAddMedia={() => {}}
-                onRemoveMedia={() => {}}
-                onReplaceMedia={() => {}}
-                showRemoveButton={false}
-                showReplaceButton={false}
-                allowAddingMore={false}
-              />
-            </View>
-          )} */}
-
-          {/* {story.location && (
-            <View style={styles.locationContainer}>
-              <Ionicons name="location-sharp" size={16} color="#555" />
-              <Text style={styles.locationText}>{story.location}</Text>
-            </View>
-          )} */}
 
           <View style={styles.actionsContainer}>
             <TouchableOpacity style={styles.actionButton} onPress={handleLikePress}>
@@ -735,8 +719,16 @@ const styles = StyleSheet.create({
   },
   topRowInfo: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     width: '100%',
+    marginBottom: 10,
+  },
+  userInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    marginRight: 8,
   },
   avatar: { 
     width: 45, 
@@ -747,10 +739,6 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     justifyContent: 'flex-start',
     marginLeft: 12,
-    flex: 1,
-  },
-  userInfo: { 
-    flex: 1 
   },
   userName: { fontSize: 16, fontWeight: 'bold', color: '#333' },
   timestampContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
@@ -767,7 +755,6 @@ const styles = StyleSheet.create({
   dotSeparator: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#B0B0B0', marginHorizontal: 6 },
   timestamp: { fontSize: 12, color: '#777' },
   titleSubtitleContainer: {
-    marginTop: 10,
     width: '100%',
   },
   storyTitleMain: {
@@ -780,14 +767,6 @@ const styles = StyleSheet.create({
     color: '#555',
     marginTop: 4,
   },
-  storyContent: { 
-    fontSize: 16, 
-    lineHeight: 24, 
-    color: '#444', 
-    paddingHorizontal: 15, 
-    paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-  },
   storyContentBlockText: {
     fontSize: 16,
     lineHeight: 24,
@@ -799,15 +778,6 @@ const styles = StyleSheet.create({
   galleryContainer: {
     marginVertical: 10,
     backgroundColor: '#FFFFFF',
-  },
-  locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1, 
-    borderTopColor: '#EEE',
   },
   locationContainerInHeader: {
     flexDirection: 'row',

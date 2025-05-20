@@ -13,10 +13,11 @@ import {
   Modal,
   Button,
   Linking,
-  ActivityIndicator
+  ActivityIndicator,
+  KeyboardAvoidingView
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useNavigation, Stack, useLocalSearchParams } from 'expo-router';
+import { useRouter, useNavigation, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
@@ -31,6 +32,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { createStoryMobile, updateStoryMobile, fetchAccessibleStoriesMobile, Story as FetchedStory, StoryBlock as FetchedStoryBlock } from '../../src/lib/storyUtils';
 import Fonts from '../../constants/Fonts';
 import { useImageUpload } from '../../hooks/useImageUpload';
+import { useScreenResult } from '../../src/contexts/ScreenResultContext';
 
 // MARK: - Types
 type BlockType = "text" | "image" | "video" | "audio";
@@ -48,7 +50,7 @@ interface Location {
 }
 
 const CreateStoryScreen = () => {
-  const { user, firestoreUser } = useAuth();
+  const { user, firestoreUser, functions } = useAuth();
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ 
@@ -63,8 +65,10 @@ const CreateStoryScreen = () => {
     selectedLocationLat?: string;
     selectedLocationLng?: string;
     fromScreen?: string;
+    initialSelectedLocation?: string;
   }>(); 
   const { uploadImage, isUploading: isImageUploading, uploadProgress } = useImageUpload();
+  const { result: screenResult, setResult: setScreenResult } = useScreenResult();
 
   const storyIdForEdit = params.storyId;
   // const isEditing = params.editMode === 'true'; // Will be replaced by isActuallyEditingNow and displayAsEditMode
@@ -112,6 +116,47 @@ const CreateStoryScreen = () => {
   useEffect(() => {
     console.log(`isAudioActionSheetVisible changed to: ${isAudioActionSheetVisible}`);
   }, [isAudioActionSheetVisible]);
+
+  // Effect to handle results from other screens (SelectMembersScreen, SelectLocationScreen)
+  useFocusEffect(
+    useCallback(() => {
+      if (screenResult) {
+        console.log("CreateStoryScreen received screen result:", screenResult);
+        const { purpose, selectedIds, location: resultLocation, timestamp } = screenResult;
+
+        if (purpose === 'tagging' && selectedIds) {
+          setTaggedMembers(prev => {
+            const newIds = selectedIds.filter(id => !prev.includes(id));
+            return [...prev, ...newIds];
+          });
+        } else if (purpose === 'viewers' && selectedIds) {
+          setCustomSelectedViewers(selectedIds);
+          setPrivacy('custom'); // Update privacy setting
+        } else if (purpose === 'location' && resultLocation) {
+          setLocation(resultLocation as Location); // Cast if necessary, ensure types match
+          setShowLocation(true);
+        }
+        
+        setScreenResult(null); // Clear the result from context
+      }
+    }, [screenResult, setScreenResult]) // Dependencies: screenResult and its setter
+  );
+
+  // Original useEffect for useLocalSearchParams (for deep links or initial params)
+  useEffect(() => {
+    if (params.initialSelectedLocation) {
+      try {
+        const loc = JSON.parse(params.initialSelectedLocation as string);
+        setLocation(loc as Location);
+        setShowLocation(true);
+        // Consider clearing this param from router if it should only be processed once
+        // router.setParams({ initialSelectedLocation: undefined }); 
+      } catch (e) {
+        console.error("Error parsing initial selected location from params:", e);
+      }
+    }
+    // Other initial param handling can go here
+  }, [params.initialSelectedLocation]); // Depend only on specific params for this effect
 
   // MARK: - Handlers (Moved Up and Wrapped in useCallback)
 
@@ -564,9 +609,8 @@ const CreateStoryScreen = () => {
             } else if (returnedPurpose === 'tagging') {
               setTaggedMembers(idsArray);
             }
-            // Clear params after use to avoid re-processing, though Expo Router might handle this
-            // For robustness, you might manage this more explicitly if issues arise.
-            // router.setParams({ returnedPurpose: undefined, selectedIds: undefined }); 
+            // Clear params after use to avoid re-processing
+            router.setParams({ returnedPurpose: undefined, selectedIds: undefined, timestamp: undefined }); 
           }
         } catch (e) {
           console.error("Error processing returned member IDs:", e);
@@ -588,7 +632,8 @@ const CreateStoryScreen = () => {
             selectedLocation: undefined, 
             selectedLocationLat: undefined, 
             selectedLocationLng: undefined,
-            fromScreen: undefined 
+            fromScreen: undefined,
+            timestamp: undefined // Also clear timestamp if used from location screen
           });
         } else {
           console.error("Error parsing returned location coordinates:", {returnedLocationLat, returnedLocationLng});
@@ -621,7 +666,7 @@ const CreateStoryScreen = () => {
       setBlocks(prevBlocks => [...prevBlocks, newBlock]);
       
       // Clear params to avoid re-processing
-      router.setParams({ recordedAudioUri: undefined, recordedAudioDuration: undefined });
+      router.setParams({ recordedAudioUri: undefined, recordedAudioDuration: undefined, timestamp: undefined });
     }
   }, [params?.recordedAudioUri, params?.recordedAudioDuration, router]); // MODIFIED dependency array
 
@@ -819,24 +864,35 @@ const CreateStoryScreen = () => {
   };
 
   const handleTagPeople = () => {
-    Alert.alert("Tag People", "People tagging functionality will be implemented here.");
+    router.push({
+      pathname: '/(screens)/selectMembersScreen',
+      params: { purpose: 'tagging', preSelected: JSON.stringify(taggedMembers) },
+    });
+  };
+
+  const handlePrivacyOptionPress = (newPrivacyValue: 'family' | 'personal' | 'custom') => {
+    setPrivacy(newPrivacyValue); // Always update the current privacy mode
+
+    // Only navigate to select members if 'custom' is chosen AND the button is pressed.
+    // The navigation is now handled by the SelectViewers component's onPress prop.
+    // if (newPrivacyValue === 'custom') {
+    //   router.push({
+    //     pathname: '/(screens)/selectMembersScreen',
+    //     params: { purpose: 'viewers', preSelected: JSON.stringify(customSelectedViewers) },
+    //   });
+    // }
+    // NOTE: We no longer clear customSelectedViewers here when switching to family/personal
   };
 
   const handleAddLocation = () => {
-    // Navigate to SelectLocationScreen
-    // Pass current location if available, so the map can focus there initially
-    const currentLocationParam = location 
-      ? JSON.stringify({ latitude: location.latitude, longitude: location.longitude }) 
-      : undefined;
-
     router.push({
-      pathname: '/selectLocation',
+      pathname: '/(screens)/selectLocation',
       params: { 
-        previousPath: '/(screens)/createStory', // ADDED leading slash
-        currentLocation: location?.address || currentLocationParam, // Pass address if available, else coords string
+        currentLat: location?.latitude?.toString(), 
+        currentLng: location?.longitude?.toString(),
+        currentAddress: location?.address
       }
-    } as any);
-    // Location state will be updated by the useEffect hook when returning from selectLocation
+    });
   };
 
   // MARK: - Date Formatting
@@ -1130,7 +1186,7 @@ const CreateStoryScreen = () => {
               { label: 'Custom', value: 'custom' },
             ]}
             selectedValue={privacy}
-            onValueChange={setPrivacy}
+            onValueChange={handlePrivacyOptionPress}
           />
           {privacy === 'custom' && (
             <SelectViewers
@@ -1148,10 +1204,7 @@ const CreateStoryScreen = () => {
           <Text style={styles.sectionTitle}>Tag People Involved</Text>
           <TagPeopleButton
             selectedCount={taggedMembers.length}
-            onPress={() => router.push({
-              pathname: '/selectMembersScreen',
-              params: { purpose: 'tagging', preSelected: JSON.stringify(taggedMembers) }
-            } as any)}
+            onPress={handleTagPeople}
           />
         </View>
         
