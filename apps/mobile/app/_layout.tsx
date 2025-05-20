@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
+import { ScreenResultProvider } from '../src/contexts/ScreenResultContext';
 import 'react-native-get-random-values';
 import { connectToEmulators } from '../src/lib/firebase';
 
@@ -63,8 +64,10 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider> 
-          {/* AuthProvider wraps AppContent so useAuth works inside it */}
-          <AppContent />
+          <ScreenResultProvider>
+            {/* AuthProvider wraps AppContent so useAuth works inside it */}
+            <AppContent />
+          </ScreenResultProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

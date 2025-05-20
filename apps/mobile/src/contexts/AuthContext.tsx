@@ -276,9 +276,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           // 3. Handle Post-Onboarding (User is onboarded AND email verified/not applicable)
           // If they are on auth, onboarding, or landing pages, redirect to feed.
           if (inAuthGroup || inOnboardingGroup || isLandingPageEquivalent ) {
-            console.log('[AuthNavEffect] User email VERIFIED, ONBOARDED. Redirecting to /(tabs)/feed. Current route:', currentRoute);
-            router.replace('/(tabs)/feed');
-            return; // Exit after redirect
+            // If it's a landing page equivalent, only redirect to feed if there's no back history,
+            // suggesting it's a true initial landing and not a transient state during back navigation.
+            if (isLandingPageEquivalent && router.canGoBack()) {
+              console.log('[AuthNavEffect] User email VERIFIED, ONBOARDED. On landing page equivalent BUT can go back. Likely a transient state during back navigation. SKIPPING redirect to feed. Current route:', currentRoute);
+            } else {
+              console.log('[AuthNavEffect] User email VERIFIED, ONBOARDED. Redirecting to /(tabs)/feed. Current route:', currentRoute, 'Can go back:', router.canGoBack());
+              router.replace('/(tabs)/feed');
+              return; // Exit after redirect
+            }
           }
         } else if (!firestoreUser && !isFetchingFirestoreUser) {
           console.log("[AuthNavEffect] User email VERIFIED (or N/A), but firestoreUser data is null and not fetching. This might be an intermediate state before onboarding or if no Firestore document exists yet.");

@@ -17,6 +17,7 @@ import { BorderRadius, Spacing } from '../../constants/Spacing';
 import ThemedText from '../../components/ThemedText';
 import { commonHeaderOptions } from '../../constants/headerConfig';
 import { getFirebaseFunctions as firebaseFunctionsInstance, getFirebaseAuth as firebaseAuthInstance } from '../../src/lib/firebase';
+import { useScreenResult } from '../../src/contexts/ScreenResultContext';
 
 interface Member {
   id: string;
@@ -38,6 +39,7 @@ interface FirebaseMember {
 const SelectMembersScreen = () => {
   const router = useRouter();
   const params = useLocalSearchParams<{ purpose?: string; preSelected?: string }>();
+  const { setResult } = useScreenResult();
   const { purpose = 'tagging' } = params; // Default to tagging if no purpose provided
 
   const [searchText, setSearchText] = useState('');
@@ -146,12 +148,16 @@ const SelectMembersScreen = () => {
 
   const handleDone = () => {
     console.log(`Selected for ${purpose}:`, selectedMemberIds);
-    
+    setResult({
+      purpose,
+      selectedIds: selectedMemberIds,
+      timestamp: Date.now()
+    });
     if (router.canGoBack()) {
-        router.navigate({ 
-            pathname: "..", // Go back to the previous screen in the stack
-            params: { returnedPurpose: purpose, selectedIds: JSON.stringify(selectedMemberIds) }
-        });
+      router.back();
+    } else {
+      console.warn("SelectMembersScreen: router.canGoBack() is false. Navigating to /(screens)/createStory as fallback.");
+      router.replace('/(screens)/createStory');
     }
   };
 

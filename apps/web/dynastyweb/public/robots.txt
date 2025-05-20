@@ -1,0 +1,23 @@
+User-agent: *
+Allow: /
+
+# Disallow Next.js internal files
+Disallow: /_next/
+
+# Disallow API routes (if any)
+Disallow: /api/
+
+# Disallow protected/internal app routes
+Disallow: /account-settings/
+Disallow: /chat/
+Disallow: /create-event/
+Disallow: /create-story/
+Disallow: /events/
+Disallow: /family-tree/
+Disallow: /feed/
+Disallow: /history-book/
+Disallow: /notifications/
+Disallow: /onboarding-redirect/
+Disallow: /story/
+
+Sitemap: https://www.mydynastyapp.com/sitemap.xml 
