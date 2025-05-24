@@ -4,6 +4,10 @@ import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { createFamilyMemberMobile } from '../../src/lib/firebaseUtils';
 import { commonHeaderOptions } from '../../constants/headerConfig';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { showErrorAlert } from '../../src/lib/errorUtils';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
 // Custom components
 import FullScreenDatePicker from '../../components/ui/FullScreenDatePicker';
@@ -19,6 +23,15 @@ const AddFamilyMemberScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
   const { user, firestoreUser } = useAuth();
+  
+  // Initialize error handler with ERROR severity and specific title
+  const { handleError, withErrorHandling, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Add Family Member Error',
+    showAlert: true,
+    trackCurrentScreen: true
+  });
+  
   // Ensure selectedNodeName is passed from FamilyTreeScreen or handle its potential undefined state
   const { selectedNodeId, relationType, selectedNodeName = "Selected Member" } = useLocalSearchParams<{
     selectedNodeId: string;
@@ -43,16 +56,29 @@ const AddFamilyMemberScreen = () => {
 
   const [isLoading, setIsLoading] = useState(false);
 
+  // useEffect for error state reset when component mounts
+  useEffect(() => {
+    reset();
+  }, [reset]);
+
   useEffect(() => {
     // Dynamically set the header title based on relationType
-    const dynamicTitle = relationType
-      ? `Add New ${relationType.charAt(0).toUpperCase() + relationType.slice(1)}`
-      : "Add Family Member";
-    navigation.setOptions({ 
-      ...commonHeaderOptions, // Apply common header styles
-      title: dynamicTitle 
-    });
-  }, [navigation, relationType]);
+    try {
+      const dynamicTitle = relationType
+        ? `Add New ${relationType.charAt(0).toUpperCase() + relationType.slice(1)}`
+        : "Add Family Member";
+      navigation.setOptions({ 
+        ...commonHeaderOptions, // Apply common header styles
+        title: dynamicTitle 
+      });
+    } catch (error) {
+      handleError(error, { 
+        action: 'setNavigationOptions',
+        relationType,
+        context: 'header setup'
+      });
+    }
+  }, [navigation, relationType, handleError]);
 
   // useEffect(() => { // Removed, displayName will be constructed on save
   //   if (firstName && lastName) {
@@ -64,27 +90,55 @@ const AddFamilyMemberScreen = () => {
   //   }
   // }, [firstName, lastName]);
 
-  const handleSaveMember = async () => {
-    if (!selectedNodeId || !relationType) {
-      Alert.alert("Error", "Missing required information (selected node or relation type). Please go back and try again.");
-      return;
-    }
-
-    if (!familyTreeId) {
-      Alert.alert("Configuration Error", "Family Tree ID not found. Please ensure you are logged in.");
-      return;
-    }
-    if (!dateOfBirth) {
-        Alert.alert("Validation Error", "Date of birth is required.");
-        return;
-    }
-    if (!firstName.trim() || !lastName.trim() || !gender.trim()) { 
-        Alert.alert("Validation Error", "First name, last name, and gender are required.");
-        return;
-    }
-
-    setIsLoading(true);
+  const handleSaveMember = withErrorHandling(async () => {
     try {
+      // Validation with error handling
+      if (!selectedNodeId || !relationType) {
+        const error = new Error("Missing required information (selected node or relation type). Please go back and try again.");
+        handleError(error, { 
+          action: 'validateRequiredParams',
+          selectedNodeId,
+          relationType,
+          context: 'initial validation'
+        });
+        return;
+      }
+
+      if (!familyTreeId) {
+        const error = new Error("Family Tree ID not found. Please ensure you are logged in.");
+        handleError(error, { 
+          action: 'validateFamilyTreeId',
+          familyTreeId,
+          userId: user?.uid,
+          context: 'configuration validation'
+        });
+        return;
+      }
+
+      if (!dateOfBirth) {
+        const error = new Error("Date of birth is required.");
+        handleError(error, { 
+          action: 'validateDateOfBirth',
+          dateOfBirth,
+          context: 'field validation'
+        });
+        return;
+      }
+
+      if (!firstName.trim() || !lastName.trim() || !gender.trim()) { 
+        const error = new Error("First name, last name, and gender are required.");
+        handleError(error, { 
+          action: 'validateRequiredFields',
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          gender: gender.trim(),
+          context: 'field validation'
+        });
+        return;
+      }
+
+      setIsLoading(true);
+      
       const constructedDisplayName = `${firstName.trim()} ${lastName.trim()}`.trim();
       const userData = {
         firstName: firstName.trim(),
@@ -107,6 +161,7 @@ const AddFamilyMemberScreen = () => {
       };
 
       await createFamilyMemberMobile(userData, relationType, selectedNodeId, options);
+      
       Alert.alert(
         "Success", 
         `${userData.displayName} has been successfully added as a ${relationType} to ${selectedNodeName}.`,
@@ -117,17 +172,37 @@ const AddFamilyMemberScreen = () => {
       // TODO: Implement a robust refresh mechanism for FamilyTreeScreen
       // e.g., using a global state update, event emitter, or router.refresh() if applicable
     } catch (error: any) {
-      console.error("Failed to add family member:", error);
-      Alert.alert("Error", `Failed to add family member. ${error.message || 'Unknown error'}`);
+      handleError(error, { 
+        action: 'createFamilyMember',
+        userData: {
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          gender: gender.trim(),
+          email: email.trim(),
+          phone: phone.trim()
+        },
+        relationType,
+        selectedNodeId,
+        familyTreeId,
+        context: 'member creation'
+      });
     } finally {
       setIsLoading(false);
     }
-  };
+  });
 
-  const onDateChange = (selectedDate: Date) => {
-    setDateOfBirth(selectedDate);
-    setShowDatePicker(false);
-  };
+  const onDateChange = withErrorHandling(async (selectedDate: Date) => {
+    try {
+      setDateOfBirth(selectedDate);
+      setShowDatePicker(false);
+    } catch (error) {
+      handleError(error, { 
+        action: 'onDateChange',
+        selectedDate: selectedDate?.toISOString(),
+        context: 'date picker handler'
+      });
+    }
+  });
 
   // const relativeToTitle = `Relative to: ${selectedNodeName}`;
   // Use selectedNodeName directly in the Text component for clarity
@@ -139,123 +214,149 @@ const AddFamilyMemberScreen = () => {
     : "Add New Member";
 
   // Close gender picker when opening date picker
-  const openDatePicker = () => {
-    if (showGenderPicker) {
-      setShowGenderPicker(false);
+  const openDatePicker = withErrorHandling(async () => {
+    try {
+      if (showGenderPicker) {
+        setShowGenderPicker(false);
+      }
+      setShowDatePicker(true);
+    } catch (error) {
+      handleError(error, { 
+        action: 'openDatePicker',
+        showGenderPicker,
+        context: 'date picker UI interaction'
+      });
     }
-    setShowDatePicker(true);
-  };
+  });
 
   // Close date picker when opening gender picker
-  const openGenderPicker = () => {
-    if (showDatePicker) {
-      setShowDatePicker(false);
+  const openGenderPicker = withErrorHandling(async () => {
+    try {
+      if (showDatePicker) {
+        setShowDatePicker(false);
+      }
+      setShowGenderPicker(true);
+    } catch (error) {
+      handleError(error, { 
+        action: 'openGenderPicker',
+        showDatePicker,
+        context: 'gender picker UI interaction'
+      });
     }
-    setShowGenderPicker(true);
-  };
+  });
 
   // Handle gender selection
-  const handleGenderChange = (selectedGender: string) => {
-    setGender(selectedGender);
-    setShowGenderPicker(false);
-  };
+  const handleGenderChange = withErrorHandling(async (selectedGender: string) => {
+    try {
+      setGender(selectedGender);
+      setShowGenderPicker(false);
+    } catch (error) {
+      handleError(error, { 
+        action: 'handleGenderChange',
+        selectedGender,
+        context: 'gender selection handler'
+      });
+    }
+  });
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <Text style={styles.subtitle}>Relative to: {selectedNodeName}</Text>
+    <ErrorBoundary screenName="AddFamilyMemberScreen">
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        <Text style={styles.subtitle}>Relative to: {selectedNodeName}</Text>
 
-      <Text style={styles.label}>First Name*</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Enter first name"
-        value={firstName}
-        onChangeText={setFirstName}
-        placeholderTextColor="#A0A0A0"
-      />
+        <Text style={styles.label}>First Name*</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter first name"
+          value={firstName}
+          onChangeText={setFirstName}
+          placeholderTextColor="#A0A0A0"
+        />
 
-      <Text style={styles.label}>Last Name*</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Enter last name"
-        value={lastName}
-        onChangeText={setLastName}
-        placeholderTextColor="#A0A0A0"
-      />
+        <Text style={styles.label}>Last Name*</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter last name"
+          value={lastName}
+          onChangeText={setLastName}
+          placeholderTextColor="#A0A0A0"
+        />
 
-      <SelectorButton
-        label="Date of Birth"
-        placeholder="Select Date of Birth"
-        value={dateOfBirth ? dateOfBirth.toLocaleDateString() : null}
-        onPress={openDatePicker}
-        required={true}
-      />
+        <SelectorButton
+          label="Date of Birth"
+          placeholder="Select Date of Birth"
+          value={dateOfBirth ? dateOfBirth.toLocaleDateString() : null}
+          onPress={openDatePicker}
+          required={true}
+        />
 
-      <FullScreenDatePicker
-        isVisible={showDatePicker}
-        onDismiss={() => setShowDatePicker(false)}
-        onDateChange={onDateChange}
-        value={dateOfBirth || new Date()}
-        maximumDate={new Date()} // Users cannot be born in the future
-        mode="date"
-        display="spinner"
-        doneButtonLabel="Done"
-      />
+        <FullScreenDatePicker
+          isVisible={showDatePicker}
+          onDismiss={() => setShowDatePicker(false)}
+          onDateChange={onDateChange}
+          value={dateOfBirth || new Date()}
+          maximumDate={new Date()} // Users cannot be born in the future
+          mode="date"
+          display="spinner"
+          doneButtonLabel="Done"
+        />
 
-      <SelectorButton
-        label="Gender"
-        placeholder="Select Gender"
-        value={gender}
-        onPress={openGenderPicker}
-        required={true}
-      />
+        <SelectorButton
+          label="Gender"
+          placeholder="Select Gender"
+          value={gender}
+          onPress={openGenderPicker}
+          required={true}
+        />
 
-      <GenderPicker
-        isVisible={showGenderPicker}
-        onDismiss={() => setShowGenderPicker(false)}
-        onGenderChange={handleGenderChange}
-        value={gender}
-        doneButtonLabel="Done"
-      />
+        <GenderPicker
+          isVisible={showGenderPicker}
+          onDismiss={() => setShowGenderPicker(false)}
+          onGenderChange={handleGenderChange}
+          value={gender}
+          doneButtonLabel="Done"
+        />
 
-      <Text style={styles.label}>Email</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Enter email address"
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        autoComplete="email"
-        textContentType="emailAddress"
-        placeholderTextColor="#A0A0A0"
-      />
+        <Text style={styles.label}>Email</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter email address"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoComplete="email"
+          textContentType="emailAddress"
+          placeholderTextColor="#A0A0A0"
+        />
 
-      <Text style={styles.label}>Phone</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Enter phone number"
-        value={phone}
-        onChangeText={setPhone}
-        keyboardType="phone-pad"
-        textContentType="telephoneNumber"
-        placeholderTextColor="#A0A0A0"
-      />
+        <Text style={styles.label}>Phone</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter phone number"
+          value={phone}
+          onChangeText={setPhone}
+          keyboardType="phone-pad"
+          textContentType="telephoneNumber"
+          placeholderTextColor="#A0A0A0"
+        />
 
-      <TouchableOpacity
-        style={[styles.button, styles.saveButton]}
-        onPress={handleSaveMember}
-        disabled={isLoading}
-      >
-        <Text style={styles.buttonText}>{isLoading ? "Saving..." : "Save Member"}</Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.button, styles.saveButton]}
+          onPress={handleSaveMember}
+          disabled={isLoading}
+        >
+          <Text style={styles.buttonText}>{isLoading ? "Saving..." : "Save Member"}</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity
-        style={[styles.button, styles.cancelButton]}
-        onPress={() => router.back()}
-        disabled={isLoading}
-      >
-        <Text style={[styles.buttonText, styles.cancelButtonText]}>Cancel</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <TouchableOpacity
+          style={[styles.button, styles.cancelButton]}
+          onPress={() => router.back()}
+          disabled={isLoading}
+        >
+          <Text style={[styles.buttonText, styles.cancelButtonText]}>Cancel</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </ErrorBoundary>
   );
 };
 

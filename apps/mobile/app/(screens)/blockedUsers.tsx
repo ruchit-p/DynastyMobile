@@ -1,26 +1,44 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
 import { useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import FlashList from '../../components/ui/FlashList';
 
 // Mock data for blocked users - replace with actual data source
-const MOCK_BLOCKED_USERS = [
-  { id: '1', name: 'User Alpha', avatarUrl: null },
-  { id: '2', name: 'User Beta', avatarUrl: null },
-  { id: '3', name: 'User Gamma', avatarUrl: null },
-];
+const MOCK_BLOCKED_USERS: { id: string; name: string; avatarUrl: null }[] = [];
 
 interface BlockedUserItemProps {
   id: string;
   name: string;
-  onUnblock: (userId: string) => void;
+  onUnblock: (userId: string) => Promise<void>;
 }
 
 const BlockedUserItem: React.FC<BlockedUserItemProps> = ({ id, name, onUnblock }) => {
+  const { handleError } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Blocked User Item Error',
+    trackCurrentScreen: false,
+  });
+
+  const handleUnblockPress = async () => {
+    try {
+      await onUnblock(id);
+    } catch (error) {
+      handleError(error, {
+        functionName: 'handleUnblockPress',
+        userId: id,
+        userName: name,
+      });
+    }
+  };
+
   return (
     <View style={styles.itemContainer}>
       <Text style={styles.itemName}>{name}</Text>
-      <TouchableOpacity style={styles.unblockButton} onPress={() => onUnblock(id)}>
+      <TouchableOpacity style={styles.unblockButton} onPress={handleUnblockPress}>
         <Text style={styles.unblockButtonText}>Unblock</Text>
       </TouchableOpacity>
     </View>
@@ -29,48 +47,74 @@ const BlockedUserItem: React.FC<BlockedUserItemProps> = ({ id, name, onUnblock }
 
 const BlockedUsersScreen = () => {
   const navigation = useNavigation();
-  // TODO: Fetch actual blocked users list and implement unblock logic with backend
+  const { handleError, withErrorHandling } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Blocked Users Error',
+    trackCurrentScreen: true,
+  });
+
+  // Reset error state when component mounts
+  useEffect(() => {
+    // Error state is automatically reset by useErrorHandler
+  }, []);
 
   useEffect(() => {
-    navigation.setOptions({
-      title: 'Blocked Users',
-      headerStyle: { backgroundColor: '#F8F8F8' },
-      headerTintColor: '#333333',
-      headerTitleStyle: { fontWeight: '600' },
-      headerBackTitleVisible: false,
-    });
-  }, [navigation]);
+    const setNavigationOptions = withErrorHandling(async () => {
+      navigation.setOptions({
+        title: 'Blocked Users',
+        headerStyle: { backgroundColor: '#F8F8F8' },
+        headerTintColor: '#333333',
+        headerTitleStyle: { fontWeight: '600' },
+        headerBackTitleVisible: false,
+      });
+    }, { functionName: 'setNavigationOptions' });
 
-  const handleUnblockUser = (userId: string) => {
-    console.log('Unblock user:', userId);
-    // TODO: Implement unblock logic (remove from Firestore list, update UI)
-    alert(`User ${userId} unblocked (mock).`);
-  };
+    setNavigationOptions().catch(() => {
+      // Error already handled by withErrorHandling
+    });
+  }, [navigation, withErrorHandling]);
+
+  const handleUnblockUser = withErrorHandling(async (userId: string) => {
+    try {
+      console.log('Unblock user:', userId);
+      // TODO: Implement unblock logic (remove from Firestore list, update UI)
+      alert(`User ${userId} unblocked (mock).`);
+    } catch (error) {
+      handleError(error, {
+        functionName: 'handleUnblockUser',
+        userId,
+      });
+      throw error;
+    }
+  }, { functionName: 'handleUnblockUser' });
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      {MOCK_BLOCKED_USERS.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="shield-checkmark-outline" size={60} color="#BDBDBD" />
-          <Text style={styles.emptyText}>No Blocked Users</Text>
-          <Text style={styles.emptySubText}>You haven't blocked anyone yet.</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={MOCK_BLOCKED_USERS}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <BlockedUserItem 
-                id={item.id} 
-                name={item.name} 
-                onUnblock={handleUnblockUser} 
-            />
-          )}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-          style={styles.list}
-        />
-      )}
-    </SafeAreaView>
+    <ErrorBoundary screenName="BlockedUsersScreen">
+      <SafeAreaView style={styles.safeArea}>
+        {MOCK_BLOCKED_USERS.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="shield-checkmark-outline" size={60} color="#BDBDBD" />
+            <Text style={styles.emptyText}>No Blocked Users</Text>
+            <Text style={styles.emptySubText}>You haven&apos;t blocked anyone yet.</Text>
+          </View>
+        ) : (
+          <FlashList
+            data={MOCK_BLOCKED_USERS}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <BlockedUserItem 
+                  id={item.id} 
+                  name={item.name} 
+                  onUnblock={handleUnblockUser} 
+              />
+            )}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            style={styles.list}
+            estimatedItemSize={70}
+          />
+        )}
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 

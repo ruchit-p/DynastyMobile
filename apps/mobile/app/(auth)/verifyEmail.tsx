@@ -15,12 +15,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../src/contexts/AuthContext'; // Updated path
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
 const dynastyLogo = require('../../assets/images/dynasty.png');
 
 export default function VerifyEmailScreen() {
   const router = useRouter();
   const { resendVerificationEmail, user, isLoading, signOut, refreshUser } = useAuth(); // Assuming resendVerificationEmail and user exist in AuthContext
+  const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Email Verification Error',
+    trackCurrentScreen: true
+  });
   const params = useLocalSearchParams<{ email?: string }>();
   const displayEmail = params.email || user?.email;
 
@@ -31,6 +39,12 @@ export default function VerifyEmailScreen() {
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
+    if (!isError) {
+      setError(null);
+    }
+  }, [isError]);
+
+  useEffect(() => {
     if (user && user.emailVerified) {
       // If somehow user lands here but is already verified, navigate away
       // This navigation should ideally be handled by a central auth state listener in AuthContext
@@ -38,12 +52,13 @@ export default function VerifyEmailScreen() {
     }
   }, [user, router]);
 
-  const handleResendEmail = async () => {
+  const handleResendEmail = withErrorHandling(async () => {
     console.log("VerifyEmailScreen: handleResendEmail TRIGGERED");
     if (!user) {
       setError("You need to be signed in to resend a verification email.");
       return;
     }
+    reset();
     setError(null);
     setMessage(null);
     setIsResending(true);
@@ -56,15 +71,19 @@ export default function VerifyEmailScreen() {
       await resendVerificationEmail();
       setMessage('A new verification email has been sent. Please check your inbox.');
     } catch (e: any) {
-      console.error("Resend email failed from screen:", e);
+      handleError(e, { 
+        action: 'resendVerificationEmail',
+        metadata: { email: displayEmail || 'unknown' }
+      });
       setError(e.message || "Failed to resend verification email.");
     } finally {
       setIsResending(false);
     }
-  };
+  });
 
   // New handler for checking verification status manually
-  const handleCheckVerificationStatus = async () => {
+  const handleCheckVerificationStatus = withErrorHandling(async () => {
+    reset();
     setError(null);
     setMessage(null);
     setIsCheckingStatus(true);
@@ -80,24 +99,23 @@ export default function VerifyEmailScreen() {
         // AuthContext should redirect. If not, router.replace here could be a fallback.
       }
     } catch (e: any) {
-      console.error("Check status failed:", e);
+      handleError(e, { 
+        action: 'checkVerificationStatus',
+        metadata: { email: displayEmail || 'unknown' }
+      });
       setError(e.message || "Failed to check verification status.");
     } finally {
       setIsCheckingStatus(false);
     }
-  };
+  });
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      router.replace('/(auth)/signIn');
-    } catch (e:any) {
-      setError(e.message || "Failed to sign out.");
-    }
-  }
+  const handleSignOut = withErrorHandling(async () => {
+    await signOut();
+    router.replace('/(auth)/signIn');
+  });
 
   return (
-    <>
+    <ErrorBoundary screenName="VerifyEmailScreen">
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.safeArea}>
         <StatusBar style={Platform.OS === 'ios' ? 'dark' : 'light'} />
@@ -157,7 +175,7 @@ export default function VerifyEmailScreen() {
           </TouchableOpacity>
         </View>
       </SafeAreaView>
-    </>
+    </ErrorBoundary>
   );
 }
 

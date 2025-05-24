@@ -12,7 +12,17 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.mydynastyapp.dynasty",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "useFrameworks": "static"
+      "useFrameworks": "static",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Dynasty needs access to your camera to capture photos and videos for your family stories and events.",
+        "NSPhotoLibraryUsageDescription": "Dynasty needs access to your photo library to select photos and videos for your family stories and events.",
+        "NSPhotoLibraryAddUsageDescription": "Dynasty needs permission to save photos and videos to your photo library.",
+        "NSMicrophoneUsageDescription": "Dynasty needs access to your microphone to record audio messages and voice notes for your family stories.",
+        "NSContactsUsageDescription": "Dynasty needs access to your contacts to help you find and invite family members to join your family tree.",
+        "NSFaceIDUsageDescription": "Dynasty uses Face ID to securely authenticate you and protect your family's private content.",
+        "NSLocationWhenInUseUsageDescription": "Dynasty needs your location to tag where family events and stories took place.",
+        "UIBackgroundModes": ["remote-notification"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -39,11 +49,28 @@
       ],
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
+      "@react-native-firebase/messaging",
       "./plugins/withFirebaseAuthFix.js",
       [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Dynasty needs access to your camera to capture photos and videos for your family stories and events.",
+          "microphonePermission": "Dynasty needs access to your microphone to record audio with videos.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Dynasty needs access to your photos to select media for stories and events.",
+          "savePhotosPermission": "Dynasty needs permission to save photos to your library.",
+          "isAccessMediaLocationEnabled": true
         }
       ],
       [
@@ -53,7 +80,8 @@
             "useFrameworks": "static"
           }
         }
-      ]
+      ],
+      "expo-background-task"
     ],
     "experiments": {
       "typedRoutes": true

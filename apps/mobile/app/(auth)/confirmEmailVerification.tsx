@@ -12,12 +12,20 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext'; // Updated path
 import { StatusBar } from 'expo-status-bar';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
 const dynastyLogo = require('../../assets/images/dynasty.png');
 
 export default function ConfirmEmailVerificationScreen() {
   const router = useRouter();
   const { confirmEmailVerificationLink } = useAuth(); // Assuming this function exists and calls your 'verifyEmail' cloud function
+  const { handleError } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Email Verification Error',
+    trackCurrentScreen: true
+  });
   const params = useLocalSearchParams<{ uid?: string; token?: string }>();
   const { uid, token } = params;
 
@@ -40,6 +48,10 @@ export default function ConfirmEmailVerificationScreen() {
             // For now, let AuthProvider handle navigation based on new state
           }, 2000);
         } catch (e: any) {
+          handleError(e, { 
+            action: 'confirmEmailVerification',
+            metadata: { uid: uid || 'unknown', hasToken: !!token }
+          });
           setStatus('error');
           setMessage(e.message || 'Failed to verify email. The link may be invalid or expired.');
         }
@@ -53,7 +65,7 @@ export default function ConfirmEmailVerificationScreen() {
   }, [uid, token, confirmEmailVerificationLink, router]);
 
   return (
-    <>
+    <ErrorBoundary screenName="ConfirmEmailVerificationScreen">
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.safeArea}>
         <StatusBar style={Platform.OS === 'ios' ? 'dark' : 'light'} />
@@ -73,7 +85,7 @@ export default function ConfirmEmailVerificationScreen() {
           )}
         </View>
       </SafeAreaView>
-    </>
+    </ErrorBoundary>
   );
 }
 

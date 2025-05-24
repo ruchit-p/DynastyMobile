@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Colors from '../../constants/Colors';
+import { Colors } from '../../constants/Colors';
 import Fonts from '../../constants/Fonts';
 import { Typography } from '../../constants/Typography'; // For more specific font control
 

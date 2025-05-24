@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -10,6 +10,9 @@ import {
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
 // Import design system
 import { Colors } from '../../constants/Colors';
@@ -31,6 +34,12 @@ const FontWeight = {
 };
 
 const StyleGuide = () => {
+  const { handleError, withErrorHandling: withErrorHandlingHook, reset } = useErrorHandler({
+    severity: ErrorSeverity.INFO,
+    title: 'Style Guide Error',
+    trackCurrentScreen: true
+  });
+
   const colorScheme = useColorScheme();
   const theme = colorScheme || 'light';
   
@@ -39,53 +48,150 @@ const StyleGuide = () => {
   const backgroundColor = useBackgroundColor('secondary');
   const borderColor = useBorderColor();
 
-  // Sample color block
-  const ColorBlock = ({ name, color, textColor = 'white' }) => (
-    <View style={styles.colorBlockContainer}>
-      <View style={[styles.colorBlock, { backgroundColor: color }]}>
-        <Text style={[styles.colorBlockText, { color: textColor }]}>{name}</Text>
-      </View>
-    </View>
-  );
+  // Reset error state on mount/unmount
+  useEffect(() => {
+    reset();
+    return () => reset();
+  }, [reset]);
 
-  // Sample text style
-  const TextStyleItem = ({ name, style }) => (
-    <View style={styles.textStyleContainer}>
-      <Text style={styles.textStyleName}>{name}</Text>
-      <Text style={style}>The quick brown fox jumps over the lazy dog</Text>
-    </View>
-  );
+  // Example of wrapping an async function with error handling
+  const loadStyleGuideData = withErrorHandlingHook(async () => {
+    // Simulate loading style guide data
+    await new Promise(resolve => setTimeout(resolve, 100));
+    return { theme, colors: Colors, typography: Typography };
+  });
 
-  // Sample spacing block
-  const SpacingBlock = ({ name, size }) => (
-    <View style={styles.spacingContainer}>
-      <Text style={styles.spacingName}>{name}</Text>
-      <View style={[styles.spacingBlock, { width: size, height: size }]} />
-      <Text style={styles.spacingValue}>{size}px</Text>
-    </View>
-  );
+  // Initialize data on mount
+  useEffect(() => {
+    const initializeData = async () => {
+      try {
+        await loadStyleGuideData();
+      } catch (error) {
+        handleError(error, { 
+          action: 'initializeData',
+          component: 'StyleGuide'
+        });
+      }
+    };
+    
+    initializeData();
+  }, [loadStyleGuideData, handleError]);
 
-  // Sample shadow block
-  const ShadowBlock = ({ name, shadow }) => (
-    <View style={styles.shadowContainer}>
-      <Text style={styles.shadowName}>{name}</Text>
-      <View style={[styles.shadowBox, shadow]} />
-    </View>
-  );
+  // Sample color block with error handling
+  const ColorBlock = useCallback(({ name, color, textColor = 'white' }) => {
+    try {
+      return (
+        <View style={styles.colorBlockContainer}>
+          <View style={[styles.colorBlock, { backgroundColor: color }]}>
+            <Text style={[styles.colorBlockText, { color: textColor }]}>{name}</Text>
+          </View>
+        </View>
+      );
+    } catch (error) {
+      handleError(error, { 
+        component: 'ColorBlock', 
+        name, 
+        color, 
+        textColor 
+      });
+      return (
+        <View style={styles.colorBlockContainer}>
+          <View style={[styles.colorBlock, { backgroundColor: '#ccc' }]}>
+            <Text style={[styles.colorBlockText, { color: 'black' }]}>Error</Text>
+          </View>
+        </View>
+      );
+    }
+  }, [handleError]);
+
+  // Sample text style with error handling
+  const TextStyleItem = useCallback(({ name, style }) => {
+    try {
+      return (
+        <View style={styles.textStyleContainer}>
+          <Text style={styles.textStyleName}>{name}</Text>
+          <Text style={style}>The quick brown fox jumps over the lazy dog</Text>
+        </View>
+      );
+    } catch (error) {
+      handleError(error, { 
+        component: 'TextStyleItem', 
+        name, 
+        style: JSON.stringify(style) 
+      });
+      return (
+        <View style={styles.textStyleContainer}>
+          <Text style={styles.textStyleName}>{name} - Error</Text>
+          <Text style={{ color: 'red' }}>Failed to render text style</Text>
+        </View>
+      );
+    }
+  }, [handleError]);
+
+  // Sample spacing block with error handling
+  const SpacingBlock = useCallback(({ name, size }) => {
+    try {
+      return (
+        <View style={styles.spacingContainer}>
+          <Text style={styles.spacingName}>{name}</Text>
+          <View style={[styles.spacingBlock, { width: size, height: size }]} />
+          <Text style={styles.spacingValue}>{size}px</Text>
+        </View>
+      );
+    } catch (error) {
+      handleError(error, { 
+        component: 'SpacingBlock', 
+        name, 
+        size 
+      });
+      return (
+        <View style={styles.spacingContainer}>
+          <Text style={styles.spacingName}>{name} - Error</Text>
+          <View style={[styles.spacingBlock, { width: 20, height: 20 }]} />
+          <Text style={styles.spacingValue}>Error</Text>
+        </View>
+      );
+    }
+  }, [handleError]);
+
+  // Sample shadow block with error handling
+  const ShadowBlock = useCallback(({ name, shadow }) => {
+    try {
+      return (
+        <View style={styles.shadowContainer}>
+          <Text style={styles.shadowName}>{name}</Text>
+          <View style={[styles.shadowBox, shadow]} />
+        </View>
+      );
+    } catch (error) {
+      handleError(error, { 
+        component: 'ShadowBlock', 
+        name, 
+        shadow: JSON.stringify(shadow) 
+      });
+      return (
+        <View style={styles.shadowContainer}>
+          <Text style={styles.shadowName}>{name} - Error</Text>
+          <View style={styles.shadowBox} />
+        </View>
+      );
+    }
+  }, [handleError]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor }]}>
-      <Stack.Screen 
-        options={{ 
-          title: 'Design System',
-          headerTitleStyle: { 
-            color: Colors.palette.dynastyGreen.dark,
-            fontWeight: 'bold'
-          }
-        }} 
-      />
-      
-      <ScrollView style={styles.scrollView}>
+    <ErrorBoundary screenName="StyleGuideScreen">
+      <SafeAreaView style={[styles.container, { backgroundColor }]}>
+        <Stack.Screen 
+          options={{ 
+            title: 'Design System',
+            headerTitleStyle: { 
+              color: Colors.palette.dynastyGreen.dark,
+              fontWeight: 'bold'
+            }
+          }} 
+        />
+        
+        <ScrollView style={styles.scrollView}>
         <View style={[styles.section, { borderColor }]}>
           <Text style={[styles.sectionTitle, { color: textColor }]}>Colors</Text>
           
@@ -222,7 +328,16 @@ const StyleGuide = () => {
                 styles.primaryButton, 
                 { backgroundColor: Colors[theme].button.primary.background }
               ]}
-              onPress={() => {}}
+              onPress={() => {
+                try {
+                  // Placeholder for button action
+                } catch (error) {
+                  handleError(error, { 
+                    component: 'PrimaryButton', 
+                    action: 'onPress' 
+                  });
+                }
+              }}
             >
               <Text style={[styles.buttonText, { color: Colors[theme].button.primary.text }]}>
                 Primary
@@ -238,7 +353,16 @@ const StyleGuide = () => {
                   borderColor: Colors[theme].button.primary.background
                 }
               ]}
-              onPress={() => {}}
+              onPress={() => {
+                try {
+                  // Placeholder for button action
+                } catch (error) {
+                  handleError(error, { 
+                    component: 'PrimaryButton', 
+                    action: 'onPress' 
+                  });
+                }
+              }}
             >
               <Text style={[styles.buttonText, { color: Colors[theme].button.secondary.text }]}>
                 Secondary
@@ -249,7 +373,16 @@ const StyleGuide = () => {
           <View style={styles.buttonRow}>
             <TouchableOpacity 
               style={[styles.buttonExample, styles.textButton]}
-              onPress={() => {}}
+              onPress={() => {
+                try {
+                  // Placeholder for button action
+                } catch (error) {
+                  handleError(error, { 
+                    component: 'PrimaryButton', 
+                    action: 'onPress' 
+                  });
+                }
+              }}
             >
               <Text style={[styles.buttonText, { color: Colors[theme].text.link }]}>
                 Text Button
@@ -262,7 +395,16 @@ const StyleGuide = () => {
                 styles.iconButton,
                 { backgroundColor: Colors[theme].button.primary.background }
               ]}
-              onPress={() => {}}
+              onPress={() => {
+                try {
+                  // Placeholder for button action
+                } catch (error) {
+                  handleError(error, { 
+                    component: 'PrimaryButton', 
+                    action: 'onPress' 
+                  });
+                }
+              }}
             >
               <Ionicons name="add" size={24} color={Colors[theme].button.primary.text} />
             </TouchableOpacity>
@@ -270,6 +412,7 @@ const StyleGuide = () => {
         </View>
       </ScrollView>
     </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 

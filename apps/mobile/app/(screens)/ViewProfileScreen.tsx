@@ -8,13 +8,23 @@ import type { StackHeaderProps } from '@react-navigation/stack';
 import AnimatedActionSheet, { ActionSheetAction } from '../../components/ui/AnimatedActionSheet';
 import { getMemberProfileDataMobile, type MemberProfile, updateMemberProfileDataMobile } from '../../src/lib/firebaseUtils';
 import { useAuth } from '../../src/contexts/AuthContext';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
-export default function ViewProfileScreen() {
+function ViewProfileScreenContent() {
   const colorScheme = useColorScheme() || 'light';
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ userId?: string; name?: string; memberId?: string; memberName?: string }>();
   const { user: authUser } = useAuth();
+
+  // Initialize error handler with severity: ERROR, title: 'View Profile Error', trackCurrentScreen: true
+  const { handleError, withErrorHandling, reset: clearError } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'View Profile Error',
+    trackCurrentScreen: true
+  });
 
   const [userData, setUserData] = useState<MemberProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -23,13 +33,18 @@ export default function ViewProfileScreen() {
   const [editedUser, setEditedUser] = useState<MemberProfile | null>(null);
   const [isActionSheetVisible, setIsActionSheetVisible] = useState(false);
 
-  const fetchMemberData = useCallback(async () => {
+  const fetchMemberData = useCallback(withErrorHandling(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const profileId = params.memberId || params.userId || (authUser?.uid ?? '');
       if (!profileId) {
-        setError('No member ID provided');
+        const errorMsg = 'No member ID provided';
+        setError(errorMsg);
+        handleError(new Error(errorMsg), { 
+          missingData: 'memberId/userId',
+          params: Object.keys(params)
+        });
         return;
       }
       const memberData = await getMemberProfileDataMobile(profileId);
@@ -38,11 +53,17 @@ export default function ViewProfileScreen() {
       setEditedUser({ ...memberData, avatar: initialAvatar });
     } catch (fetchError) {
       console.error('Error fetching member data:', fetchError);
-      setError('Failed to load profile data');
+      const errorMsg = 'Failed to load profile data';
+      setError(errorMsg);
+      handleError(fetchError, {
+        operation: 'fetchMemberData',
+        profileId: params.memberId || params.userId || authUser?.uid,
+        hasAuthUser: !!authUser
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [params.userId, params.memberId, authUser?.uid]);
+  }, { operation: 'fetchMemberData' }), [params.userId, params.memberId, authUser?.uid, withErrorHandling, handleError]);
 
   // Set up header with dynamic title and action buttons using AppHeader
   useEffect(() => {
@@ -80,6 +101,11 @@ export default function ViewProfileScreen() {
     });
   }, [navigation, params.name, params.memberName, userData?.name, colorScheme]);
 
+  // Add useEffect to clear local errors when global error state resets
+  useEffect(() => {
+    clearError();
+  }, [clearError]);
+
   // Use useFocusEffect to fetch data when the screen comes into focus
   useFocusEffect(
     useCallback(() => {
@@ -96,31 +122,45 @@ export default function ViewProfileScreen() {
     }
   };
 
-  const toggleEditMode = () => {
-    if (isEditing && editedUser) {
-      // If was editing, prompt to save changes or discard
-      Alert.alert(
-        "Save Changes?",
-        "Do you want to save your changes?",
-        [
-          { text: "Discard", onPress: () => {
-            setEditedUser(userData); // Revert changes
-            setIsEditing(false);
-          }, style: "cancel" },
-          { text: "Save", onPress: saveChanges }
-        ]
-      );
-    } else {
-      setIsEditing(!isEditing);
-      if (!isEditing && userData) {
-        setEditedUser(JSON.parse(JSON.stringify(userData))); // Deep copy for editing
+  const toggleEditMode = withErrorHandling(async () => {
+    try {
+      if (isEditing && editedUser) {
+        // If was editing, prompt to save changes or discard
+        Alert.alert(
+          "Save Changes?",
+          "Do you want to save your changes?",
+          [
+            { text: "Discard", onPress: () => {
+              setEditedUser(userData); // Revert changes
+              setIsEditing(false);
+            }, style: "cancel" },
+            { text: "Save", onPress: saveChanges }
+          ]
+        );
+      } else {
+        setIsEditing(!isEditing);
+        if (!isEditing && userData) {
+          setEditedUser(JSON.parse(JSON.stringify(userData))); // Deep copy for editing
+        }
       }
+    } catch (error) {
+      handleError(error, {
+        operation: 'toggleEditMode',
+        currentlyEditing: isEditing,
+        hasUserData: !!userData
+      });
     }
-  };
+  }, { operation: 'toggleEditMode' });
 
-  const saveChanges = async () => {
+  const saveChanges = withErrorHandling(async () => {
     if (!editedUser || !userData?.id) {
-      Alert.alert('Error', 'No data to save.');
+      const errorMsg = 'No data to save';
+      Alert.alert('Error', errorMsg);
+      handleError(new Error(errorMsg), {
+        operation: 'saveChanges',
+        hasEditedUser: !!editedUser,
+        hasUserDataId: !!(userData?.id)
+      });
       return;
     }
 
@@ -134,10 +174,15 @@ export default function ViewProfileScreen() {
     } catch (error: any) {
       console.error('Failed to save profile changes:', error);
       Alert.alert('Save Error', `Could not save changes: ${error.message || 'Unknown error'}`);
+      handleError(error, {
+        operation: 'saveChanges',
+        userId: userData.id,
+        changedFields: Object.keys(editedUser)
+      });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, { operation: 'saveChanges' });
 
   const confirmRemoveUser = () => {
     Alert.alert(
@@ -151,17 +196,25 @@ export default function ViewProfileScreen() {
     );
   };
 
-  const removeUser = () => {
-    // In a real app, call an API to remove the user
-    console.log('Removing user:', userData?.id);
-    Alert.alert('User Removed', `${userData?.name || 'The user'} has been removed from the family tree.`);
-    // Navigate back or to a relevant screen
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)/familyTree');
+  const removeUser = withErrorHandling(async () => {
+    try {
+      // In a real app, call an API to remove the user
+      console.log('Removing user:', userData?.id);
+      Alert.alert('User Removed', `${userData?.name || 'The user'} has been removed from the family tree.`);
+      // Navigate back or to a relevant screen
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(tabs)/familyTree');
+      }
+    } catch (error) {
+      handleError(error, {
+        operation: 'removeUser',
+        userId: userData?.id,
+        userName: userData?.name
+      });
     }
-  };
+  }, { operation: 'removeUser' });
 
   const profileActions: ActionSheetAction[] = [
     {
@@ -214,7 +267,7 @@ export default function ViewProfileScreen() {
     );
   }
 
-  const profileFields: Array<{ key: keyof MemberProfile; label: string; icon?: keyof typeof Ionicons.glyphMap }> = [
+  const profileFields: { key: keyof MemberProfile; label: string; icon?: keyof typeof Ionicons.glyphMap }[] = [
     { key: 'name', label: 'Name', icon: 'person-outline' },
     { key: 'email', label: 'Email', icon: 'mail-outline' },
     { key: 'phone', label: 'Phone', icon: 'call-outline' },
@@ -398,4 +451,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   // Add other styles from Colors.ts as needed
-}); 
+});
+
+// Wrap the main component in ErrorBoundary
+export default function ViewProfileScreen() {
+  return (
+    <ErrorBoundary screenName="ViewProfileScreen">
+      <ViewProfileScreenContent />
+    </ErrorBoundary>
+  );
+}

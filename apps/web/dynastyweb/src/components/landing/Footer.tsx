@@ -116,7 +116,7 @@ const FooterLink = ({ href, children }: { href: string; children: React.ReactNod
     <li>
       <Link 
         href={href} 
-        className="opacity-75 hover:opacity-100 hover:text-dynasty-gold transition-colors duration-300"
+        className="text-dynasty-neutral-light opacity-75 hover:opacity-100 transition-opacity duration-300"
       >
         {children}
       </Link>

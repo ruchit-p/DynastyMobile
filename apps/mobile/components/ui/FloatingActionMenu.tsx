@@ -185,4 +185,6 @@ const styles = StyleSheet.create({
   },
 });
 
+FloatingActionMenu.displayName = 'FloatingActionMenu';
+
 export default FloatingActionMenu;

@@ -1,13 +1,16 @@
 import { getFirebaseFunctions } from './firebase';
 import { httpsCallable } from '@react-native-firebase/functions';
+import { errorHandler, ErrorSeverity } from './ErrorHandlingService';
 
 /**
  * Types and interfaces for story operations
  */
 export interface StoryBlock {
   type: 'text' | 'image' | 'video' | 'audio';
-  data: string | string[];
+  data: string | string[] | any; // Allow any for complex media objects
   localId: string;
+  isEncrypted?: boolean;
+  encryptionKey?: string;
 }
 
 export interface Story {
@@ -42,11 +45,24 @@ export const fetchAccessibleStoriesMobile = async (
   userId: string,
   familyTreeId: string
 ): Promise<Story[]> => {
-  const functionsInstance = getFirebaseFunctions();
-  const functionRef = httpsCallable(functionsInstance, 'getAccessibleStories');
-  const res = await functionRef({ userId, familyTreeId });
-  const data = res.data as { stories: Story[] };
-  return data.stories;
+  try {
+    const functionsInstance = getFirebaseFunctions();
+    const functionRef = httpsCallable(functionsInstance, 'getAccessibleStories');
+    const res = await functionRef({ userId, familyTreeId });
+    const data = res.data as { stories: Story[] };
+    return data.stories;
+  } catch (error) {
+    errorHandler.handleFirebaseError(error, {
+      severity: ErrorSeverity.ERROR,
+      title: 'Story Error',
+      metadata: {
+        action: 'fetchAccessibleStories',
+        userId,
+        familyTreeId
+      }
+    });
+    throw error;
+  }
 };
 
 /**
@@ -55,11 +71,23 @@ export const fetchAccessibleStoriesMobile = async (
 export const fetchUserStoriesMobile = async (
   userId: string
 ): Promise<Story[]> => {
-  const functionsInstance = getFirebaseFunctions();
-  const functionRef = httpsCallable(functionsInstance, 'getUserStories');
-  const res = await functionRef({ userId });
-  const data = res.data as { stories: Story[] };
-  return data.stories;
+  try {
+    const functionsInstance = getFirebaseFunctions();
+    const functionRef = httpsCallable(functionsInstance, 'getUserStories');
+    const res = await functionRef({ userId });
+    const data = res.data as { stories: Story[] };
+    return data.stories;
+  } catch (error) {
+    errorHandler.handleFirebaseError(error, {
+      severity: ErrorSeverity.ERROR,
+      title: 'Story Error',
+      metadata: {
+        action: 'fetchUserStories',
+        userId
+      }
+    });
+    throw error;
+  }
 };
 
 /**
@@ -79,11 +107,25 @@ export const createStoryMobile = async (storyData: {
   peopleInvolved: string[];
   coverImageURL?: string;
 }): Promise<string> => {
-  const functionsInstance = getFirebaseFunctions();
-  const functionRef = httpsCallable(functionsInstance, 'createStory');
-  const res = await functionRef(storyData);
-  const data = res.data as { id: string };
-  return data.id;
+  try {
+    const functionsInstance = getFirebaseFunctions();
+    const functionRef = httpsCallable(functionsInstance, 'createStory');
+    const res = await functionRef({ story: storyData });
+    const data = res.data as { id: string };
+    return data.id;
+  } catch (error) {
+    errorHandler.handleFirebaseError(error, {
+      severity: ErrorSeverity.ERROR,
+      title: 'Story Creation Error',
+      metadata: {
+        action: 'createStory',
+        authorID: storyData.authorID,
+        familyTreeId: storyData.familyTreeId,
+        title: storyData.title
+      }
+    });
+    throw error;
+  }
 };
 
 /**
@@ -104,11 +146,24 @@ export const updateStoryMobile = async (
     coverImageURL?: string | null;
   }>
 ): Promise<boolean> => {
-  const functionsInstance = getFirebaseFunctions();
-  const functionRef = httpsCallable(functionsInstance, 'updateStory');
-  const res = await functionRef({ storyId, userId, updates });
-  const data = res.data as { success: boolean };
-  return data.success;
+  try {
+    const functionsInstance = getFirebaseFunctions();
+    const functionRef = httpsCallable(functionsInstance, 'updateStory');
+    const res = await functionRef({ storyId, userId, updates });
+    const data = res.data as { success: boolean };
+    return data.success;
+  } catch (error) {
+    errorHandler.handleFirebaseError(error, {
+      severity: ErrorSeverity.ERROR,
+      title: 'Story Update Error',
+      metadata: {
+        action: 'updateStory',
+        storyId,
+        userId
+      }
+    });
+    throw error;
+  }
 };
 
 /**
@@ -118,11 +173,24 @@ export const deleteStoryMobile = async (
   storyId: string,
   userId: string
 ): Promise<boolean> => {
-  const functionsInstance = getFirebaseFunctions();
-  const functionRef = httpsCallable(functionsInstance, 'deleteStory');
-  const res = await functionRef({ storyId, userId });
-  const data = res.data as { success: boolean };
-  return data.success;
+  try {
+    const functionsInstance = getFirebaseFunctions();
+    const functionRef = httpsCallable(functionsInstance, 'deleteStory');
+    const res = await functionRef({ storyId, userId });
+    const data = res.data as { success: boolean };
+    return data.success;
+  } catch (error) {
+    errorHandler.handleFirebaseError(error, {
+      severity: ErrorSeverity.ERROR,
+      title: 'Story Deletion Error',
+      metadata: {
+        action: 'deleteStory',
+        storyId,
+        userId
+      }
+    });
+    throw error;
+  }
 };
 
 /**
@@ -147,7 +215,16 @@ export const toggleStoryLikeMobile = async (
     return data.success;
   } catch (error) {
     if (onLikeChange) onLikeChange(isCurrentlyLiked, 0);
-    console.error('Error toggling story like:', error);
+    errorHandler.handleFirebaseError(error, {
+      severity: ErrorSeverity.WARNING,
+      title: 'Like Error',
+      metadata: {
+        action: 'toggleStoryLike',
+        storyId,
+        isCurrentlyLiked
+      },
+      showAlert: false // Don't show alert for like failures, just reset state
+    });
     return false;
   }
 };
@@ -165,7 +242,15 @@ export const checkStoryLikeStatusMobile = async (
     const data = res.data as { isLiked: boolean };
     return data.isLiked;
   } catch (error) {
-    console.error('Error checking story like status:', error);
+    errorHandler.handleFirebaseError(error, {
+      severity: ErrorSeverity.WARNING,
+      title: 'Like Status Error',
+      metadata: {
+        action: 'checkStoryLikeStatus',
+        storyId
+      },
+      showAlert: false // Don't show alert for like check failures
+    });
     return false;
   }
 };
@@ -175,15 +260,23 @@ export const checkStoryLikeStatusMobile = async (
  */
 export const getStoryLikesMobile = async (
   storyId: string
-): Promise<Array<any>> => {
+): Promise<any[]> => {
   try {
     const functionsInstance = getFirebaseFunctions();
     const functionRef = httpsCallable(functionsInstance, 'getStoryLikes');
     const res = await functionRef({ storyId });
-    const data = res.data as { likes?: Array<any> };
+    const data = res.data as { likes?: any[] };
     return data.likes || [];
   } catch (error) {
-    console.error('Error fetching story likes:', error);
+    errorHandler.handleFirebaseError(error, {
+      severity: ErrorSeverity.WARNING,
+      title: 'Likes Fetch Error',
+      metadata: {
+        action: 'getStoryLikes',
+        storyId
+      },
+      showAlert: false
+    });
     return [];
   }
 };
@@ -193,18 +286,25 @@ export const getStoryLikesMobile = async (
  */
 export const getStoryCommentsMobile = async (
   storyId: string
-): Promise<Array<any>> => {
+): Promise<any[]> => {
   try {
     const functionsInstance = getFirebaseFunctions();
     const functionRef = httpsCallable(functionsInstance, 'getStoryComments');
     const res = await functionRef({ storyId });
-    const data = res.data as { status?: string; comments?: Array<any> };
+    const data = res.data as { status?: string; comments?: any[] };
     if (data.status === 'error') {
       return [];
     }
     return data.comments || [];
   } catch (error) {
-    console.error('Error fetching story comments:', error);
+    errorHandler.handleFirebaseError(error, {
+      severity: ErrorSeverity.WARNING,
+      title: 'Comments Fetch Error',
+      metadata: {
+        action: 'getStoryComments',
+        storyId
+      }
+    });
     return [];
   }
 };
@@ -228,7 +328,16 @@ export const addCommentMobile = async (
       return { success: false, comment: null, error: "Failed to add comment or comment data missing from response." };
     }
   } catch (error: any) {
-    console.error('Error adding comment:', error);
+    errorHandler.handleFirebaseError(error, {
+      severity: ErrorSeverity.ERROR,
+      title: 'Comment Submission Error',
+      metadata: {
+        action: 'addComment',
+        storyId,
+        parentId,
+        textLength: text?.length
+      }
+    });
     return { success: false, comment: null, error: error.message || "Unknown error adding comment" };
   }
 };
@@ -251,7 +360,15 @@ export const toggleCommentLikeMobile = async (
       return { success: false, liked: false, error: "Invalid response from server." };
     }
   } catch (error: any) {
-    console.error('Error toggling comment like:', error);
+    errorHandler.handleFirebaseError(error, {
+      severity: ErrorSeverity.WARNING,
+      title: 'Comment Like Error',
+      metadata: {
+        action: 'toggleCommentLike',
+        commentId
+      },
+      showAlert: false
+    });
     return { success: false, liked: false, error: error.message || "Unknown error toggling comment like" };
   }
 };
@@ -261,15 +378,23 @@ export const toggleCommentLikeMobile = async (
  */
 export const getCommentLikesMobile = async (
   commentId: string
-): Promise<Array<any>> => {
+): Promise<any[]> => {
   try {
     const functionsInstance = getFirebaseFunctions();
     const functionRef = httpsCallable(functionsInstance, 'getCommentLikes');
     const res = await functionRef({ commentId });
-    const data = res.data as { likes?: Array<any> };
+    const data = res.data as { likes?: any[] };
     return data.likes || [];
   } catch (error) {
-    console.error('Error fetching comment likes:', error);
+    errorHandler.handleFirebaseError(error, {
+      severity: ErrorSeverity.WARNING,
+      title: 'Comment Likes Fetch Error',
+      metadata: {
+        action: 'getCommentLikes',
+        commentId
+      },
+      showAlert: false
+    });
     return [];
   }
 }; 

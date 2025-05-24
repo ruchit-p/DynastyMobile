@@ -16,29 +16,54 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { commonHeaderOptions } from '../../constants/headerConfig';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { getFirebaseAuth, getFirebaseDb } from '../../src/lib/firebase'; // Import Firebase services
-import Fonts from '../../constants/Fonts'; // ADDED IMPORT
+import { getFirebaseAuth } from '../../src/lib/firebase';
+import Fonts from '../../constants/Fonts';
+import { showErrorAlert, callFirebaseFunction } from '../../src/lib/errorUtils';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { useImageUpload } from '../../hooks/useImageUpload';
+import FullScreenDatePicker from '../../components/ui/FullScreenDatePicker';
+import GenderPicker from '../../components/ui/GenderPicker';
 
 const EditProfileScreen = () => {
   const navigation = useNavigation();
   const { user, firestoreUser, refreshUser } = useAuth();
+  const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Profile Update Error',
+    trackCurrentScreen: true
+  });
+
+  useEffect(() => {
+    if (!isError) {
+      // Clear any local error states when global error is cleared
+    }
+  }, [isError]);
 
   const [name, setName] = useState(firestoreUser?.displayName || user?.displayName || '');
   const [editableEmail, setEditableEmail] = useState(user?.email || '');
   const [avatarUri, setAvatarUri] = useState<string | null>(firestoreUser?.profilePicture || user?.photoURL || null);
   const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
+  const [profileImageFirebaseUrl, setProfileImageFirebaseUrl] = useState<string | null>(null);
+  const [dateOfBirth, setDateOfBirth] = useState(firestoreUser?.dateOfBirth || '');
+  const [gender, setGender] = useState(firestoreUser?.gender || '');
+  const [phoneNumber, setPhoneNumber] = useState(firestoreUser?.phoneNumber || '');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showGenderPicker, setShowGenderPicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(
+    firestoreUser?.dateOfBirth ? new Date(firestoreUser.dateOfBirth) : null
+  );
   
-  // Mock state for image uploading, since the hook is removed or not used in this step
-  const [isUploadingImage, setIsUploadingImage] = useState<boolean>(false);
-  const [uploadProgress, setUploadProgress] = useState<number>(0);
-  // const [profileImageFirebaseUrl, setProfileImageFirebaseUrl] = useState<string | null>(null); // This would be set by an upload function
+  // Use the image upload hook
+  const { isUploading: isUploadingImage, uploadProgress, uploadImage } = useImageUpload();
 
-  const handleSaveChanges = async () => {
+  const handleSaveChanges = withErrorHandling(async () => {
+    reset();
     const auth = getFirebaseAuth();
-    const db = getFirebaseDb();
 
     if (!auth.currentUser) {
-      Alert.alert("Error", "You must be logged in to save your profile.");
+      showErrorAlert({ message: "You must be logged in to save your profile.", code: "unauthenticated" }, "Authentication Error");
       return;
     }
     if (isUploadingImage) {
@@ -48,53 +73,84 @@ const EditProfileScreen = () => {
 
     setIsSavingProfile(true);
     try {
-      const userId = auth.currentUser!.uid;
-      const userDocRef = db.collection("users").doc(userId);
+      // Handle email update separately if needed
       let emailChanged = false;
-
       if (editableEmail && editableEmail !== user?.email) {
         try {
           await auth.currentUser!.updateEmail(editableEmail);
           emailChanged = true;
           Alert.alert("Email Updated", "Your email has been updated. You might need to re-verify it.");
         } catch (error: any) {
-          console.error("Error updating email in Auth:", error);
-          Alert.alert("Email Update Failed", error.message || "Could not update your email. It might be already in use or invalid.");
+          handleError(error, { 
+            action: 'updateEmail',
+            metadata: { newEmail: editableEmail }
+          });
+          showErrorAlert(error, "Email Update Failed");
           setIsSavingProfile(false);
           return;
         }
       }
 
-      const profileDataToUpdate: { name: string; email?: string; profilePicture?: string, updatedAt: Date, displayName?: string } = {
-        name: name,
+      // Prepare profile update data
+      const profileDataToUpdate: { 
+        uid: string;
+        displayName?: string;
+        photoURL?: string;
+        dateOfBirth?: string;
+        gender?: string;
+        phoneNumber?: string;
+      } = {
+        uid: auth.currentUser!.uid,
         displayName: name,
-        updatedAt: new Date(),
+        dateOfBirth: dateOfBirth,
+        gender: gender,
+        phoneNumber: phoneNumber,
       };
 
-      if (emailChanged) {
-        profileDataToUpdate.email = editableEmail;
-      }
-
-      // if (profileImageFirebaseUrl) { // If using a separate upload hook for avatar
-      //   profileDataToUpdate.profilePicture = profileImageFirebaseUrl;
-      // } else 
-      if (avatarUri && avatarUri !== (firestoreUser?.profilePicture || user?.photoURL)) {
-        // This implies a new local URI was picked but not yet uploaded via a hook.
-        // For now, we're not handling direct upload in this function to keep it focused on text fields.
-        // If you have an `uploadImage` function (like from `useImageUpload`), call it here for `avatarUri`
-        // and then set `profileDataToUpdate.profilePicture` with the returned Firebase URL.
-        // For this example, we assume `avatarUri` might be a Firebase URL if already set, or needs separate upload.
-        // If it's a new local URI, it won't be saved unless you implement the upload and URL retrieval here.
-        console.log("New avatar URI picked, but upload logic needs to be integrated here if it's a local file.");
-        // Example: if (avatarUri.startsWith('file://')) { /* call uploadImage -> get URL -> update profileData... */ }
-        // For now, let's assume if avatarUri exists and is different, it's a new Firebase URL (e.g. from a hypothetical direct upload)
-        // This part needs to be robust based on how you handle image uploads.
-        if (avatarUri.startsWith('http')) { // Simplistic check if it might be a Firebase URL
-            profileDataToUpdate.profilePicture = avatarUri;
+      // Handle profile picture upload
+      let profilePictureUrl: string | undefined;
+      if (profileImageFirebaseUrl) {
+        // If we have already uploaded the image, use the Firebase URL
+        profilePictureUrl = profileImageFirebaseUrl;
+      } else if (avatarUri && avatarUri !== (firestoreUser?.profilePicture || user?.photoURL)) {
+        // If it's a new local URI that hasn't been uploaded yet
+        if (avatarUri.startsWith('file://')) {
+          // Upload the image first
+          try {
+            const uploadedUrl = await uploadImage(avatarUri, 'profileImages');
+            if (uploadedUrl) {
+              profilePictureUrl = uploadedUrl;
+            } else {
+              Alert.alert("Upload Failed", "Failed to upload profile picture. Please try again.");
+              setIsSavingProfile(false);
+              return;
+            }
+          } catch (error: any) {
+            handleError(error, { 
+              action: 'uploadProfileImage',
+              metadata: { localUri: avatarUri }
+            });
+            Alert.alert("Upload Failed", "Failed to upload profile picture. Please try again.");
+            setIsSavingProfile(false);
+            return;
+          }
+        } else if (avatarUri.startsWith('http')) {
+          // It's already a Firebase URL
+          profilePictureUrl = avatarUri;
         }
       }
 
-      await userDocRef.set(profileDataToUpdate, { merge: true });
+      // Add profile picture to update data if available
+      if (profilePictureUrl) {
+        profileDataToUpdate.photoURL = profilePictureUrl;
+      }
+
+      // Call the updateUserProfile cloud function
+      const result = await callFirebaseFunction('updateUserProfile', profileDataToUpdate);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update profile');
+      }
 
       if (refreshUser) {
         await refreshUser();
@@ -103,12 +159,19 @@ const EditProfileScreen = () => {
       Alert.alert('Profile Saved', 'Your changes have been successfully saved.');
       navigation.goBack();
     } catch (error: any) {
-      console.error("Error saving profile:", error);
-      Alert.alert("Save Failed", error.message || "Could not save your profile. Please try again.");
+      handleError(error, { 
+        action: 'saveProfile',
+        metadata: { 
+          nameChanged: name !== (firestoreUser?.displayName || user?.displayName),
+          emailChanged: editableEmail !== user?.email,
+          avatarChanged: avatarUri !== (firestoreUser?.profilePicture || user?.photoURL)
+        }
+      });
+      showErrorAlert(error, "Save Failed");
     } finally {
       setIsSavingProfile(false);
     }
-  };
+  });
 
   useEffect(() => {
     navigation.setOptions({
@@ -131,7 +194,7 @@ const EditProfileScreen = () => {
   const handlePickProfileImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Allow access to photos to update profile picture.');
+      showErrorAlert({ message: 'Allow access to photos to update profile picture.', code: 'permission-denied' }, 'Permission Required');
       return;
     }
     const pickerResult = await ImagePicker.launchImageLibraryAsync({
@@ -143,47 +206,47 @@ const EditProfileScreen = () => {
     if (!pickerResult.canceled && pickerResult.assets && pickerResult.assets.length > 0) {
       const localUri = pickerResult.assets[0].uri;
       setAvatarUri(localUri);
+      setProfileImageFirebaseUrl(null); // Reset any previous upload
       
-      // try { // Firebase image upload logic commented out
-        // setIsUploadingImage(true); // Manually set for UI
-        // setUploadProgress(0); // Reset progress
-        // const firebaseUrl = await uploadImage(localUri, 'profileImages'); // This was the call to the hook
-        // if (firebaseUrl) {
-        //   console.log("Uploaded to Firebase:", firebaseUrl);
-        //   // setProfileImageFirebaseUrl(firebaseUrl); // Set the uploaded URL if needed for save
-        // } else {
-          // Upload failed (error handled within the hook / shown via Alert)
-          // Revert local avatar display if needed, or allow user to retry saving.
-          // Example: setAvatarUri(initialUserData.profilePicUrl); 
-        // }
-      // } catch (err) {
-         // Error is already handled by the hook (sets error state, shows Alert)
-         // console.error("Upload initiation failed (caught in component):", err)
-      // } finally {
-        // setIsUploadingImage(false); // Manually set for UI
-      // }
-      // Simulate image "upload" for UI purposes if you want a delay/progress
-      console.log("Image picked (local):", localUri);
-      // If you want to simulate an upload process for UI testing:
-      /*
-      setIsUploadingImage(true);
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += 10;
-        setUploadProgress(progress);
-        if (progress >= 100) {
-          clearInterval(interval);
-          setIsUploadingImage(false);
-          // setProfileImageFirebaseUrl(localUri); // For testing, treat local as "uploaded"
-          console.log("Simulated upload complete for ", localUri)
+      // Upload immediately after picking
+      try {
+        const firebaseUrl = await uploadImage(localUri, 'profileImages');
+        if (firebaseUrl) {
+          console.log("Uploaded to Firebase:", firebaseUrl);
+          setProfileImageFirebaseUrl(firebaseUrl);
+          // Update the avatar URI to the Firebase URL for immediate display
+          setAvatarUri(firebaseUrl);
+        } else {
+          // Upload failed - revert to previous avatar
+          setAvatarUri(firestoreUser?.profilePicture || user?.photoURL || null);
+          Alert.alert("Upload Failed", "Failed to upload profile picture. Please try again.");
         }
-      }, 100);
-      */
+      } catch (err: any) {
+        console.error("Upload failed:", err);
+        // Revert to previous avatar
+        setAvatarUri(firestoreUser?.profilePicture || user?.photoURL || null);
+        Alert.alert("Upload Failed", "Failed to upload profile picture. Please try again.");
+      }
     }
   };
 
+  const handleDateChange = (date: Date) => {
+    setSelectedDate(date);
+    setDateOfBirth(date.toISOString().split('T')[0]); // Format as YYYY-MM-DD
+  };
+
+  const formatDateDisplay = (date: Date | null) => {
+    if (!date) return 'Select Date';
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  };
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <ErrorBoundary screenName="EditProfileScreen">
+      <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.avatarContainer}>
           <TouchableOpacity onPress={handlePickProfileImage}>
@@ -226,20 +289,70 @@ const EditProfileScreen = () => {
           />
         </View>
 
-        {firestoreUser?.phoneNumber && (
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Phone Number</Text>
-            <TextInput
-              style={[styles.input, styles.readOnlyInput]} // Added readOnlyInput style
-              value={firestoreUser.phoneNumber}
-              editable={false} // Make it non-editable for now
-              placeholderTextColor="#999"
-            />
-          </View>
-        )}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Phone Number</Text>
+          <TextInput
+            style={styles.input}
+            value={phoneNumber}
+            onChangeText={setPhoneNumber}
+            placeholder="+1 (123) 456-7890"
+            keyboardType="phone-pad"
+            placeholderTextColor="#999"
+          />
+          {phoneNumber && phoneNumber !== firestoreUser?.phoneNumber && (
+            <Text style={styles.helperText}>Phone number will require verification</Text>
+          )}
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Date of Birth</Text>
+          <TouchableOpacity 
+            onPress={() => setShowDatePicker(true)}
+            style={styles.selectorButton}
+          >
+            <Text style={[styles.selectorText, !selectedDate && styles.placeholderText]}>
+              {formatDateDisplay(selectedDate)}
+            </Text>
+            <Ionicons name="calendar-outline" size={20} color="#666" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Gender</Text>
+          <TouchableOpacity 
+            onPress={() => setShowGenderPicker(true)}
+            style={styles.selectorButton}
+          >
+            <Text style={[styles.selectorText, !gender && styles.placeholderText]}>
+              {gender || 'Select Gender'}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color="#666" />
+          </TouchableOpacity>
+        </View>
 
       </ScrollView>
-    </SafeAreaView>
+      
+      <FullScreenDatePicker
+        isVisible={showDatePicker}
+        onDismiss={() => setShowDatePicker(false)}
+        onDateChange={handleDateChange}
+        value={selectedDate}
+        maximumDate={new Date()}
+        mode="date"
+        headerTitle="Select Date of Birth"
+      />
+      
+      <GenderPicker
+        isVisible={showGenderPicker}
+        onDismiss={() => setShowGenderPicker(false)}
+        onGenderChange={(g) => {
+          setGender(g);
+          setShowGenderPicker(false);
+        }}
+        value={gender}
+      />
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 
@@ -314,6 +427,31 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  selectorButton: {
+    backgroundColor: '#FFF',
+    paddingHorizontal: 15,
+    paddingVertical: Platform.OS === 'ios' ? 15 : 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#DDD',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  selectorText: {
+    fontSize: 16,
+    color: '#333',
+    fontFamily: Fonts.type.base,
+  },
+  placeholderText: {
+    color: '#999',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 5,
+    fontStyle: 'italic',
   },
 });
 

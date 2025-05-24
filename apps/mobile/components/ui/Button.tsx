@@ -151,7 +151,8 @@ const Button: React.FC<ButtonProps> = ({
       return (
         <ActivityIndicator 
           size="small" 
-          color={specialTextColor} 
+          color={specialTextColor}
+          testID={testID ? `${testID}-loading` : 'button-loading'}
         />
       );
     }
@@ -161,7 +162,8 @@ const Button: React.FC<ButtonProps> = ({
         <Ionicons 
           name={iconOnly} 
           size={iconSize} 
-          color={specialTextColor} 
+          color={specialTextColor}
+          testID={testID ? `${testID}-icon` : 'button-icon'}
         />
       );
     }
@@ -210,7 +212,7 @@ const Button: React.FC<ButtonProps> = ({
         disabled: isDisabled || isLoading,
         busy: isLoading,
       }}
-      testID={testID}
+      testID={testID || 'button-touchable'}
     >
       {renderContent()}
     </TouchableOpacity>

@@ -133,6 +133,14 @@ const VideoItemRenderer: React.FC<{ item: MediaItem; style?: StyleProp<ViewStyle
         showsTimecodes // Optional: if you want timecodes without full native controls
         nativeControls={true} // MODIFIED: Enable native controls
       />
+      {/* Play button overlay - shown when video is not playing and no errors */}
+      {!isPlaying && status !== 'error' && status !== 'loading' && (
+        <View style={styles.playButtonOverlay} pointerEvents="none">
+          <View style={styles.playButton}>
+            <Ionicons name="play" size={40} color="white" />
+          </View>
+        </View>
+      )}
       {item.duration ? (
         <Text style={styles.durationText}>
           {Math.floor(item.duration / 60000)}:{(Math.floor(item.duration / 1000) % 60).toString().padStart(2, '0')}
@@ -284,6 +292,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.1)', // Slight dim to make icon more visible
+  },
+  playButtonOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   durationText: {
     position: 'absolute',

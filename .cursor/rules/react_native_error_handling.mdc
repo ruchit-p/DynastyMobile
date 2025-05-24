@@ -1,0 +1,241 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Specify the following for Cursor rules
+description: React Native error handling implementation requirements for Dynasty mobile app
+globs: "apps/mobile/**/*.tsx, apps/mobile/**/*.ts"
+---
+
+# React Native Error Handling
+
+## Overview
+
+The Dynasty mobile app implements comprehensive error handling across all screens and components using a standardized pattern. This rule ensures all new React Native components and screens follow the established error handling architecture.
+
+## 🚨 CRITICAL RULES 🚨
+
+1. **ALL** React Native screens and components MUST implement error handling
+2. **ALL** screens MUST wrap content with ErrorBoundary component
+3. **ALL** async operations MUST use withErrorHandling wrapper
+4. **ALL** error handling MUST follow the standardized import pattern
+5. **NEVER** create screens without proper error handling implementation
+
+## Required Imports
+
+Every screen/component with error handling MUST include these imports:
+
+```typescript
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+```
+
+**Note**: Adjust relative paths based on file location:
+- From `app/(screens)/`: `../../components/ui/ErrorBoundary`
+- From `app/(tabs)/`: `../../components/ui/ErrorBoundary`
+- From `app/(auth)/`: `../../components/ui/ErrorBoundary`
+- From `app/_layout.tsx`: `../components/ui/ErrorBoundary`
+
+## Standardized Implementation Pattern
+
+### For Screen Components
+
+```typescript
+import React from 'react';
+import { View, Text } from 'react-native';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+
+export default function ScreenName() {
+  const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Screen Name Error',
+    trackCurrentScreen: true
+  });
+
+  const handleAsyncOperation = withErrorHandling(async () => {
+    // Async operation logic
+  }, 'Failed to perform operation');
+
+  return (
+    <ErrorBoundary screenName="ScreenNameScreen">
+      <View>
+        {/* Screen content */}
+      </View>
+    </ErrorBoundary>
+  );
+}
+```
+
+### For Layout Components
+
+```typescript
+import React from 'react';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+
+export default function LayoutName() {
+  const { handleError, withErrorHandling } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Layout Error',
+    trackCurrentScreen: true
+  });
+
+  return (
+    <ErrorBoundary screenName="LayoutNameScreen">
+      {/* Layout content */}
+    </ErrorBoundary>
+  );
+}
+```
+
+## Error Severity Guidelines
+
+Choose appropriate severity levels:
+
+- **ErrorSeverity.INFO** - Non-critical informational events
+- **ErrorSeverity.WARNING** - Potential issues that don't break functionality  
+- **ErrorSeverity.ERROR** - Errors that affect functionality (DEFAULT for most screens)
+- **ErrorSeverity.FATAL** - Critical errors that may crash the app (layouts, root components)
+
+## Common Patterns
+
+### Async Operations with Error Handling
+
+```typescript
+// Good: Wrapped async operation
+const fetchData = withErrorHandling(async () => {
+  const response = await api.getData();
+  setData(response);
+}, 'Failed to fetch data');
+
+// Bad: Unhandled async operation
+const fetchData = async () => {
+  const response = await api.getData(); // Could throw unhandled error
+  setData(response);
+};
+```
+
+### Navigation with Error Handling
+
+```typescript
+// Good: Wrapped navigation
+const navigateToScreen = withErrorHandling(() => {
+  router.push('/screen');
+}, 'Navigation failed');
+
+// Bad: Unhandled navigation
+const navigateToScreen = () => {
+  router.push('/screen'); // Could throw unhandled error
+};
+```
+
+### Manual Error Handling
+
+```typescript
+// When you need custom error handling
+try {
+  await riskyOperation();
+} catch (error) {
+  handleError(error, 'Custom error message', { 
+    additionalContext: 'value',
+    userId: user.id 
+  });
+}
+```
+
+## ErrorBoundary Requirements
+
+### Screen Name Convention
+
+Always provide descriptive screen names to ErrorBoundary:
+
+```typescript
+// Good: Descriptive screen names
+<ErrorBoundary screenName="CreateEventScreen">
+<ErrorBoundary screenName="ProfileEditScreen">
+<ErrorBoundary screenName="ChatDetailScreen">
+
+// Bad: Generic or missing screen names
+<ErrorBoundary screenName="Screen">
+<ErrorBoundary>
+```
+
+### Screen Name Patterns
+
+Follow these naming conventions:
+- Screen components: `{ScreenName}Screen` (e.g., "CreateEventScreen")
+- Layout components: `{LayoutName}Layout` (e.g., "TabLayout")
+- Root layout: `RootLayout`
+
+## Hook Configuration Options
+
+### useErrorHandler Configuration
+
+```typescript
+const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
+  severity: ErrorSeverity.ERROR,        // Required: Error severity level
+  title: 'Descriptive Error Title',     // Required: User-friendly title
+  trackCurrentScreen: true,             // Optional: Track screen context
+  metadata: { userId: user.id }         // Optional: Additional context
+});
+```
+
+## Best Practices
+
+1. **Always wrap screen content** with ErrorBoundary
+2. **Use descriptive error titles** that help users understand the context
+3. **Wrap all async operations** with withErrorHandling
+4. **Include relevant metadata** for debugging context
+5. **Test error scenarios** to ensure proper fallback UI
+6. **Keep error messages user-friendly** and actionable
+7. **Use appropriate severity levels** based on impact
+
+## Anti-Patterns to Avoid
+
+```typescript
+// ❌ Missing ErrorBoundary wrapper
+export default function BadScreen() {
+  return <View>{/* content */}</View>;
+}
+
+// ❌ Unhandled async operations  
+const badAsyncFunction = async () => {
+  await riskyOperation(); // Could crash app
+};
+
+// ❌ Missing error handling imports
+import React from 'react';
+// Missing ErrorBoundary and useErrorHandler imports
+
+// ❌ Generic error titles
+useErrorHandler({ 
+  severity: ErrorSeverity.ERROR,
+  title: 'Error' // Too generic
+});
+```
+
+## Integration with Existing Components
+
+When modifying existing components, ensure they follow this pattern:
+
+1. Add required imports
+2. Implement useErrorHandler hook
+3. Wrap content with ErrorBoundary
+4. Update async operations to use withErrorHandling
+5. Test error scenarios
+
+## Testing Error Handling
+
+Always test error scenarios:
+
+1. **Rendering errors**: Force component to throw during render
+2. **Async failures**: Mock API failures
+3. **Navigation errors**: Test invalid route navigation
+4. **Boundary recovery**: Test "Try Again" functionality
+
+This comprehensive error handling system ensures the Dynasty mobile app provides a robust user experience even when errors occur.

@@ -1,9 +1,9 @@
-import * as functions from "firebase-functions";
 import {onCall} from "firebase-functions/v2/https";
 import {Client} from "@googlemaps/google-maps-services-js";
 import {defineSecret} from "firebase-functions/params"; // Changed from defineString
-import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common"; // Assuming common config file
-import {logger} from "firebase-functions";
+import {DEFAULT_REGION, FUNCTION_TIMEOUT, DEFAULT_MEMORY} from "./common"; // Assuming common config file
+import {logger} from "firebase-functions/v2";
+import {createError, withErrorHandling, ErrorCode} from "./utils/errors"; // Added
 
 // Initialize Google Maps Client
 const mapsClient = new Client({});
@@ -21,17 +21,15 @@ export const googlePlacesAutocomplete = onCall(
   {
     region: DEFAULT_REGION,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT, // Adjust as needed
-    // memory: "256MiB", // Adjust as needed
+    memory: DEFAULT_MEMORY.SHORT, // Use constant from common.ts
+    secrets: [GOOGLE_PLACES_API_KEY], // Ensure secret is available
   },
-  async (request) => {
+  withErrorHandling(async (request) => { // Wrapped withErrorHandling
     const {auth, data} = request;
     const apiKey = GOOGLE_PLACES_API_KEY.value(); // Access the secret value
 
     if (!auth) {
-      throw new functions.https.HttpsError(
-        "unauthenticated",
-        "User must be authenticated to use this function."
-      );
+      throw createError(ErrorCode.UNAUTHENTICATED, "User must be authenticated to use this function.");
     }
 
     if (!apiKey) {
@@ -42,10 +40,7 @@ export const googlePlacesAutocomplete = onCall(
         "Ensure it is set in your function's environment variables or secrets configuration. " +
         "For deployed functions, use `firebase functions:secrets:set GOOGLE_PLACES_API_KEY`. "
       );
-      throw new functions.https.HttpsError(
-        "internal",
-        "Google API key is not configured for the server."
-      );
+      throw createError(ErrorCode.INTERNAL, "Google API key is not configured for the server.");
     }
 
     const {
@@ -59,49 +54,35 @@ export const googlePlacesAutocomplete = onCall(
     } = data;
 
     if (!input) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "The function must be called with a 'input' argument."
-      );
+      throw createError(ErrorCode.MISSING_PARAMETERS, "The function must be called with an 'input' argument.");
     }
 
-    try {
-      logger.info(`Places Autocomplete request for input: ${input}`, {userId: auth.uid});
-      const params: any = {
-        input,
-        key: apiKey, // Use the accessed secret value
-      };
-      if (sessiontoken) params.sessiontoken = sessiontoken;
-      if (location) params.location = location;
-      if (radius) params.radius = radius;
-      if (language) params.language = language;
-      if (components) params.components = components;
-      if (types) params.types = types;
+    // Try-catch block is now handled by withErrorHandling
+    logger.info(`Places Autocomplete request for input: ${input}`, {userId: auth.uid});
+    const params: any = {
+      input,
+      key: apiKey, // Use the accessed secret value
+    };
+    if (sessiontoken) params.sessiontoken = sessiontoken;
+    if (location) params.location = location;
+    if (radius) params.radius = radius;
+    if (language) params.language = language;
+    if (components) params.components = components;
+    if (types) params.types = types;
 
-      const response = await mapsClient.placeAutocomplete({params});
+    const response = await mapsClient.placeAutocomplete({params});
 
-      if (response.data.status === "OK" || response.data.status === "ZERO_RESULTS") {
-        return {predictions: response.data.predictions};
-      } else {
-        logger.error("Google Places Autocomplete API Error:", response.data);
-        throw new functions.https.HttpsError(
-          "internal",
-          response.data.error_message || "Failed to fetch place predictions.",
-          {status: response.data.status}
-        );
-      }
-    } catch (error: any) {
-      logger.error("Error calling Google Places Autocomplete API:", error);
-      if (error instanceof functions.https.HttpsError) {
-        throw error;
-      }
-      throw new functions.https.HttpsError(
-        "internal",
-        "An unexpected error occurred while fetching place predictions.",
-        error.message
+    if (response.data.status === "OK" || response.data.status === "ZERO_RESULTS") {
+      return {predictions: response.data.predictions};
+    } else {
+      logger.error("Google Places Autocomplete API Error:", response.data);
+      throw createError(
+        ErrorCode.INTERNAL,
+        response.data.error_message || "Failed to fetch place predictions.",
+        {status: response.data.status}
       );
     }
-  }
+  }, "googlePlacesAutocomplete") // Added function name for logging
 );
 
 /**
@@ -114,17 +95,15 @@ export const getGooglePlaceDetails = onCall(
   {
     region: DEFAULT_REGION,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT, // Adjust as needed
-    // memory: "256MiB", // Adjust as needed
+    memory: DEFAULT_MEMORY.SHORT, // Use constant from common.ts
+    secrets: [GOOGLE_PLACES_API_KEY], // Ensure secret is available
   },
-  async (request) => {
+  withErrorHandling(async (request) => { // Wrapped withErrorHandling
     const {auth, data} = request;
     const apiKey = GOOGLE_PLACES_API_KEY.value(); // Access the secret value
 
     if (!auth) {
-      throw new functions.https.HttpsError(
-        "unauthenticated",
-        "User must be authenticated to use this function."
-      );
+      throw createError(ErrorCode.UNAUTHENTICATED, "User must be authenticated to use this function.");
     }
 
     if (!apiKey) {
@@ -134,10 +113,7 @@ export const getGooglePlaceDetails = onCall(
         "Ensure it is set in your function's environment variables or secrets configuration. " +
         "For deployed functions, use `firebase functions:secrets:set GOOGLE_PLACES_API_KEY`. "
       );
-      throw new functions.https.HttpsError(
-        "internal",
-        "Google API key is not configured for the server."
-      );
+      throw createError(ErrorCode.INTERNAL, "Google API key is not configured for the server.");
     }
 
     const {
@@ -148,49 +124,35 @@ export const getGooglePlaceDetails = onCall(
     } = data;
 
     if (!placeId) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "The function must be called with a 'placeId' argument."
-      );
+      throw createError(ErrorCode.MISSING_PARAMETERS, "The function must be called with a 'placeId' argument.");
     }
 
-    try {
-      logger.info(`Place Details request for placeId: ${placeId}`, {userId: auth.uid});
-      const params: any = {
-        place_id: placeId,
-        key: apiKey, // Use the accessed secret value
-      };
-      if (sessiontoken) params.sessiontoken = sessiontoken;
-      if (fields && Array.isArray(fields) && fields.length > 0) {
-        params.fields = fields.join(",");
-      } else {
-        // Default fields if not specified, geometry and formatted_address are often needed
-        params.fields = ["place_id", "name", "formatted_address", "geometry", "address_components", "types", "url", "vicinity"];
-      }
-      if (language) params.language = language;
+    // Try-catch block is now handled by withErrorHandling
+    logger.info(`Place Details request for placeId: ${placeId}`, {userId: auth.uid});
+    const params: any = {
+      place_id: placeId,
+      key: apiKey, // Use the accessed secret value
+    };
+    if (sessiontoken) params.sessiontoken = sessiontoken;
+    if (fields && Array.isArray(fields) && fields.length > 0) {
+      params.fields = fields.join(",");
+    } else {
+      // Default fields if not specified, geometry and formatted_address are often needed
+      params.fields = ["place_id", "name", "formatted_address", "geometry", "address_components", "types", "url", "vicinity"];
+    }
+    if (language) params.language = language;
 
-      const response = await mapsClient.placeDetails({params});
+    const response = await mapsClient.placeDetails({params});
 
-      if (response.data.status === "OK") {
-        return {result: response.data.result};
-      } else {
-        logger.error("Google Place Details API Error:", response.data);
-        throw new functions.https.HttpsError(
-          "internal",
-          response.data.error_message || "Failed to fetch place details.",
-          {status: response.data.status}
-        );
-      }
-    } catch (error: any) {
-      logger.error("Error calling Google Place Details API:", error);
-      if (error instanceof functions.https.HttpsError) {
-        throw error;
-      }
-      throw new functions.https.HttpsError(
-        "internal",
-        "An unexpected error occurred while fetching place details.",
-        error.message
+    if (response.data.status === "OK") {
+      return {result: response.data.result};
+    } else {
+      logger.error("Google Place Details API Error:", response.data);
+      throw createError(
+        ErrorCode.INTERNAL,
+        response.data.error_message || "Failed to fetch place details.",
+        {status: response.data.status}
       );
     }
-  }
+  }, "getGooglePlaceDetails") // Added function name for logging
 );

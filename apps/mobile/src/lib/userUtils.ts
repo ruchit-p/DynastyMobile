@@ -1,5 +1,6 @@
 import { collection, doc, getDoc, getDocs, query, where, FieldPath } from '@react-native-firebase/firestore';
 import { getFirebaseDb } from './firebase'; // Corrected import
+import { errorHandler, ErrorSeverity } from './ErrorHandlingService';
 
 export interface UserProfile {
   id: string;
@@ -52,7 +53,16 @@ export const fetchUserProfilesByIds = async (userIds: string[]): Promise<UserPro
     }
     return userProfiles;
   } catch (error) {
-    console.error("Error fetching user profiles by IDs:", error);
+    errorHandler.handleFirebaseError(error, {
+      severity: ErrorSeverity.ERROR,
+      title: 'User Profiles Error',
+      metadata: {
+        action: 'fetchUserProfilesByIds',
+        userIdCount: userIds.length,
+        batchCount: batchedUserIds.length
+      },
+      showAlert: false // Don't show alert for background data fetching
+    });
     // Depending on requirements, you might want to throw the error or return an empty array / partial data
     return []; 
   }
@@ -85,7 +95,15 @@ export const fetchUserProfileById = async (userId: string): Promise<UserProfile 
       return null;
     }
   } catch (error) {
-    console.error(`Error fetching user profile for ID ${userId}:`, error);
+    errorHandler.handleFirebaseError(error, {
+      severity: ErrorSeverity.WARNING,
+      title: 'User Profile Error',
+      metadata: {
+        action: 'fetchUserProfileById',
+        userId
+      },
+      showAlert: false
+    });
     return null;
   }
 }; 

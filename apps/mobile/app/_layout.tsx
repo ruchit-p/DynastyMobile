@@ -1,5 +1,9 @@
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
+import { LogBox } from 'react-native';
+import { errorHandler, ErrorSeverity } from '../src/lib/ErrorHandlingService';
+import ErrorBoundary from '../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../hooks/useErrorHandler';
 import { SplashScreen, Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
@@ -8,8 +12,22 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { ScreenResultProvider } from '../src/contexts/ScreenResultContext';
+import { EncryptionProvider } from '../src/contexts/EncryptionContext';
+import { OfflineProvider } from '../src/contexts/OfflineContext';
 import 'react-native-get-random-values';
 import { connectToEmulators } from '../src/lib/firebase';
+import { ensureFirebaseInitialized } from '../src/lib/firebaseInit';
+import { Buffer } from '@craftzdog/react-native-buffer';
+import KeyRotationPrompt from '../components/encryption/KeyRotationPrompt';
+import { backgroundSyncTask } from '../src/services/BackgroundSyncTask';
+global.Buffer = Buffer as any;
+
+// Initialize Firebase as early as possible
+try {
+  ensureFirebaseInitialized();
+} catch (error) {
+  console.error('Early Firebase initialization failed:', error);
+}
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -26,7 +44,14 @@ function AppContent() {
   useEffect(() => {
     // Hide splash screen once fonts are loaded (or error) AND auth state is determined
     if ((fontsLoaded || fontError) && !isAuthLoading) {
-      SplashScreen.hideAsync();
+      SplashScreen.hideAsync().catch((error) => {
+        console.error('Failed to hide splash screen:', error);
+      });
+    }
+    
+    // Handle font loading errors
+    if (fontError) {
+      console.error('Font loading error:', fontError);
     }
   }, [fontsLoaded, fontError, isAuthLoading]);
 
@@ -47,29 +72,67 @@ function AppContent() {
         {/* Expo Router's Stack implicitly renders the correct screen (Slot) */}
       </Stack>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+      <KeyRotationPrompt />
     </ThemeProvider>
   );
 }
 
 export default function RootLayout() {
-  // Call connectToEmulators here, early in the app lifecycle
+  // Initialize error handling and connect to emulators
   useEffect(() => {
-    if (__DEV__) {
-      connectToEmulators();
-    }
-  }, []); // Empty dependency array ensures this runs once on mount
+    const initializeApp = async () => {
+      try {
+        // Initialize global error handling
+        errorHandler.initialize();
+        
+        // Initialize background sync
+        try {
+          await backgroundSyncTask.configure();
+          console.log('[App] Background sync configured successfully');
+        } catch (error) {
+          console.error('[App] Failed to configure background sync:', error);
+        }
+        
+        // Suppress yellow box warnings in development
+        if (__DEV__) {
+          LogBox.ignoreLogs([
+            'Non-serializable values were found in the navigation state',
+            'Possible Unhandled Promise Rejection',
+            // Add other warnings you want to suppress
+          ]);
+          
+          // Connect to Firebase emulators in dev mode
+          try {
+            await connectToEmulators();
+          } catch (error) {
+            console.error('Failed to connect to emulators:', error);
+          }
+        }
+      } catch (error) {
+        console.error('App initialization failed:', error);
+      }
+    };
 
-  // RootLayout is now simpler, mainly setting up providers
+    initializeApp();
+  }, []); // Empty dependency array since this should only run once
+
+  // RootLayout with global error boundary
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <AuthProvider> 
-          <ScreenResultProvider>
-            {/* AuthProvider wraps AppContent so useAuth works inside it */}
-            <AppContent />
-          </ScreenResultProvider>
-        </AuthProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary screenName="RootLayout">
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <AuthProvider> 
+            <OfflineProvider>
+              <EncryptionProvider>
+                <ScreenResultProvider>
+                  {/* AuthProvider wraps AppContent so useAuth works inside it */}
+                  <AppContent />
+                </ScreenResultProvider>
+              </EncryptionProvider>
+            </OfflineProvider>
+          </AuthProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }

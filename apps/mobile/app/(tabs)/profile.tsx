@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-// import { auth, db } from '../../src/lib/firebase'; // Commented out Firebase
+import { getFirebaseDb } from '../../src/lib/firebase';
 import { useAuth } from '../../src/contexts/AuthContext';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
 // Import design system components
 import Screen from '../../components/ui/Screen';
@@ -26,10 +29,17 @@ interface UserProfile {
   joinDate?: string;
   connections?: number;
   stories?: number;
+  events?: number;
   profilePicture?: string | null | undefined;
   firstName?: string;
   lastName?: string;
   createdAt?: any;
+}
+
+interface ProfileStats {
+  storiesCount: number;
+  eventsCount: number;
+  connectionsCount: number;
 }
 
 const ProfileScreen = () => {
@@ -37,59 +47,138 @@ const ProfileScreen = () => {
   const { user, isLoading: authIsLoading, firestoreUser } = useAuth();
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [userProfileData, setUserProfileData] = useState<UserProfile | null>(null);
+  const [profileStats, setProfileStats] = useState<ProfileStats>({
+    storiesCount: 0,
+    eventsCount: 0,
+    connectionsCount: 0
+  });
   
   // Get theme colors
   const borderColor = useBorderColor();
   const secondaryTextColor = useTextColor('secondary');
   const tertiaryTextColor = useTextColor('tertiary');
 
-  useEffect(() => {
-    setIsLoading(authIsLoading);
-    if (user) {
-      // Building user profile data from auth context
-      const profile: UserProfile = {
-        name: user.displayName || `${firestoreUser?.firstName || ''} ${firestoreUser?.lastName || ''}`.trim() || 'User',
-        email: user.email || null,
-        phoneNumber: user.phoneNumber || firestoreUser?.phoneNumber,
-        bio: firestoreUser?.bio,
-        joinDate: user.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleString('default', { month: 'long', year: 'numeric' }) : 'N/A',
-        connections: firestoreUser?.connectionsCount || 0,
-        stories: firestoreUser?.storiesCount || 0,
-        profilePicture: user.photoURL || firestoreUser?.profilePictureUrl,
-        firstName: firestoreUser?.firstName || user.displayName?.split(' ')[0],
-        lastName: firestoreUser?.lastName || user.displayName?.split(' ').slice(1).join(' '),
-        createdAt: firestoreUser?.createdAt || (user.metadata?.creationTime ? new Date(user.metadata.creationTime) : undefined),
-      };
-      setUserProfileData(profile);
-    } else {
-      setUserProfileData(null);
+  // Initialize our error handler
+  const { handleError, withErrorHandling } = useErrorHandler({
+    title: 'Profile Error',
+  });
+
+  // Fetch dynamic stats from Firebase
+  const fetchProfileStats = async (userId: string) => {
+    try {
+      const db = getFirebaseDb();
+      
+      // Fetch stories count
+      const storiesQuery = db.collection('stories')
+        .where('userId', '==', userId)
+        .where('isDeleted', '!=', true);
+      const storiesSnapshot = await storiesQuery.get();
+      
+      // Fetch events count (where user is host or attendee)
+      const hostedEventsQuery = db.collection('events')
+        .where('createdBy', '==', userId)
+        .where('isDeleted', '!=', true);
+      const hostedEventsSnapshot = await hostedEventsQuery.get();
+      
+      const attendingEventsQuery = db.collection('events')
+        .where('attendees', 'array-contains', userId)
+        .where('isDeleted', '!=', true);
+      const attendingEventsSnapshot = await attendingEventsQuery.get();
+      
+      // Combine unique events (avoid counting same event twice if user is both host and attendee)
+      const eventIds = new Set([
+        ...hostedEventsSnapshot.docs.map(doc => doc.id),
+        ...attendingEventsSnapshot.docs.map(doc => doc.id)
+      ]);
+      
+      // Fetch connections count from user's family members
+      const userDoc = await db.collection('users').doc(userId).get();
+      const userData = userDoc.data();
+      let connectionsCount = 0;
+      
+      if (userData?.familyId) {
+        const familyDoc = await db.collection('families').doc(userData.familyId).get();
+        const familyData = familyDoc.data();
+        connectionsCount = familyData?.members?.length || 0;
+      }
+      
+      setProfileStats({
+        storiesCount: storiesSnapshot.size,
+        eventsCount: eventIds.size,
+        connectionsCount: connectionsCount - 1 // Subtract 1 to exclude the user themselves
+      });
+    } catch (error) {
+      console.error('Error fetching profile stats:', error);
+      // Don't throw error, just use default values
     }
+  };
+
+  useEffect(() => {
+    const loadProfileData = async () => {
+      try {
+        setIsLoading(authIsLoading);
+        if (user) {
+          // Building user profile data from auth context
+          const profile: UserProfile = {
+            name: user.displayName || `${firestoreUser?.firstName || ''} ${firestoreUser?.lastName || ''}`.trim() || 'User',
+            email: user.email || null,
+            phoneNumber: user.phoneNumber || firestoreUser?.phoneNumber,
+            bio: firestoreUser?.bio,
+            joinDate: user.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleString('default', { month: 'long', year: 'numeric' }) : 'N/A',
+            connections: 0, // Will be updated by fetchProfileStats
+            stories: 0, // Will be updated by fetchProfileStats
+            events: 0, // Will be updated by fetchProfileStats
+            profilePicture: user.photoURL || firestoreUser?.profilePictureUrl,
+            firstName: firestoreUser?.firstName || user.displayName?.split(' ')[0],
+            lastName: firestoreUser?.lastName || user.displayName?.split(' ').slice(1).join(' '),
+            createdAt: firestoreUser?.createdAt || (user.metadata?.creationTime ? new Date(user.metadata.creationTime) : undefined),
+          };
+          setUserProfileData(profile);
+          
+          // Fetch dynamic stats
+          await fetchProfileStats(user.uid);
+        } else {
+          setUserProfileData(null);
+        }
+      } catch (error) {
+        handleError(error, {
+          severity: ErrorSeverity.ERROR,
+          metadata: {
+            action: 'loadUserProfile',
+            userId: user?.uid
+          }
+        });
+        setUserProfileData(null);
+      }
+    };
+    
+    loadProfileData();
   }, [user, firestoreUser, authIsLoading]);
 
-  const handleEditProfile = () => {
+  const handleEditProfile = withErrorHandling(() => {
     router.push('/(screens)/editProfile' as any);
-  };
+  });
 
   const menuItems = [
     {
       icon: 'settings-outline' as keyof typeof Ionicons.glyphMap,
       text: 'Account Settings',
-      onPress: () => router.push('/(screens)/accountSettings' as any),
+      onPress: withErrorHandling(() => router.push('/(screens)/accountSettings' as any)),
     },
     {
       icon: 'book-outline' as keyof typeof Ionicons.glyphMap,
       text: 'Story Settings',
-      onPress: () => router.push('/(screens)/storySettings' as any),
+      onPress: withErrorHandling(() => router.push('/(screens)/storySettings' as any)),
     },
     {
       icon: 'calendar-outline' as keyof typeof Ionicons.glyphMap,
       text: 'Events Settings',
-      onPress: () => router.push('/(screens)/eventSettings' as any),
+      onPress: withErrorHandling(() => router.push('/(screens)/eventSettings' as any)),
     },
     {
       icon: 'people-outline' as keyof typeof Ionicons.glyphMap,
       text: 'Family Management',
-      onPress: () => router.push('/(screens)/familyManagement' as any),
+      onPress: withErrorHandling(() => router.push('/(screens)/familyManagement' as any)),
     },
   ];
 
@@ -121,7 +210,8 @@ const ProfileScreen = () => {
   }
 
   return (
-    <Screen scroll padding>
+    <ErrorBoundary screenName="ProfileScreen">
+      <Screen scroll padding>
       <Card variant="elevated" style={styles.profileCard}>
         <View style={styles.profileHeader}>
           <Avatar
@@ -146,7 +236,7 @@ const ProfileScreen = () => {
           <View style={[styles.statsContainer, { borderTopColor: borderColor }]}>
             <View style={styles.statItem}>
               <ThemedText variant="h5" style={styles.statNumber}>
-                {userProfileData.connections || 0}
+                {profileStats.connectionsCount}
               </ThemedText>
               <ThemedText variant="caption" color="secondary" style={styles.statLabel}>
                 Family Members
@@ -157,10 +247,21 @@ const ProfileScreen = () => {
             
             <View style={styles.statItem}>
               <ThemedText variant="h5" style={styles.statNumber}>
-                {userProfileData.stories || 0}
+                {profileStats.storiesCount}
               </ThemedText>
               <ThemedText variant="caption" color="secondary" style={styles.statLabel}>
                 Stories
+              </ThemedText>
+            </View>
+            
+            <View style={[styles.statSeparator, { backgroundColor: borderColor }]} />
+            
+            <View style={styles.statItem}>
+              <ThemedText variant="h5" style={styles.statNumber}>
+                {profileStats.eventsCount}
+              </ThemedText>
+              <ThemedText variant="caption" color="secondary" style={styles.statLabel}>
+                Events
               </ThemedText>
             </View>
           </View>
@@ -185,7 +286,8 @@ const ProfileScreen = () => {
         leftIcon={'color-palette-outline' as keyof typeof Ionicons.glyphMap}
         style={styles.styleGuideButton}
       />
-    </Screen>
+      </Screen>
+    </ErrorBoundary>
   );
 };
 

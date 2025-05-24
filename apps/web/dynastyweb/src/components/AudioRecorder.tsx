@@ -51,7 +51,7 @@ export default function AudioRecorder({ onRecordingComplete }: AudioRecorderProp
       setIsRecording(true)
       timerRef.current = setInterval(() => {
         setRecordingTime((prev) => prev + 1)
-      }, 1000)
+      }, 1000) as unknown as NodeJS.Timeout
     } catch (error) {
       console.error("Error accessing microphone:", error)
     }

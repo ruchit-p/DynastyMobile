@@ -2,16 +2,33 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
 import { useNavigation } from 'expo-router';
 import { commonHeaderOptions } from '../../constants/headerConfig';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
-const StorySettingsScreen = () => {
+const StorySettingsScreenContent = () => {
   const navigation = useNavigation();
+  const { withErrorHandling, clearError } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Story Settings Error',
+    trackCurrentScreen: true
+  });
 
+  // Reset error state when component mounts
   useEffect(() => {
+    clearError();
+  }, [clearError]);
+
+  const setNavigationOptions = withErrorHandling(async () => {
     navigation.setOptions({
       ...commonHeaderOptions,
       title: 'Story Settings',
     });
-  }, [navigation]);
+  }, { component: 'StorySettings', action: 'setNavigationOptions' });
+
+  useEffect(() => {
+    setNavigationOptions();
+  }, [navigation, setNavigationOptions]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -47,5 +64,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 });
+
+const StorySettingsScreen = () => {
+  return (
+    <ErrorBoundary screenName="StorySettingsScreen">
+      <StorySettingsScreenContent />
+    </ErrorBoundary>
+  );
+};
 
 export default StorySettingsScreen; 

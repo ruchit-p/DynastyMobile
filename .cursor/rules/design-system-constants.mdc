@@ -1,0 +1,259 @@
+---
+description: This rule documents the proper usage of design system constants in the Dynasty Mobile application, including colors, typography, spacing, and theme management.
+globs: 
+alwaysApply: false
+---
+# Design System Constants Usage
+
+This rule documents the proper usage of design system constants in the Dynasty Mobile application, including colors, typography, spacing, and theme management.
+
+## 🎨 Color System Usage
+
+### Correct Import and Hook Usage
+
+```typescript
+// ✅ Correct imports
+import { Colors } from '../../constants/Colors';
+import { useColorScheme } from '../../hooks/useColorScheme';
+
+// ✅ Correct hook usage
+const colorScheme = useColorScheme() ?? 'light';
+const isDark = colorScheme === 'dark';
+```
+
+### ❌ Common Mistakes to Avoid
+
+```typescript
+// ❌ Wrong import - useTheme doesn't exist
+import { useTheme } from '../../hooks/useThemeColor';
+
+// ❌ Wrong usage
+const theme = useTheme();
+```
+
+### Color Access Patterns
+
+#### ✅ Correct Color Access
+
+```typescript
+// Theme-aware color access
+const textColor = Colors[colorScheme].text.primary;
+const backgroundColor = Colors[colorScheme].background.secondary;
+const borderColor = Colors[colorScheme].border.primary;
+const successColor = Colors[colorScheme].status.success;
+const errorColor = Colors[colorScheme].status.error;
+
+// Brand colors (theme-independent)
+const brandColor = Colors.dynastyGreen;
+const brandLight = Colors.dynastyGreenLight;
+
+// Direct palette access (when needed)
+const whiteColor = Colors.palette.neutral.white;
+```
+
+#### ❌ Invalid Color Paths
+
+```typescript
+// ❌ These paths don't exist in the design system
+Colors.dark.card           // Use Colors[colorScheme].background.secondary
+Colors.dark.text           // Use Colors[colorScheme].text.primary
+Colors.dark.textSecondary  // Use Colors[colorScheme].text.secondary
+Colors.semantic.success    // Use Colors[colorScheme].status.success
+Colors.dynasty.green       // Use Colors.dynastyGreen
+Colors.white               // Use Colors.palette.neutral.white
+```
+
+### Color Categories
+
+**Text Colors:**
+- `Colors[colorScheme].text.primary` - Main text
+- `Colors[colorScheme].text.secondary` - Secondary text
+- `Colors[colorScheme].text.tertiary` - Tertiary text
+- `Colors[colorScheme].text.inverse` - Inverse text (white on dark backgrounds)
+
+**Background Colors:**
+- `Colors[colorScheme].background.primary` - Main background
+- `Colors[colorScheme].background.secondary` - Secondary background (cards, etc.)
+- `Colors[colorScheme].background.tertiary` - Tertiary background
+
+**Status Colors:**
+- `Colors[colorScheme].status.success` - Success states
+- `Colors[colorScheme].status.error` - Error states
+- `Colors[colorScheme].status.warning` - Warning states
+- `Colors[colorScheme].status.info` - Info states
+
+**Interactive Colors:**
+- `Colors[colorScheme].button.primary.background` - Primary button background
+- `Colors[colorScheme].button.primary.text` - Primary button text
+- `Colors[colorScheme].icon.primary` - Primary icons
+- `Colors[colorScheme].tab.active` - Active tab color
+
+## 🎨 Alternative: Semantic Color Hooks
+
+For convenience, you can also use the semantic helper hooks from [useThemeColor.ts](mdc:apps/mobile/hooks/useThemeColor.ts):
+
+```typescript
+import { useTextColor, useBackgroundColor, useButtonBackgroundColor } from '../../hooks/useThemeColor';
+
+// Using semantic helpers
+const textColor = useTextColor('primary');
+const backgroundColor = useBackgroundColor('secondary');
+const buttonColor = useButtonBackgroundColor('primary');
+```
+
+## 📝 Typography Usage
+
+### Correct Import and Usage
+
+```typescript
+import Typography from '../../constants/Typography';
+
+// ✅ Correct usage in StyleSheet
+const styles = StyleSheet.create({
+  title: {
+    ...Typography.styles.heading1,
+    color: Colors[colorScheme].text.primary,
+  },
+  body: {
+    ...Typography.styles.bodyMedium,
+    fontWeight: Typography.weight.medium,
+  },
+});
+```
+
+### Available Typography Styles
+
+Reference [Typography.ts](mdc:apps/mobile/constants/Typography.ts) for available styles:
+- `Typography.styles.heading1` through `Typography.styles.heading6`
+- `Typography.styles.bodyLarge`, `Typography.styles.bodyMedium`, `Typography.styles.bodySmall`
+- `Typography.styles.caption`
+- `Typography.weight.light`, `Typography.weight.regular`, `Typography.weight.medium`, `Typography.weight.semiBold`, `Typography.weight.bold`
+
+## 📏 Spacing Usage
+
+### Correct Import and Usage
+
+```typescript
+import { Spacing, BorderRadius } from '../../constants/Spacing';
+
+// ✅ Correct usage in StyleSheet
+const styles = StyleSheet.create({
+  container: {
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+    borderRadius: BorderRadius.md,
+  },
+  card: {
+    margin: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+  },
+});
+```
+
+### Available Spacing Values
+
+Reference [Spacing.ts](mdc:apps/mobile/constants/Spacing.ts) for available values:
+- `Spacing.xs`, `Spacing.sm`, `Spacing.md`, `Spacing.lg`, `Spacing.xl`
+- `Spacing['2xl']`, `Spacing['3xl']`, `Spacing['4xl']`, `Spacing['5xl']`
+- `BorderRadius.sm`, `BorderRadius.md`, `BorderRadius.lg`, `BorderRadius.full`
+
+## 🏗️ Complete Component Example
+
+```typescript
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../../constants/Colors';
+import Typography from '../../constants/Typography';
+import { Spacing, BorderRadius } from '../../constants/Spacing';
+import { useColorScheme } from '../../hooks/useColorScheme';
+
+export default function ExampleComponent() {
+  const colorScheme = useColorScheme() ?? 'light';
+
+  return (
+    <View style={[styles.container, { backgroundColor: Colors[colorScheme].background.primary }]}>
+      <View style={[styles.card, { backgroundColor: Colors[colorScheme].background.secondary }]}>
+        <Text style={[styles.title, { color: Colors[colorScheme].text.primary }]}>
+          Card Title
+        </Text>
+        <Text style={[styles.description, { color: Colors[colorScheme].text.secondary }]}>
+          Card description text
+        </Text>
+        <TouchableOpacity 
+          style={[styles.button, { backgroundColor: Colors.dynastyGreen }]}
+        >
+          <Ionicons 
+            name="checkmark" 
+            size={16} 
+            color={Colors[colorScheme].text.inverse} 
+          />
+          <Text style={[styles.buttonText, { color: Colors[colorScheme].text.inverse }]}>
+            Action
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: Spacing.md,
+  },
+  card: {
+    borderRadius: BorderRadius.md,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  title: {
+    ...Typography.styles.heading3,
+    marginBottom: Spacing.sm,
+  },
+  description: {
+    ...Typography.styles.bodyMedium,
+    marginBottom: Spacing.md,
+  },
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+  },
+  buttonText: {
+    ...Typography.styles.bodyMedium,
+    fontWeight: Typography.weight.semiBold,
+    marginLeft: Spacing.xs,
+  },
+});
+```
+
+## 🚨 Migration Checklist
+
+When updating existing components:
+
+1. **✅ Fix imports**: Replace `useTheme` with `useColorScheme`
+2. **✅ Update hook usage**: Use `useColorScheme() ?? 'light'`
+3. **✅ Fix color paths**: Replace invalid paths with correct semantic paths
+4. **✅ Use design system**: Import and use Typography, Spacing constants
+5. **✅ Test both themes**: Verify component works in light and dark mode
+
+## 📚 Key Files Reference
+
+- **Colors**: [Colors.ts](mdc:apps/mobile/constants/Colors.ts)
+- **Typography**: [Typography.ts](mdc:apps/mobile/constants/Typography.ts)
+- **Spacing**: [Spacing.ts](mdc:apps/mobile/constants/Spacing.ts)
+- **Color Scheme Hook**: [useColorScheme.ts](mdc:apps/mobile/hooks/useColorScheme.ts)
+- **Theme Color Hooks**: [useThemeColor.ts](mdc:apps/mobile/hooks/useThemeColor.ts)
+
+Following these patterns ensures consistent theming, maintainable code, and proper design system usage across the Dynasty Mobile application.
+

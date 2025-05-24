@@ -1,5 +1,5 @@
-import * as functions from "firebase-functions";
-import { logger } from "firebase-functions";
+import {logger} from "firebase-functions/v2";
+import {HttpsError} from "firebase-functions/v2/https";
 
 /**
  * Standardized error codes for Dynasty application
@@ -14,30 +14,39 @@ export enum ErrorCode {
   TOKEN_EXPIRED = "token-expired",
   EMAIL_EXISTS = "email-exists",
   VERIFICATION_FAILED = "verification-failed",
-  
+
   // Authorization errors
   PERMISSION_DENIED = "permission-denied",
   INSUFFICIENT_PERMISSIONS = "insufficient-permissions",
-  
+
   // Input validation errors
   INVALID_ARGUMENT = "invalid-argument",
   INVALID_FORMAT = "invalid-format",
   MISSING_PARAMETERS = "missing-parameters",
-  
+  INVALID_REQUEST = "invalid-request",
+
   // Resource errors
   NOT_FOUND = "not-found",
   RESOURCE_EXHAUSTED = "resource-exhausted",
-  
+  FAILED_PRECONDITION = "failed-precondition",
+
   // Rate limiting
   RATE_LIMITED = "rate-limited",
-  
+
   // Service errors
   SERVICE_UNAVAILABLE = "service-unavailable",
-  
+
+  // Sync errors
+  SYNC_CONFLICT = "sync-conflict",
+  SYNC_QUEUE_FULL = "sync-queue-full",
+  OFFLINE_OPERATION_FAILED = "offline-operation-failed",
+  SYNC_VERSION_MISMATCH = "sync-version-mismatch",
+
   // General errors
   ABORTED = "aborted",
   INTERNAL = "internal",
-  UNKNOWN = "unknown"
+  UNKNOWN = "unknown",
+  UNIMPLEMENTED = "unimplemented"
 }
 
 /**
@@ -53,30 +62,38 @@ export const ErrorMessages = {
   [ErrorCode.TOKEN_EXPIRED]: "Your verification link has expired. Please request a new one.",
   [ErrorCode.EMAIL_EXISTS]: "An account with this email already exists.",
   [ErrorCode.VERIFICATION_FAILED]: "Email verification failed. Please try again.",
-  
+
   // Authorization errors
   [ErrorCode.PERMISSION_DENIED]: "You don't have permission to perform this action.",
   [ErrorCode.INSUFFICIENT_PERMISSIONS]: "You don't have sufficient permissions for this operation.",
-  
+
   // Input validation errors
   [ErrorCode.INVALID_ARGUMENT]: "Invalid argument provided.",
   [ErrorCode.INVALID_FORMAT]: "Invalid format provided.",
   [ErrorCode.MISSING_PARAMETERS]: "Required parameters are missing.",
-  
+  [ErrorCode.INVALID_REQUEST]: "Invalid request provided.",
+
   // Resource errors
   [ErrorCode.NOT_FOUND]: "The requested resource was not found.",
   [ErrorCode.RESOURCE_EXHAUSTED]: "Resource limit exceeded.",
-  
+  [ErrorCode.FAILED_PRECONDITION]: "Operation failed due to precondition check.",
+
   // Rate limiting
   [ErrorCode.RATE_LIMITED]: "Too many requests. Please try again later.",
-  
+
   // Service errors
   [ErrorCode.SERVICE_UNAVAILABLE]: "Service is temporarily unavailable. Please try again later.",
-  
+
+  // Sync errors
+  [ErrorCode.SYNC_CONFLICT]: "Data conflict detected. Please resolve conflicts before syncing.",
+  [ErrorCode.SYNC_QUEUE_FULL]: "Sync queue is full. Please try again later.",
+  [ErrorCode.OFFLINE_OPERATION_FAILED]: "Offline operation failed. Please check your connection.",
+  [ErrorCode.SYNC_VERSION_MISMATCH]: "Data version mismatch. Please refresh and try again.",
+
   // General errors
   [ErrorCode.ABORTED]: "The operation was aborted.",
   [ErrorCode.INTERNAL]: "An internal error occurred. Please try again later.",
-  [ErrorCode.UNKNOWN]: "An unknown error occurred. Please try again."
+  [ErrorCode.UNKNOWN]: "An unknown error occurred. Please try again.",
 };
 
 /**
@@ -90,7 +107,7 @@ export interface ErrorData {
 
 /**
  * Creates a standardized HttpsError for Dynasty Firebase functions
- * 
+ *
  * @param code - ErrorCode enum value
  * @param message - Optional custom message, defaults to standard message
  * @param data - Optional additional error data
@@ -100,54 +117,85 @@ export function createError(
   code: ErrorCode,
   message?: string,
   data?: ErrorData
-): functions.https.HttpsError {
-  // Determine proper https error code
+): HttpsError {
   const httpsErrorCode = mapToHttpsErrorCode(code);
-  
-  // Use custom message or fall back to standard message
-  const errorMessage = message || ErrorMessages[code];
-  
-  // Create error with standardized code, message, and data
-  return new functions.https.HttpsError(httpsErrorCode, errorMessage, data);
+  return new HttpsError(httpsErrorCode, message || code, data);
 }
 
 /**
  * Maps our application ErrorCode to Firebase functions HttpsErrorCode
  */
-function mapToHttpsErrorCode(code: ErrorCode): functions.https.FunctionsErrorCode {
+function mapToHttpsErrorCode(code: ErrorCode): "ok" | "cancelled" | "unknown" | "invalid-argument" | "deadline-exceeded" | "not-found" | "already-exists" | "permission-denied" | "resource-exhausted" | "failed-precondition" | "aborted" | "out-of-range" | "unimplemented" | "internal" | "unavailable" | "data-loss" | "unauthenticated" {
   switch (code) {
-    case ErrorCode.UNAUTHENTICATED:
-      return "unauthenticated";
-    case ErrorCode.INVALID_TOKEN:
-    case ErrorCode.EXPIRED_TOKEN:
-      return "unauthenticated";
-    case ErrorCode.PERMISSION_DENIED:
-    case ErrorCode.INSUFFICIENT_PERMISSIONS:
-      return "permission-denied";
-    case ErrorCode.INVALID_ARGUMENT:
-    case ErrorCode.INVALID_FORMAT:
-    case ErrorCode.MISSING_PARAMETERS:
-      return "invalid-argument";
-    case ErrorCode.NOT_FOUND:
-      return "not-found";
-    case ErrorCode.ALREADY_EXISTS:
-    case ErrorCode.EMAIL_EXISTS:
-      return "already-exists";
-    case ErrorCode.RESOURCE_EXHAUSTED:
-    case ErrorCode.RATE_LIMITED:
-      return "resource-exhausted";
-    case ErrorCode.SERVICE_UNAVAILABLE:
-      return "unavailable";
-    case ErrorCode.ABORTED:
-      return "aborted";
-    default:
-      return "internal";
+  // Authentication errors
+  case ErrorCode.UNAUTHENTICATED:
+  case ErrorCode.INVALID_TOKEN:
+  case ErrorCode.EXPIRED_TOKEN:
+  case ErrorCode.INVALID_CREDENTIALS:
+  case ErrorCode.TOKEN_EXPIRED:
+    return "unauthenticated";
+  case ErrorCode.EMAIL_EXISTS:
+  case ErrorCode.ALREADY_EXISTS:
+    return "already-exists";
+  case ErrorCode.VERIFICATION_FAILED:
+    return "invalid-argument"; // Or another appropriate mapping
+
+    // Authorization errors
+  case ErrorCode.PERMISSION_DENIED:
+  case ErrorCode.INSUFFICIENT_PERMISSIONS:
+    return "permission-denied";
+
+    // Input validation errors
+  case ErrorCode.INVALID_ARGUMENT:
+  case ErrorCode.INVALID_FORMAT:
+  case ErrorCode.MISSING_PARAMETERS:
+  case ErrorCode.INVALID_REQUEST:
+    return "invalid-argument";
+
+    // Resource errors
+  case ErrorCode.NOT_FOUND:
+    return "not-found";
+  case ErrorCode.RESOURCE_EXHAUSTED:
+  case ErrorCode.RATE_LIMITED: // Grouping RATE_LIMITED here
+  case ErrorCode.SYNC_QUEUE_FULL:
+    return "resource-exhausted";
+  case ErrorCode.FAILED_PRECONDITION:
+    return "failed-precondition";
+
+    // Service errors
+  case ErrorCode.SERVICE_UNAVAILABLE:
+    return "unavailable";
+
+    // Sync errors
+  case ErrorCode.SYNC_CONFLICT:
+  case ErrorCode.SYNC_VERSION_MISMATCH:
+    return "failed-precondition";
+  case ErrorCode.OFFLINE_OPERATION_FAILED:
+    return "unavailable";
+
+    // General errors
+  case ErrorCode.ABORTED:
+    return "aborted";
+  case ErrorCode.INTERNAL:
+    return "internal";
+  case ErrorCode.UNKNOWN:
+    return "unknown";
+  case ErrorCode.UNIMPLEMENTED:
+    return "unavailable"; // Mapped to unavailable as per previous attempt
+
+  default: {
+    // This exhaustive check helps ensure all enum members are considered.
+    // If new ErrorCodes are added, TypeScript will error here until they are mapped.
+    const _exhaustiveCheck: never = code;
+    logger.error("Unhandled ErrorCode in mapToHttpsErrorCode:", _exhaustiveCheck);
+    return "internal"; // Fallback for safety, though ideally unreachable
+  }
   }
 }
 
 /**
  * Handle and log error before throwing HttpsError
- * 
+ *
  * @param error - The original error to handle
  * @param functionName - Name of the function where error occurred
  * @param defaultCode - Default error code to use if not detected
@@ -162,14 +210,14 @@ export function handleError(
 ): never {
   const errorData: ErrorData = {
     functionName,
-    ...context
+    ...context,
   };
 
-  if (error instanceof functions.https.HttpsError) {
+  if (error instanceof HttpsError) {
     // Log and re-throw existing HttpsError
     logger.error(`[${functionName}] ${error.code}: ${error.message}`, {
       ...errorData,
-      httpsErrorData: error.details
+      httpsErrorData: error.details,
     });
     throw error;
   }
@@ -190,7 +238,7 @@ export function handleError(
 
     errorData.originalError = {
       message: error.message,
-      stack: error.stack
+      stack: error.stack,
     };
   } else {
     errorData.originalError = error;
@@ -205,16 +253,16 @@ export function handleError(
 
 /**
  * Wraps a function to add standardized error handling
- * 
+ *
  * @param fn - The function to wrap
  * @param functionName - Name of the function for logging
  * @returns Wrapped function with error handling
  */
-export function withErrorHandling<T extends (...args: any[]) => Promise<any>>(
+export function withErrorHandling<T extends(...args: any[]) => Promise<any>>(
   fn: T,
   functionName: string
-): (...args: Parameters<T>) => ReturnType<T> {
-  return async (...args: Parameters<T>): ReturnType<T> => {
+): (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>>> {
+  return async (...args: Parameters<T>) => {
     try {
       return await fn(...args);
     } catch (error) {

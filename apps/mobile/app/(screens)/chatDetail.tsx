@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,301 +6,690 @@ import {
   SafeAreaView,
   Platform,
   TouchableOpacity,
-  FlatList,
   TextInput,
   KeyboardAvoidingView,
-  Image,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import FlashList from '../../components/ui/FlashList';
+import { useEncryptedChat } from '../../hooks/useEncryptedChat';
+import { useAuth } from '../../src/contexts/AuthContext';
+import { Colors } from '../../constants/Colors';
+import { useThemeColor } from '../../hooks/useThemeColor';
+import EncryptionIndicator from '../../components/encryption/EncryptionIndicator';
+import KeyVerificationScreen from '../../components/encryption/KeyVerificationScreen';
+import { EncryptionStatusBanner, MessageEncryptionIndicator } from '../../components/encryption/EncryptionStatusComponents';
+import MediaGallery from '../../components/ui/MediaGallery';
+import { useImageUpload } from '../../hooks/useImageUpload';
+import IconButton from '../../components/ui/IconButton';
+import MessageStatusIndicator from '../../components/ui/MessageStatusIndicator';
+import MessageActionsSheet from '../../components/ui/MessageActionsSheet';
+import VoiceMessageRecorder from '../../components/ui/VoiceMessageRecorder';
+import VoiceMessagePlayer from '../../components/ui/VoiceMessagePlayer';
+import ChatMediaGallery from '../../components/ui/ChatMediaGallery';
+import TypingIndicator from '../../components/ui/TypingIndicator';
+import TypingService from '../../src/services/TypingService';
+import { MessageReactions, ReactionPicker } from '../../components/ui/MessageReactions';
+import ChatEncryptionService from '../../src/services/encryption/ChatEncryptionService';
 
-interface Message {
-  id: string;
-  text: string;
-  timestamp: Date; // Changed to Date for better sorting/formatting
-  senderId: string; // 'currentUser' or other user's ID
-  userName?: string; // Optional, for group chats or if sender name is needed
-  avatarUrl?: string; // Optional
+interface ChatDetailScreenProps {
+  chatId: string;
+  participantIds: string[];
+  chatTitle?: string;
 }
 
-// Mock user data for group chat participant identification
-const MOCK_USERS_DB: Record<string, { name: string, avatarUrl?: string }> = {
-  'currentUser': { name: 'Me', avatarUrl: 'https://via.placeholder.com/30/008080/FFFFFF?Text=Me' }, // Current user
-  '1': { name: 'Eleanor Vance', avatarUrl: 'https://via.placeholder.com/30/FF7F50/000000?Text=EV' },
-  '2': { name: 'Marcus Thorne', avatarUrl: 'https://via.placeholder.com/30/6495ED/FFFFFF?Text=MT' },
-  '3': { name: 'Julia Chen', avatarUrl: 'https://via.placeholder.com/30/DC143C/FFFFFF?Text=JC' },
-  // Add more users from MOCK_FAMILY_MEMBERS in newChat.tsx if needed for detailed mock messages
-};
-
-const CURRENT_USER_ID = 'currentUser'; // Define current user's ID
-
-// Mock messages - will be removed/commented
-// const getMockMessages = (chatId: string): Message[] => {
-//   if (chatId === 'chat1') {
-//     return [
-//       { id: 'm1', text: 'Hey Alice, how are you?', timestamp: '10:25 AM', senderId: 'otherUser', userName: 'Bob', avatarUrl: 'https://via.placeholder.com/30/ADD8E6/000000?Text=B' },
-//       { id: 'm2', text: 'Hi Bob! I am good, thanks for asking. Excited for tea tomorrow!', timestamp: '10:28 AM', senderId: 'currentUser', userName: 'Alice', avatarUrl: 'https://via.placeholder.com/30/FFA07A/000000?Text=A' },
-//       { id: 'm3', text: 'Me too! See you then.', timestamp: '10:29 AM', senderId: 'otherUser', userName: 'Bob', avatarUrl: 'https://via.placeholder.com/30/ADD8E6/000000?Text=B' },
-//       { id: 'm4', text: 'See you tomorrow for tea!', timestamp: '10:30 AM', senderId: 'currentUser', userName: 'Alice', avatarUrl: 'https://via.placeholder.com/30/FFA07A/000000?Text=A' },
-//     ];
-//   }
-//   return [
-//       { id: 'm_default1', text: 'Hello there!', timestamp: '09:00 AM', senderId: 'otherUser', userName: 'Some User'},
-//       { id: 'm_default2', text: 'Hi! How can I help?', timestamp: '09:01 AM', senderId: 'currentUser', userName: 'Me'},
-//   ];
-// };
-
-const ChatDetailScreen = () => {
+export default function ChatDetailScreen() {
+  const params = useLocalSearchParams<ChatDetailScreenProps>();
   const router = useRouter();
   const navigation = useNavigation();
-  const params = useLocalSearchParams<{
-    chatId?: string; // For existing chats
-    userName?: string; // For 1-on-1 from newChat
-    userAvatar?: string;
-    userId?: string; // For 1-on-1 from newChat (target user's ID)
-    isGroupChat?: string; // Will be "true" or undefined
-    groupName?: string;
-    participantIds?: string; // JSON string array of user IDs
-  }>();
+  const { user } = useAuth();
+  const { handleError, withErrorHandling } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Chat Error',
+    trackCurrentScreen: true
+  });
 
-  const isGroup = params.isGroupChat === 'true';
-  const chatTitle = isGroup ? params.groupName : params.userName;
-  const parsedParticipantIds: string[] = isGroup && params.participantIds ? JSON.parse(params.participantIds) : [];
-  
-  // For one-on-one chats initiated from newChat, use userId as the effective chatId for fetching/identifying the other user
-  // For existing chats, params.chatId would be used.
-  const effectiveChatId = params.chatId || params.userId;
-
-  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
-  const flatListRef = useRef<FlatList>(null);
+  const [showKeyVerification, setShowKeyVerification] = useState(false);
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
+  const [selectedMessage, setSelectedMessage] = useState<any>(null);
+  const [showMessageActions, setShowMessageActions] = useState(false);
+  const [editingMessage, setEditingMessage] = useState<any>(null);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const [showMediaGallery, setShowMediaGallery] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [typingUserNames, setTypingUserNames] = useState<string[]>([]);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [reactionPickerPosition, setReactionPickerPosition] = useState<{ x: number; y: number } | undefined>();
+  const [reactionMessageId, setReactionMessageId] = useState<string | null>(null);
+  const messageListRef = useRef<any>(null);
+  const typingTimerRef = useRef<NodeJS.Timeout>();
 
-  useLayoutEffect(() => {
+  const backgroundColor = useThemeColor({}, 'background');
+  const textColor = useThemeColor({}, 'text');
+  const borderColor = useThemeColor({ light: Colors.light.border, dark: Colors.dark.border }, 'border');
+  
+  // Message action handlers
+  const handleMessageCopy = useCallback(() => {
+    Alert.alert('Copied', 'Message copied to clipboard');
+  }, []);
+  
+  const handleMessageReply = useCallback(() => {
+    // TODO: Implement reply functionality
+    Alert.alert('Reply', 'Reply feature coming soon');
+  }, []);
+  
+  const handleMessageEdit = useCallback(() => {
+    if (selectedMessage) {
+      setEditingMessage(selectedMessage);
+      setInputText(selectedMessage.text || '');
+    }
+  }, [selectedMessage]);
+  
+  const handleMessageDelete = useCallback(async (forEveryone: boolean) => {
+    if (!selectedMessage) return;
+    
+    try {
+      // TODO: Implement delete functionality
+      Alert.alert(
+        'Delete Message',
+        `Message will be deleted ${forEveryone ? 'for everyone' : 'for you'}.`,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      handleError(error);
+    }
+  }, [selectedMessage, handleError]);
+  
+  const handleSend = useCallback(async () => {
+    const text = inputText.trim();
+    if (!text) return;
+    
+    try {
+      if (editingMessage) {
+        // TODO: Implement message editing
+        Alert.alert('Edit', 'Message editing feature coming soon');
+        setEditingMessage(null);
+      } else {
+        await sendMessage(text);
+      }
+      setInputText('');
+    } catch (error) {
+      handleError(error);
+    }
+  }, [inputText, editingMessage, sendMessage, handleError]);
+  
+  const handleVoiceRecordingComplete = useCallback(async (uri: string, duration: number) => {
+    try {
+      setShowVoiceRecorder(false);
+      
+      // Get file info
+      const fileName = `voice_${Date.now()}.m4a`;
+      const mimeType = 'audio/m4a';
+      
+      // Send as voice message with duration
+      await sendMediaMessage(uri, fileName, mimeType, duration);
+    } catch (error) {
+      handleError(error);
+    }
+  }, [sendMediaMessage, handleError]);
+  
+  // Handle reaction
+  const handleReaction = useCallback(async (messageId: string, emoji: string) => {
+    try {
+      await ChatEncryptionService.toggleReaction(params.chatId, messageId, emoji);
+    } catch (error) {
+      console.error('Failed to add reaction:', error);
+    }
+  }, [params.chatId]);
+  
+  // Handle typing
+  const handleTyping = useCallback((text: string) => {
+    setInputText(text);
+    
+    // Clear existing timer
+    if (typingTimerRef.current) {
+      clearTimeout(typingTimerRef.current);
+    }
+    
+    // Start typing if text is not empty
+    if (text.trim()) {
+      TypingService.startTyping(params.chatId);
+      
+      // Set timer to stop typing after 3 seconds of inactivity
+      typingTimerRef.current = setTimeout(() => {
+        TypingService.stopTyping(params.chatId);
+      }, 3000);
+    } else {
+      // Stop typing if text is empty
+      TypingService.stopTyping(params.chatId);
+    }
+  }, [params.chatId]);
+
+  // Parse participant IDs
+  const participantIds = Array.isArray(params.participantIds) 
+    ? params.participantIds 
+    : params.participantIds?.split(',') || [];
+    
+  // Determine if this is a group chat
+  const isGroupChat = participantIds.length > 1;
+
+  // Use the encrypted chat hook
+  const {
+    messages,
+    isLoading,
+    isInitialized,
+    encryptionStatus,
+    sendMessage,
+    sendMediaMessage,
+    initializeChat,
+    verifyParticipant,
+    refreshMessages,
+    markAsRead,
+  } = useEncryptedChat(params.chatId || '', participantIds);
+
+  // Initialize chat when component mounts
+  useEffect(() => {
+    if (params.chatId && participantIds.length > 0 && !isInitialized) {
+      withErrorHandling(async () => {
+        await initializeChat(params.chatId, participantIds);
+      }, 'Failed to initialize encrypted chat')();
+    }
+  }, [params.chatId, participantIds, isInitialized]);
+
+  // Subscribe to typing indicators
+  useEffect(() => {
+    if (!params.chatId) return;
+
+    const unsubscribe = TypingService.subscribeToTypingIndicators(
+      params.chatId,
+      async (userIds) => {
+        setTypingUsers(userIds);
+        if (userIds.length > 0) {
+          const names = await TypingService.getTypingUserNames(userIds);
+          setTypingUserNames(names);
+        } else {
+          setTypingUserNames([]);
+        }
+      }
+    );
+
+    return () => {
+      unsubscribe();
+      TypingService.cleanup(params.chatId);
+    };
+  }, [params.chatId]);
+
+  // Set up navigation header
+  useEffect(() => {
     navigation.setOptions({
-      title: chatTitle || 'Chat',
-      headerTitleAlign: 'center',
-      headerStyle: { backgroundColor: '#FFFFFF' },
-      headerTintColor: '#1A4B44',
-      headerTitleStyle: { fontWeight: '600', fontSize: 18, color: '#1A4B44' },
-      headerLeft: () => (
-        <TouchableOpacity 
-          onPress={() => router.canGoBack() ? router.back() : router.push('/(screens)/chat')} 
-          style={styles.headerLeftButton}
-        >
-          <Ionicons name="arrow-back" size={28} color="#1A4B44" />
-          {/* Removed "Messages" text to simplify header */}
-        </TouchableOpacity>
+      headerTitle: () => (
+        <View style={styles.headerTitleContainer}>
+          <Text style={[styles.headerTitleText, { color: textColor }]}>
+            {params.chatTitle || 'Encrypted Chat'}
+          </Text>
+          {isGroupChat && (
+            <View style={styles.groupBadge}>
+              <Ionicons name="people" size={12} color={Colors.dynastyGreen} />
+              <Text style={styles.groupBadgeText}>{participantIds.length + 1}</Text>
+            </View>
+          )}
+        </View>
       ),
       headerRight: () => (
-        <TouchableOpacity onPress={() => Alert.alert("Chat Info", "Navigate to chat info/settings screen")} style={{ paddingHorizontal: 15 }}>
-          <Ionicons name="ellipsis-vertical" size={22} color="#1A4B44" />
-        </TouchableOpacity>
-      ),
-      headerBackTitleVisible: false,
-    });
-  }, [navigation, chatTitle, router, isGroup]);
-
-  useEffect(() => {
-    // Fetch or load messages for the given chatId
-    console.log("ChatDetailScreen Params:", params);
-    if (isGroup) {
-      console.log(`Loading group chat: ${params.groupName}, Participants: ${params.participantIds}`);
-      // Simulate group messages
-      const groupMessages: Message[] = [
-        { id: 'gm1', text: 'Hey everyone! Planning the weekend?', senderId: parsedParticipantIds[0] || '1', userName: MOCK_USERS_DB[parsedParticipantIds[0] || '1']?.name, timestamp: new Date(Date.now() - 3600000 * 3) },
-        { id: 'gm2', text: 'I am in for a movie!', senderId: parsedParticipantIds[1] || '2', userName: MOCK_USERS_DB[parsedParticipantIds[1] || '2']?.name, timestamp: new Date(Date.now() - 3600000 * 2.5) },
-        { id: 'gm3', text: 'Sounds good to me!', senderId: CURRENT_USER_ID, userName: MOCK_USERS_DB[CURRENT_USER_ID]?.name, timestamp: new Date(Date.now() - 3600000 * 2) },
-      ];
-      setMessages(groupMessages);
-    } else if (effectiveChatId) {
-      console.log(`Loading 1-on-1 chat with: ${params.userName} (ID: ${effectiveChatId})`);
-      // Simulate 1-on-1 messages
-      const directMessages: Message[] = [
-        { id: 'dm1', text: `Hello ${params.userName}!`, senderId: CURRENT_USER_ID, userName: MOCK_USERS_DB[CURRENT_USER_ID]?.name, timestamp: new Date(Date.now() - 3600000) },
-        { id: 'dm2', text: 'Hi there! How are you?', senderId: effectiveChatId, userName: params.userName, timestamp: new Date(Date.now() - 3000000) },
-      ];
-      setMessages(directMessages);
-    }
-    // This is a simplified mock load. In a real app, you'd fetch based on IDs.
-  }, [isGroup, params.groupName, params.participantIds, effectiveChatId, params.userName]);
-
-  useEffect(() => {
-    // Scroll to bottom when messages change
-    if (messages.length > 0) {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }
-  }, [messages]);
-
-  const handleSendMessage = () => {
-    if (inputText.trim().length === 0) return;
-    const newMessage: Message = {
-      id: `msg_${Date.now()}`,
-      text: inputText.trim(),
-      timestamp: new Date(), // Use Date object
-      senderId: CURRENT_USER_ID,
-      userName: MOCK_USERS_DB[CURRENT_USER_ID]?.name,
-      avatarUrl: MOCK_USERS_DB[CURRENT_USER_ID]?.avatarUrl,
-    };
-    setMessages(prevMessages => [...prevMessages, newMessage]);
-    setInputText('');
-    if (isGroup) {
-      // TODO: Add logic to send message to group backend/service with participantIds
-      console.log("Sending group message:", newMessage.text, "to participants:", parsedParticipantIds);
-    } else {
-      // TODO: Add logic to send message to 1-on-1 backend/service with effectiveChatId (recipient's ID)
-      console.log("Sending 1-on-1 message:", newMessage.text, "to user:", effectiveChatId);
-    }
-  };
-
-  const renderMessageItem = ({ item }: { item: Message }) => {
-    const isCurrentUser = item.senderId === CURRENT_USER_ID;
-    
-    // Determine avatar and sender name
-    // For group chats, or if item.userName is already set (e.g. from fetched data)
-    let senderName = item.userName;
-    let avatar = item.avatarUrl;
-
-    if (!isCurrentUser) {
-      if (isGroup) {
-        // In group chats, senderId should be one of the participant IDs
-        senderName = MOCK_USERS_DB[item.senderId]?.name || 'Unknown User';
-        avatar = MOCK_USERS_DB[item.senderId]?.avatarUrl;
-      } else {
-        // In 1-on-1 chats, the other user's name is from params.userName
-        senderName = params.userName;
-        avatar = params.userAvatar; // Use avatar passed from previous screen for the other user
-      }
-    }
-
-    return (
-      <View style={[styles.messageRow, isCurrentUser ? styles.currentUserMessageRow : styles.otherUserMessageRow]}>
-        {!isCurrentUser && avatar && <Image source={{uri: avatar}} style={styles.avatarSmall} />}
-        <View style={[styles.messageBubble, isCurrentUser ? styles.currentUserBubble : styles.otherUserBubble]}>
-          {!isCurrentUser && senderName && <Text style={styles.messageSenderName}>{senderName}</Text>}
-          <Text style={isCurrentUser ? styles.currentUserMessageText : styles.otherUserMessageText}>{item.text}</Text>
-          <Text style={isCurrentUser ? styles.currentUserTimestamp : styles.otherUserTimestamp}>
-            {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
+        <View style={styles.headerRight}>
+          <EncryptionIndicator status={encryptionStatus} />
+          <TouchableOpacity
+            onPress={() => router.push({
+              pathname: '/(screens)/chatSearch',
+              params: { chatId: params.chatId }
+            })}
+            style={styles.headerButton}
+          >
+            <Ionicons name="search" size={24} color={textColor} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setShowMediaGallery(true)}
+            style={styles.headerButton}
+          >
+            <Ionicons name="images" size={24} color={textColor} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setShowKeyVerification(true)}
+            style={styles.headerButton}
+          >
+            <Ionicons name="shield-checkmark" size={24} color={textColor} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.push({
+              pathname: '/(screens)/chatInfo',
+              params: { 
+                chatId: params.chatId,
+                chatTitle: params.chatTitle 
+              }
+            })}
+            style={styles.headerButton}
+          >
+            <Ionicons name="information-circle" size={24} color={textColor} />
+          </TouchableOpacity>
         </View>
-        {/* Current user avatar could be on the right, if desired and available */}
-        {/* {isCurrentUser && currentUserAvatar && <Image source={{uri: currentUserAvatar}} style={styles.avatarSmall} /> } */}
+      ),
+    });
+  }, [navigation, params.chatTitle, encryptionStatus, textColor, isGroupChat, participantIds, router, params.chatId]);
+
+  // Handle media selection
+  const { selectImages } = useImageUpload({
+    onImagesSelected: async (images) => {
+      if (images.length > 0 && user) {
+        await withErrorHandling(async () => {
+          for (const image of images) {
+            await sendMediaMessage(image.uri, 'image');
+          }
+        }, 'Failed to send media')();
+      }
+    },
+  });
+
+  // Render individual message
+  const renderMessage = useCallback(({ item }: { item: any }) => {
+    const isOwnMessage = item.senderId === user?.uid;
+    
+    // Mark message as read when rendering (if not own message)
+    if (!isOwnMessage && item.read && !item.read.includes(user?.uid)) {
+      // Use setTimeout to avoid state updates during render
+      setTimeout(() => markAsRead(item.id), 0);
+    }
+    
+    const handleLongPress = () => {
+      setSelectedMessage(item);
+      setShowMessageActions(true);
+    };
+    
+    return (
+      <TouchableOpacity
+        onLongPress={handleLongPress}
+        delayLongPress={300}
+        style={[
+          styles.messageContainer,
+          isOwnMessage ? styles.ownMessage : styles.otherMessage
+        ]}
+      >
+        <View style={[
+          styles.messageBubble,
+          isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
+          { backgroundColor: isOwnMessage ? Colors.light.primary : borderColor }
+        ]}>
+          {item.type === 'text' ? (
+            <Text style={[
+              styles.messageText,
+              { color: isOwnMessage ? 'white' : textColor }
+            ]}>
+              {item.text || item.content}
+            </Text>
+          ) : item.type === 'voice' ? (
+            <VoiceMessagePlayer
+              uri={item.mediaUrl}
+              duration={item.duration}
+              isOwnMessage={isOwnMessage}
+            />
+          ) : (
+            <MediaGallery
+              media={[{ 
+                id: item.id, 
+                uri: item.mediaUrl, 
+                type: item.mediaType || 'image',
+                metadata: { encrypted: true }
+              }]}
+              enableFullscreen
+              style={styles.mediaMessage}
+            />
+          )}
+          <View style={styles.messageFooter}>
+            <Text style={[
+              styles.timestamp,
+              { color: isOwnMessage ? 'rgba(255,255,255,0.7)' : 'gray' }
+            ]}>
+              {new Date(item.timestamp).toLocaleTimeString()}
+            </Text>
+            <MessageEncryptionIndicator encrypted={item.encrypted} />
+            <MessageStatusIndicator
+              status={item.status || 'sent'}
+              delivered={item.delivered || []}
+              read={item.read || []}
+              isOwnMessage={isOwnMessage}
+              participantCount={participantIds.length + 1}
+              color={isOwnMessage ? 'rgba(255,255,255,0.7)' : 'gray'}
+            />
+          </View>
+          {item.reactions && item.reactions.length > 0 && (
+            <MessageReactions
+              reactions={item.reactions}
+              onReact={(emoji) => handleReaction(item.id, emoji)}
+              currentUserId={user?.uid || ''}
+            />
+          )}
+        </View>
+        
+        {/* Add reaction button for double tap or special gesture */}
+        <TouchableOpacity
+          onPress={(event) => {
+            const { pageX, pageY } = event.nativeEvent;
+            setReactionPickerPosition({ x: pageX, y: pageY });
+            setReactionMessageId(item.id);
+            setShowReactionPicker(true);
+          }}
+          style={styles.reactionTouchArea}
+        />
+      </TouchableOpacity>
+    );
+  }, [user, textColor, borderColor, handleReaction]);
+
+  if (isLoading && !isInitialized) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor }]}>
+        <ActivityIndicator size="large" color={Colors.light.primary} />
+        <Text style={[styles.loadingText, { color: textColor }]}>
+          Initializing encrypted chat...
+        </Text>
       </View>
     );
-  };
+  }
+
+  if (showKeyVerification && selectedParticipantId) {
+    return (
+      <KeyVerificationScreen
+        targetUserId={selectedParticipantId}
+        onVerified={() => {
+          verifyParticipant(selectedParticipantId);
+          setShowKeyVerification(false);
+          setSelectedParticipantId(null);
+        }}
+        onCancel={() => {
+          setShowKeyVerification(false);
+          setSelectedParticipantId(null);
+        }}
+      />
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === "ios" ? "padding" : "height"} 
-        style={styles.keyboardAvoidingContainer}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0} // Adjusted offset, may need tuning
-      >
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          renderItem={renderMessageItem}
-          keyExtractor={(item) => item.id}
-          style={styles.messagesList}
-          contentContainerStyle={{ paddingVertical: 10 }}
-        />
-
-        <View style={styles.inputContainer}>
-          <TouchableOpacity style={styles.inputActionButton} onPress={() => Alert.alert("Attach File", "File attachment UI")}>
-            <Ionicons name="add-circle-outline" size={28} color="#1A4B44" />
-          </TouchableOpacity>
-          <TextInput
-            style={styles.textInput}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder={`Message ${chatTitle}...`}
-            placeholderTextColor="#888"
-            multiline
+    <ErrorBoundary screenName="ChatDetail">
+      <SafeAreaView style={[styles.container, { backgroundColor }]}>
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoidingView}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        >
+          <EncryptionStatusBanner 
+            status={encryptionStatus}
+            onVerifyTap={() => {
+              // For group chats, show participant list for verification
+              if (participantIds.length > 1) {
+                Alert.alert(
+                  'Verify Participants',
+                  'Select a participant to verify their encryption keys',
+                  participantIds
+                    .filter(id => id !== user?.uid)
+                    .map(id => ({
+                      text: id, // In production, show actual names
+                      onPress: () => {
+                        setSelectedParticipantId(id);
+                        setShowKeyVerification(true);
+                      }
+                    }))
+                );
+              } else {
+                // Direct chat - verify the other participant
+                const otherParticipant = participantIds.find(id => id !== user?.uid);
+                if (otherParticipant) {
+                  setSelectedParticipantId(otherParticipant);
+                  setShowKeyVerification(true);
+                }
+              }
+            }}
           />
-          <TouchableOpacity style={styles.inputActionButton} onPress={handleSendMessage}>
-            <Ionicons name="send" size={26} color={inputText.trim() ? "#1A4B44" : "#B0B0B0"} />
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+
+          <FlashList
+            ref={messageListRef}
+            data={messages}
+            renderItem={renderMessage}
+            keyExtractor={(item) => item.id}
+            estimatedItemSize={80}
+            inverted
+            contentContainerStyle={styles.messagesList}
+            onRefresh={refreshMessages}
+            refreshing={isLoading}
+          />
+          
+          <TypingIndicator
+            userNames={typingUserNames}
+            isVisible={typingUsers.length > 0}
+          />
+
+          {!showVoiceRecorder && (
+            <View style={[styles.inputContainer, { borderTopColor: borderColor }]}>
+            {editingMessage ? (
+              <TouchableOpacity 
+                onPress={() => {
+                  setEditingMessage(null);
+                  setInputText('');
+                }}
+                style={styles.attachButton}
+              >
+                <Ionicons name="close" size={24} color={textColor} />
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity 
+                  onPress={() => setShowVoiceRecorder(true)}
+                  style={styles.attachButton}
+                >
+                  <Ionicons name="mic" size={24} color={textColor} />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  onPress={selectImages}
+                  style={styles.attachButton}
+                >
+                  <Ionicons name="attach" size={24} color={textColor} />
+                </TouchableOpacity>
+              </>
+            )}
+            
+            <TextInput
+              style={[styles.input, { color: textColor, borderColor }]}
+              value={inputText}
+              onChangeText={handleTyping}
+              placeholder={editingMessage ? "Edit message..." : "Type a secure message..."}
+              placeholderTextColor="gray"
+              multiline
+              maxLength={1000}
+            />
+            
+            <TouchableOpacity
+              onPress={handleSend}
+              disabled={!inputText.trim()}
+              style={[
+                styles.sendButton,
+                { opacity: inputText.trim() ? 1 : 0.5 }
+              ]}
+            >
+              <Ionicons 
+                name={editingMessage ? "checkmark" : "send"} 
+                size={24} 
+                color={Colors.light.primary}
+              />
+            </TouchableOpacity>
+            </View>
+          )}
+        </KeyboardAvoidingView>
+        
+        <VoiceMessageRecorder
+          isVisible={showVoiceRecorder}
+          onRecordingComplete={handleVoiceRecordingComplete}
+          onCancel={() => setShowVoiceRecorder(false)}
+        />
+        
+        <MessageActionsSheet
+          visible={showMessageActions}
+          message={selectedMessage || {}}
+          isOwnMessage={selectedMessage?.senderId === user?.uid}
+          onClose={() => {
+            setShowMessageActions(false);
+            setSelectedMessage(null);
+          }}
+          onCopy={handleMessageCopy}
+          onReply={handleMessageReply}
+          onEdit={handleMessageEdit}
+          onDelete={handleMessageDelete}
+        />
+        
+        <ChatMediaGallery
+          chatId={params.chatId}
+          isVisible={showMediaGallery}
+          onClose={() => setShowMediaGallery(false)}
+        />
+        
+        <ReactionPicker
+          visible={showReactionPicker}
+          onSelect={(emoji) => {
+            if (reactionMessageId) {
+              handleReaction(reactionMessageId, emoji);
+            }
+          }}
+          onClose={() => {
+            setShowReactionPicker(false);
+            setReactionMessageId(null);
+            setReactionPickerPosition(undefined);
+          }}
+          anchorPosition={reactionPickerPosition}
+        />
+      </SafeAreaView>
+    </ErrorBoundary>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
-  headerLeftButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: Platform.OS === 'ios' ? 10 : 10, 
-    // paddingVertical: 5, // Removed to make icon primary touch target
-  },
-  headerLeftButtonText: {
-    color: '#1A4B44',
-    fontSize: 17, 
-    // marginLeft: Platform.OS === 'ios' ? 6 : 8, // Removed as text is removed
-  },
-  keyboardAvoidingContainer: { flex: 1 }, 
-  messagesList: { flex: 1, backgroundColor: '#F4F4F4' },
-  messageRow: {
-    flexDirection: 'row',
-    marginVertical: 5,
-    paddingHorizontal: 10,
-    alignItems: 'flex-end',
-  },
-  currentUserMessageRow: { justifyContent: 'flex-end' },
-  otherUserMessageRow: { justifyContent: 'flex-start' },
-  avatarSmall: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
-      marginHorizontal: 5,
-      marginBottom: 5, // Align with bottom of bubble
-  },
-  messageBubble: {
-    maxWidth: '75%',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 18,
-  },
-  currentUserBubble: {
-    backgroundColor: '#1A4B44',
-    borderTopRightRadius: 5, 
-  },
-  otherUserBubble: {
-    backgroundColor: '#E0E0E0',
-    borderTopLeftRadius: 5,
-  },
-  messageSenderName: {
-      fontSize: 12,
-      fontWeight: 'bold',
-      color: '#555',
-      marginBottom: 2,
-  },
-  currentUserMessageText: { fontSize: 15, color: '#FFFFFF' },
-  otherUserMessageText: { fontSize: 15, color: '#333333' },
-  currentUserTimestamp: { fontSize: 10, color: '#E0E0E0', alignSelf: 'flex-end', marginTop: 3 },
-  otherUserTimestamp: { fontSize: 10, color: '#777', alignSelf: 'flex-start', marginTop: 3 },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-    backgroundColor: '#FFFFFF',
-  },
-  textInput: {
+  container: {
     flex: 1,
-    minHeight: 40,
-    maxHeight: 120, // Allow for multiple lines but not too many
-    backgroundColor: '#F0F0F0',
-    borderRadius: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerButton: {
+    marginLeft: 15,
+    padding: 5,
+  },
+  messagesList: {
     paddingHorizontal: 15,
     paddingVertical: 10,
-    fontSize: 16,
-    marginHorizontal: 8,
   },
-  inputActionButton: { padding: 5 },
+  messageContainer: {
+    marginVertical: 5,
+    maxWidth: '80%',
+  },
+  ownMessage: {
+    alignSelf: 'flex-end',
+  },
+  otherMessage: {
+    alignSelf: 'flex-start',
+  },
+  messageBubble: {
+    padding: 12,
+    borderRadius: 18,
+    minWidth: 80,
+  },
+  ownMessageBubble: {
+    borderBottomRightRadius: 4,
+  },
+  otherMessageBubble: {
+    borderBottomLeftRadius: 4,
+  },
+  messageText: {
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  mediaMessage: {
+    width: 200,
+    height: 200,
+    borderRadius: 10,
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+    justifyContent: 'flex-end',
+  },
+  timestamp: {
+    fontSize: 12,
+    marginRight: 5,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    padding: 10,
+    borderTopWidth: 1,
+    alignItems: 'flex-end',
+  },
+  attachButton: {
+    padding: 10,
+  },
+  input: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    marginHorizontal: 10,
+    maxHeight: 100,
+    fontSize: 16,
+  },
+  sendButton: {
+    padding: 10,
+  },
+  headerTitleContainer: {
+    alignItems: 'center',
+  },
+  headerTitleText: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  groupBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F7F5',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginTop: 4,
+    gap: 2,
+  },
+  groupBadgeText: {
+    fontSize: 12,
+    color: Colors.dynastyGreen,
+    fontWeight: '500',
+  },
+  reactionTouchArea: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 40,
+    height: 40,
+  },
 });
-
-export default ChatDetailScreen; 

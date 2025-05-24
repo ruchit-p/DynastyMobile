@@ -1,10 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, Platform, Keyboard, ActivityIndicator, Alert, Dimensions, StatusBar, FlatList } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, Platform, Keyboard, ActivityIndicator, Alert, Dimensions, StatusBar } from 'react-native';
 import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Region, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { getFirebaseFunctions } from '../../src/lib/firebase';
+import { showErrorAlert } from '../../src/lib/errorUtils';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import FlashList from '../../components/ui/FlashList';
 
 // Define the primary green color from the app's theme (assuming it might be used or for consistency)
 const dynastyGreen = '#1A4B44'; 
@@ -34,6 +39,13 @@ const SelectLocationScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ currentLocation?: string, previousPath?: string }>();
+  
+  // Initialize error handler
+  const { handleError, withErrorHandling, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Select Location Error',
+    trackCurrentScreen: true
+  });
   
   const [region, setRegion] = useState<Region>(INITIAL_REGION);
   
@@ -81,6 +93,11 @@ const SelectLocationScreen = () => {
   
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  
+  // Reset error state when component mounts
+  useEffect(() => {
+    reset();
+  }, [reset]);
 
   // Initialize Firebase Functions
   const functions = getFirebaseFunctions();
@@ -89,25 +106,37 @@ const SelectLocationScreen = () => {
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Moved handleConfirmLocation earlier as it's used in navigation.setOptions
-  const handleConfirmLocation = () => {
-    if (!selectedPlace || !selectedPlace.address || selectedPlace.address === 'Loading address...' || selectedPlace.address === 'Error fetching address') {
-      Alert.alert("No Location Selected", "Please select a valid location or wait for address to load.");
-      return;
+  const handleConfirmLocation = withErrorHandling(async () => {
+    try {
+      if (!selectedPlace || !selectedPlace.address || selectedPlace.address === 'Loading address...' || selectedPlace.address === 'Error fetching address') {
+        handleError(new Error('No valid location selected'), {
+          userAction: 'confirm_location',
+          selectedPlace: selectedPlace ? { address: selectedPlace.address } : null
+        });
+        showErrorAlert({ message: "Please select a valid location or wait for address to load.", code: "invalid-argument" }, "No Location Selected");
+        return;
+      }
+      
+      const targetPath = params.previousPath || '..';
+      router.navigate({
+        pathname: targetPath as any, // Expo Router bug, needs 'any' for type safety with '..'
+        params: { 
+          selectedLocation: selectedPlace.address,
+          selectedLocationLat: selectedPlace.latitude.toString(),
+          selectedLocationLng: selectedPlace.longitude.toString(),
+          fromScreen: 'selectLocation'
+        },
+      });
+    } catch (error) {
+      handleError(error, {
+        userAction: 'confirm_location',
+        targetPath: params.previousPath || '..'
+      });
     }
-    const targetPath = params.previousPath || '..';
-    router.navigate({
-      pathname: targetPath as any, // Expo Router bug, needs 'any' for type safety with '..'
-      params: { 
-        selectedLocation: selectedPlace.address,
-        selectedLocationLat: selectedPlace.latitude.toString(),
-        selectedLocationLng: selectedPlace.longitude.toString(),
-        fromScreen: 'selectLocation'
-      },
-    });
-  };
+  });
 
   // Moved handleReverseGeocode earlier as it's used in initial useEffect
-  const handleReverseGeocode = async (latitude: number, longitude: number, isInitialLoad: boolean = false) => {
+  const handleReverseGeocode = withErrorHandling(async (latitude: number, longitude: number, isInitialLoad: boolean = false) => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
@@ -132,36 +161,46 @@ const SelectLocationScreen = () => {
         mapRef.current.animateToRegion({ latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.005 }, 1000);
       }
     } catch (error) {
-      console.error("Reverse geocoding error:", error);
+      handleError(error, {
+        userAction: 'reverse_geocode',
+        coordinates: { latitude, longitude },
+        isInitialLoad
+      });
       setErrorMsg("Could not fetch address for the selected point.");
       setSelectedPlace({ address: 'Error fetching address', latitude, longitude });
     } finally {
       setIsLoading(false);
     }
-  };
+  });
 
   useEffect(() => {
     // Initial setup logic (uses handleReverseGeocode)
-    (async () => {
+    const initializeLocation = withErrorHandling(async () => {
       setIsLoading(true);
       setErrorMsg(null);
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setErrorMsg('Permission to access location was denied.');
-        Alert.alert(
-          "Location Permission Denied",
-          "Please enable location services for a better experience. You can still search manually.",
-          [{ text: "OK" }]
-        );
-        setIsLoading(false);
-        if (params.currentLocation && !selectedPlace) {
-            // If permission denied but an old location string was passed
-            setSelectedPlace({ address: params.currentLocation, latitude: INITIAL_REGION.latitude, longitude: INITIAL_REGION.longitude });
-        }
-        return;
-      }
-
+      
       try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          const permissionError = new Error('Location permission denied');
+          handleError(permissionError, {
+            userAction: 'request_location_permission',
+            permissionStatus: status
+          });
+          setErrorMsg('Permission to access location was denied.');
+          Alert.alert(
+            "Location Permission Denied",
+            "Please enable location services for a better experience. You can still search manually.",
+            [{ text: "OK" }]
+          );
+          setIsLoading(false);
+          if (params.currentLocation && !selectedPlace) {
+              // If permission denied but an old location string was passed
+              setSelectedPlace({ address: params.currentLocation, latitude: INITIAL_REGION.latitude, longitude: INITIAL_REGION.longitude });
+          }
+          return;
+        }
+
         let location = await Location.getCurrentPositionAsync({});
         const currentRegion = {
           latitude: location.coords.latitude,
@@ -187,12 +226,17 @@ const SelectLocationScreen = () => {
         // If they search/tap map, selectedPlace and searchInputValue get updated.
 
       } catch (e: any) {
-        console.error("Error getting current location:", e);
+        handleError(e, {
+          userAction: 'get_current_location',
+          initialRegion: INITIAL_REGION
+        });
         setErrorMsg("Could not fetch current location.");
       } finally {
         setIsLoading(false);
       }
-    })();
+    });
+    
+    initializeLocation();
   }, []);
 
   useEffect(() => {
@@ -215,7 +259,7 @@ const SelectLocationScreen = () => {
     });
   }, [navigation, router, selectedPlace, handleConfirmLocation]);
   
-  const handleSearch = async (text: string) => {
+  const handleSearch = (text: string) => {
     setSearchInputValue(text);
     setPlacePredictions([]); // Clear previous predictions
 
@@ -229,7 +273,7 @@ const SelectLocationScreen = () => {
     }
 
     setIsFetchingPredictions(true);
-    debounceTimeoutRef.current = setTimeout(async () => {
+    debounceTimeoutRef.current = setTimeout(withErrorHandling(async () => {
       try {
         const googlePlacesAutocompleteFn = functions.httpsCallable('googlePlacesAutocomplete');
         const result = await googlePlacesAutocompleteFn({ input: text });
@@ -240,16 +284,19 @@ const SelectLocationScreen = () => {
           setPlacePredictions([]);
         }
       } catch (error: any) {
-        console.error("Error fetching place predictions:", error);
-        // Alert.alert("Search Error", error.message || "Could not fetch place suggestions.");
+        handleError(error, {
+          userAction: 'search_places',
+          searchText: text,
+          functionName: 'googlePlacesAutocomplete'
+        });
         setPlacePredictions([]); // Clear predictions on error
       } finally {
         setIsFetchingPredictions(false);
       }
-    }, 500) as unknown as NodeJS.Timeout; // Cast to NodeJS.Timeout to satisfy ref type, though platform setTimeout might return number
+    }), 500) as unknown as NodeJS.Timeout; // Cast to NodeJS.Timeout to satisfy ref type, though platform setTimeout might return number
   };
   
-  const handleSelectPrediction = async (prediction: PlacePrediction) => {
+  const handleSelectPrediction = withErrorHandling(async (prediction: PlacePrediction) => {
     Keyboard.dismiss();
     setSearchInputValue(prediction.description); // Set input to selected prediction
     setPlacePredictions([]); // Clear predictions
@@ -281,22 +328,34 @@ const SelectLocationScreen = () => {
         throw new Error("Place details not found or location missing.");
       }
     } catch (error: any) {
-      console.error("Error fetching place details:", error);
+      handleError(error, {
+        userAction: 'select_place_prediction',
+        placeId: prediction.place_id,
+        prediction: prediction.description,
+        functionName: 'getGooglePlaceDetails'
+      });
       Alert.alert("Error", error.message || "Could not fetch place details.");
       // Fallback to using the description if details fail, but without precise coords
       setSelectedPlace({ address: prediction.description, latitude: region.latitude, longitude: region.longitude });
     } finally {
       setIsLoading(false);
     }
-  };
+  });
 
-  const handleMapPress = (event: any) => {
-    Keyboard.dismiss();
-    const { coordinate } = event.nativeEvent;
-    setPlacePredictions([]); // Clear predictions
-    setSearchInputValue(''); // Clear search input
-    handleReverseGeocode(coordinate.latitude, coordinate.longitude);
-  };
+  const handleMapPress = withErrorHandling(async (event: any) => {
+    try {
+      Keyboard.dismiss();
+      const { coordinate } = event.nativeEvent;
+      setPlacePredictions([]); // Clear predictions
+      setSearchInputValue(''); // Clear search input
+      await handleReverseGeocode(coordinate.latitude, coordinate.longitude);
+    } catch (error) {
+      handleError(error, {
+        userAction: 'map_press',
+        coordinates: event.nativeEvent?.coordinate
+      });
+    }
+  });
 
   const renderPredictionItem = ({ item }: { item: PlacePrediction }) => (
     <TouchableOpacity style={styles.predictionRow} onPress={() => handleSelectPrediction(item)}>
@@ -305,7 +364,7 @@ const SelectLocationScreen = () => {
     </TouchableOpacity>
   );
 
-  return (
+  const ScreenContent = () => (
     <View style={styles.container}>
       <MapView
         ref={mapRef}
@@ -342,12 +401,13 @@ const SelectLocationScreen = () => {
           )}
         </View>
         {placePredictions.length > 0 && (
-          <FlatList
+          <FlashList
             data={placePredictions}
             renderItem={renderPredictionItem}
             keyExtractor={(item) => item.place_id}
             style={styles.predictionsList}
             keyboardShouldPersistTaps="handled"
+            estimatedItemSize={60}
           />
         )}
       </SafeAreaView>
@@ -360,6 +420,12 @@ const SelectLocationScreen = () => {
       )}
       {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text> /* More prominent error display */}
     </View>
+  );
+  
+  return (
+    <ErrorBoundary screenName='SelectLocationScreen'>
+      <ScreenContent />
+    </ErrorBoundary>
   );
 };
 

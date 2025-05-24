@@ -29,6 +29,7 @@ const palette = {
   status: {
     success: '#4CAF50',
     warning: '#FFC107',
+    warningLight: '#FFF3CD',
     error: '#F44336',
     info: '#2196F3',
   },
@@ -74,6 +75,13 @@ export const Colors = {
       active: palette.dynastyGreen.dark,
       inactive: palette.neutral.medium,
     },
+    status: {
+      success: palette.status.success,
+      warning: palette.status.warning,
+      warningLight: palette.status.warningLight,
+      error: palette.status.error,
+      info: palette.status.info,
+    },
   },
   dark: {
     text: {
@@ -112,6 +120,13 @@ export const Colors = {
     tab: {
       active: palette.neutral.white,
       inactive: palette.neutral.light,
+    },
+    status: {
+      success: palette.status.success,
+      warning: palette.status.warning,
+      warningLight: '#4A3B20', // Darker version for dark theme
+      error: palette.status.error,
+      info: palette.status.info,
     },
   },
   

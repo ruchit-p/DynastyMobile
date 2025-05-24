@@ -1,33 +1,52 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform, SafeAreaView, Image, Linking, TouchableOpacity } from 'react-native';
 import { useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
 // MARK: - Main Component
-const AboutScreen = () => {
+const AboutScreenContent = () => {
   const navigation = useNavigation();
   const appVersion = "1.0.0"; // TODO: Get this dynamically
   const buildNumber = "100123"; // TODO: Get this dynamically
 
-  React.useEffect(() => {
-    navigation.setOptions({
-      title: 'About Dynasty',
-      headerTitleAlign: 'center',
-      headerLeft: () => (
-        <Ionicons 
-          name="arrow-back" 
-          size={24} 
-          color={Platform.OS === 'ios' ? "#007AFF" : "#000"}
-          style={{ marginLeft: 15 }} 
-          onPress={() => navigation.goBack()} 
-        />
-      ),
-    });
-  }, [navigation]);
+  // Initialize error handler
+  const { withErrorHandling, clearError } = useErrorHandler({
+    severity: ErrorSeverity.INFO,
+    title: 'About Screen Error',
+    trackCurrentScreen: true
+  });
 
-  const openLink = (url: string) => {
-    Linking.openURL(url).catch(err => console.error("Couldn't load page", err));
-  };
+  // Reset error state when component mounts
+  useEffect(() => {
+    clearError();
+  }, [clearError]);
+
+  useEffect(() => {
+    const setNavigationOptions = withErrorHandling(async () => {
+      navigation.setOptions({
+        title: 'About Dynasty',
+        headerTitleAlign: 'center',
+        headerLeft: () => (
+          <Ionicons 
+            name="arrow-back" 
+            size={24} 
+            color={Platform.OS === 'ios' ? "#007AFF" : "#000"}
+            style={{ marginLeft: 15 }} 
+            onPress={() => navigation.goBack()}
+          />
+        ),
+      });
+    }, { component: 'AboutScreen', action: 'setNavigationOptions' });
+
+    setNavigationOptions();
+  }, [navigation, withErrorHandling]);
+
+  const openLink = withErrorHandling(async (url: string) => {
+    await Linking.openURL(url);
+  }, { component: 'AboutScreen', action: 'openLink' });
 
   // MARK: - Render
   return (
@@ -46,15 +65,24 @@ const AboutScreen = () => {
         </View>
 
         <View style={styles.linksSection}>
-            <TouchableOpacity style={styles.linkItem} onPress={() => openLink('https://example.com/terms')}>
+            <TouchableOpacity 
+              style={styles.linkItem} 
+              onPress={() => openLink('https://example.com/terms')}
+            >
                 <Ionicons name="document-text-outline" size={20} color="#007AFF" />
                 <Text style={styles.linkText}>Terms of Service</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.linkItem} onPress={() => openLink('https://example.com/privacy')}>
+            <TouchableOpacity 
+              style={styles.linkItem} 
+              onPress={() => openLink('https://example.com/privacy')}
+            >
                 <Ionicons name="shield-checkmark-outline" size={20} color="#007AFF" />
                 <Text style={styles.linkText}>Privacy Policy</Text>
             </TouchableOpacity>
-             <TouchableOpacity style={styles.linkItem} onPress={() => openLink('https://example.com/website')}>
+             <TouchableOpacity 
+               style={styles.linkItem} 
+               onPress={() => openLink('https://example.com/website')}
+             >
                 <Ionicons name="globe-outline" size={20} color="#007AFF" />
                 <Text style={styles.linkText}>Visit our Website</Text>
             </TouchableOpacity>
@@ -136,5 +164,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   }
 });
+
+// MARK: - Wrapped Component with Error Boundary
+const AboutScreen = () => {
+  return (
+    <ErrorBoundary screenName="AboutScreen">
+      <AboutScreenContent />
+    </ErrorBoundary>
+  );
+};
 
 export default AboutScreen; 

@@ -1,73 +1,46 @@
-import React, { useState, useEffect, useLayoutEffect } from 'react';
-import { SafeAreaView, StyleSheet, Text, View, Platform, Image, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
-import RelativesTree, { type RelativeItem, type RelativeItemProps as LibRelativeItemProps } from '../../react-native-relatives-tree/src';
+import React, { useState, useEffect, useLayoutEffect, useCallback } from 'react';
+import {
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  View,
+  Platform,
+  Image,
+  ActivityIndicator,
+} from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
-import AnimatedActionSheet, { type ActionSheetAction } from '../../components/ui/AnimatedActionSheet';
+import type { Node, ExtNode } from 'relatives-tree/lib/types';
+
+import { FamilyTree } from '../../components/FamilyTree';
+import AnimatedActionSheet from '../../components/ui/AnimatedActionSheet';
 import IconButton, { IconSet } from '../../components/ui/IconButton';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
 import { Colors } from '../../constants/Colors';
+import Typography from '../../constants/Typography';
+import { Spacing, BorderRadius } from '../../constants/Spacing';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { getFamilyTreeDataMobile } from '../../src/lib/firebaseUtils';
-
-// Define the Items type for your specific data structure
-type Items = RelativeItem & {
-  id: string;
-  name: string;
-  spouse?: Items;
-  dob: string;
-  dod?: string;
-  // Add any other properties your nodes might have, e.g., avatar
-  avatar?: string; 
-};
-
-// Helper function to get initials
-const getInitials = (name: string): string => {
-  if (!name) return '';
-  const nameParts = name.trim().split(' ');
-  if (nameParts.length === 1 && nameParts[0].length > 0) {
-    return nameParts[0].substring(0, Math.min(2, nameParts[0].length)).toUpperCase();
-  }
-  return (
-    (nameParts[0] ? nameParts[0][0] : '') +
-    (nameParts.length > 1 && nameParts[nameParts.length - 1] ? nameParts[nameParts.length - 1][0] : '')
-  ).toUpperCase();
-};
-
-// Define props for our custom item component
-type CustomRelativeItemProps = LibRelativeItemProps<Items> & {
-  onPress: (item: Items) => void;
-  isSelected: boolean;
-};
-
-const DYNASTY_PRIMARY_COLOR = '#1A4B44'; // TODO: Move to Colors.ts or Theme.ts
-
-// Custom RelativeItem component to render each node
-const CustomRelativeItem: React.FC<CustomRelativeItemProps> = ({
-  level,
-  info,
-  style,
-  onPress,
-  isSelected,
-}) => (
-  <TouchableOpacity onPress={() => onPress(info)} style={[styles.itemContainer, style, isSelected && styles.selectedItemContainer]}>
-    {info.avatar ? (
-      <Image source={{ uri: info.avatar }} style={styles.avatar} />
-    ) : (
-      <View style={styles.avatarPlaceholder}>
-        <Text style={styles.avatarPlaceholderText}>{getInitials(info.name)}</Text>
-      </View>
-    )}
-    <Text style={styles.nameText}>{info.name}</Text>
-  </TouchableOpacity>
-);
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { transformFirebaseToRelativesTree } from '../../utils/familyTreeTransform';
 
 const FamilyTreeScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
-  const [selectedNode, setSelectedNode] = useState<Items | null>(null);
+  const { user, firestoreUser } = useAuth();
+  const { handleError, withErrorHandling } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Family Tree Error',
+    trackCurrentScreen: true
+  });
+
+  const [nodes, setNodes] = useState<Node[]>([]);
+  const [firebaseNodeMap, setFirebaseNodeMap] = useState<Map<string, any>>(new Map());
+  const [selectedNode, setSelectedNode] = useState<ExtNode | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [isNodeActionMenuVisible, setIsNodeActionMenuVisible] = useState(false);
   const [isHeaderMenuVisible, setIsHeaderMenuVisible] = useState(false);
-  const { user, firestoreUser } = useAuth();
-  const [relativesData, setRelativesData] = useState<Items[]>([]);
+  const [performanceMode, setPerformanceMode] = useState<'performance' | 'balanced' | 'quality'>('balanced');
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -76,8 +49,8 @@ const FamilyTreeScreen = () => {
           iconSet={IconSet.Ionicons}
           iconName="ellipsis-vertical"
           size={24}
-          color={DYNASTY_PRIMARY_COLOR}
-          onPress={openHeaderMenu}
+          color={Colors.dynastyGreen}
+          onPress={() => setIsHeaderMenuVisible(true)}
           style={{ marginRight: Platform.OS === 'ios' ? 10 : 15 }}
           accessibilityLabel="Family tree options"
         />
@@ -87,285 +60,256 @@ const FamilyTreeScreen = () => {
 
   useEffect(() => {
     if (!user) return;
-    getFamilyTreeDataMobile(user.uid)
-      .then(({ treeNodes }) => {
-        const nodeMap = new Map(treeNodes.map((node: any) => [node.id, node]));
-        // Keep track of nodes we've already processed to prevent infinite recursion
-        const processedNodes = new Set<string>();
 
-        const buildItem = (member: any): Items => {
-          // Prevent processing the same node twice (circular references)
-          if (processedNodes.has(member.id)) {
-            return {
-              id: member.id,
-              name: member.attributes?.displayName || 'Duplicate Reference',
-              dob: '',
-              children: [],
-            };
-          }
+    const loadFamilyTree = async () => {
+      setIsLoading(true);
+      const startTime = performance.now();
 
-          // Mark this node as processed
-          processedNodes.add(member.id);
+      try {
+        const { treeNodes } = await getFamilyTreeDataMobile(user.uid);
+        
+        const { nodes: transformedNodes, nodeMap } = transformFirebaseToRelativesTree(treeNodes);
+        
+        setNodes(transformedNodes);
+        setFirebaseNodeMap(nodeMap);
 
-          // Process children
-          const children = (member.children || [])
-            .map((c: any) => nodeMap.get(c.id))
-            .filter((m: any) => m)
-            .map((m: any) => buildItem(m));
+        const loadTime = performance.now() - startTime;
+        console.log(`[FamilyTree] Loaded ${transformedNodes.length} nodes in ${loadTime.toFixed(2)}ms`);
 
-          // Process spouse
-          const spouseRel = member.spouses?.[0];
-          let spouse: Items | undefined;
-          if (spouseRel && !processedNodes.has(spouseRel.id)) {
-            const spouseMember = nodeMap.get(spouseRel.id);
-            if (spouseMember) {
-              spouse = buildItem(spouseMember);
-            }
-          }
-
-          // Determine avatar: use provided profilePicture, otherwise for current user fall back to auth or firestore picture
-          const attributeAvatar = member.attributes?.profilePicture;
-          const isCurrentUser = member.id === user.uid;
-          const fallbackAvatar = isCurrentUser ? (user.photoURL || firestoreUser?.profilePictureUrl) : undefined;
-
-          return {
-            id: member.id,
-            name: member.attributes?.displayName || '',
-            dob: '', // Map dateOfBirth if available
-            dod: undefined,
-            avatar: attributeAvatar ?? fallbackAvatar,
-            spouse,
-            children,
-          };
-        };
-
-        const rootMember = treeNodes.find((n: any) => n.id === user.uid);
-        if (rootMember) {
-          try {
-            const treeData = [buildItem(rootMember)];
-            setRelativesData(treeData);
-          } catch (err) {
-            console.error('Error building family tree data:', err);
-          }
+        if (transformedNodes.length > 1000) {
+          setPerformanceMode('performance');
+        } else if (transformedNodes.length < 100) {
+          setPerformanceMode('quality');
         }
-      })
-      .catch((error) => console.error('Error fetching family tree:', error));
-  }, [user, firestoreUser]);
+      } catch (error) {
+        handleError(error, {
+          severity: ErrorSeverity.ERROR,
+          metadata: {
+            action: 'loadFamilyTree',
+            userId: user.uid,
+          },
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const openHeaderMenu = () => {
-    setIsHeaderMenuVisible(true);
-  };
+    loadFamilyTree();
+  }, [user, handleError]);
 
-  const closeHeaderMenu = () => {
-    setIsHeaderMenuVisible(false);
-  };
-
-  const handleFamilyTreeSettings = () => {
-    closeHeaderMenu();
-    console.log('Navigate to Family Tree Settings');
-  };
-
-  const handleInviteMembers = () => {
-    closeHeaderMenu();
-    console.log('Invite Members');
-  };
-
-  const headerMenuActions: ActionSheetAction[] = [
-    {
-      title: 'Family Tree Settings',
-      onPress: handleFamilyTreeSettings,
-    },
-    {
-      title: 'Invite Members',
-      onPress: handleInviteMembers,
-    },
-    {
-      title: 'Cancel',
-      onPress: closeHeaderMenu,
-      style: 'cancel',
-    },
-  ];
-
-  const handleNodePress = (item: Items) => {
-    setSelectedNode(item);
+  const handleNodePress = useCallback((node: ExtNode) => {
+    setSelectedNode(node);
     setIsNodeActionMenuVisible(true);
-  };
+  }, []);
 
-  const handleCloseNodeMenu = () => {
-    setIsNodeActionMenuVisible(false);
-  };
-
-  const onAddMember = (relationType: 'parent' | 'spouse' | 'child') => {
-    if (selectedNode) {
-      router.push({
-        pathname: '/(screens)/addFamilyMember',
-        params: {
-          selectedNodeId: selectedNode.id,
-          relationType: relationType,
-          selectedNodeName: selectedNode.name
-        }
-      });
-    } else {
-      console.warn("No node selected for adding member.");
+  const handleAddMember = withErrorHandling(async (relationType: 'parent' | 'spouse' | 'child') => {
+    if (!selectedNode) {
+      throw new Error('No node selected');
     }
-  };
 
-  const onViewProfile = () => {
-    if (selectedNode) {
-      console.log(`Navigating to profile for ${selectedNode.name} (ID: ${selectedNode.id})`);
-      router.push({
-        pathname: '/(screens)/ViewProfileScreen',
-        params: {
-          memberId: selectedNode.id,
-          memberName: selectedNode.name,
-        }
-      });
-    } else {
-      console.warn("No node selected for viewing profile.");
+    const firebaseNode = firebaseNodeMap.get(selectedNode.id);
+    
+    router.push({
+      pathname: '/(screens)/addFamilyMember',
+      params: {
+        selectedNodeId: selectedNode.id,
+        relationType,
+        selectedNodeName: firebaseNode?.attributes?.displayName || 'Unknown',
+      },
+    });
+  }, 'Failed to add family member');
+
+  const handleViewProfile = withErrorHandling(async () => {
+    if (!selectedNode) {
+      throw new Error('No node selected');
     }
-  };
 
-  let dynamicActions: ActionSheetAction[] = [];
-  if (selectedNode) {
-    dynamicActions = [
-      {
-        title: 'View Profile',
-        onPress: onViewProfile,
+    const firebaseNode = firebaseNodeMap.get(selectedNode.id);
+    
+    router.push({
+      pathname: '/(screens)/ViewProfileScreen',
+      params: {
+        memberId: selectedNode.id,
+        memberName: firebaseNode?.attributes?.displayName || 'Unknown',
       },
-      {
-        title: 'Add Parent',
-        onPress: () => onAddMember('parent'),
-      },
-      {
-        title: 'Add Spouse',
-        onPress: () => onAddMember('spouse'),
-      },
-      {
-        title: 'Add Child',
-        onPress: () => onAddMember('child'),
-      },
-      {
-        title: 'Cancel',
-        onPress: handleCloseNodeMenu,
-        style: 'cancel',
-      },
-    ];
+    });
+  }, 'Failed to view profile');
+
+  const renderNode = useCallback((node: ExtNode, isSelected: boolean) => {
+    const firebaseNode = firebaseNodeMap.get(node.id);
+    const attributes = firebaseNode?.attributes || {};
+    const name = attributes.displayName || '';
+    const avatar = attributes.profilePicture || 
+                   (node.id === user?.uid ? (user.photoURL || firestoreUser?.profilePictureUrl) : undefined);
+
+    return (
+      <View style={[styles.nodeContainer, isSelected && styles.selectedNode]}>
+        {avatar ? (
+          <Image source={{ uri: avatar }} style={styles.avatar} />
+        ) : (
+          <View style={styles.avatarPlaceholder}>
+            <Text style={styles.avatarText}>
+              {name.split(' ').map(n => n[0]).join('').toUpperCase()}
+            </Text>
+          </View>
+        )}
+        <Text style={styles.nodeName} numberOfLines={2}>
+          {name}
+        </Text>
+        {node.hasSubTree && (
+          <View style={styles.subTreeIndicator} />
+        )}
+      </View>
+    );
+  }, [firebaseNodeMap, user, firestoreUser]);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.dynastyGreen} />
+          <Text style={styles.loadingText}>Loading family tree...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!isLoading && nodes.length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No family members yet</Text>
+          <Text style={styles.emptySubtext}>Start building your family tree</Text>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <RelativesTree<Items>
-        data={relativesData}
-        spouseKey="spouse"
-        relativeItem={(props) => {
-          return (
-            <CustomRelativeItem
-              {...props}
-              onPress={handleNodePress}
-              isSelected={selectedNode?.id === props.info.id}
-            />
-          );
-        }}
-        cardWidth={150}
-        gap={25}
-        pathColor="#006400"
-        strokeWidth={2}
-        style={styles.treeContainer}
-      />
+    <ErrorBoundary screenName="FamilyTreeScreen">
+      <SafeAreaView style={styles.container}>
+        <FamilyTree
+          nodes={nodes}
+          rootId={user?.uid || ''}
+          renderNode={renderNode}
+          onNodePress={handleNodePress}
+          selectedNodeId={selectedNode?.id}
+          performanceMode={performanceMode}
+          onTreeReady={() => {
+            console.log(`[FamilyTree] Tree rendered with ${nodes.length} nodes`);
+          }}
+        />
 
-      {selectedNode && (
         <AnimatedActionSheet
           isVisible={isNodeActionMenuVisible}
-          onClose={handleCloseNodeMenu}
-          title={`Actions for ${selectedNode.name}`}
-          actions={dynamicActions}
+          onClose={() => setIsNodeActionMenuVisible(false)}
+          title={`Actions for ${firebaseNodeMap.get(selectedNode?.id || '')?.attributes?.displayName || 'Member'}`}
+          actions={[
+            { title: 'View Profile', onPress: handleViewProfile },
+            { title: 'Add Parent', onPress: () => handleAddMember('parent') },
+            { title: 'Add Spouse', onPress: () => handleAddMember('spouse') },
+            { title: 'Add Child', onPress: () => handleAddMember('child') },
+            { title: 'Cancel', style: 'cancel', onPress: () => {} },
+          ]}
         />
-      )}
 
-      <AnimatedActionSheet
-        isVisible={isHeaderMenuVisible}
-        onClose={closeHeaderMenu}
-        title="Family Tree Options"
-        actions={headerMenuActions}
-      />
-    </SafeAreaView>
+        <AnimatedActionSheet
+          isVisible={isHeaderMenuVisible}
+          onClose={() => setIsHeaderMenuVisible(false)}
+          title="Family Tree Options"
+          actions={[
+            { title: 'Family Tree Settings', onPress: () => {} },
+            { title: 'Invite Members', onPress: () => {} },
+            { title: 'Export Tree', onPress: () => {} },
+            { title: 'Cancel', style: 'cancel', onPress: () => {} },
+          ]}
+        />
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.light.background.primary,
   },
-  pageHeader: {
-    paddingHorizontal: 15,
-    paddingTop: Platform.OS === 'ios' ? 15 : 40,
-    paddingBottom: 10,
-    backgroundColor: '#FFFFFF',
-  },
-  pageTitle: {
-    fontSize: 34,
-    fontWeight: 'bold',
-    color: '#000000',
-  },
-  treeContainer: {
+  loadingContainer: {
     flex: 1,
-    backgroundColor: '#F4F4F4',
-    padding: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  itemContainer: {
+  loadingText: {
+    marginTop: Spacing.md,
+    ...Typography.styles.bodyMedium,
+    color: Colors.light.text.secondary,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.xl,
+  },
+  emptyText: {
+    ...Typography.styles.heading3,
+    color: Colors.light.text.primary,
+    marginBottom: Spacing.sm,
+  },
+  emptySubtext: {
+    ...Typography.styles.bodyMedium,
+    color: Colors.light.text.secondary,
+  },
+  nodeContainer: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: Colors.palette.dynastyGreen.extraLight,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: '#1A4B44',
-    borderRadius: 10,
+    borderColor: Colors.dynastyGreen,
+    padding: Spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E8F5E9',
-    padding: 8,
   },
-  selectedItemContainer: {
-    borderColor: '#C4A55C',
+  selectedNode: {
+    borderColor: Colors.palette.status.warning,
     borderWidth: 2,
     backgroundColor: '#FFFDE7',
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginBottom: 8,
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.full,
+    marginBottom: Spacing.xxs,
   },
   avatarPlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#B0BEC5',
-    justifyContent: 'center',
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.light.border.secondary,
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'center',
+    marginBottom: Spacing.xxs,
   },
-  avatarPlaceholderText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 18,
+  avatarText: {
+    ...Typography.styles.caption,
+    fontWeight: Typography.weight.bold,
+    color: Colors.light.text.inverse,
   },
-  nameText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1A4B44',
+  nodeName: {
+    ...Typography.styles.caption,
+    fontWeight: Typography.weight.semiBold,
+    color: Colors.dynastyGreen,
     textAlign: 'center',
-    paddingHorizontal: 5,
   },
-  dobText: {
-    fontSize: 10,
-    color: '#555',
-  },
-  dodText: {
-    fontSize: 10,
-    color: '#888',
-  },
-  levelText: {
-    fontSize: 9,
-    color: '#777',
+  subTreeIndicator: {
+    position: 'absolute',
+    top: Spacing.xxs,
+    right: Spacing.xxs,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.palette.status.info,
   },
 });
 
-export default FamilyTreeScreen; 
+export default FamilyTreeScreen;

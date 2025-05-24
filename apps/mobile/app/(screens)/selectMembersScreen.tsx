@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TouchableOpacity,
   TextInput,
   SafeAreaView,
@@ -18,6 +17,10 @@ import ThemedText from '../../components/ThemedText';
 import { commonHeaderOptions } from '../../constants/headerConfig';
 import { getFirebaseFunctions as firebaseFunctionsInstance, getFirebaseAuth as firebaseAuthInstance } from '../../src/lib/firebase';
 import { useScreenResult } from '../../src/contexts/ScreenResultContext';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import FlashList from '../../components/ui/FlashList';
 
 interface Member {
   id: string;
@@ -41,6 +44,11 @@ const SelectMembersScreen = () => {
   const params = useLocalSearchParams<{ purpose?: string; preSelected?: string }>();
   const { setResult } = useScreenResult();
   const { purpose = 'tagging' } = params; // Default to tagging if no purpose provided
+  const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Member Selection Error',
+    trackCurrentScreen: true
+  });
 
   const [searchText, setSearchText] = useState('');
   const [members, setMembers] = useState<Member[]>([]); 
@@ -48,6 +56,12 @@ const SelectMembersScreen = () => {
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isError) {
+      setError(null);
+    }
+  }, [isError]);
 
   const screenTitle = purpose === 'viewers' ? 'Select Viewers' : 'Tag People';
   const allowMultipleSelection = purpose === 'viewers' || purpose === 'tagging'; // Both can be multi-select
@@ -68,7 +82,8 @@ const SelectMembersScreen = () => {
 
   // Fetch family members
   useEffect(() => {
-    const fetchFamilyMembers = async () => {
+    const fetchFamilyMembers = withErrorHandling(async () => {
+      reset();
       setIsLoading(true);
       setError(null); // Clear previous errors
       try {
@@ -102,6 +117,17 @@ const SelectMembersScreen = () => {
         }
       } catch (error: any) {
         console.error("Error fetching family members:", error);
+        
+        handleError(error, {
+          action: 'fetchFamilyMembers',
+          metadata: { 
+            purpose,
+            currentUserId: firebaseAuthInstance().currentUser?.uid,
+            errorCode: error.code,
+            errorMessage: error.message
+          }
+        });
+
         // Check if the error is from Firebase and has a code property
         if (error.code && error.message) {
           // Handle specific Firebase error codes if necessary
@@ -118,7 +144,7 @@ const SelectMembersScreen = () => {
       } finally {
         setIsLoading(false);
       }
-    };
+    });
 
     fetchFamilyMembers();
   }, []);
@@ -146,20 +172,33 @@ const SelectMembersScreen = () => {
     });
   };
 
-  const handleDone = () => {
-    console.log(`Selected for ${purpose}:`, selectedMemberIds);
-    setResult({
-      purpose,
-      selectedIds: selectedMemberIds,
-      timestamp: Date.now()
-    });
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      console.warn("SelectMembersScreen: router.canGoBack() is false. Navigating to /(screens)/createStory as fallback.");
-      router.replace('/(screens)/createStory');
+  const handleDone = withErrorHandling(async () => {
+    reset();
+    try {
+      console.log(`Selected for ${purpose}:`, selectedMemberIds);
+      setResult({
+        purpose,
+        selectedIds: selectedMemberIds,
+        timestamp: Date.now()
+      });
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        console.warn("SelectMembersScreen: router.canGoBack() is false. Navigating to /(screens)/createStory as fallback.");
+        router.replace('/(screens)/createStory');
+      }
+    } catch (error: any) {
+      handleError(error, {
+        action: 'handleDone',
+        metadata: {
+          purpose,
+          selectedMemberIds,
+          selectedCount: selectedMemberIds.length,
+          canGoBack: router.canGoBack()
+        }
+      });
     }
-  };
+  });
 
   const renderItem = ({ item }: { item: Member }) => {
     const isSelected = selectedMemberIds.includes(item.id);
@@ -197,46 +236,49 @@ const SelectMembersScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Stack.Screen options={headerOptions} />
-      <View style={styles.container}>
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={18} color={Colors.palette.neutral.medium} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search for members..."
-            value={searchText}
-            onChangeText={setSearchText}
-            placeholderTextColor={Colors.palette.neutral.medium}
-            returnKeyType="search"
-            clearButtonMode="while-editing"
-          />
+    <ErrorBoundary screenName="SelectMembersScreen">
+      <SafeAreaView style={styles.safeArea}>
+        <Stack.Screen options={headerOptions} />
+        <View style={styles.container}>
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={18} color={Colors.palette.neutral.medium} style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search for members..."
+              value={searchText}
+              onChangeText={setSearchText}
+              placeholderTextColor={Colors.palette.neutral.medium}
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+          </View>
+          
+          {isLoading ? (
+            <View style={styles.centeredContainer}>
+              <ActivityIndicator size="large" color={Colors.palette.dynastyGreen.dark} />
+            </View>
+          ) : error ? (
+            <View style={styles.centeredContainer}>
+              <ThemedText variant="bodyMedium" style={styles.errorText}>{error}</ThemedText>
+            </View>
+          ) : (
+            <FlashList
+              data={filteredMembers}
+              renderItem={renderItem}
+              keyExtractor={item => item.id}
+              style={styles.list}
+              ItemSeparatorComponent={() => <View style={styles.separator} />}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <ThemedText variant="bodyMedium" style={styles.emptyListText}>No members found.</ThemedText>
+                </View>
+              }
+              estimatedItemSize={70}
+            />
+          )}
         </View>
-        
-        {isLoading ? (
-          <View style={styles.centeredContainer}>
-            <ActivityIndicator size="large" color={Colors.palette.dynastyGreen.dark} />
-          </View>
-        ) : error ? (
-          <View style={styles.centeredContainer}>
-            <ThemedText variant="bodyMedium" style={styles.errorText}>{error}</ThemedText>
-          </View>
-        ) : (
-          <FlatList
-            data={filteredMembers}
-            renderItem={renderItem}
-            keyExtractor={item => item.id}
-            style={styles.list}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <ThemedText variant="bodyMedium" style={styles.emptyListText}>No members found.</ThemedText>
-              </View>
-            }
-          />
-        )}
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 

@@ -21,15 +21,30 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { Spacing } from '../../constants/Spacing';
 import { commonHeaderOptions } from '../../constants/headerConfig';
+import { showErrorAlert } from '../../src/lib/errorUtils';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
 const RecordAudioScreen = () => {
   const router = useRouter();
+  const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Audio Recording Error',
+    trackCurrentScreen: true
+  });
   
   // Recording states with expo-audio hooks
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
   const [audioUri, setAudioUri] = useState<string | null>(null);
   const [permissionStatus, setPermissionStatus] = useState<string | null>(null); // Store permission string
+
+  useEffect(() => {
+    if (!isError) {
+      // Clear any local error states when global error is cleared
+    }
+  }, [isError]);
 
   // Playback states with expo-audio hooks
   const player = useAudioPlayer(audioUri); // Initialize player with URI, will load when URI is set
@@ -104,7 +119,7 @@ const RecordAudioScreen = () => {
         await requestPermissions();
         // Re-check status after requesting again
         if (permissionStatus !== 'granted' && (await AudioModule.getRecordingPermissionsAsync()).status !== 'granted') {
-            Alert.alert('Permission Error', 'Microphone permission is still not granted.');
+            showErrorAlert({ message: 'Microphone permission is still not granted.', code: 'permission-denied' }, 'Permission Error');
             return;
         }
       }
@@ -132,8 +147,11 @@ const RecordAudioScreen = () => {
         setRecordingDuration((prev) => prev + 1);
       }, 1000);
     } catch (error: any) {
-      console.error('Failed to start recording', error);
-      Alert.alert('Error', `Failed to start recording: ${error.message || 'Unknown error'}`);
+      handleError(error, { 
+        action: 'startRecording',
+        metadata: { permissionStatus }
+      });
+      showErrorAlert(error, 'Recording Error');
     }
   };
 
@@ -159,8 +177,11 @@ const RecordAudioScreen = () => {
       // Reset audio mode (optional, depends on desired app behavior)
       // await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
     } catch (error: any) {
-      console.error('Failed to stop recording', error);
-      Alert.alert('Error', `Failed to stop recording: ${error.message || 'Unknown error'}`);
+      handleError(error, { 
+        action: 'stopRecording',
+        metadata: { recordingDuration }
+      });
+      showErrorAlert(error, 'Stop Recording Error');
     }
   };
 
@@ -182,8 +203,11 @@ const RecordAudioScreen = () => {
       await player.play();
       // isPlaying state will be updated by the 'playingChange' listener
     } catch (error: any) {
-      console.error('Failed to play sound', error);
-      Alert.alert('Error', `Failed to play recording: ${error.message || 'Unknown error'}`);
+      handleError(error, { 
+        action: 'playSound',
+        metadata: { hasAudioUri: !!audioUri }
+      });
+      showErrorAlert(error, 'Playback Error');
     }
   };
 
@@ -194,8 +218,11 @@ const RecordAudioScreen = () => {
         await player.pause(); // Using pause as stop, or seekTo(0) then pause
                                 // Or if a 'stop' method is available on AudioPlayer: await player.stop();
       } catch (error: any) {
-         console.error('Failed to stop sound', error);
-         Alert.alert('Error', `Failed to stop playback: ${error.message || 'Unknown error'}`);
+         handleError(error, { 
+           action: 'stopSound',
+           metadata: { wasPlaying: isPlaying }
+         });
+         showErrorAlert(error, 'Stop Playback Error');
       }
     }
     setIsPlaying(false); // Explicitly set here in case event is missed or for immediate UI update
@@ -236,8 +263,9 @@ const RecordAudioScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Stack.Screen options={headerOptions} />
+    <ErrorBoundary screenName="RecordAudioScreen">
+      <SafeAreaView style={styles.safeArea}>
+        <Stack.Screen options={headerOptions} />
       
       <View style={styles.container}>
         <View style={styles.timerContainer}>
@@ -286,7 +314,8 @@ const RecordAudioScreen = () => {
               : (permissionStatus === 'granted' ? 'Tap the button to start recording' : 'Enable microphone to record')}
         </Text>
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 

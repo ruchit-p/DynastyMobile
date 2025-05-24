@@ -18,8 +18,16 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useNavigation, useLocalSearchParams, usePathname, router as expoRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { getFirebaseAuth, getFirebaseFunctions } from '../../src/lib/firebase'; // Use getFirebaseFunctions from local lib
+import { getFirebaseAuth } from '../../src/lib/firebase';
+import { createEventMobile } from '../../src/lib/eventUtils';
 import { useImageUpload } from '../../hooks/useImageUpload';
+import { callFirebaseFunction, showErrorAlert } from '../../src/lib/errorUtils'; // Corrected import for callFirebaseFunction
+import { showErrorAlert as oldShowErrorAlert } from '../../src/lib/errorUtils'; // Added for consistent error display
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { useSmartMediaUpload } from '../../hooks/useSmartMediaUpload';
+import { useEncryption } from '../../src/contexts/EncryptionContext';
 
 // Custom components
 import FullScreenDatePicker from '../../components/ui/FullScreenDatePicker';
@@ -54,7 +62,7 @@ interface NewEventData {
   whatToBring?: string;
   
   // Privacy settings
-  privacy: 'family' | 'private'; // 'private' means invitees only
+  privacy: 'public' | 'family_tree' | 'invite_only'; // Updated to match API
   allowGuestPlusOne: boolean;
   showGuestList: boolean;
   
@@ -85,8 +93,13 @@ interface FamilyMember {
 const CreateEventScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
+  const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Event Creation Error',
+    trackCurrentScreen: true
+  });
   const params = useLocalSearchParams<{
-    selectedVisibility?: 'family' | 'private',
+    selectedVisibility?: 'public' | 'family_tree' | 'invite_only',
     selectedLocation?: string, 
     selectedLocationLat?: string,
     selectedLocationLng?: string,
@@ -98,6 +111,12 @@ const CreateEventScreen = () => {
     prefillEndTime?: string,
   }>();
   const currentPath = usePathname();
+
+  useEffect(() => {
+    if (!isError) {
+      // Clear any local error states when global error is cleared
+    }
+  }, [isError]);
 
   const [newEvent, setNewEvent] = useState<NewEventData>({
     title: '',
@@ -114,7 +133,7 @@ const CreateEventScreen = () => {
     description: '',
     dressCode: '',
     whatToBring: '',
-    privacy: 'private',
+    privacy: 'invite_only',
     allowGuestPlusOne: false,
     showGuestList: true,
     requireRsvp: true,
@@ -132,9 +151,8 @@ const CreateEventScreen = () => {
   const [membersError, setMembersError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Initialize Firebase Auth and Functions
+  // Initialize Firebase Auth
   const auth = getFirebaseAuth();
-  const functions = getFirebaseFunctions(); // Use @react-native-firebase/functions instance
 
   // MARK: - Navigation Setup
   useEffect(() => {
@@ -161,6 +179,9 @@ const CreateEventScreen = () => {
     error: uploadError,
     uploadImage 
   } = useImageUpload();
+  
+  const smartUpload = useSmartMediaUpload();
+  const { isEncryptionReady } = useEncryption();
 
   // State for DateTimePickerModal (NEW)
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
@@ -389,9 +410,16 @@ const CreateEventScreen = () => {
           const storagePath = `eventImages/${auth.currentUser!.uid}/${newEvent.title.replace(/\s+/g, '_')}_${Date.now()}_${i}/${uniqueFileName}`;
           
           console.log(`[uploadAllEventMedia] Uploading: ${item.uri} to ${storagePath}`);
-          const imageUrl = await uploadImage(
+          
+          // Use smart upload which handles encryption based on settings
+          const uploadResult = await smartUpload.uploadMedia(
             item.uri,
-            storagePath, // Pass the full path for the file name to be included by uploadImage
+            'event',
+            {
+              fileName: uniqueFileName,
+              mimeType: item.type === 'video' ? 'video/mp4' : 'image/jpeg',
+              pathPrefix: storagePath.split('/').slice(0, -1).join('/'), // Extract directory from path
+            },
             (progress) => {
               // Progress for this single item
               // Overall progress needs to sum up fractions from each item
@@ -402,8 +430,9 @@ const CreateEventScreen = () => {
             }
           );
 
-          if (imageUrl) {
-            console.log(`[uploadAllEventMedia] Uploaded ${item.uri} to ${imageUrl}`);
+          if (uploadResult) {
+            const imageUrl = uploadResult.url;
+            console.log(`[uploadAllEventMedia] Uploaded ${item.uri} to ${imageUrl}${uploadResult.key ? ' (encrypted)' : ''}`);
             finalMediaUris[i] = imageUrl; // Update the URI in the final list
             uploadedUrls.push(imageUrl); // Collect successfully uploaded URLs for the payload
             setCompletedUploads(prev => prev + 1);
@@ -440,140 +469,125 @@ const CreateEventScreen = () => {
     return finalMediaUris; 
   };
 
-  const handleCreateEvent = async () => {
+  const handleCreateEvent = withErrorHandling(async () => {
+    reset();
     if (!auth.currentUser) { 
-      Alert.alert("Authentication Error", "You need to be logged in to create an event.");
+      // Use showErrorAlert for consistency
+      showErrorAlert({ code: "unauthenticated", message: "You need to be logged in to create an event." }, "Authentication Error");
       return;
     }
     // Basic Validation
     if (!newEvent.title.trim()) {
-        Alert.alert('Missing Title', 'Please provide an event title.');
+        // Using showErrorAlert for validation errors
+        showErrorAlert({ code: "invalid-argument", message: "Please provide an event title." }, 'Missing Title');
         return;
     }
     if (!newEvent.eventDate) {
-        Alert.alert('Missing Start Date', 'Please select a start date.');
+        showErrorAlert({ code: "invalid-argument", message: "Please select a start date." }, 'Missing Start Date');
         return;
     }
     if (newEvent.isMultiDay && !newEvent.endDate) {
-        Alert.alert('Missing End Date', 'Please select an end date for multi-day event.');
+        showErrorAlert({ code: "invalid-argument", message: "Please select an end date for multi-day event." }, 'Missing End Date');
         return;
     }
     if (newEvent.isMultiDay && newEvent.endDate && newEvent.eventDate && newEvent.endDate <= newEvent.eventDate) {
-        Alert.alert('Invalid Dates', 'End date must be after start date.');
+        showErrorAlert({ code: "invalid-argument", message: "End date must be after start date." }, 'Invalid Dates');
         return;
     }
     if (!newEvent.isVirtual && !newEvent.location.trim() && !newEvent.selectedLocation) {
-        Alert.alert('Missing Location', 'Please provide an event location or mark as virtual.');
+        showErrorAlert({ code: "invalid-argument", message: "Please provide an event location or mark as virtual." }, 'Missing Location');
         return;
     }
     if (newEvent.isVirtual && !newEvent.virtualLink.trim()) {
-        Alert.alert('Missing Virtual Link', 'Please provide a link for the virtual event.');
+        showErrorAlert({ code: "invalid-argument", message: "Please provide a link for the virtual event." }, 'Missing Virtual Link');
         return;
     }
     if (newEvent.requireRsvp && !newEvent.rsvpDeadline) {
-      Alert.alert('Missing RSVP Deadline', 'Please set an RSVP deadline.');
+      showErrorAlert({ code: "invalid-argument", message: "Please set an RSVP deadline." }, 'Missing RSVP Deadline');
+      return;
+    }
+    if (newEvent.requireRsvp && newEvent.rsvpDeadline && newEvent.eventDate && newEvent.rsvpDeadline >= newEvent.eventDate) {
+      showErrorAlert({ code: "invalid-argument", message: "RSVP deadline must be before the event date." }, 'Invalid RSVP Deadline');
       return;
     }
     if (newEvent.inviteType === 'select' && newEvent.selectedMembers.length === 0) {
-      Alert.alert('No Invitees', 'Please select at least one family member to invite.');
+      showErrorAlert({ code: "invalid-argument", message: "Please select at least one family member to invite." }, 'No Invitees');
       return;
     }
 
-    if (isUploadingImage) { // Prevent concurrent actions
-        Alert.alert("Please Wait", "Image is currently uploading.");
+    if (isUploadingImage) { // Changed from isUploadingImage to the general isUploading state
+        showErrorAlert({ code: "aborted", message: "Media is currently uploading. Please wait." }, "Please Wait");
         return;
     }
 
     setIsCreatingEvent(true);
 
     try {
-      // Upload all media (images and videos) from newEvent.photos
       const allCoverMediaUrls = await uploadAllEventMedia(newEvent.photos);
       
-      // Simplified check for upload failures: if there were local photos to upload,
-      // but none of them resulted in an HTTP URL in the final list from uploadAllEventMedia.
       const localPhotosAttempted = newEvent.photos.some(p => p.uri.startsWith('file://') || p.uri.startsWith('content://'));
-      const successfulHttpUploads = allCoverMediaUrls.some(url => url.startsWith('http'));
+      const successfulHttpUploads = allCoverMediaUrls.some(url => typeof url === 'string' && url.startsWith('http'));
 
       if (localPhotosAttempted && !successfulHttpUploads && newEvent.photos.length > 0) {
-        // This condition implies that an attempt was made to upload local files, but no HTTP URLs were produced.
-        // This could mean all uploads failed.
-        Alert.alert("Upload Failed", "Some media items failed to upload. Please check and try again.");
-        setIsCreatingEvent(false); // Stop event creation
-        return; // Exit if critical uploads failed
+        showErrorAlert({ code: "internal", message: "Some media items failed to upload. Please check and try again." }, "Upload Failed");
+        setIsCreatingEvent(false);
+        return;
       }
-      // Further partial failure warnings can be added here if needed, by comparing
-      // the number of initial local files vs the number of http links in allCoverMediaUrls.
 
-      // Helper to format date to YYYY-MM-DD
       const formatDateToYYYYMMDD = (date: Date | null): string | null => {
         if (!date) return null;
         return date.toISOString().split('T')[0];
       };
 
-      const eventPayload = {
+      // Use the eventUtils function to create the event
+      const eventId = await createEventMobile({
         title: newEvent.title.trim(),
-        eventDate: formatDateToYYYYMMDD(newEvent.eventDate),
-        endDate: newEvent.isMultiDay ? formatDateToYYYYMMDD(newEvent.endDate) : null,
-        startTime: newEvent.startTime, // "HH:MM"
-        endTime: newEvent.endTime, // "HH:MM"
-        timezone: newEvent.timezone,
-        location: newEvent.isVirtual ? null : newEvent.selectedLocation,
-        virtualLink: newEvent.isVirtual ? newEvent.virtualLink.trim() : null,
-        isVirtual: newEvent.isVirtual,
         description: newEvent.description.trim(),
-        dresscode: newEvent.dressCode?.trim() || null, // Field name changed to 'dresscode'
-        whatToBring: newEvent.whatToBring?.trim() || null,
-        additionalInfo: null, // Ensure this is explicitly null if not provided
+        eventDate: formatDateToYYYYMMDD(newEvent.eventDate) || '',
+        endDate: newEvent.isMultiDay ? formatDateToYYYYMMDD(newEvent.endDate) : undefined,
+        startTime: newEvent.startTime,
+        endTime: newEvent.endTime,
+        timezone: newEvent.timezone,
+        location: newEvent.isVirtual ? undefined : newEvent.selectedLocation,
+        isVirtual: newEvent.isVirtual,
+        virtualLink: newEvent.isVirtual ? newEvent.virtualLink.trim() : undefined,
         privacy: newEvent.privacy,
         allowGuestPlusOne: newEvent.allowGuestPlusOne,
         showGuestList: newEvent.showGuestList,
         requireRsvp: newEvent.requireRsvp,
-        rsvpDeadline: newEvent.requireRsvp ? formatDateToYYYYMMDD(newEvent.rsvpDeadline) : null,
-        hostId: auth.currentUser.uid,
-        invitedMembers: newEvent.inviteType === "all" 
-            ? familyMembers.map(member => member.id) // Assumes familyMembers is populated correctly
+        rsvpDeadline: newEvent.requireRsvp ? formatDateToYYYYMMDD(newEvent.rsvpDeadline) : undefined,
+        dresscode: newEvent.dressCode?.trim(),
+        whatToBring: newEvent.whatToBring?.trim(),
+        additionalInfo: undefined,
+        invitedMemberIds: newEvent.inviteType === "all" 
+            ? familyMembers.map(member => member.id)
             : newEvent.selectedMembers,
-        coverPhotos: allCoverMediaUrls, 
-      };
+        coverPhotoStoragePaths: allCoverMediaUrls.filter(url => typeof url === 'string'),
+      });
 
-      console.log("[CreateEvent] Calling Firebase Function 'createEvent' with payload:", JSON.stringify(eventPayload, null, 2));
-
-      const createEventFunction = functions.httpsCallable('createEvent');
-      const result = await createEventFunction(eventPayload); // Result structure might be directly data
-
-      console.log("[CreateEvent] Firebase Function 'createEvent' response:", result.data);
-
-      // For @react-native-firebase/functions, result often contains { data: yourActualData }
-      // Depending on your cloud function, result.data might be the success flag or the object containing it.
-      // Let's assume result.data is the object { success: true, message: "..." } or similar.
-      const responseData = result.data as any; // Cast to any to access potential properties
-
-      if (responseData && responseData.success) {
-        Alert.alert('Event Created', responseData.message || 'Your event has been successfully created!');
+      if (eventId) {
+        Alert.alert('Event Created', 'Your event has been successfully created!');
         router.back();
       } else {
-        const errorMessage = responseData?.message || "Unknown error from server.";
-        console.error("[CreateEvent] Error from Firebase Function:", errorMessage, responseData?.errorDetails);
-        Alert.alert("Creation Failed", `Could not create your event: ${errorMessage}`);
+        console.error("[CreateEvent] Failed to create event, no event ID returned");
+        showErrorAlert({ code: "unknown", message: "Event creation failed. Please try again." }, "Creation Failed");
       }
 
     } catch (error: any) {
-      console.error("[CreateEvent] Error during event creation process:", error);
-      let errorMessage = "Could not create your event. Please try again later.";
-      if (error.message) {
-        errorMessage = error.message;
-      }
-      // Check for Firebase Functions specific error details
-      if (error.details) {
-        console.error("Firebase Functions error details:", error.details);
-        // errorMessage += ` Details: ${JSON.stringify(error.details)}`; // Or a more user-friendly message
-      }
-      Alert.alert("Creation Failed", errorMessage);
+      handleError(error, { 
+        action: 'createEvent',
+        metadata: { 
+          eventTitle: newEvent.title,
+          isVirtual: newEvent.isVirtual,
+          privacy: newEvent.privacy,
+          photoCount: newEvent.photos.length
+        }
+      });
+      showErrorAlert(error, "Creation Failed");
     } finally {
       setIsCreatingEvent(false);
     }
-  };
+  });
 
   const inputAccessoryViewID = 'uniqueInputAccessoryViewID';
 
@@ -600,6 +614,11 @@ const CreateEventScreen = () => {
       if (currentPickerTarget === 'endDate' && newEvent.eventDate && date < newEvent.eventDate) {
         Alert.alert("Invalid End Date", "End date cannot be before the start date.");
         setNewEvent(prev => ({ ...prev, endDate: prev.eventDate })); // Reset to start date
+      }
+      // If selecting RSVP deadline, ensure it's before event date
+      if (currentPickerTarget === 'rsvpDeadline' && newEvent.eventDate && date >= newEvent.eventDate) {
+        Alert.alert("Invalid RSVP Deadline", "RSVP deadline must be before the event date.");
+        setNewEvent(prev => ({ ...prev, rsvpDeadline: new Date(prev.eventDate!.getTime() - 24 * 60 * 60 * 1000) })); // Set to day before event
       }
     }
     hideDatePicker();
@@ -661,7 +680,8 @@ const CreateEventScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <ErrorBoundary screenName="CreateEventScreen">
+      <SafeAreaView style={styles.safeArea}>
       <ScrollView 
         style={styles.container}
         contentContainerStyle={styles.scrollContentContainer}
@@ -850,7 +870,10 @@ const CreateEventScreen = () => {
           >
             <Ionicons name="eye-outline" size={22} color={styles.inputIcon.color} style={styles.inputIcon} />
             <Text style={styles.inputLabel}>Visibility</Text>
-            <Text style={[styles.inputText, {color: styles.placeholderText.color, textAlign: 'right'}]}>{newEvent.privacy === 'family' ? 'All Family' : 'Invitees Only'}</Text>
+            <Text style={[styles.inputText, {color: styles.placeholderText.color, textAlign: 'right'}]}>
+              {newEvent.privacy === 'public' ? 'Public' : 
+               newEvent.privacy === 'family_tree' ? 'Family Tree' : 'Invitees Only'}
+            </Text>
             <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
           </TouchableOpacity>
           <View style={styles.separatorThin} />
@@ -868,13 +891,101 @@ const CreateEventScreen = () => {
             <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
           </TouchableOpacity> */}
 
-          {/* TODO: Add UI for Allow Guest +1 */}
-          {/* TODO: Add UI for Show Guest List */}
-          {/* TODO: Add UI for Invite Type (All Family / Select) */}
-          {/* TODO: Add UI for RSVP Required Toggle */}
-          {/* TODO: Add UI for RSVP Deadline Picker */}
-          {/* TODO: Add UI for Dress Code, What to Bring (as optional inputs) */}
-          {/* TODO: Add UI for displaying multiple photo previews and remove buttons */}
+          <View style={styles.inputRow}>
+            <Ionicons name="people-outline" size={22} color={styles.inputIcon.color} style={styles.inputIcon} />
+            <Text style={styles.inputLabel}>Allow guests to bring +1</Text>
+            <Switch
+              value={newEvent.allowGuestPlusOne}
+              onValueChange={(value) => setNewEvent({ ...newEvent, allowGuestPlusOne: value })}
+              trackColor={{ false: "#E9E9EA", true: dynastyGreen }}
+              thumbColor={newEvent.allowGuestPlusOne ? "#f4f3f4" : "#f4f3f4"}
+            />
+          </View>
+          <View style={styles.separatorThin} />
+
+          <View style={styles.inputRow}>
+            <Ionicons name="list-outline" size={22} color={styles.inputIcon.color} style={styles.inputIcon} />
+            <Text style={styles.inputLabel}>Show guest list</Text>
+            <Switch
+              value={newEvent.showGuestList}
+              onValueChange={(value) => setNewEvent({ ...newEvent, showGuestList: value })}
+              trackColor={{ false: "#E9E9EA", true: dynastyGreen }}
+              thumbColor={newEvent.showGuestList ? "#f4f3f4" : "#f4f3f4"}
+            />
+          </View>
+          <View style={styles.separatorThin} />
+
+          <TouchableOpacity 
+            style={styles.inputRow} 
+            onPress={() => router.push({
+              pathname: '/(screens)/selectMembersScreen',
+              params: { 
+                inviteType: newEvent.inviteType,
+                selectedMembers: JSON.stringify(newEvent.selectedMembers),
+                previousPath: currentPath 
+              },
+            })}
+          >
+            <Ionicons name="mail-outline" size={22} color={styles.inputIcon.color} style={styles.inputIcon} />
+            <Text style={styles.inputLabel}>Invite</Text>
+            <Text style={[styles.inputText, {color: styles.placeholderText.color, textAlign: 'right'}]}>
+              {newEvent.inviteType === 'all' ? 'All Family' : `${newEvent.selectedMembers.length} Selected`}
+            </Text>
+            <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+          </TouchableOpacity>
+          <View style={styles.separatorThin} />
+
+          <View style={styles.inputRow}>
+            <Ionicons name="checkmark-circle-outline" size={22} color={styles.inputIcon.color} style={styles.inputIcon} />
+            <Text style={styles.inputLabel}>RSVP required</Text>
+            <Switch
+              value={newEvent.requireRsvp}
+              onValueChange={(value) => setNewEvent({ ...newEvent, requireRsvp: value })}
+              trackColor={{ false: "#E9E9EA", true: dynastyGreen }}
+              thumbColor={newEvent.requireRsvp ? "#f4f3f4" : "#f4f3f4"}
+            />
+          </View>
+          {newEvent.requireRsvp && (
+            <View style={styles.inputRow}>
+              <View style={{width: 22, marginRight: 15}} />
+              <Text style={styles.inputLabel}>RSVP deadline</Text>
+              <TouchableOpacity
+                style={styles.valueContainer}
+                onPress={() => showDatePickerModalFor('rsvpDeadline')}
+              >
+                <Text style={newEvent.rsvpDeadline ? styles.inputTextValue : styles.placeholderTextValue}>
+                  {newEvent.rsvpDeadline ? formatDate(newEvent.rsvpDeadline) : 'Select...'}
+                </Text>
+                <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+              </TouchableOpacity>
+            </View>
+          )}
+          <View style={styles.separatorThin} />
+
+          <View style={styles.descriptionInputContainer}>
+            <MaterialCommunityIcons name="tshirt-crew-outline" size={22} color={styles.inputIcon.color} style={[styles.inputIcon, {marginTop: Platform.OS === 'ios' ? 0 : 3 }]} />
+             <TextInput
+                placeholder="Dress Code (optional)"
+                placeholderTextColor={styles.placeholderText.color}
+                style={styles.descriptionTextInput}
+                value={newEvent.dressCode}
+                onChangeText={(text) => setNewEvent({ ...newEvent, dressCode: text })}
+                inputAccessoryViewID={inputAccessoryViewID}
+            />
+          </View>
+          <View style={styles.separatorThin} />
+
+          <View style={styles.descriptionInputContainer}>
+            <MaterialCommunityIcons name="bag-personal-outline" size={22} color={styles.inputIcon.color} style={[styles.inputIcon, {marginTop: Platform.OS === 'ios' ? 0 : 3 }]} />
+             <TextInput
+                placeholder="What to bring (optional)"
+                placeholderTextColor={styles.placeholderText.color}
+                style={styles.descriptionTextInput}
+                value={newEvent.whatToBring}
+                onChangeText={(text) => setNewEvent({ ...newEvent, whatToBring: text })}
+                inputAccessoryViewID={inputAccessoryViewID}
+            />
+          </View>
 
         </View>
 
@@ -921,7 +1032,8 @@ const CreateEventScreen = () => {
         </TouchableOpacity>
       </View>
       
-    </SafeAreaView>
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 

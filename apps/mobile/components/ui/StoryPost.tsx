@@ -7,6 +7,7 @@ import ProfilePicture from './ProfilePicture';
 import MediaGallery from './MediaGallery';
 import TaggedPeopleBadges, { PersonInfo as BadgePersonInfo } from './TaggedPeopleBadges';
 import { Spacing, BorderRadius } from '../../constants/Spacing';
+import { Colors } from '../../constants/Colors';
 import type { Story } from '../../src/lib/storyUtils';
 import { formatDate, formatTimeAgo } from '../../src/lib/dateUtils';
 import * as ImagePicker from 'expo-image-picker';
@@ -61,10 +62,10 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
 
   const galleryMediaItems = React.useMemo(() => {
     if (!story || !story.blocks) return [];
-    const items: Array<{ uri: string; type: 'image' | 'video'; width?: number; height?: number; duration?: number; asset?: ImagePicker.ImagePickerAsset }> = [];
+    const items: { uri: string; type: 'image' | 'video'; width?: number; height?: number; duration?: number; asset?: ImagePicker.ImagePickerAsset }[] = [];
     story.blocks.forEach(block => {
       if (block.type === 'image' && Array.isArray(block.data)) {
-        (block.data as Array<any>).forEach(mediaData => {
+        (block.data as any[]).forEach(mediaData => {
           if (typeof mediaData === 'string') {
             const url = mediaData;
             const isVideo = /\.(mp4|mov|avi|mkv|webm)$/i.test(url.toLowerCase());
@@ -84,13 +85,22 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
     });
     return items;
   }, [story]);
+  
+  // Check if any blocks are encrypted
+  const hasEncryptedContent = React.useMemo(() => {
+    return story.blocks.some(block => block.isEncrypted);
+  }, [story.blocks]);
 
   // const peopleInvolved = (story as any).peopleInvolved as PersonInfoForPost[] || []; // Old way
 
   return (
-    <View style={[styles.container, style]}>
+    <View style={[styles.container, style]} testID="story-post">
       <Card variant="elevated" noPadding>
-        <TouchableOpacity onPress={() => onPress(story)} activeOpacity={0.8}>
+        <TouchableOpacity 
+          onPress={() => onPress(story)} 
+          activeOpacity={0.8}
+          testID="story-container"
+        >
           <View style={styles.header}>
             <View style={styles.topRowInfo}> 
               <View style={styles.userInfoContainer}>
@@ -108,6 +118,15 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
                     <Text style={styles.datePill}>{dateLabel}</Text>
                     <View style={styles.dotSeparator} />
                     <Text style={styles.timestamp}>{timeAgoLabel}</Text>
+                    {hasEncryptedContent && (
+                      <>
+                        <View style={styles.dotSeparator} />
+                        <View style={styles.encryptedBadge}>
+                          <Ionicons name="lock-closed" size={12} color={Colors.dynastyGreen} />
+                          <Text style={styles.encryptedText}>Encrypted</Text>
+                        </View>
+                      </>
+                    )}
                   </View>
                 </View>
               </View>
@@ -136,16 +155,18 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
           )} */}
         </TouchableOpacity>
         {galleryMediaItems.length > 0 && (
-          <MediaGallery
-            media={galleryMediaItems}
-            onAddMedia={() => {}}
-            onRemoveMedia={() => {}}
-            onReplaceMedia={() => {}}
-            showRemoveButton={false}
-            showReplaceButton={false}
-            allowAddingMore={false}
-            imageStyle={styles.galleryImage}
-          />
+          <View testID="media-gallery">
+            <MediaGallery
+              media={galleryMediaItems}
+              onAddMedia={() => {}}
+              onRemoveMedia={() => {}}
+              onReplaceMedia={() => {}}
+              showRemoveButton={false}
+              showReplaceButton={false}
+              allowAddingMore={false}
+              imageStyle={styles.galleryImage}
+            />
+          </View>
         )}
         {story.location && (
           <View style={styles.locationContainer}>
@@ -292,6 +313,20 @@ const styles = StyleSheet.create({
   },
   statText: {
     marginLeft: Spacing.xs,
+  },
+  encryptedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: '#F0F7F5',
+    borderRadius: 10,
+  },
+  encryptedText: {
+    fontSize: 10,
+    color: Colors.dynastyGreen,
+    fontWeight: '500',
   },
 });
 

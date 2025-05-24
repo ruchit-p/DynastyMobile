@@ -24,6 +24,7 @@ interface VaultFile extends VaultItemBase {
   size?: string;
   mimeType?: string;
   uri?: string;  // Added for mobile file access and sharing
+  isEncrypted?: boolean; // Added for encryption status
 }
 
 export type VaultListItemType = VaultFolder | VaultFile;
@@ -72,9 +73,17 @@ const FileListItem: React.FC<FileListItemProps> = ({ item, onPress, onMorePress 
         <Text style={styles.nameText} numberOfLines={1} ellipsizeMode="middle">
           {item.name}
         </Text>
-        {!isFolder && vaultFile.size && (
-          <Text style={styles.sizeText}>{vaultFile.size}</Text>
-        )}
+        <View style={styles.metaContainer}>
+          {!isFolder && vaultFile.size && (
+            <Text style={styles.sizeText}>{vaultFile.size}</Text>
+          )}
+          {!isFolder && vaultFile.isEncrypted && (
+            <View style={styles.encryptedBadge}>
+              <Ionicons name="lock-closed" size={12} color={Colors.dynastyGreen} />
+              <Text style={styles.encryptedText}>Encrypted</Text>
+            </View>
+          )}
+        </View>
       </View>
       <View style={styles.actionIconContainer}>
         {isFolder ? (
@@ -132,7 +141,26 @@ const styles = StyleSheet.create({
   moreButton: {
     padding: 8, // Larger touch target
     borderRadius: 20,
-  }
+  },
+  metaContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  encryptedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: Colors.light.background.secondary,
+    borderRadius: BorderRadius.sm,
+  },
+  encryptedText: {
+    fontFamily: Fonts.type.base,
+    fontSize: Fonts.size.small,
+    color: Colors.dynastyGreen,
+  },
 });
 
 export default FileListItem; 

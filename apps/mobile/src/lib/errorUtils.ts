@@ -1,7 +1,5 @@
 import { Alert } from 'react-native';
-import { FirebaseError } from 'firebase/app';
-import { getFunctions, httpsCallable, HttpsCallableResult } from 'firebase/functions';
-import { FirebaseFunctionsError } from 'firebase/functions';
+import { FirebaseFunctionsTypes } from '@react-native-firebase/functions';
 
 /**
  * Standard error codes that match the server-side codes
@@ -190,8 +188,9 @@ export function showErrorAlert(
  * Parse firebase function errors
  */
 export function parseFirebaseFunctionError(error: unknown): AppError {
-  if ((error as FirebaseFunctionsError)?.code) {
-    const fbError = error as FirebaseFunctionsError;
+  // React Native Firebase uses a different error structure
+  if (error && typeof error === 'object' && 'code' in error) {
+    const fbError = error as any;
     const errorDetails = fbError.message || 'Unknown error occurred';
     
     return {
@@ -210,16 +209,22 @@ export function parseFirebaseFunctionError(error: unknown): AppError {
  * 
  * @param functionName The name of the Firebase function to call
  * @param data The data to pass to the function
+ * @param functions The Firebase Functions instance
  * @returns The result from the function
  * @throws AppError if the function call fails
  */
 export async function callFirebaseFunction<T = any, R = any>(
   functionName: string,
-  data?: T
+  data?: T,
+  functions?: FirebaseFunctionsTypes.Module
 ): Promise<R> {
   try {
-    const functions = getFunctions();
-    const functionCall = httpsCallable<T, R>(functions, functionName);
+    if (!functions) {
+      // Lazy import to avoid circular dependency
+      const { getFirebaseFunctions } = await import('./firebase');
+      functions = getFirebaseFunctions();
+    }
+    const functionCall = functions.httpsCallable(functionName);
     const result = await functionCall(data);
     return result.data;
   } catch (error) {
@@ -243,5 +248,5 @@ export async function callFirebaseFunction<T = any, R = any>(
 export function createFunctionCaller<T extends (data?: any) => Promise<any>>(
   functionName: string
 ): T {
-  return ((data?: any) => callFirebaseFunction(functionName, data)) as T;
+  return ((data?: any) => callFirebaseFunction(functionName, data, undefined)) as T;
 }

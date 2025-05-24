@@ -1,8 +1,17 @@
 const type = {
   base: 'Helvetica Neue', // Example base font
   bold: 'HelveticaNeue-Bold', // Example bold font
+  semiBold: 'HelveticaNeue-SemiBold', // Add missing semiBold font
+  medium: 'HelveticaNeue-Medium', // Add missing medium font
   // Add your custom fonts here, e.g.:
   // spaceMono: 'SpaceMono-Regular',
+};
+
+const family = {
+  regular: 'Helvetica Neue',
+  medium: 'HelveticaNeue-Medium',
+  semiBold: 'HelveticaNeue-SemiBold', 
+  bold: 'HelveticaNeue-Bold',
 };
 
 const size = {
@@ -23,6 +32,7 @@ const weight = {
   medium: '500' as '500',
   regular: 'normal' as 'normal',
   light: '300' as '300',
+  semiBold: '600' as '600', // Add missing semiBold weight
 };
 
 const style = {
@@ -32,6 +42,7 @@ const style = {
 
 export default {
   type,
+  family, // Add the family property
   size,
   weight,
   style,
