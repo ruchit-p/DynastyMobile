@@ -175,5 +175,55 @@ service cloud.firestore {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow write: if false; // Only through Cloud Functions
     }
+    
+    // End-to-end encryption keys
+    match /encryptionKeys/{userId} {
+      allow read: if isSignedIn(); // Anyone authenticated can read public keys
+      allow create: if isSignedIn() && userId == request.auth.uid;
+      allow update: if isSignedIn() && userId == request.auth.uid;
+      allow delete: if false; // Don't allow deletion of encryption keys
+    }
+    
+    // User's personal key storage
+    match /users/{userId}/keys/{keyType} {
+      allow read: if isSignedIn() && userId == request.auth.uid;
+      allow write: if isSignedIn() && userId == request.auth.uid;
+    }
+    
+    // Key verifications
+    match /users/{userId}/keyVerifications/{targetUserId} {
+      allow read: if isSignedIn() && 
+                    (userId == request.auth.uid || 
+                     targetUserId == request.auth.uid);
+      allow write: if false; // Only through Cloud Functions
+    }
+    
+    // Encrypted chats
+    match /chats/{chatId} {
+      allow read: if isSignedIn() && 
+                    resource.data.participants.hasAny([request.auth.uid]);
+      allow create: if false; // Only through Cloud Functions
+      allow update: if false; // Only through Cloud Functions
+      allow delete: if false; // Don't allow chat deletion
+    }
+    
+    // User's chat references
+    match /users/{userId}/chats/{chatId} {
+      allow read: if isSignedIn() && userId == request.auth.uid;
+      allow create: if false; // Only through Cloud Functions
+      allow update: if isSignedIn() && userId == request.auth.uid;
+      allow delete: if false; // Don't allow deletion
+    }
+    
+    // Encrypted messages
+    match /chats/{chatId}/messages/{messageId} {
+      allow read: if isSignedIn() && 
+                    get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]);
+      allow create: if isSignedIn() && 
+                      get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]) &&
+                      request.resource.data.senderId == request.auth.uid;
+      allow update: if false; // Messages are immutable
+      allow delete: if false; // Messages cannot be deleted
+    }
   }
 }

@@ -19,7 +19,9 @@
     /* Updated primary colors to match Dynasty theme */
     --primary: 145 78% 20%; /* #0A5C36 - Deep Forest Green */
     --primary-foreground: 0 0% 100%; /* White text on primary */
+    --secondary: 42 68% 56%; /* Gold/Amber secondary */
     --secondary-foreground: 0 0% 20%; /* Dark text on secondary */
+    --accent: 42 68% 56%; /* Gold accent */
     
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
@@ -91,8 +93,8 @@ body {
   overflow-x: hidden;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  color: var(--text-color);
-  background: var(--background-color);
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
 }
 
 /* MARK: - Typography */
@@ -109,9 +111,9 @@ p {
 
 /* MARK: - Links */
 a {
-  color: var(--primary-color);
+  color: hsl(var(--primary));
   text-decoration: none;
-  transition: color var(--transition-speed) ease;
+  transition: color 200ms ease;
 }
 
 a:hover {
@@ -163,7 +165,7 @@ a:hover {
 }
 
 .transition {
-  transition: all var(--transition-speed) ease;
+  transition: all 200ms ease;
 }
 
 /* MARK: - Custom Family Tree Styles */
@@ -203,7 +205,7 @@ a:hover {
 .family-node {
   position: absolute;
   cursor: pointer;
-  transition: all var(--transition-speed) ease;
+  transition: all 200ms ease;
 }
 
 .node-card {
@@ -213,7 +215,7 @@ a:hover {
   border-radius: 4px;
   background: white;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  transition: all var(--transition-speed) ease;
+  transition: all 200ms ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -242,17 +244,17 @@ a:hover {
 .node-id {
   font-weight: 500;
   font-size: 0.875rem;
-  color: var(--text-color);
+  color: hsl(var(--foreground));
 }
 
 .node-gender {
   font-size: 0.75rem;
-  color: var(--secondary-color);
+  color: hsl(var(--secondary));
 }
 
 .node-subtree-indicator {
   font-size: 0.75rem;
-  color: var(--primary-color);
+  color: hsl(var(--primary));
   font-weight: 500;
 }
 

@@ -18,6 +18,9 @@ import { useAuth } from '../../src/contexts/AuthContext'; // Adjust path as need
 import { getFirebaseFunctions } from '../../src/lib/firebase'; // Corrected import for functions
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import Fonts from '../../constants/Fonts';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 // You might want a gender picker component (e.g., dropdown)
 
 // Define the expected structure of data from the completeOnboarding Firebase function
@@ -40,7 +43,12 @@ export default function ProfileSetupScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const onChangeDate = (event: DateTimePickerEvent, selectedDate?: Date) => {
+  // Initialize our error handler
+  const { handleError, withErrorHandling } = useErrorHandler({
+    title: 'Profile Setup Error',
+  });
+
+  const onChangeDate = withErrorHandling((event: DateTimePickerEvent, selectedDate?: Date) => {
     if (Platform.OS === 'android') {
       setShowDatePicker(false); // Modal picker on Android, close after interaction
     }
@@ -67,14 +75,14 @@ export default function ProfileSetupScreen() {
       // User cancelled. For Android, picker is already closed.
       // For iOS, if it's a modal, it would be handled. Spinner remains.
     }
-  };
+  });
 
-  const handleSelectGender = (selectedGender: string) => {
+  const handleSelectGender = withErrorHandling((selectedGender: string) => {
     setGender(selectedGender);
     setShowGenderPicker(false);
-  };
+  });
 
-  const handleSubmit = async () => {
+  const handleSubmit = withErrorHandling(async () => {
     if (!firstName || !lastName) {
       setError('First and last name are required.');
       return;
@@ -112,28 +120,34 @@ export default function ProfileSetupScreen() {
       }) as { data: CompleteOnboardingResultData }; // Added type assertion for the result
 
       if (result.data.success) {
-        Alert.alert('Profile Updated', 'Your profile has been set up!');
-        // Navigation to the main app will be handled by AuthContext's useEffect
-        // after it detects onboardingCompleted is true.
+        // Navigate to encryption setup
         await refreshUser(); // Refresh user data in AuthContext
-        // AuthContext's useEffect should now handle the redirect.
-        // router.replace('/(tabs)/home'); // Remove direct navigation
+        router.push('/(onboarding)/encryptionSetup');
       } else {
         throw new Error(result.data.message || 'Failed to complete onboarding.');
       }
     } catch (e: any) {
-      console.error("Onboarding submission failed:", e);
+      handleError(e, {
+        severity: ErrorSeverity.ERROR,
+        metadata: {
+          action: 'completeOnboarding',
+          userId: user?.uid,
+          firstName,
+          lastName
+        }
+      });
       setError(e.message || 'An error occurred.');
     } finally {
       setIsLoading(false);
     }
-  };
+  });
 
   return (
-    <>
-      <Stack.Screen options={{ title: 'Set Up Your Profile', headerShown: false }} />
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar style={Platform.OS === 'ios' ? 'dark' : 'light'} />
+    <ErrorBoundary screenName="ProfileSetupScreen">
+      <>
+        <Stack.Screen options={{ title: 'Set Up Your Profile', headerShown: false }} />
+        <SafeAreaView style={styles.safeArea}>
+          <StatusBar style={Platform.OS === 'ios' ? 'dark' : 'light'} />
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <View style={styles.container}>
             <Image 
@@ -219,8 +233,9 @@ export default function ProfileSetupScreen() {
             </TouchableOpacity>
           </View>
         </ScrollView>
-      </SafeAreaView>
-    </>
+        </SafeAreaView>
+      </>
+    </ErrorBoundary>
   );
 }
 

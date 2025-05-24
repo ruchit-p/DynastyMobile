@@ -127,6 +127,34 @@ import EmptyState from '../../components/ui/EmptyState';
 />
 ```
 
+### FlashList
+
+High-performance list component that replaces FlatList for better performance.
+
+```tsx
+import FlashList from '../../components/ui/FlashList';
+
+<FlashList
+  data={items}
+  renderItem={renderItem}
+  keyExtractor={item => item.id}
+  estimatedItemSize={80}
+  ItemSeparatorComponent={() => <View style={styles.separator} />}
+/>
+```
+
+**Key Features:**
+- Better scrolling performance than FlatList
+- Automatic theme integration
+- Consistent default styling
+- All FlatList props supported
+- Optimized for dynasty app usage patterns
+
+**estimatedItemSize Guidelines:**
+- Simple text items: 50-60px
+- User items with avatars: 70-80px
+- Card/complex items: 80-120px
+
 ### ListItem
 
 Consistent list item for navigation and settings screens.

@@ -1,10 +1,15 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getFirebaseAuth } from '../../src/lib/firebase';
 import ListItem, { ListItemProps } from '../../components/ListItem'; // Import shared ListItem
 import { commonHeaderOptions } from '../../constants/headerConfig'; // Import common header options
+import { showErrorAlert } from '../../src/lib/errorUtils'; // Added import
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import FlashList from '../../components/ui/FlashList';
 
 // Reusable ListItem component - REMOVED
 // interface ListItemProps { ... }
@@ -13,6 +18,11 @@ import { commonHeaderOptions } from '../../constants/headerConfig'; // Import co
 const AccountSettingsScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
+  const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Account Settings Error',
+    trackCurrentScreen: true
+  });
 
   useEffect(() => {
     navigation.setOptions({
@@ -21,47 +31,72 @@ const AccountSettingsScreen = () => {
     });
   }, [navigation]);
 
-  const handleLogout = async () => {
+  useEffect(() => {
+    if (!isError) {
+      // Clear any local error states when global error is cleared
+    }
+  }, [isError]);
+
+  const handleLogout = withErrorHandling(async () => {
+    reset();
     try {
       const authInstance = getFirebaseAuth(); // Get the auth instance
       await authInstance.signOut(); // Call signOut on the instance
       router.replace('/login');
-    } catch (error) {
-      console.error("Logout error:", error);
-      Alert.alert("Logout Failed", error instanceof Error ? error.message : "An unexpected error occurred.");
+    } catch (error: any) {
+      handleError(error, { 
+        action: 'logout',
+        metadata: { 
+          screenName: 'AccountSettings',
+          timestamp: new Date().toISOString()
+        }
+      });
+      showErrorAlert(error, "Logout Failed"); // Refactored
     }
-  };
+  });
+
+  const handleNavigation = withErrorHandling(async (path: string, optionName: string) => {
+    reset();
+    try {
+      router.push(path as any);
+    } catch (error: any) {
+      handleError(error, { 
+        action: 'navigation',
+        metadata: { 
+          destination: path,
+          optionName,
+          screenName: 'AccountSettings'
+        }
+      });
+      showErrorAlert(error, "Navigation Failed");
+    }
+  });
 
   const settingsOptions: ListItemProps[] = [
     {
         icon: 'person-circle-outline',
         text: 'Edit Profile',
-        onPress: () => router.push('/(screens)/editProfile'),
-    },
-    {
-        icon: 'lock-closed-outline',
-        text: 'Privacy Settings',
-        onPress: () => router.push('/(screens)/privacySettings'),
+        onPress: () => handleNavigation('/(screens)/editProfile', 'Edit Profile'),
     },
     {
         icon: 'notifications-outline',
         text: 'Notification Preferences',
-        onPress: () => router.push('/(screens)/notificationPreferences'),
+        onPress: () => handleNavigation('/(screens)/notificationPreferences', 'Notification Preferences'),
+    },
+    {
+        icon: 'lock-closed-outline',
+        text: 'Privacy Settings',
+        onPress: () => handleNavigation('/(screens)/privacySettings', 'Privacy Settings'),
     },
     {
         icon: 'shield-checkmark-outline',
         text: 'Account Security',
-        onPress: () => router.push('/(screens)/accountSecurity'),
-    },
-    {
-        icon: 'help-circle-outline',
-        text: 'Help & Support',
-        onPress: () => router.push('/(screens)/helpAndSupport'),
+        onPress: () => handleNavigation('/(screens)/accountSecurity', 'Account Security'),
     },
     {
         icon: 'information-circle-outline',
         text: 'About Dynasty',
-        onPress: () => router.push('/(screens)/aboutDynasty'),
+        onPress: () => handleNavigation('/(screens)/aboutDynasty', 'About Dynasty'),
     },
     {
         icon: 'log-out-outline',
@@ -71,18 +106,21 @@ const AccountSettingsScreen = () => {
   ];
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <FlatList
-        data={settingsOptions}
-        keyExtractor={(item) => item.text}
-        renderItem={({ item }) => <ListItem {...item} />}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        ListFooterComponent={() => (
-            <Text style={styles.footerText}>Dynasty App v1.0.0</Text>
-        )}
-        style={styles.listContainer}
-      />
-    </SafeAreaView>
+    <ErrorBoundary screenName="AccountSettingsScreen">
+      <SafeAreaView style={styles.safeArea}>
+        <FlashList
+          data={settingsOptions}
+          keyExtractor={(item) => item.text}
+          renderItem={({ item }) => <ListItem {...item} />}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ListFooterComponent={() => (
+              <Text style={styles.footerText}>Dynasty App v1.0.0</Text>
+          )}
+          style={styles.listContainer}
+          estimatedItemSize={60}
+        />
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 

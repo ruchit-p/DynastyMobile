@@ -1,11 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { showErrorAlert } from '../../src/lib/errorUtils';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import FlashList from '../../components/ui/FlashList';
 
 const CAPACITY_PRESETS = ['Unlimited', '10', '25', '50', '100', 'Custom'];
 
-const SelectCapacityScreen = () => {
+const SelectCapacityInner = () => {
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ currentCapacity?: string, previousPath?: string }>();
@@ -14,67 +19,124 @@ const SelectCapacityScreen = () => {
   const [customCapacity, setCustomCapacity] = useState<string>('');
   const [showCustomInput, setShowCustomInput] = useState(false);
 
+  // Initialize error handler
+  const { handleError, withErrorHandling, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Select Capacity Error',
+    trackCurrentScreen: true,
+  });
+
+  // Error state reset effect
   useEffect(() => {
-    if (params.currentCapacity) {
-      if (CAPACITY_PRESETS.includes(params.currentCapacity)) {
-        setSelectedCapacity(params.currentCapacity);
-        setShowCustomInput(params.currentCapacity === 'Custom');
-        if (params.currentCapacity === 'Custom') {
-          // If current is 'Custom', but no specific number was passed, leave customCapacity empty
-          // Or, if createEvent stores "Custom: 123", then parse it here.
-          // For now, assume createEvent stores the raw number if custom, or the preset string.
+    reset();
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (params.currentCapacity) {
+        if (CAPACITY_PRESETS.includes(params.currentCapacity)) {
+          setSelectedCapacity(params.currentCapacity);
+          setShowCustomInput(params.currentCapacity === 'Custom');
+          if (params.currentCapacity === 'Custom') {
+            // If current is 'Custom', but no specific number was passed, leave customCapacity empty
+            // Or, if createEvent stores "Custom: 123", then parse it here.
+            // For now, assume createEvent stores the raw number if custom, or the preset string.
+          }
+        } else {
+          // It's a custom number not in presets (e.g. "75")
+          setSelectedCapacity('Custom');
+          setCustomCapacity(params.currentCapacity);
+          setShowCustomInput(true);
         }
-      } else {
-        // It's a custom number not in presets (e.g. "75")
-        setSelectedCapacity('Custom');
-        setCustomCapacity(params.currentCapacity);
-        setShowCustomInput(true);
       }
+    } catch (error) {
+      handleError(error, {
+        action: 'initialize_capacity_from_params',
+        currentCapacity: params.currentCapacity,
+        params: params
+      });
     }
-  }, [params.currentCapacity]);
+  }, [params.currentCapacity, handleError]);
 
   useEffect(() => {
-    navigation.setOptions({
-      title: 'Select Capacity',
-      headerStyle: { backgroundColor: '#F8F8F8' },
-      headerTintColor: '#333333',
-      headerTitleStyle: { fontWeight: '600' },
-      headerBackTitleVisible: false,
-    });
-  }, [navigation]);
-
-  const navigateBackWithCapacity = (capacityValue: string) => {
-    const targetPath = params.previousPath || '..';
-    router.navigate({
-      pathname: targetPath,
-      params: { selectedCapacity: capacityValue, fromScreen: 'selectCapacity' },
-    });
-  };
-
-  const handleSelectCapacity = (option: string) => {
-    setSelectedCapacity(option);
-    if (option === 'Custom') {
-      setShowCustomInput(true);
-      // Don't navigate back yet, wait for custom input
-    } else {
-      setShowCustomInput(false);
-      setCustomCapacity(''); // Clear custom input if a preset is chosen
-      navigateBackWithCapacity(option);
+    try {
+      navigation.setOptions({
+        title: 'Select Capacity',
+        headerStyle: { backgroundColor: '#F8F8F8' },
+        headerTintColor: '#333333',
+        headerTitleStyle: { fontWeight: '600' },
+        headerBackTitleVisible: false,
+      });
+    } catch (error) {
+      handleError(error, {
+        action: 'set_navigation_options'
+      });
     }
-  };
+  }, [navigation, handleError]);
 
-  const handleConfirmCustomCapacity = () => {
-    const numericCapacity = parseInt(customCapacity, 10);
-    if (customCapacity.trim() && !isNaN(numericCapacity) && numericCapacity > 0) {
-      navigateBackWithCapacity(customCapacity.trim());
-    } else {
-      Alert.alert('Invalid Input', 'Please enter a valid positive number for custom capacity.');
+  const navigateBackWithCapacity = withErrorHandling(async (capacityValue: string) => {
+    try {
+      const targetPath = params.previousPath || '..';
+      router.navigate({
+        pathname: targetPath,
+        params: { selectedCapacity: capacityValue, fromScreen: 'selectCapacity' },
+      });
+    } catch (error) {
+      handleError(error, {
+        action: 'navigate_back_with_capacity',
+        capacityValue,
+        targetPath: params.previousPath || '..',
+      });
+      throw error;
     }
-  };
+  });
+
+  const handleSelectCapacity = withErrorHandling(async (option: string) => {
+    try {
+      setSelectedCapacity(option);
+      if (option === 'Custom') {
+        setShowCustomInput(true);
+        // Don't navigate back yet, wait for custom input
+      } else {
+        setShowCustomInput(false);
+        setCustomCapacity(''); // Clear custom input if a preset is chosen
+        await navigateBackWithCapacity(option);
+      }
+    } catch (error) {
+      handleError(error, {
+        action: 'select_capacity_option',
+        selectedOption: option,
+        isCustom: option === 'Custom'
+      });
+    }
+  });
+
+  const handleConfirmCustomCapacity = withErrorHandling(async () => {
+    try {
+      const numericCapacity = parseInt(customCapacity, 10);
+      if (customCapacity.trim() && !isNaN(numericCapacity) && numericCapacity > 0) {
+        await navigateBackWithCapacity(customCapacity.trim());
+      } else {
+        const validationError = new Error('Please enter a valid positive number for custom capacity.');
+        handleError(validationError, {
+          action: 'validate_custom_capacity',
+          inputValue: customCapacity,
+          parsedValue: numericCapacity,
+          isValid: false
+        });
+        showErrorAlert({ message: 'Please enter a valid positive number for custom capacity.', code: 'invalid-argument' }, 'Invalid Input');
+      }
+    } catch (error) {
+      handleError(error, {
+        action: 'confirm_custom_capacity',
+        customCapacity: customCapacity
+      });
+    }
+  });
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <FlatList
+      <FlashList
         data={CAPACITY_PRESETS}
         keyExtractor={(item) => item}
         renderItem={({ item }) => (
@@ -88,6 +150,7 @@ const SelectCapacityScreen = () => {
         )}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         style={styles.list}
+        estimatedItemSize={60}
         ListFooterComponent={() => (
             showCustomInput ? (
                 <View style={styles.customInputContainer}>
@@ -99,7 +162,7 @@ const SelectCapacityScreen = () => {
                         onChangeText={setCustomCapacity}
                         autoFocus
                     />
-                    <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmCustomCapacity}>
+                    <TouchableOpacity style={styles.confirmButton} onPress={() => handleConfirmCustomCapacity()}>
                         <Text style={styles.confirmButtonText}>Confirm Custom</Text>
                     </TouchableOpacity>
                 </View>
@@ -163,5 +226,13 @@ const styles = StyleSheet.create({
       fontWeight: '600',
   }
 });
+
+const SelectCapacityScreen = () => {
+  return (
+    <ErrorBoundary screenName="SelectCapacityScreen">
+      <SelectCapacityInner />
+    </ErrorBoundary>
+  );
+};
 
 export default SelectCapacityScreen; 

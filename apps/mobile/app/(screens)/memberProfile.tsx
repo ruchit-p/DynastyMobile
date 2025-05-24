@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,110 +9,317 @@ import {
   SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
-import { useLocalSearchParams, useNavigation, Stack } from 'expo-router';
+import { useLocalSearchParams, useNavigation, Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AppHeader from '../../components/ui/AppHeader'; // Assuming AppHeader path
-import Colors from '../../constants/Colors'; // Assuming Colors path
-import Fonts from '../../constants/Fonts'; // Assuming Fonts path (if you have one)
-import Layout from '../../constants/Layout'; // Assuming Layout path for spacing
+import AppHeader from '../../components/ui/AppHeader';
+import Colors from '../../constants/Colors';
+import Fonts from '../../constants/Fonts';
+import Layout from '../../constants/Layout';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { getFirebaseDb } from '../../src/lib/firebase';
+import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import { fetchAccessibleStoriesMobile } from '../../src/lib/storyUtils';
+import { useAuth } from '../../src/contexts/AuthContext';
 
-// Mock Data Interfaces (adjust as needed)
 interface MemberProfile {
   id: string;
   name: string;
   profilePictureUrl?: string;
-  // Add other profile details as needed
+  email?: string;
+  phoneNumber?: string;
+  dateOfBirth?: FirebaseFirestoreTypes.Timestamp;
+  gender?: string;
+  bio?: string;
+  occupation?: string;
+  joinedDate?: FirebaseFirestoreTypes.Timestamp;
+  familyRole?: string;
 }
 
 interface StoryItem {
   id: string;
   title: string;
-  excerpt: string;
-  imageUrl?: string;
-  createdAt: Date;
+  subtitle?: string;
+  privacy: 'family' | 'privateAccess' | 'custom';
+  createdAt: FirebaseFirestoreTypes.Timestamp;
+  authorName: string;
+  blocks?: {
+    type: string;
+    data: any;
+  }[];
 }
 
 interface EventItem {
   id: string;
   title: string;
-  date: Date;
-  location: string;
+  eventDate: FirebaseFirestoreTypes.Timestamp;
+  endDate?: FirebaseFirestoreTypes.Timestamp;
+  location?: {
+    address?: string;
+    lat?: number;
+    lng?: number;
+  };
   description?: string;
+  hostId: string;
+  rsvpStatus?: 'pending' | 'accepted' | 'declined' | 'maybe';
 }
-
-// Mock Data
-const MOCK_PROFILE: MemberProfile = {
-  id: '123',
-  name: 'Alex Doe',
-  profilePictureUrl: 'https://via.placeholder.com/150/0000FF/808080?Text=User+Photo', // Replace with a real placeholder or logic
-};
-
-const MOCK_STORIES: StoryItem[] = [
-  { id: 's1', title: 'Our Summer Vacation', excerpt: 'A wonderful trip to the mountains...', createdAt: new Date(2023, 7, 15), imageUrl: 'https://via.placeholder.com/300/CCCCCC/808080?Text=Story+Image+1' },
-  { id: 's2', title: 'Graduation Day', excerpt: 'Celebrating a major milestone...', createdAt: new Date(2023, 5, 20), imageUrl: 'https://via.placeholder.com/300/AAAAAA/808080?Text=Story+Image+2' },
-];
-
-const MOCK_EVENTS: EventItem[] = [
-  { id: 'e1', title: 'Family Reunion', date: new Date(2024, 11, 20), location: 'Community Hall' },
-  { id: 'e2', title: 'Birthday Party', date: new Date(2024, 8, 5), location: 'Home' },
-];
 
 type ActiveTab = 'stories' | 'events';
 
-const MemberProfileScreen = () => {
+function MemberProfileScreenContent() {
   const navigation = useNavigation();
-  const params = useLocalSearchParams<{ userId?: string; memberName?: string }>(); // Get userId and potentially pre-fetched name
+  const router = useRouter();
+  const params = useLocalSearchParams<{ userId?: string; memberName?: string }>();
+  const { user, firestoreUser } = useAuth();
+
+  const { handleError, withErrorHandling, reset: clearError } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Member Profile Error',
+    trackCurrentScreen: true
+  });
 
   const [profile, setProfile] = useState<MemberProfile | null>(null);
   const [stories, setStories] = useState<StoryItem[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [activeTab, setActiveTab] = useState<ActiveTab>('stories');
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const memberNameForHeader = params.memberName || profile?.name || 'Profile';
 
+  // Add useEffect for error state reset
   useEffect(() => {
-    // TODO: Replace with actual data fetching based on params.userId
-    // Simulate fetching data
-    setTimeout(() => {
-      setProfile(MOCK_PROFILE);
-      setStories(MOCK_STORIES);
-      setEvents(MOCK_EVENTS);
+    clearError();
+  }, [clearError]);
+
+  const fetchMemberData = useCallback(withErrorHandling(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      if (!params.userId) {
+        const errorMsg = 'No member ID provided';
+        setError(errorMsg);
+        handleError(new Error(errorMsg), { 
+          missingData: 'userId',
+          params: Object.keys(params)
+        });
+        return;
+      }
+
+      const db = getFirebaseDb();
+      
+      // Fetch user profile
+      const userDoc = await db.collection('users').doc(params.userId).get();
+      if (!userDoc.exists) {
+        throw new Error('User not found');
+      }
+      
+      const userData = userDoc.data();
+      if (userData) {
+        setProfile({
+          id: params.userId,
+          name: userData.displayName || userData.name || 'Unknown User',
+          profilePictureUrl: userData.profilePictureUrl || userData.photoURL,
+          email: userData.email,
+          phoneNumber: userData.phoneNumber,
+          dateOfBirth: userData.dateOfBirth,
+          gender: userData.gender,
+          bio: userData.bio,
+          occupation: userData.occupation,
+          joinedDate: userData.createdAt,
+          familyRole: userData.familyRole,
+        });
+      }
+      
+      // Fetch user's stories
+      if (firestoreUser?.familyTreeId) {
+        try {
+          const storiesQuery = await db
+            .collection('stories')
+            .where('authorID', '==', params.userId)
+            .where('familyTreeId', '==', firestoreUser.familyTreeId)
+            .orderBy('createdAt', 'desc')
+            .limit(10)
+            .get();
+          
+          const fetchedStories: StoryItem[] = storiesQuery.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data() as any,
+          }));
+          
+          setStories(fetchedStories);
+        } catch (storyError) {
+          console.error('Error fetching stories:', storyError);
+          // Continue without stories rather than failing entirely
+        }
+      }
+      
+      // Fetch user's events
+      if (user?.uid) {
+        try {
+          const eventsQuery = await db
+            .collection('events')
+            .where('hostId', '==', params.userId)
+            .orderBy('eventDate', 'desc')
+            .limit(10)
+            .get();
+          
+          const fetchedEvents: EventItem[] = eventsQuery.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data() as any,
+          }));
+          
+          // Also fetch events where user is invited
+          const invitedEventsQuery = await db
+            .collection('events')
+            .where('invitedMembers', 'array-contains', params.userId)
+            .orderBy('eventDate', 'desc')
+            .limit(10)
+            .get();
+          
+          const invitedEvents: EventItem[] = invitedEventsQuery.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data() as any,
+          }));
+          
+          // Combine and deduplicate events
+          const allEvents = [...fetchedEvents, ...invitedEvents];
+          const uniqueEvents = Array.from(new Map(allEvents.map(event => [event.id, event])).values());
+          
+          setEvents(uniqueEvents);
+        } catch (eventError) {
+          console.error('Error fetching events:', eventError);
+          // Continue without events rather than failing entirely
+        }
+      }
+      
+    } catch (fetchError) {
+      console.error('Error fetching member data:', fetchError);
+      const errorMsg = 'Failed to load profile data';
+      setError(errorMsg);
+      handleError(fetchError, {
+        operation: 'fetchMemberData',
+        userId: params.userId,
+        memberName: params.memberName
+      });
+    } finally {
       setIsLoading(false);
-    }, 1000);
-  }, [params.userId]);
+    }
+  }, { operation: 'fetchMemberData' }), [params.userId, params.memberName, user, firestoreUser, withErrorHandling, handleError]);
+
+  useEffect(() => {
+    fetchMemberData();
+  }, [fetchMemberData]);
+
+  const handleStoryPress = withErrorHandling(async (storyId: string) => {
+    try {
+      router.push({
+        pathname: '/(screens)/storyDetail',
+        params: { storyId }
+      });
+    } catch (error) {
+      handleError(error, {
+        operation: 'navigateToStory',
+        storyId,
+        userId: params.userId
+      });
+    }
+  }, { operation: 'handleStoryPress' });
+
+  const handleEventPress = withErrorHandling(async (eventId: string) => {
+    try {
+      router.push({
+        pathname: '/(screens)/eventDetail',
+        params: { eventId }
+      });
+    } catch (error) {
+      handleError(error, {
+        operation: 'navigateToEvent',
+        eventId,
+        userId: params.userId
+      });
+    }
+  }, { operation: 'handleEventPress' });
+
+  const handleTabChange = withErrorHandling(async (tab: ActiveTab) => {
+    try {
+      setActiveTab(tab);
+    } catch (error) {
+      handleError(error, {
+        operation: 'tabChange',
+        newTab: tab,
+        previousTab: activeTab
+      });
+    }
+  }, { operation: 'handleTabChange' });
 
   const renderContent = () => {
     if (isLoading) {
       return <ActivityIndicator size="large" color={Colors.light.tint} style={styles.loader} />;
     }
 
+    if (error) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchMemberData}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     if (activeTab === 'stories') {
       if (stories.length === 0) {
         return <Text style={styles.emptyStateText}>No stories shared yet.</Text>;
       }
-      return stories.map(story => (
-        <TouchableOpacity key={story.id} style={styles.contentItem} onPress={() => console.log('Navigate to story', story.id)}>
-          {story.imageUrl && <Image source={{ uri: story.imageUrl }} style={styles.itemImage} />}
-          <View style={styles.itemTextContainer}>
-            <Text style={styles.itemTitle}>{story.title}</Text>
-            <Text style={styles.itemSubtitle}>{story.excerpt}</Text>
-            <Text style={styles.itemDate}>{story.createdAt.toLocaleDateString()}</Text>
-          </View>
-        </TouchableOpacity>
-      ));
+      return stories.map(story => {
+        // Extract first image from story blocks if available
+        let firstImageUrl: string | undefined;
+        if (story.blocks) {
+          const imageBlock = story.blocks.find(block => 
+            block.type === 'image' && block.data && Array.isArray(block.data) && block.data.length > 0
+          );
+          if (imageBlock && Array.isArray(imageBlock.data) && imageBlock.data[0]?.uri) {
+            firstImageUrl = imageBlock.data[0].uri;
+          }
+        }
+        
+        return (
+          <TouchableOpacity key={story.id} style={styles.contentItem} onPress={() => handleStoryPress(story.id)}>
+            {firstImageUrl && <Image source={{ uri: firstImageUrl }} style={styles.itemImage} />}
+            <View style={styles.itemTextContainer}>
+              <Text style={styles.itemTitle}>{story.title}</Text>
+              {story.subtitle && <Text style={styles.itemSubtitle}>{story.subtitle}</Text>}
+              <Text style={styles.itemDate}>
+                {story.createdAt?.toDate ? story.createdAt.toDate().toLocaleDateString() : 'Unknown date'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        );
+      });
     }
 
     if (activeTab === 'events') {
       if (events.length === 0) {
-        return <Text style={styles.emptyStateText}>No upcoming events.</Text>;
+        return <Text style={styles.emptyStateText}>No events found.</Text>;
       }
       return events.map(event => (
-        <TouchableOpacity key={event.id} style={styles.contentItem} onPress={() => console.log('Navigate to event', event.id)}>
+        <TouchableOpacity key={event.id} style={styles.contentItem} onPress={() => handleEventPress(event.id)}>
           <View style={styles.itemTextContainer}>
             <Text style={styles.itemTitle}>{event.title}</Text>
-            <Text style={styles.itemSubtitle}>{event.location}</Text>
-            <Text style={styles.itemDate}>{event.date.toLocaleDateString()}</Text>
+            <Text style={styles.itemSubtitle}>
+              {event.location?.address || 'No location set'}
+            </Text>
+            <Text style={styles.itemDate}>
+              {event.eventDate?.toDate ? event.eventDate.toDate().toLocaleDateString() : 'Unknown date'}
+            </Text>
+            {event.rsvpStatus && (
+              <Text style={[styles.rsvpStatus, styles[`rsvpStatus${event.rsvpStatus}`]]}>
+                {event.rsvpStatus.charAt(0).toUpperCase() + event.rsvpStatus.slice(1)}
+              </Text>
+            )}
           </View>
         </TouchableOpacity>
       ));
@@ -120,13 +327,24 @@ const MemberProfileScreen = () => {
     return null;
   };
 
+  const handleBackPress = withErrorHandling(async () => {
+    try {
+      navigation.goBack();
+    } catch (error) {
+      handleError(error, {
+        operation: 'navigation',
+        action: 'goBack'
+      });
+    }
+  }, { operation: 'handleBackPress' });
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <Stack.Screen options={{ headerShown: false }} />
       <AppHeader
         title={memberNameForHeader}
         showBackButton={true}
-        onBackPress={() => navigation.goBack()}
+        onBackPress={handleBackPress}
       />
       <ScrollView style={styles.container}>
         <View style={styles.profileHeader}>
@@ -140,13 +358,13 @@ const MemberProfileScreen = () => {
         <View style={styles.tabContainer}>
           <TouchableOpacity
             style={[styles.tabButton, activeTab === 'stories' && styles.activeTabButton]}
-            onPress={() => setActiveTab('stories')}
+            onPress={() => handleTabChange('stories')}
           >
             <Text style={[styles.tabButtonText, activeTab === 'stories' && styles.activeTabButtonText]}>Stories</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tabButton, activeTab === 'events' && styles.activeTabButton]}
-            onPress={() => setActiveTab('events')}
+            onPress={() => handleTabChange('events')}
           >
             <Text style={[styles.tabButtonText, activeTab === 'events' && styles.activeTabButtonText]}>Events</Text>
           </TouchableOpacity>
@@ -158,7 +376,7 @@ const MemberProfileScreen = () => {
       </ScrollView>
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -259,10 +477,56 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     textAlign: 'center',
-    marginTop: Layout.spacing.large,
     fontSize: Fonts.size.medium,
     color: Colors.light.textSecondary,
+    marginTop: Layout.spacing.xlarge,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Layout.spacing.xlarge,
+  },
+  errorText: {
+    fontSize: Fonts.size.medium,
+    color: Colors.light.error,
+    textAlign: 'center',
+    marginBottom: Layout.spacing.medium,
+  },
+  retryButton: {
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: Layout.spacing.large,
+    paddingVertical: Layout.spacing.medium,
+    borderRadius: Layout.borderRadius.medium,
+  },
+  retryButtonText: {
+    color: Colors.light.background,
+    fontSize: Fonts.size.medium,
+    fontWeight: Fonts.weight.medium,
+  },
+  rsvpStatus: {
+    fontSize: Fonts.size.small,
+    fontWeight: Fonts.weight.medium,
+    marginTop: Layout.spacing.small / 2,
+  },
+  rsvpStatuspending: {
+    color: '#FFA500', // Orange
+  },
+  rsvpStatusaccepted: {
+    color: '#4CAF50', // Green
+  },
+  rsvpStatusdeclined: {
+    color: '#F44336', // Red
+  },
+  rsvpStatusmaybe: {
+    color: '#2196F3', // Blue
   },
 });
 
-export default MemberProfileScreen; 
+// Wrap the main component in ErrorBoundary
+export default function MemberProfileScreen() {
+  return (
+    <ErrorBoundary screenName="MemberProfileScreen">
+      <MemberProfileScreenContent />
+    </ErrorBoundary>
+  );
+} 

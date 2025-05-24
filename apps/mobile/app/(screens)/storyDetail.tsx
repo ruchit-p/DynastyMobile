@@ -34,6 +34,10 @@ import AnimatedActionSheet, { ActionSheetAction } from '../../components/ui/Anim
 import MediaGallery from '../../components/ui/MediaGallery';
 import TaggedPeopleBadges, { PersonInfo as BadgePersonInfo } from '../../components/ui/TaggedPeopleBadges';
 import { fetchUserProfilesByIds, UserProfile } from '../../src/lib/userUtils'; // Import fetch function
+import { showErrorAlert } from '../../src/lib/errorUtils'; // Added import
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
 interface StoryComment {
   id: string;
@@ -72,7 +76,7 @@ interface StoryDetail {
   timestamp: string;
   date: string; 
   title: string; 
-  storyBlocks: Array<{ type: string; data: any; localId: string }>; 
+  storyBlocks: { type: string; data: any; localId: string }[]; 
   location?: string;
   likesCount: number;
   commentsCount: number;
@@ -89,6 +93,11 @@ const StoryDetailScreen = () => {
   const params = useLocalSearchParams<{ storyId: string }>();
   const storyId = params.storyId as string;
   const { user, firestoreUser } = useAuth();
+  const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Story Detail Error',
+    trackCurrentScreen: true
+  });
 
   const [story, setStory] = useState<StoryDetail | null>(null);
   const [comments, setComments] = useState<StoryComment[]>([]);
@@ -102,11 +111,18 @@ const StoryDetailScreen = () => {
   const [isLoadingStory, setIsLoadingStory] = useState(true); // For overall story loading
 
   useEffect(() => {
+    if (!isError) {
+      // Clear any local errors when global error state resets
+    }
+  }, [isError]);
+
+  useEffect(() => {
     let isMounted = true;
     if (storyId && user?.uid && firestoreUser?.familyTreeId) {
       navigation.setOptions({ ...commonHeaderOptions, title: 'Loading...', headerRight: undefined });
       setIsLoadingStory(true);
-      (async () => {
+      const loadStoryData = withErrorHandling(async () => {
+        reset();
         try {
           const stories = await fetchAccessibleStoriesMobile(user.uid, firestoreUser.familyTreeId);
           const foundStory = stories.find(s => s.id === storyId) as FetchedStory | undefined;
@@ -196,20 +212,34 @@ const StoryDetailScreen = () => {
             },
           });
 
-        } catch (error) {
+        } catch (error: any) {
           if (isMounted) {
             console.error(error);
+            
+            handleError(error, {
+              action: 'loadStoryData',
+              metadata: {
+                storyId,
+                userId: user?.uid,
+                familyTreeId: firestoreUser?.familyTreeId,
+                errorCode: error.code,
+                errorMessage: error.message
+              }
+            });
+
             Alert.alert("Error", "Failed to load story details.", [{ text: "OK", onPress: () => router.back() }]);
           }
         } finally {
           if (isMounted) setIsLoadingStory(false);
         }
-      })();
+      });
+      loadStoryData();
     }
     return () => { isMounted = false; };
   }, [storyId, user, firestoreUser, navigation, router]); // Removed story from dependencies to avoid re-fetch loop on setStory
 
-  const handleLikePress = async () => {
+  const handleLikePress = withErrorHandling(async () => {
+    reset();
     if (isLoadingLikeStatus || !story) return;
 
     const originalIsLiked = isLiked;
@@ -220,13 +250,25 @@ const StoryDetailScreen = () => {
 
     try {
       await toggleStoryLikeMobile(story.id, originalIsLiked);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error toggling like:", error);
+      
+      handleError(error, {
+        action: 'handleLikePress',
+        metadata: {
+          storyId: story.id,
+          originalIsLiked,
+          originalLikesCount,
+          errorCode: error.code,
+          errorMessage: error.message
+        }
+      });
+
       setIsLiked(originalIsLiked);
       setLikesCount(originalLikesCount);
-      Alert.alert("Error", "Could not update like status. Please try again.");
+      showErrorAlert(error, "Error Updating Like");
     }
-  };
+  });
 
   const handlePostComment = async (parentId?: string) => {
     const commentTextToPost = newComment.trim();
@@ -458,7 +500,7 @@ const StoryDetailScreen = () => {
               }
             } catch (error) {
               console.error("Error deleting story:", error);
-              Alert.alert("Error", "An unexpected error occurred while deleting the story.");
+              showErrorAlert(error, "Error Deleting Story");
             }
           },
         },
@@ -549,7 +591,8 @@ const StoryDetailScreen = () => {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <ErrorBoundary screenName="StoryDetailScreen">
+      <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "height"} 
         style={{flex: 1}}
@@ -596,9 +639,9 @@ const StoryDetailScreen = () => {
               );
             }
             if (block.type === 'image') {
-              const mediaItemsForBlock: Array<{ uri: string; type: 'image' | 'video'; duration?: number; width?: number; height?: number; asset?: ImagePicker.ImagePickerAsset }> = [];
+              const mediaItemsForBlock: { uri: string; type: 'image' | 'video'; duration?: number; width?: number; height?: number; asset?: ImagePicker.ImagePickerAsset }[] = [];
               if (Array.isArray(block.data)) {
-                (block.data as Array<any>).forEach(mediaData => {
+                (block.data as any[]).forEach(mediaData => {
                   if (typeof mediaData === 'string') {
                     const url = mediaData;
                     const isVideo = /\.(mp4|mov|avi|mkv|webm)$/i.test(url.toLowerCase());
@@ -692,16 +735,17 @@ const StoryDetailScreen = () => {
             </View>
         </View>
       </KeyboardAvoidingView>
-      {story && user?.uid === story.authorId && (
-        <AnimatedActionSheet
-          isVisible={isActionSheetVisible}
-          onClose={() => setActionSheetVisible(false)}
-          actions={storyActions}
-          title="Story Options"
-          message="Manage your story."
-        />
-      )}
-    </SafeAreaView>
+        {story && user?.uid === story.authorId && (
+          <AnimatedActionSheet
+            isVisible={isActionSheetVisible}
+            onClose={() => setActionSheetVisible(false)}
+            actions={storyActions}
+            title="Story Options"
+            message="Manage your story."
+          />
+        )}
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 

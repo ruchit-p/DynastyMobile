@@ -33,6 +33,16 @@ import { createStoryMobile, updateStoryMobile, fetchAccessibleStoriesMobile, Sto
 import Fonts from '../../constants/Fonts';
 import { useImageUpload } from '../../hooks/useImageUpload';
 import { useScreenResult } from '../../src/contexts/ScreenResultContext';
+import { showErrorAlert } from '../../src/lib/errorUtils';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { useSmartMediaUpload } from '../../hooks/useSmartMediaUpload';
+import { useEncryption } from '../../src/contexts/EncryptionContext';
+import { useOffline } from '../../src/contexts/OfflineContext';
+import { syncService } from '../../src/lib/syncService';
+import { StorySyncService } from '../../src/services/StorySyncService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // MARK: - Types
 type BlockType = "text" | "image" | "video" | "audio";
@@ -53,6 +63,11 @@ const CreateStoryScreen = () => {
   const { user, firestoreUser, functions } = useAuth();
   const router = useRouter();
   const navigation = useNavigation();
+  const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Story Creation Error',
+    trackCurrentScreen: true
+  });
   const params = useLocalSearchParams<{ 
     storyId?: string; 
     editMode?: string; 
@@ -69,6 +84,15 @@ const CreateStoryScreen = () => {
   }>(); 
   const { uploadImage, isUploading: isImageUploading, uploadProgress } = useImageUpload();
   const { result: screenResult, setResult: setScreenResult } = useScreenResult();
+  const smartUpload = useSmartMediaUpload();
+  const { isEncryptionReady } = useEncryption();
+  const { isOnline } = useOffline();
+
+  useEffect(() => {
+    if (!isError) {
+      // Clear any local error states when global error is cleared
+    }
+  }, [isError]);
 
   const storyIdForEdit = params.storyId;
   // const isEditing = params.editMode === 'true'; // Will be replaced by isActuallyEditingNow and displayAsEditMode
@@ -161,18 +185,23 @@ const CreateStoryScreen = () => {
   // MARK: - Handlers (Moved Up and Wrapped in useCallback)
 
   // Function to upload all images in image blocks and return updated blocks with Firebase Storage URLs
-  const uploadAllMedia = async (storyBlocks: Array<{
+  const uploadAllMedia = async (storyBlocks: {
     type: string;
     data: any; // For 'image' blocks, this will be Array<{uri: string, type: 'image'|'video', ...}>
                // For 'audio'/'video' (dedicated), this will be a string URI
     localId: string;
-  }>) => {
+  }[]) => {
+    // If offline, skip upload and return original blocks
+    if (!isOnline) {
+      console.log('Offline mode: Skipping media upload');
+      return storyBlocks;
+    }
     // Count total media items that need to be uploaded
     let mediaToUploadCount = 0;
     storyBlocks.forEach(block => {
       if (block.type === 'image' && Array.isArray(block.data)) {
         // block.data is an array of MediaItem-like objects
-        (block.data as Array<{ uri: string }>).forEach(item => { // Cast to check URI
+        (block.data as { uri: string }[]).forEach(item => { // Cast to check URI
           if (typeof item.uri === 'string' && (item.uri.startsWith('file://') || item.uri.startsWith('content://'))) {
             mediaToUploadCount++;
           }
@@ -202,17 +231,33 @@ const CreateStoryScreen = () => {
           const mediaItem = block.data[j] as MediaItem; // Expect MediaItem like structure
           if (typeof mediaItem.uri === 'string' && (mediaItem.uri.startsWith('file://') || mediaItem.uri.startsWith('content://'))) {
             try {
-              const uploadedUrl = await uploadImage(
-                mediaItem.uri, 
-                'stories', 
+              let uploadedUrl: string | null = null;
+              let encryptionKey: string | null = null;
+              
+              // Use smart upload which handles encryption based on settings
+              const uploadResult = await smartUpload.uploadMedia(
+                mediaItem.uri,
+                'story',
+                {
+                  fileName: `story_${Date.now()}_${j}`,
+                  mimeType: mediaItem.type === 'video' ? 'video/mp4' : 'image/jpeg',
+                },
                 (progress) => {
                   // Progress reporting needs to be accurate based on items, not just overall percentage
-                  const currentTotalProgress = (completedUploads + progress / 100) / totalUploads * 100;
+                  const currentTotalProgress = totalUploads > 0 ? (completedUploads + progress / 100) / totalUploads * 100 : 0;
                   setOverallProgress(currentTotalProgress);
                 }
               );
-              if (uploadedUrl) {
-                processedMediaItems.push({ ...mediaItem, uri: uploadedUrl }); // Update URI, keep other props
+              
+              if (uploadResult) {
+                uploadedUrl = uploadResult.url;
+                encryptionKey = uploadResult.key || null;
+                processedMediaItems.push({ 
+                  ...mediaItem, 
+                  uri: uploadedUrl,
+                  isEncrypted: !!encryptionKey,
+                  encryptionKey 
+                }); // Update URI and add encryption info
                 setCompletedUploads(prev => prev + 1);
               } else {
                 processedMediaItems.push(mediaItem); // Fallback, keep original item with local URI
@@ -229,18 +274,28 @@ const CreateStoryScreen = () => {
       } else if ((block.type === 'video' || block.type === 'audio') && typeof block.data === 'string' && (block.data.startsWith('file://') || block.data.startsWith('content://'))) {
         // Handle single media URI upload for dedicated 'video' or 'audio' blocks
         try {
-          const uploadedUrl = await uploadImage(
+          const uploadResult = await smartUpload.uploadMedia(
             block.data,
-            'stories',
+            'story',
+            {
+              fileName: `story_${block.type}_${Date.now()}`,
+              mimeType: block.type === 'audio' ? 'audio/mpeg' : 'video/mp4',
+            },
             (progress) => {
               // Simplified progress for single file upload in a block
-              const baseProgress = completedUploads / totalUploads * 100;
-              const itemProgress = progress / totalUploads;
+              const baseProgress = totalUploads > 0 ? completedUploads / totalUploads * 100 : 0;
+              const itemProgress = totalUploads > 0 ? progress / totalUploads : 0;
               setOverallProgress(baseProgress + itemProgress);
             }
           );
-          if (uploadedUrl) {
-            block.data = uploadedUrl;
+          
+          if (uploadResult) {
+            block.data = uploadResult.url;
+            // Store encryption metadata if needed
+            if (uploadResult.key) {
+              block.isEncrypted = true;
+              block.encryptionKey = uploadResult.key;
+            }
             setCompletedUploads(prev => prev + 1);
           }
           // Fallback: original URI remains if upload fails
@@ -255,13 +310,14 @@ const CreateStoryScreen = () => {
     return updatedBlocks;
   };
 
-  const handleSaveStory = useCallback(async () => {
+  const handleSaveStory = useCallback(withErrorHandling(async () => {
+    reset();
     if (!storyTitle.trim()) {
-      Alert.alert('Missing Title', 'Please provide a title for your story.');
+      showErrorAlert({ message: 'Please provide a title for your story.', code: 'missing-title' }, 'Missing Title');
       return;
     }
     if (!firestoreUser?.familyTreeId) {
-        Alert.alert('Family Tree Error', 'You must be part of a family tree to create stories.');
+        showErrorAlert({ message: 'You must be part of a family tree to create stories.', code: 'family-tree-error' }, 'Family Tree Error');
         return;
     }
 
@@ -307,43 +363,95 @@ const CreateStoryScreen = () => {
     });
     
     try {
-      // Upload all images to Firebase Storage and get updated blocks with Firebase URLs
-      const updatedBlocks = await uploadAllMedia(transformedBlocks);
-      
-      const storyPayload = {
-        authorID: user?.uid || '',
-        title: storyTitle,
-        subtitle: showSubtitle ? subtitle : undefined,
-        eventDate: showDate && storyDate ? storyDate.toISOString() : undefined,
-        location: showLocation && location ? { lat: location.latitude, lng: location.longitude, address: location.address || '' } : undefined,
-        privacy: (privacy === 'personal' ? 'privateAccess' : privacy) as 'family' | 'privateAccess' | 'custom',
-        customAccessMembers: privacy === 'custom' ? customSelectedViewers : undefined,
-        blocks: updatedBlocks,
-        familyTreeId: firestoreUser.familyTreeId, 
-        peopleInvolved: taggedMembers,
-      };
-      
-      console.log('Full story payload:', JSON.stringify(storyPayload, null, 2));
+      // If offline, create story with local data first (optimistic UI)
+      if (!isOnline) {
+        const tempStoryId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        const storyPayload = {
+          authorID: user?.uid || '',
+          title: storyTitle,
+          subtitle: showSubtitle ? subtitle : undefined,
+          eventDate: showDate && storyDate ? storyDate.toISOString() : undefined,
+          location: showLocation && location ? { lat: location.latitude, lng: location.longitude, address: location.address || '' } : undefined,
+          privacy: (privacy === 'personal' ? 'privateAccess' : privacy) as 'family' | 'privateAccess' | 'custom',
+          customAccessMembers: privacy === 'custom' ? customSelectedViewers : undefined,
+          blocks: transformedBlocks, // Use local URIs when offline
+          familyTreeId: firestoreUser.familyTreeId, 
+          peopleInvolved: taggedMembers,
+          _isOffline: true,
+          _tempId: tempStoryId,
+          createdAt: new Date().toISOString(),
+          authorName: firestoreUser?.displayName || 'Unknown',
+        };
+        
+        // Queue for sync when online
+        await syncService.queueOperation({
+          type: 'create',
+          collection: 'stories',
+          data: storyPayload,
+          timestamp: Date.now(),
+        });
+        
+        // Cache the story locally for immediate display
+        const cachedStories = await AsyncStorage.getItem('cachedStories');
+        const stories = cachedStories ? JSON.parse(cachedStories) : [];
+        stories.unshift({ ...storyPayload, id: tempStoryId });
+        await AsyncStorage.setItem('cachedStories', JSON.stringify(stories));
+        
+        Alert.alert(
+          'Story Saved Offline', 
+          'Your story has been saved locally and will sync when you\'re back online.',
+          [{ text: 'OK', onPress: () => router.navigate('/(tabs)/feed') }]
+        );
+      } else {
+        // Online: upload media and create story normally
+        const updatedBlocks = await uploadAllMedia(transformedBlocks);
+        
+        const storyPayload = {
+          authorID: user?.uid || '',
+          title: storyTitle,
+          subtitle: showSubtitle ? subtitle : undefined,
+          eventDate: showDate && storyDate ? storyDate.toISOString() : undefined,
+          location: showLocation && location ? { lat: location.latitude, lng: location.longitude, address: location.address || '' } : undefined,
+          privacy: (privacy === 'personal' ? 'privateAccess' : privacy) as 'family' | 'privateAccess' | 'custom',
+          customAccessMembers: privacy === 'custom' ? customSelectedViewers : undefined,
+          blocks: updatedBlocks,
+          familyTreeId: firestoreUser.familyTreeId, 
+          peopleInvolved: taggedMembers,
+        };
+        
+        console.log('Full story payload:', JSON.stringify(storyPayload, null, 2));
 
-      const newStoryId = await createStoryMobile(storyPayload);
-      console.log('Story created with ID:', newStoryId);
-      Alert.alert('Success', 'Your story has been saved.');
-      router.navigate('/(tabs)/feed');
+        const newStoryId = await createStoryMobile(storyPayload);
+        console.log('Story created with ID:', newStoryId);
+        Alert.alert('Success', 'Your story has been saved.');
+        router.navigate('/(tabs)/feed');
+      }
     } catch (error) {
-      console.error('Error creating story:', error);
-      Alert.alert('Error', `Failed to save your story: ${ (error as Error).message }`);
+      handleError(error, { 
+        action: 'createStory',
+        metadata: { 
+          storyTitle,
+          privacy,
+          blockCount: blocks.length,
+          hasLocation: showLocation,
+          isOffline: !isOnline
+        }
+      });
+      showErrorAlert(error, 'Error');
     } finally {
       setIsLoading(false);
     }
-  }, [storyTitle, firestoreUser, user, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, router, uploadImage]);
+  }), [storyTitle, firestoreUser, user, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, router, uploadImage, handleError, reset, isOnline]);
 
-  const handleUpdateStory = useCallback(async () => {
+  const handleUpdateStory = useCallback(withErrorHandling(async () => {
+    reset();
     if (!storyTitle.trim()) {
-      Alert.alert('Missing Title', 'Please provide a title for your story.');
+      showErrorAlert({ message: 'Please provide a title for your story.', code: 'missing-title' }, 'Missing Title');
       return;
     }
     if (!storyIdForEdit || !user?.uid) {
-      Alert.alert('Error', 'Cannot update story. Missing ID or user information.');
+      showErrorAlert({ message: 'Cannot update story. Missing ID or user information.', code: 'update-error' }, 'Error');
       return;
     }
 
@@ -401,12 +509,19 @@ const CreateStoryScreen = () => {
       Alert.alert('Success', 'Your story has been updated.');
       router.navigate('/(tabs)/feed');
     } catch (error) {
-      console.error('Error updating story:', error);
-      Alert.alert('Error', `Failed to update your story: ${ (error as Error).message }`);
+      handleError(error, { 
+        action: 'updateStory',
+        metadata: { 
+          storyId: storyIdForEdit,
+          storyTitle,
+          blockCount: blocks.length
+        }
+      });
+      showErrorAlert(error, 'Error');
     } finally {
       setIsLoading(false);
     }
-  }, [storyTitle, storyIdForEdit, user, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, router, uploadImage]);
+  }), [storyTitle, storyIdForEdit, user, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, router, uploadImage, handleError, reset]);
 
   // MARK: - Load Story Data for Editing
   useEffect(() => {
@@ -491,7 +606,7 @@ const CreateStoryScreen = () => {
                     });
                   } else if (fb.data.length > 0 && typeof fb.data[0] === 'object' && fb.data[0] !== null && 'uri' in fb.data[0]) {
                     // New format: array of MediaItem-like objects
-                    contentValue = (fb.data as Array<any>).map(itemData => ({
+                    contentValue = (fb.data as any[]).map(itemData => ({
                       uri: itemData.uri,
                       type: itemData.type || (/\.(mp4|mov|avi|mkv|webm)$/i.test(itemData.uri?.toLowerCase() || '') ? 'video' : 'image'), // Infer if type missing
                       asset: undefined,
@@ -528,11 +643,14 @@ const CreateStoryScreen = () => {
             setBlocks(mappedBlocks);
 
           } else {
-            Alert.alert("Error", "Could not find the story to edit.", [{ text: "OK", onPress: () => router.back() }]);
+            showErrorAlert({ message: "Could not find the story to edit.", code: "story-not-found" }, "Error", () => router.back());
           }
         } catch (error) {
-          console.error("Error loading story for editing:", error);
-          Alert.alert("Error", "Failed to load story details for editing.", [{ text: "OK", onPress: () => router.back() }]);
+          handleError(error, { 
+            action: 'loadStoryForEdit',
+            metadata: { storyId: storyIdForEdit }
+          });
+          showErrorAlert(error, "Error", () => router.back());
         } finally {
           setIsLoading(false);
         }
@@ -705,7 +823,7 @@ const CreateStoryScreen = () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert('Permission Required', 'Allow access to media library to add audio.');
+        showErrorAlert({ message: 'Allow access to media library to add audio.', code: 'permission-denied' }, 'Permission Required');
         return;
       }
 
@@ -762,7 +880,7 @@ const CreateStoryScreen = () => {
       }
     } catch (error) {
       console.error("Error picking audio file: ", error);
-      Alert.alert("Upload Error", "Could not select audio file.");
+      showErrorAlert(error, "Upload Error");
     }
     setAudioActionSheetVisible(false);
   };
@@ -773,6 +891,7 @@ const CreateStoryScreen = () => {
     router.push('/recordAudio' as any);
     setAudioActionSheetVisible(false);
   };
+  
   
   // Handle selecting media for a specific block (now used by MediaGallery)
   const handleSelectMediaForImageBlock = async (blockId: string, replaceIndex?: number) => {
@@ -791,7 +910,7 @@ const CreateStoryScreen = () => {
     }
     
     if (permissionResult.status !== ImagePicker.PermissionStatus.GRANTED) {
-        Alert.alert("Permission Required", "Photo and video library access is required.");
+        showErrorAlert("Permission Required", "Photo and video library access is required.");
         return;
     }
 
@@ -837,7 +956,7 @@ const CreateStoryScreen = () => {
       }
     } catch (error) {
       console.error("Error launching media library:", error);
-      Alert.alert("Media Picker Error", "Could not open the media library.");
+      showErrorAlert("Media Picker Error", "Could not open the media library.");
     }
   };
 
@@ -890,7 +1009,8 @@ const CreateStoryScreen = () => {
       params: { 
         currentLat: location?.latitude?.toString(), 
         currentLng: location?.longitude?.toString(),
-        currentAddress: location?.address
+        currentAddress: location?.address,
+        previousPath: '/(screens)/createStory'
       }
     });
   };
@@ -1035,27 +1155,25 @@ const CreateStoryScreen = () => {
 
   // Show a loading overlay during image uploads or story creation/update
   const renderLoadingOverlay = () => {
-    if (isLoading || isUploading) {
-      return (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#1A4B44" />
-          <Text style={styles.loadingText}>
-            {isUploading ? `Uploading Media (${Math.round(overallProgress)}%)` : 'Saving Story...'}
-          </Text>
-          {isUploading && (
-            <View style={styles.progressBarContainer}>
-              <View style={[styles.progressBar, { width: `${overallProgress}%` }]} />
-            </View>
-          )}
-        </View>
-      );
-    }
-    return null;
+    return (
+      <View style={styles.loadingOverlay}>
+        <ActivityIndicator size="large" color="#1A4B44" />
+        <Text style={styles.loadingText}>
+          {isUploading ? `Uploading Media (${Math.round(overallProgress || 0)}%)` : 'Saving Story...'}
+        </Text>
+        {isUploading && (
+          <View style={styles.progressBarContainer}>
+            <View style={[styles.progressBar, { width: `${Math.max(0, Math.min(100, overallProgress || 0))}%` }]} />
+          </View>
+        )}
+      </View>
+    );
   };
 
   // MARK: - Main Render
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <ErrorBoundary screenName="CreateStoryScreen">
+      <SafeAreaView style={styles.safeArea}>
       <Stack.Screen
         options={{
           title: 'Create Story',
@@ -1144,7 +1262,6 @@ const CreateStoryScreen = () => {
                 onPress={showDatePicker}
               >
                 <MaterialCommunityIcons name="calendar-month-outline" size={24} color={styles.inputIcon.color} style={styles.inputIcon} />
-                <Text style={styles.inputRowText}>Story Date</Text>
                 <View style={[styles.inputRowValueContainer, styles.valueContainerWithRightButton]}>
                   <Text style={styles.inputRowValueText}>{formatDate(storyDate)}</Text>
                   <TouchableOpacity onPress={() => setShowDate(false)} style={styles.removeButtonAlignedRight}>
@@ -1289,8 +1406,9 @@ const CreateStoryScreen = () => {
       />
       
       {/* Loading overlay */}
-      {renderLoadingOverlay()}
-    </SafeAreaView>
+      {(isLoading || isUploading) && renderLoadingOverlay()}
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 

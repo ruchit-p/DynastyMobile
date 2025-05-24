@@ -1,4 +1,5 @@
 import { format, formatDistanceToNow, isValid } from 'date-fns';
+import { errorHandler, ErrorSeverity } from './ErrorHandlingService';
 
 /**
  * Supported timestamp types for mobile (Date, plain object, number, string).
@@ -57,7 +58,16 @@ export function toDate(timestamp: TimestampType): Date | null {
 
     return null;
   } catch (error) {
-    console.error('Error converting timestamp to Date:', error, timestamp);
+    errorHandler.handleError(error, {
+      severity: ErrorSeverity.WARNING,
+      title: 'Date Conversion Error',
+      metadata: {
+        action: 'toDate',
+        timestampType: typeof timestamp,
+        timestampValue: String(timestamp).substring(0, 100) // Truncate for safety
+      },
+      showAlert: false
+    });
     return null;
   }
 }
@@ -75,7 +85,16 @@ export function formatDate(
     if (!date) return fallback;
     return format(date, formatString);
   } catch (error) {
-    console.error('Error formatting date:', error, timestamp);
+    errorHandler.handleError(error, {
+      severity: ErrorSeverity.INFO,
+      title: 'Date Formatting Error',
+      metadata: {
+        action: 'formatDate',
+        formatString,
+        timestampType: typeof timestamp
+      },
+      showAlert: false
+    });
     return fallback;
   }
 }
@@ -93,7 +112,16 @@ export function formatTimeAgo(
     if (!date) return fallback;
     return formatDistanceToNow(date, { addSuffix });
   } catch (error) {
-    console.error('Error formatting time ago:', error, timestamp);
+    errorHandler.handleError(error, {
+      severity: ErrorSeverity.INFO,
+      title: 'Time Ago Formatting Error',
+      metadata: {
+        action: 'formatTimeAgo',
+        addSuffix,
+        timestampType: typeof timestamp
+      },
+      showAlert: false
+    });
     return fallback;
   }
 }
@@ -130,7 +158,15 @@ export function getSmartDate(
     // Different year
     return format(date, 'MMMM d, yyyy');
   } catch (error) {
-    console.error('Error getting smart date:', error, timestamp);
+    errorHandler.handleError(error, {
+      severity: ErrorSeverity.INFO,
+      title: 'Smart Date Formatting Error',
+      metadata: {
+        action: 'getSmartDate',
+        timestampType: typeof timestamp
+      },
+      showAlert: false
+    });
     return fallback;
   }
 } 

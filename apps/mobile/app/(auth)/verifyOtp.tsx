@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,40 +9,181 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
-  Image
+  Image,
+  Animated
 } from 'react-native';
-import { useRouter, useLocalSearchParams, Link } from 'expo-router';
+import { useRouter, useLocalSearchParams, Link, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { 
+  PHONE_AUTH_CONFIG, 
+  isTestPhoneNumber, 
+  getTestVerificationCode,
+  PHONE_AUTH_ERROR_MESSAGES 
+} from '../../src/config/phoneAuth';
+import { Colors } from '../../constants/Colors';
+import { Typography } from '../../constants/Typography';
+import { Spacing, BorderRadius, Shadows } from '../../constants/Spacing';
 
 const dynastyLogo = require('../../assets/images/dynasty.png');
 
+// OTP Session timeout (5 minutes)
+const OTP_SESSION_TIMEOUT = 5 * 60 * 1000;
+
+// Enhanced error messages with recovery actions for OTP verification
+const getOtpErrorMessageAndAction = (errorCode: string) => {
+  const errorInfo = {
+    message: (PHONE_AUTH_ERROR_MESSAGES as Record<string, string>)[errorCode] || 'Verification failed. Please try again.',
+    action: null as string | null,
+    canRetry: true
+  };
+
+  switch(errorCode) {
+    case 'auth/invalid-verification-code':
+      errorInfo.message = 'Invalid code. Please check and try again.';
+      errorInfo.action = 'Make sure you entered the 6-digit code correctly.';
+      break;
+    case 'auth/code-expired':
+    case 'auth/invalid-verification-id':
+      errorInfo.message = 'This code has expired.';
+      errorInfo.action = 'Request a new verification code.';
+      errorInfo.canRetry = false;
+      break;
+    case 'auth/too-many-requests':
+      errorInfo.message = 'Too many failed attempts.';
+      errorInfo.action = 'Please wait a few minutes before trying again.';
+      errorInfo.canRetry = false;
+      break;
+    case 'auth/session-expired':
+      errorInfo.message = 'Verification session expired.';
+      errorInfo.action = 'Please go back and request a new code.';
+      errorInfo.canRetry = false;
+      break;
+    case 'auth/network-request-failed':
+      errorInfo.action = 'Check your internet connection.';
+      break;
+  }
+
+  return errorInfo;
+};
+
 export default function VerifyOtpScreen() {
   const router = useRouter();
-  const { confirmPhoneCode, isLoading, phoneAuthConfirmation, signInWithPhoneNumber } = useAuth();
+  const { confirmPhoneCode, isLoading, phoneAuthConfirmation, phoneNumberInProgress, signInWithPhoneNumber } = useAuth();
+  const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'OTP Verification Error',
+    trackCurrentScreen: true
+  });
   const params = useLocalSearchParams<{ phoneNumberSent?: string }>();
-  const phoneNumberSent = params.phoneNumberSent;
+  // Use phone number from context if available, fallback to params
+  const phoneNumberSent = phoneNumberInProgress || params.phoneNumberSent;
   const insets = useSafeAreaInsets();
-
-  console.log('[VerifyOtpScreen] Component Load: isLoading:', isLoading, 'phoneAuthConfirmation exists:', !!phoneAuthConfirmation, 'phoneNumberSent:', phoneNumberSent);
 
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [errorAction, setErrorAction] = useState<string | null>(null);
+  const [canRetry, setCanRetry] = useState(true);
   const [resendDisabled, setResendDisabled] = useState(false);
   const [countdown, setCountdown] = useState(30); // Countdown for resend OTP
+  const [sessionStartTime] = useState(Date.now());
+  const [sessionTimeRemaining, setSessionTimeRemaining] = useState(OTP_SESSION_TIMEOUT);
+  const [isSessionExpired, setIsSessionExpired] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Verifying code...');
+  const [attemptCount, setAttemptCount] = useState(0);
+  
+  const errorAnimation = useRef(new Animated.Value(0)).current;
+  const successAnimation = useRef(new Animated.Value(0)).current;
+  const inputRefs = useRef<TextInput[]>([]);
+  const hasLoggedInitialLoad = useRef(false);
+
+  // Reduce excessive logging - only log on meaningful state changes
+  useEffect(() => {
+    if (!hasLoggedInitialLoad.current) {
+      console.log('[VerifyOtpScreen] Component Load: isLoading:', isLoading, 'phoneAuthConfirmation exists:', !!phoneAuthConfirmation, 'phoneNumberSent:', phoneNumberSent);
+      hasLoggedInitialLoad.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isError) {
+      setError(null);
+      setErrorAction(null);
+    }
+  }, [isError]);
+
+  // Track session timeout
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - sessionStartTime;
+      const remaining = OTP_SESSION_TIMEOUT - elapsed;
+      
+      if (remaining <= 0) {
+        setIsSessionExpired(true);
+        setSessionTimeRemaining(0);
+        setError('Verification session expired.');
+        setErrorAction('Please go back and request a new code.');
+        setCanRetry(false);
+        clearInterval(interval);
+      } else {
+        setSessionTimeRemaining(remaining);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [sessionStartTime]);
+
+  // Format time remaining
+  const formatTimeRemaining = (ms: number) => {
+    const minutes = Math.floor(ms / 60000);
+    const seconds = Math.floor((ms % 60000) / 1000);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Animate error message
+  useEffect(() => {
+    if (error) {
+      Animated.sequence([
+        Animated.timing(errorAnimation, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(errorAnimation, {
+          toValue: 0.95,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [error]);
+
+  // Auto-fill test code in development
+  useEffect(() => {
+    if (__DEV__ && PHONE_AUTH_CONFIG.testMode.autoFillTestCode && phoneNumberSent) {
+      const testCode = getTestVerificationCode(phoneNumberSent);
+      if (testCode) {
+        setOtp(testCode);
+        console.log('📱 Auto-filled test verification code');
+      }
+    }
+  }, [phoneNumberSent]);
 
   useEffect(() => {
     console.log('[VerifyOtpScreen] useEffect (initial): isLoading:', isLoading, 'phoneAuthConfirmation exists:', !!phoneAuthConfirmation);
-    if (!phoneAuthConfirmation && !isLoading) {
-      // This might happen if user navigates here directly or context was lost.
-      // Alert and redirect or allow re-sending OTP for the passed phone number.
-      // Alert.alert("Verification Error", "Verification process was not initiated correctly. Please try sending OTP again.");
-      // router.replace('/(auth)/phoneSignIn');
-      console.warn("No phoneAuthConfirmation found in context on VerifyOtpScreen load.")
+    if (!phoneAuthConfirmation && !isLoading && !phoneNumberSent) {
+      // No confirmation and no phone number means user navigated here directly
+      console.warn("No phoneAuthConfirmation and no phone number. Redirecting to phone sign in.");
+      router.replace('/(auth)/phoneSignIn');
     }
-  }, [phoneAuthConfirmation, isLoading, router]);
+    // Removed immediate error for missing confirmation - let user try first
+    // If confirmation is missing, the error will be shown when they try to verify
+  }, [phoneAuthConfirmation, isLoading, phoneNumberSent]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>; // Correct type for setTimeout timer ID
@@ -55,50 +196,159 @@ export default function VerifyOtpScreen() {
     return () => clearTimeout(timer);
   }, [resendDisabled, countdown]);
 
-  const handleVerifyOtp = async () => {
+  const handleVerifyOtp = withErrorHandling(async () => {
+    reset();
     setError(null);
+    setErrorAction(null);
+    setLoadingMessage('Verifying code...');
+    setAttemptCount(prev => prev + 1);
+    
     if (!otp.trim() || otp.length !== 6) {
       setError('Please enter the 6-digit code.');
+      setErrorAction('The code should be 6 digits.');
       return;
     }
+    
+    if (isSessionExpired) {
+      const errorInfo = getOtpErrorMessageAndAction('auth/session-expired');
+      setError(errorInfo.message);
+      setErrorAction(errorInfo.action);
+      setCanRetry(errorInfo.canRetry);
+      return;
+    }
+    
     if (!phoneAuthConfirmation) {
-        setError("Verification session expired or not found. Please request a new OTP.");
+      // If we have a phone number but no confirmation (due to app reload), 
+      // provide helpful guidance to user
+      if (phoneNumberSent) {
+        setError('Verification session has expired.');
+        setErrorAction('Please tap "Resend" below to get a new verification code.');
+        setCanRetry(false);
         return;
+      } else {
+        setError('No verification session found.');
+        setErrorAction('Please go back and request a new verification code.');
+        setCanRetry(false);
+        return;
+      }
     }
+    
     if (!phoneNumberSent) {
-        setError("Phone number not available. Cannot verify OTP.");
-        return;
+      setError("Phone number not available. Cannot verify OTP.");
+      setCanRetry(false);
+      return;
     }
+    
     try {
+      // Log for debugging
+      if (PHONE_AUTH_CONFIG.enableDebugLogging) {
+        console.log('Verifying OTP for:', phoneNumberSent);
+        if (isTestPhoneNumber(phoneNumberSent)) {
+          console.log('📱 Verifying test phone number');
+        }
+      }
+      
+      setLoadingMessage('Almost there...');
       await confirmPhoneCode(phoneNumberSent, otp);
+      
+      // Success animation
+      setLoadingMessage('Success! Signing you in...');
+      Animated.timing(successAnimation, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
       // Navigation is handled by AuthProvider on successful auth state change
     } catch (e: any) {
-      console.error("OTP Verification failed:", e);
-      setError(e.message || "Failed to verify OTP. Check the code or try again.");
+      console.error('OTP verification error:', e);
+      
+      const errorCode = e.code || 'default';
+      const errorInfo = getOtpErrorMessageAndAction(errorCode);
+      
+      setError(errorInfo.message);
+      setErrorAction(errorInfo.action);
+      setCanRetry(errorInfo.canRetry);
+      
+      // Check if too many attempts
+      if (attemptCount >= 3 && errorCode === 'auth/invalid-verification-code') {
+        setErrorAction('You have 3 more attempts before this code expires.');
+      }
+      
+      handleError(e, { 
+        action: 'verifyOtp',
+        metadata: { 
+          phoneNumber: phoneNumberSent || 'unknown', 
+          otpLength: otp.length,
+          errorCode,
+          attemptCount,
+          isTestNumber: phoneNumberSent ? isTestPhoneNumber(phoneNumberSent) : false
+        }
+      });
     }
-  };
+  });
 
-  const handleResendOtp = async () => {
+  const handleResendOtp = withErrorHandling(async () => {
     if (!phoneNumberSent) {
         setError("Cannot resend OTP without a phone number.");
         return;
     }
+    reset();
     setError(null);
+    setErrorAction(null);
     setResendDisabled(true);
+    setLoadingMessage('Sending new code...');
+    
     try {
         // Re-call signInWithPhoneNumber to send a new OTP
         // This will update the phoneAuthConfirmation in the context
         await signInWithPhoneNumber(phoneNumberSent);
-        Alert.alert("OTP Resent", `A new OTP has been sent to ${phoneNumberSent}.`);
+        
+        // Reset session timer
+        setIsSessionExpired(false);
+        setAttemptCount(0);
+        setOtp('');
+        
+        // Show success message
+        Animated.timing(successAnimation, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }).start(() => {
+          setTimeout(() => {
+            Animated.timing(successAnimation, {
+              toValue: 0,
+              duration: 300,
+              useNativeDriver: true,
+            }).start();
+          }, 2000);
+        });
+        
+        Alert.alert(
+          "Code Sent!",
+          `A new verification code has been sent to ${phoneNumberSent}.`,
+          [{ text: "OK", style: "default" }],
+          { cancelable: true }
+        );
     } catch (e: any) {
-        setError(e.message || "Failed to resend OTP.");
+        const errorCode = e.code || 'default';
+        const errorInfo = getOtpErrorMessageAndAction(errorCode);
+        
+        setError(errorInfo.message);
+        setErrorAction(errorInfo.action);
+        
+        handleError(e, { 
+          action: 'resendOtp',
+          metadata: { phoneNumber: phoneNumberSent || 'unknown', errorCode }
+        });
         setResendDisabled(false); // Allow trying again if resend fails
     }
-  };
+  });
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style={Platform.OS === 'ios' ? 'dark' : 'light'} />
+    <ErrorBoundary screenName="VerifyOtpScreen">
+      <Stack.Screen options={{ headerShown: false }} />
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style={Platform.OS === 'ios' ? 'dark' : 'light'} />
       <TouchableOpacity onPress={() => router.replace('/(auth)/phoneSignIn')} style={[styles.backButton, { top: insets.top + 5 }]}>
         <Ionicons name="arrow-back" size={28} color="#1A4B44" />
       </TouchableOpacity>
@@ -109,8 +359,27 @@ export default function VerifyOtpScreen() {
           Enter the 6-digit code sent to {phoneNumberSent || 'your phone'}.
         </Text>
 
+        {/* Session Timer */}
+        <View style={styles.timerContainer}>
+          <Ionicons 
+            name="time-outline" 
+            size={16} 
+            color={isSessionExpired ? Colors.palette.status.error : Colors.light.text.secondary} 
+          />
+          <Text style={[
+            styles.timerText, 
+            isSessionExpired && styles.timerExpired
+          ]}>
+            {isSessionExpired ? 'Session expired' : `Time remaining: ${formatTimeRemaining(sessionTimeRemaining)}`}
+          </Text>
+        </View>
+
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            error && styles.inputError,
+            isSessionExpired && styles.inputDisabled
+          ]}
           placeholder="XXXXXX"
           placeholderTextColor="#888"
           value={otp}
@@ -118,17 +387,57 @@ export default function VerifyOtpScreen() {
           keyboardType="number-pad"
           maxLength={6}
           textContentType="oneTimeCode"
+          editable={!isSessionExpired}
         />
 
-        {error && <Text style={styles.errorText}>{error}</Text>}
+        {/* Enhanced Error Display */}
+        {error && (
+          <Animated.View 
+            style={[
+              styles.errorContainer, 
+              { 
+                opacity: errorAnimation,
+                transform: [{ scale: errorAnimation }]
+              }
+            ]}
+          >
+            <View style={styles.errorHeader}>
+              <Ionicons name="alert-circle" size={20} color={Colors.palette.status.error} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+            {errorAction && (
+              <Text style={styles.errorAction}>{errorAction}</Text>
+            )}
+          </Animated.View>
+        )}
+
+        {/* Success Animation */}
+        <Animated.View 
+          style={[
+            styles.successContainer,
+            { 
+              opacity: successAnimation,
+              transform: [{ scale: successAnimation }]
+            }
+          ]}
+        >
+          <Ionicons name="checkmark-circle" size={24} color={Colors.palette.status.success} />
+          <Text style={styles.successText}>Code sent!</Text>
+        </Animated.View>
 
         <TouchableOpacity 
-          style={[styles.button, isLoading && styles.buttonDisabled]}
+          style={[
+            styles.button, 
+            (isLoading || isSessionExpired || !canRetry) && styles.buttonDisabled
+          ]}
           onPress={handleVerifyOtp} 
-          disabled={isLoading}
+          disabled={isLoading || isSessionExpired || !canRetry}
         >
-          {isLoading && !resendDisabled ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#FFFFFF" />
+              <Text style={[styles.buttonText, styles.loadingText]}>{loadingMessage}</Text>
+            </View>
           ) : (
             <Text style={styles.buttonText}>Verify Code</Text>
           )}
@@ -136,11 +445,14 @@ export default function VerifyOtpScreen() {
 
         <TouchableOpacity 
             onPress={handleResendOtp} 
-            disabled={resendDisabled || isLoading} 
+            disabled={resendDisabled || isLoading || isSessionExpired} 
             style={styles.resendContainer}
         >
-          <Text style={[styles.resendText, (resendDisabled || isLoading) && styles.disabledText]}>
-            {resendDisabled ? `Resend OTP in ${countdown}s` : "Didn't receive code? Resend OTP"}
+          <Text style={[
+            styles.resendText, 
+            (resendDisabled || isLoading || isSessionExpired) && styles.disabledText
+          ]}>
+            {resendDisabled ? `Resend code in ${countdown}s` : "Didn't receive code? Resend"}
           </Text>
         </TouchableOpacity>
 
@@ -151,7 +463,8 @@ export default function VerifyOtpScreen() {
             </TouchableOpacity>
         </View>
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 }
 
@@ -221,9 +534,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#A9A9A9',
   },
   errorText: {
-    color: 'red',
-    marginBottom: 10,
-    textAlign: 'center',
+    color: Colors.palette.status.error,
+    fontSize: Typography.size.md,
+    fontWeight: Typography.weight.medium,
+    flex: 1,
+    marginLeft: Spacing.xs,
   },
   resendContainer: {
     marginTop: 20,
@@ -248,5 +563,72 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0A5C36',
     fontWeight: 'bold',
+  },
+  // Enhanced UI Styles
+  timerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.light.background.secondary,
+    borderRadius: BorderRadius.full,
+  },
+  timerText: {
+    fontSize: Typography.size.sm,
+    color: Colors.light.text.secondary,
+    marginLeft: Spacing.xs,
+  },
+  timerExpired: {
+    color: Colors.palette.status.error,
+  },
+  inputError: {
+    borderColor: Colors.palette.status.error,
+    borderWidth: 2,
+  },
+  inputDisabled: {
+    backgroundColor: Colors.light.background.secondary,
+    opacity: 0.6,
+  },
+  errorContainer: {
+    backgroundColor: Colors.palette.status.error + '10',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginVertical: Spacing.sm,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: Colors.palette.status.error + '30',
+  },
+  errorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  errorAction: {
+    fontSize: Typography.size.sm,
+    color: Colors.light.text.secondary,
+    marginTop: Spacing.xs,
+    lineHeight: Typography.lineHeight.sm,
+  },
+  successContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: Spacing.sm,
+  },
+  successText: {
+    color: Colors.palette.status.success,
+    fontSize: Typography.size.md,
+    fontWeight: Typography.weight.medium,
+    marginLeft: Spacing.xs,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginLeft: Spacing.sm,
+    fontSize: Typography.size.md,
   },
 }); 

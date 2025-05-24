@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -17,19 +17,34 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext'; // Updated path
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { httpsCallable } from '@react-native-firebase/functions'; // Import from @react-native-firebase/functions
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
 const dynastyLogo = require('../../assets/images/dynasty.png');
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const { functions } = useAuth(); // Get functions instance directly
+  const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Password Reset Error',
+    trackCurrentScreen: true
+  });
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
 
-  const handleSendResetLink = async () => {
+  useEffect(() => {
+    if (!isError) {
+      setError(null);
+    }
+  }, [isError]);
+
+  const handleSendResetLink = withErrorHandling(async () => {
+    reset();
     setError(null);
     setSuccessMessage(null);
     if (!email) {
@@ -58,16 +73,20 @@ export default function ForgotPasswordScreen() {
         setError(result.data.error || 'Failed to send password reset email. Please try again.');
       }
     } catch (e: any) {
-      console.error("Forgot Password failed:", e);
+      handleError(e, { 
+        action: 'sendPasswordReset',
+        metadata: { email: email || 'unknown' }
+      });
       setError(e.message || 'An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  };
+  });
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Stack.Screen options={{ headerShown: false }} />
+    <ErrorBoundary screenName="ForgotPasswordScreen">
+      <SafeAreaView style={styles.safeArea}>
+        <Stack.Screen options={{ headerShown: false }} />
       <StatusBar style={Platform.OS === 'ios' ? 'dark' : 'light'} />
 
       <TouchableOpacity
@@ -116,7 +135,8 @@ export default function ForgotPasswordScreen() {
           </Link>
         </View>
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 }
 

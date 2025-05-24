@@ -1,16 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
 import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import FlashList from '../../components/ui/FlashList';
 
 type VisibilityOption = 'Public' | 'Private' | 'Friends Only';
 const VISIBILITY_OPTIONS: VisibilityOption[] = ['Public', 'Private', 'Friends Only'];
 
-const SelectVisibilityScreen = () => {
+const SelectVisibilityScreenContent = () => {
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ currentVisibility?: VisibilityOption, previousPath?: string }>();
   const [selectedOption, setSelectedOption] = useState<VisibilityOption | undefined>(params.currentVisibility);
+  
+  // Initialize error handler
+  const { handleError, withErrorHandling, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Select Visibility Error',
+    trackCurrentScreen: true
+  });
 
   useEffect(() => {
     if (params.currentVisibility) {
@@ -18,32 +29,65 @@ const SelectVisibilityScreen = () => {
     }
   }, [params.currentVisibility]);
 
+  // Reset error state when component unmounts or navigation changes
   useEffect(() => {
-    navigation.setOptions({
-      title: 'Select Visibility',
-      headerStyle: { backgroundColor: '#F8F8F8' },
-      headerTintColor: '#333333',
-      headerTitleStyle: { fontWeight: '600' },
-      headerBackTitleVisible: false,
-    });
-  }, [navigation]);
+    return () => {
+      reset();
+    };
+  }, [reset]);
 
-  const handleSelectVisibility = (option: VisibilityOption) => {
-    setSelectedOption(option);
-    if (navigation.canGoBack()) {
-      const targetPath = params.previousPath || '..';
-      router.navigate({
-        pathname: targetPath,
-        params: { selectedVisibility: option, fromScreen: 'selectVisibility' },
+  useEffect(() => {
+    const setNavigationOptions = withErrorHandling(async () => {
+      navigation.setOptions({
+        title: 'Select Visibility',
+        headerStyle: { backgroundColor: '#F8F8F8' },
+        headerTintColor: '#333333',
+        headerTitleStyle: { fontWeight: '600' },
+        headerBackTitleVisible: false,
       });
-    } else {
-      console.warn("Cannot go back from SelectVisibilityScreen or previousPath not set");
+    });
+    
+    setNavigationOptions().catch((error) => {
+      handleError(error, {
+        action: 'setNavigationOptions',
+        component: 'SelectVisibilityScreen'
+      });
+    });
+  }, [navigation, withErrorHandling, handleError]);
+
+  const handleSelectVisibility = withErrorHandling(async (option: VisibilityOption) => {
+    try {
+      setSelectedOption(option);
+      
+      if (navigation.canGoBack()) {
+        const targetPath = params.previousPath || '..';
+        router.navigate({
+          pathname: targetPath,
+          params: { selectedVisibility: option, fromScreen: 'selectVisibility' },
+        });
+      } else {
+        const warning = "Cannot go back from SelectVisibilityScreen or previousPath not set";
+        console.warn(warning);
+        handleError(new Error(warning), {
+          action: 'navigation',
+          option,
+          canGoBack: navigation.canGoBack(),
+          previousPath: params.previousPath
+        });
+      }
+    } catch (error) {
+      handleError(error, {
+        action: 'handleSelectVisibility',
+        option,
+        targetPath: params.previousPath || '..'
+      });
+      throw error;
     }
-  };
+  });
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <FlatList
+      <FlashList
         data={VISIBILITY_OPTIONS}
         keyExtractor={(item) => item}
         renderItem={({ item }) => (
@@ -59,6 +103,7 @@ const SelectVisibilityScreen = () => {
         )}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         style={styles.list}
+        estimatedItemSize={60}
       />
     </SafeAreaView>
   );
@@ -91,5 +136,13 @@ const styles = StyleSheet.create({
     marginLeft: 20,
   },
 });
+
+const SelectVisibilityScreen = () => {
+  return (
+    <ErrorBoundary screenName="SelectVisibilityScreen">
+      <SelectVisibilityScreenContent />
+    </ErrorBoundary>
+  );
+};
 
 export default SelectVisibilityScreen; 

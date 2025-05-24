@@ -3,8 +3,13 @@ import { StyleSheet, View, Text, Image, TouchableOpacity, SafeAreaView, Platform
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
-// Assuming the logo is in assets/images. Adjust path if necessary.
-const dynastyLogo = require('@/assets/images/dynasty.png'); 
+// Import design system constants
+import { Colors } from '../constants/Colors';
+import { Typography } from '../constants/Typography';
+import { Spacing, BorderRadius, Shadows } from '../constants/Spacing';
+
+// Image imports
+const dynastyLogo = require('../assets/images/dynasty.png'); 
 
 export default function LandingScreen() {
   const router = useRouter();
@@ -36,50 +41,60 @@ export default function LandingScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF', // White background for the landing page
+    backgroundColor: Colors.light.background.primary,
   },
   container: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: Spacing.lg,
   },
   logo: {
-    width: 200, // Adjust size as needed
-    height: 200, // Adjust size as needed
-    marginBottom: 30,
+    width: 200,
+    height: 200,
+    marginBottom: Spacing['2xl'],
   },
   title: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#0A5C36', // Dynasty Green color (adjust if you have a specific theme color)
-    marginBottom: 8,
+    fontFamily: Typography.styles.heading1.fontFamily,
+    fontSize: Typography.styles.heading1.fontSize,
+    lineHeight: Typography.styles.heading1.lineHeight,
+    fontWeight: Typography.styles.heading1.fontWeight,
+    color: Colors.dynastyGreen,
+    marginBottom: Spacing.xs,
   },
   subtitle: {
-    fontSize: 18,
-    color: '#333333', // Dark gray
-    marginBottom: 20,
+    fontFamily: Typography.styles.bodyLarge.fontFamily,
+    fontSize: Typography.styles.bodyLarge.fontSize,
+    lineHeight: Typography.styles.bodyLarge.lineHeight,
+    fontWeight: Typography.styles.bodyLarge.fontWeight,
+    color: Colors.light.text.secondary,
+    marginBottom: Spacing.lg,
   },
   tagline: {
-    fontSize: 16,
-    color: '#1A4B44', // Dynasty Dark Green for tagline (adjust as needed)
+    fontFamily: Typography.styles.bodyMedium.fontFamily,
+    fontSize: Typography.styles.bodyMedium.fontSize,
+    lineHeight: Typography.styles.bodyMedium.lineHeight,
+    fontWeight: Typography.styles.bodyMedium.fontWeight,
+    color: Colors.dynastyGreen,
     letterSpacing: 0.5,
-    marginBottom: 40,
+    marginBottom: Spacing['3xl'],
   },
   getStartedButton: {
-    backgroundColor: '#1A4B44', // Dynasty Dark Green
-    paddingVertical: 15,
-    paddingHorizontal: 80,
-    borderRadius: 30, // Rounded button
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    backgroundColor: Colors.dynastyGreen,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing['5xl'],
+    borderRadius: BorderRadius['2xl'],
+    shadowColor: Shadows.md.shadowColor,
+    shadowOffset: Shadows.md.shadowOffset,
+    shadowOpacity: Shadows.md.shadowOpacity,
+    shadowRadius: Shadows.md.shadowRadius,
+    elevation: Shadows.md.elevation,
   },
   getStartedButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
+    fontFamily: Typography.styles.button.fontFamily,
+    fontSize: Typography.styles.button.fontSize,
+    lineHeight: Typography.styles.button.lineHeight,
+    fontWeight: Typography.styles.button.fontWeight,
+    color: Colors.light.text.inverse,
   },
 }); 

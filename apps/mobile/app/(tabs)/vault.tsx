@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { StyleSheet, View, Alert, Platform, ActivityIndicator, FlatList } from 'react-native';
+import { StyleSheet, View, Alert, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import FloatingActionMenu, { FabMenuItemAction, FloatingActionMenuRef } from '../../components/ui/FloatingActionMenu';
@@ -9,6 +9,9 @@ import ThemedText from '../../components/ThemedText';
 import IconButton, { IconSet } from '../../components/ui/IconButton';
 import AppHeader from '../../components/ui/AppHeader';
 import FileListItem, { type VaultListItemType as UIVaultItem } from '../../components/ui/FileListItem';
+import FileListItemWithPreview from '../../components/ui/FileListItemWithPreview';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import FlashList from '../../components/ui/FlashList';
 import { Colors } from '../../constants/Colors';
 import Fonts from '../../constants/Fonts';
 import { Spacing, BorderRadius, Shadows } from '../../constants/Spacing';
@@ -26,8 +29,22 @@ import {
   getUploadSignedUrlMobile,
 } from '../../src/lib/firebaseUtils';
 import firebase from '@react-native-firebase/app';
+import { showErrorAlert } from '../../src/lib/errorUtils';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { useSmartMediaUpload, MediaContext } from '../../hooks/useSmartMediaUpload';
+import { useEncryption } from '../../src/contexts/EncryptionContext';
+import { getVaultService, VaultItem as ServiceVaultItem } from '../../src/services/VaultService';
+import VaultSearchBar, { VaultSearchFilters } from '../../components/ui/VaultSearchBar';
+import Checkbox from '../../components/ui/Checkbox';
+import UploadProgressBar from '../../components/ui/UploadProgressBar';
+import Button from '../../components/ui/Button';
 
 // MARK: - Helper Functions
+
+// Constants
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+const MAX_FILE_SIZE_MB = 100;
 
 const getVaultFileType = (mimeType?: string | null, fileName?: string | null) => {
   if (!mimeType && !fileName) return 'other';
@@ -53,13 +70,76 @@ const VaultScreen = () => {
   const [currentPathDisplay, setCurrentPathDisplay] = useState<string>('');
   const [items, setItems] = useState<UIVaultItem[]>([]);
   const [pathHistory, setPathHistory] = useState<{id: string | null; name: string}[]>([{id: null, name: 'Vault'}]);
+  const [searchFilters, setSearchFilters] = useState<VaultSearchFilters>({
+    query: '',
+    fileTypes: [],
+    sortBy: 'name',
+    sortOrder: 'asc'
+  });
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [showUploadProgress, setShowUploadProgress] = useState(false);
+
+  // Initialize our error handler
+  const { handleError, withErrorHandling } = useErrorHandler({
+    title: 'Vault Error',
+  });
 
   const fabMenuRef = useRef<FloatingActionMenuRef>(null);
+  
+  // Smart media upload hook
+  const smartUpload = useSmartMediaUpload();
+  const { isEncryptionReady } = useEncryption();
 
-  const fetchItems = useCallback(async (parentId: string | null) => {
+  const fetchItems = useCallback(async (parentId: string | null, forceRefresh = false) => {
     setIsLoading(true);
     try {
-      const { items: remote } = await getVaultItemsMobile(parentId);
+      const vaultService = getVaultService();
+      await vaultService.initialize();
+      
+      let remote: ServiceVaultItem[];
+      
+      if (isSearching && (searchFilters.query || searchFilters.fileTypes.length > 0)) {
+        // Use search API when searching
+        remote = await vaultService.searchItems({
+          query: searchFilters.query,
+          fileTypes: searchFilters.fileTypes,
+          parentId: parentId,
+          includeDeleted: false,
+          sortBy: searchFilters.sortBy,
+          sortOrder: searchFilters.sortOrder,
+          limit: 100
+        });
+      } else {
+        // Use regular fetch when not searching
+        remote = await vaultService.getItems(parentId, forceRefresh);
+        
+        // Apply client-side sorting when not searching
+        remote.sort((a, b) => {
+          let comparison = 0;
+          
+          switch (searchFilters.sortBy) {
+            case 'name':
+              comparison = a.name.localeCompare(b.name);
+              break;
+            case 'date':
+              const aDate = a.updatedAt || a.createdAt;
+              const bDate = b.updatedAt || b.createdAt;
+              comparison = (aDate?.toMillis?.() || 0) - (bDate?.toMillis?.() || 0);
+              break;
+            case 'size':
+              comparison = (a.size || 0) - (b.size || 0);
+              break;
+            case 'type':
+              comparison = (a.type || '').localeCompare(b.type || '');
+              break;
+          }
+          
+          return searchFilters.sortOrder === 'desc' ? -comparison : comparison;
+        });
+      }
+      
       const uiItems: UIVaultItem[] = remote.map(r => {
         if (r.type === 'file') {
           return {
@@ -70,6 +150,7 @@ const VaultScreen = () => {
             size: r.size ? `${(r.size / (1024 * 1024)).toFixed(2)} MB` : undefined,
             mimeType: r.mimeType,
             uri: r.downloadURL,
+            isEncrypted: r.isEncrypted || false,
           };
         }
         return { id: r.id, name: r.name, type: 'folder' };
@@ -80,11 +161,17 @@ const VaultScreen = () => {
         setCurrentPathDisplay(pathHistory.slice(1).map(p => p.name).join(' / '));
       }
     } catch (error) {
-      console.error("VaultScreen: Error fetching vault items:", error); // Detailed error logging
-      Alert.alert('Error', 'Could not load vault items.');
+      handleError(error, {
+        severity: ErrorSeverity.ERROR,
+        metadata: {
+          action: 'fetchVaultItems',
+          parentId,
+          pathDepth: pathHistory.length
+        }
+      });
     }
     setIsLoading(false);
-  }, [pathHistory]);
+  }, [pathHistory, handleError, isSearching, searchFilters]);
 
   useFocusEffect(
     useCallback(() => {
@@ -92,6 +179,18 @@ const VaultScreen = () => {
       fabMenuRef.current?.close();
     }, [currentPathId, fetchItems])
   );
+  
+  const handleSearch = useCallback(() => {
+    setIsSearching(true);
+    fetchItems(currentPathId, true);
+  }, [currentPathId, fetchItems]);
+  
+  const handleFiltersChange = useCallback((newFilters: VaultSearchFilters) => {
+    setSearchFilters(newFilters);
+    if (!newFilters.query && newFilters.fileTypes.length === 0) {
+      setIsSearching(false);
+    }
+  }, []);
   
   const navigateToFolder = (folder: {id: string; name: string}) => {
     const newHist = [...pathHistory, { id: folder.id, name: folder.name }];
@@ -110,68 +209,80 @@ const VaultScreen = () => {
     }
   };
 
-  const handleAddItemsToVault = async (
+  const handleAddItemsToVault = withErrorHandling(async (
     assets: DocumentPicker.DocumentPickerAsset[] | ImagePicker.ImagePickerAsset[]
   ) => {
-    setIsLoading(true);
     try {
+      const vaultService = getVaultService();
+      await vaultService.initialize();
+      
+      setShowUploadProgress(true);
+      const uploadPromises = [];
+      
       for (const fileResult of assets) {
         const assetName = (fileResult as any).name || (fileResult as any).fileName || `file_${Date.now()}`;
         const assetMimeType = (fileResult as any).mimeType || 'application/octet-stream';
         const assetSize = (fileResult as any).size || 0;
         const assetUri = (fileResult as any).uri;
-
-        // 1. Get Signed URL from Cloud Function
-        const { signedUrl, storagePath } = await getUploadSignedUrlMobile(
+        
+        // Validate file size
+        if (assetSize > MAX_FILE_SIZE) {
+          Alert.alert(
+            'File Too Large',
+            `"${assetName}" exceeds the maximum file size of ${MAX_FILE_SIZE_MB}MB. Please select a smaller file.`,
+            [{ text: 'OK' }]
+          );
+          continue; // Skip this file and continue with others
+        }
+        
+        // Use VaultService for upload
+        const uploadPromise = vaultService.uploadFile(
+          assetUri,
           assetName,
           assetMimeType,
-          currentPathId
+          currentPathId,
+          {
+            encrypt: smartUpload.isEncrypted && isEncryptionReady,
+            onProgress: (progress) => {
+              console.log(`Upload progress for ${assetName}: ${progress}%`);
+            }
+          }
         );
-
-        // 2. Upload the file to the Signed URL
-        const response = await fetch(assetUri);
-        const blob = await response.blob();
-
-        const uploadResponse = await fetch(signedUrl, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': assetMimeType,
-          },
-          body: blob,
-        });
-
-        if (!uploadResponse.ok) {
-          const errorText = await uploadResponse.text();
-          throw new Error(`Failed to upload ${assetName} to storage. Status: ${uploadResponse.status}. Error: ${errorText}`);
-        }
-
-        console.log(`Successfully uploaded ${assetName} to ${storagePath}`);
-
-        // 3. Add file metadata to Firestore via Cloud Function
-        const fileType = getVaultFileType(assetMimeType, assetName);
-        await addVaultFileMobile({
-          name: assetName,
-          parentId: currentPathId,
-          storagePath,
-          fileType,
-          size: assetSize,
-          mimeType: assetMimeType,
-        });
+        
+        uploadPromises.push(uploadPromise);
       }
-
-      Alert.alert('Success', `${assets.length} item(s) added to Vault.`);
-      fetchItems(currentPathId);
-
+      
+      // Wait for all uploads to complete
+      const results = await Promise.allSettled(uploadPromises);
+      const successCount = results.filter(r => r.status === 'fulfilled').length;
+      const failedCount = results.filter(r => r.status === 'rejected').length;
+      
+      if (successCount > 0) {
+        fetchItems(currentPathId, true);
+      }
+      
+      if (failedCount > 0) {
+        Alert.alert(
+          'Upload Complete',
+          `${successCount} file(s) uploaded successfully. ${failedCount} file(s) failed to upload.`
+        );
+      }
+      
     } catch (error: any) {
-      console.error('Error in handleAddItemsToVault:', error);
-      Alert.alert('Upload Error', error.message || 'Could not upload items.');
-    } finally {
-      setIsLoading(false);
+      handleError(error, {
+        severity: ErrorSeverity.ERROR,
+        metadata: {
+          action: 'uploadToVault',
+          assetCount: assets.length,
+          currentFolderId: currentPathId,
+          encrypted: smartUpload.isEncrypted
+        }
+      });
     }
-  };
+  });
 
   // MARK: - FAB Menu Items & Pickers
-  const pickDocuments = async () => {
+  const pickDocuments = withErrorHandling(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: '*/*', multiple: true, copyToCacheDirectory: true,
@@ -183,12 +294,14 @@ const VaultScreen = () => {
         console.log('Document picking cancelled');
       }
     } catch (error) {
-      console.error('Error picking documents:', error);
-      Alert.alert('Error', 'Could not pick documents.');
+      handleError(error, {
+        severity: ErrorSeverity.ERROR,
+        metadata: { action: 'pickDocuments' }
+      });
     }
-  };
+  });
 
-  const pickMedia = async () => {
+  const pickMedia = withErrorHandling(async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images', 'videos'],
@@ -200,10 +313,12 @@ const VaultScreen = () => {
         await handleAddItemsToVault(result.assets);
       }
     } catch (error) {
-      console.error('Error picking media:', error);
-      Alert.alert('Error', 'Could not pick media.');
+      handleError(error, {
+        severity: ErrorSeverity.ERROR,
+        metadata: { action: 'pickMedia' }
+      });
     }
-  };
+  });
 
   // On Android, try to use the Storage Access Framework via DocumentPicker for folder access
   const pickFolder = async () => {
@@ -240,7 +355,7 @@ const VaultScreen = () => {
                     fetchItems(currentPathId);
                   } catch (e) {
                     console.error('Error creating folder:', e);
-                    Alert.alert('Error', 'Could not create folder.');
+                    showErrorAlert(e, 'Folder Creation Error');
                   }
                 }
               }
@@ -250,7 +365,7 @@ const VaultScreen = () => {
       }
     } catch (error) {
       console.error('Error accessing folder:', error);
-      Alert.alert('Error', 'Could not access the selected folder.');
+      showErrorAlert(error, 'Folder Access Error');
     }
   };
 
@@ -303,7 +418,7 @@ const VaultScreen = () => {
     } else { // File
       const file = item as VaultFile;
       if (!file.uri) {
-        Alert.alert('Error', 'File URI is missing.');
+        showErrorAlert({ message: 'File URI is missing.', code: 'not-found' }, 'File Error');
         return;
       }
 
@@ -311,12 +426,17 @@ const VaultScreen = () => {
         // Navigate to a new screen for image/video preview
         router.push({ 
           pathname: '/filePreview',
-          params: { fileUri: file.uri, fileName: file.name, fileType: file.fileType } 
+          params: { 
+            fileUri: file.uri, 
+            fileName: file.name, 
+            fileType: file.fileType,
+            mimeType: file.mimeType 
+          } 
         });
       } else if (file.fileType === 'document' || file.fileType === 'audio' || file.fileType === 'other') {
         try {
           if (!(await Sharing.isAvailableAsync())) {
-            Alert.alert('Sharing Error', 'Sharing is not available on this device.');
+            showErrorAlert({ message: 'Sharing is not available on this device.', code: 'unavailable' }, 'Sharing Error');
             return;
           }
           // For documents, audio, etc., try to share/open with external app
@@ -338,7 +458,7 @@ const VaultScreen = () => {
         } catch (e: any) { // Catch specific error type
           setIsLoading(false);
           console.error('Error sharing file:', e);
-          Alert.alert('Error', `Could not open file: ${e.message}`);
+          showErrorAlert(e, 'File Opening Error');
         }
       }
     }
@@ -359,7 +479,7 @@ const VaultScreen = () => {
               fetchItems(currentPathId);
             } catch (e) {
               console.error('Delete error:', e);
-              Alert.alert('Error', 'Could not delete item.');
+              showErrorAlert(e, 'Delete Error');
             }
           }
         }
@@ -381,7 +501,7 @@ const VaultScreen = () => {
                 fetchItems(currentPathId);
               } catch (e) {
                 console.error('Rename error:', e);
-                Alert.alert('Error', 'Could not rename item.');
+                showErrorAlert(e, 'Rename Error');
               }
             }
         }}
@@ -392,11 +512,82 @@ const VaultScreen = () => {
   };
 
   const handleItemLongPress = (item: UIVaultItem) => {
-    Alert.alert(item.name, undefined, [
-      { text: 'Rename', onPress: () => handleRenameItem(item) },
-      { text: 'Delete', style: 'destructive', onPress: () => handleDeleteItem(item) },
-      { text: 'Cancel', style: 'cancel' }
-    ]);
+    if (!selectionMode) {
+      // Enter selection mode on long press
+      setSelectionMode(true);
+      setSelectedItems(new Set([item.id]));
+    } else {
+      Alert.alert(item.name, undefined, [
+        { text: 'Rename', onPress: () => handleRenameItem(item) },
+        { text: 'Delete', style: 'destructive', onPress: () => handleDeleteItem(item) },
+        { text: 'Cancel', style: 'cancel' }
+      ]);
+    }
+  };
+  
+  const toggleItemSelection = (itemId: string) => {
+    const newSelected = new Set(selectedItems);
+    if (newSelected.has(itemId)) {
+      newSelected.delete(itemId);
+    } else {
+      newSelected.add(itemId);
+    }
+    setSelectedItems(newSelected);
+    
+    // Exit selection mode if no items selected
+    if (newSelected.size === 0) {
+      setSelectionMode(false);
+    }
+  };
+  
+  const handleBulkDelete = withErrorHandling(async () => {
+    if (selectedItems.size === 0) return;
+    
+    Alert.alert(
+      'Delete Items',
+      `Are you sure you want to delete ${selectedItems.size} item(s)?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setIsLoading(true);
+            try {
+              const vaultService = getVaultService();
+              const itemIds = Array.from(selectedItems);
+              const result = await vaultService.bulkDelete(itemIds);
+              
+              if (result.success > 0) {
+                Alert.alert(
+                  'Delete Complete',
+                  `Successfully deleted ${result.success} item(s).${result.failed > 0 ? ` Failed to delete ${result.failed} item(s).` : ''}`
+                );
+              }
+              
+              setSelectedItems(new Set());
+              setSelectionMode(false);
+              fetchItems(currentPathId, true);
+            } catch (error) {
+              handleError(error, {
+                severity: ErrorSeverity.ERROR,
+                metadata: {
+                  action: 'bulkDeleteVaultItems',
+                  itemCount: selectedItems.size
+                }
+              });
+            } finally {
+              setIsLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  });
+  
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedItems(new Set());
   };
   
   const getHeaderLeft = () => {
@@ -430,25 +621,120 @@ const VaultScreen = () => {
   }
 
   const renderItem = ({ item }: { item: UIVaultItem }) => {
+    const isSelected = selectedItems.has(item.id);
+    
     return (
-      <FileListItem
-        item={item}
-        onPress={() => handleItemPress(item)}
-        onMorePress={() => handleItemLongPress(item)}
-      />
+      <View style={styles.itemWrapper}>
+        {selectionMode && (
+          <Checkbox
+            value={isSelected}
+            onValueChange={() => toggleItemSelection(item.id)}
+            style={styles.checkbox}
+          />
+        )}
+        <View style={{ flex: 1 }}>
+          <FileListItemWithPreview
+            item={item}
+            onPress={() => {
+              if (selectionMode) {
+                toggleItemSelection(item.id);
+              } else {
+                handleItemPress(item);
+              }
+            }}
+            onMorePress={() => handleItemLongPress(item)}
+            showPreview={!selectionMode}
+            style={isSelected ? styles.selectedItem : undefined}
+          />
+        </View>
+      </View>
     );
   };
 
   // MARK: - Main Return
   return (
-    <View style={styles.screen}>
+    <ErrorBoundary screenName="VaultScreen">
+      <View style={styles.screen}>
       {/* Vault-specific header shadow wrapper */}
       <View style={styles.vaultHeaderShadowContainer}>
         <AppHeader
-          title={pathHistory.length > 1 ? currentPathDisplay : 'Vault'}
-          headerLeft={pathHistory.length > 1 ? getHeaderLeft : undefined}
+          title={selectionMode ? `${selectedItems.size} selected` : (pathHistory.length > 1 ? currentPathDisplay : 'Vault')}
+          headerLeft={selectionMode ? () => (
+            <IconButton
+              iconSet={IconSet.Ionicons}
+              iconName="close"
+              size={24}
+              color={Colors.light.text.primary}
+              onPress={exitSelectionMode}
+              accessibilityLabel="Exit selection mode"
+            />
+          ) : (pathHistory.length > 1 ? getHeaderLeft : undefined)}
+          headerRight={selectionMode ? () => (
+            <View style={styles.headerActions}>
+              <IconButton
+                iconSet={IconSet.Ionicons}
+                iconName="trash-outline"
+                size={24}
+                color={Colors.light.text.primary}
+                onPress={handleBulkDelete}
+                accessibilityLabel="Delete selected"
+                disabled={selectedItems.size === 0}
+              />
+            </View>
+          ) : () => (
+            <View style={styles.headerActions}>
+              <IconButton
+                iconSet={IconSet.Ionicons}
+                iconName="pie-chart-outline"
+                size={24}
+                color={Colors.light.text.primary}
+                onPress={() => router.push('/vaultStorage')}
+                accessibilityLabel="Storage management"
+              />
+              <IconButton
+                iconSet={IconSet.Ionicons}
+                iconName="shield-checkmark-outline"
+                size={24}
+                color={Colors.light.text.primary}
+                onPress={() => router.push('/vaultAuditLogs')}
+                accessibilityLabel="View audit logs"
+              />
+              <IconButton
+                iconSet={IconSet.Ionicons}
+                iconName="trash-outline"
+                size={24}
+                color={Colors.light.text.primary}
+                onPress={() => router.push('/vaultTrash')}
+                accessibilityLabel="View trash"
+              />
+            </View>
+          )}
         />
       </View>
+      {!selectionMode && (
+        <VaultSearchBar
+          filters={searchFilters}
+          onFiltersChange={handleFiltersChange}
+          onSearch={handleSearch}
+        />
+      )}
+      {selectionMode && (
+        <View style={styles.bulkActionsBar}>
+          <Button
+            variant="text"
+            size="small"
+            onPress={() => {
+              if (selectedItems.size === items.length) {
+                setSelectedItems(new Set());
+              } else {
+                setSelectedItems(new Set(items.map(i => i.id)));
+              }
+            }}
+          >
+            {selectedItems.size === items.length ? 'Deselect All' : 'Select All'}
+          </Button>
+        </View>
+      )}
       <Screen safeArea={false} style={styles.contentScreen}>
         {isLoading ? (
           <View style={styles.loadingContainer}>
@@ -458,19 +744,24 @@ const VaultScreen = () => {
         ) : items.length === 0 ? (
            <View style={styles.emptyStateContainer}>
               <EmptyState 
-                  title={currentPathId === null ? "Vault is Empty" : "Folder is Empty"}
-                  description={currentPathId === null ? "Tap the '+' button to add your first file or folder." : "This folder is currently empty. Add some files!"}
-                  icon="archive-outline"
-                  onAction={currentPathId === null ? undefined : () => fabMenuRef.current?.open()}
-                  actionLabel={currentPathId === null ? undefined : "Add Items"}
+                  title={isSearching ? "No Results Found" : (currentPathId === null ? "Vault is Empty" : "Folder is Empty")}
+                  description={isSearching ? "Try adjusting your search or filters." : (currentPathId === null ? "Tap the '+' button to add your first file or folder." : "This folder is currently empty. Add some files!")}
+                  icon={isSearching ? "search-outline" : "archive-outline"}
+                  onAction={isSearching ? () => {
+                    setSearchFilters({ query: '', fileTypes: [], sortBy: 'name', sortOrder: 'asc' });
+                    setIsSearching(false);
+                    fetchItems(currentPathId);
+                  } : (currentPathId === null ? undefined : () => fabMenuRef.current?.open())}
+                  actionLabel={isSearching ? "Clear Search" : (currentPathId === null ? undefined : "Add Items")}
               />
           </View>
         ) : (
-          <FlatList
+          <FlashList
             data={items}
             renderItem={renderItem}
             keyExtractor={(item: UIVaultItem) => item.id}
             contentContainerStyle={styles.listContentContainer}
+            estimatedItemSize={80}
           />
         )}
         <FloatingActionMenu
@@ -478,7 +769,13 @@ const VaultScreen = () => {
           menuItems={vaultMenuItems}
         />
       </Screen>
-    </View>
+      {showUploadProgress && (
+        <UploadProgressBar 
+          onDismiss={() => setShowUploadProgress(false)}
+        />
+      )}
+      </View>
+    </ErrorBoundary>
   );
 };
 
@@ -520,6 +817,31 @@ const styles = StyleSheet.create({
   listContentContainer: {
     flexGrow: 1,
     paddingBottom: Spacing.lg + 80,
+  },
+  itemWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkbox: {
+    marginLeft: Spacing.md,
+    marginRight: Spacing.xs,
+  },
+  selectedItem: {
+    backgroundColor: Colors.light.background.secondary,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  bulkActionsBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    backgroundColor: Colors.light.background.secondary,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
   },
 });
 

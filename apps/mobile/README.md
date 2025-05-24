@@ -1,8 +1,17 @@
-# Welcome to your Expo app 👋
+# Dynasty Mobile App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+This is a React Native application built with Expo, designed for families to connect, share stories, organize events, and preserve their family history.
 
-## Get started
+## Key Features
+
+- **Authentication**: Multi-method authentication with email/password, Google Sign-In, and phone verification
+- **Feed**: Timeline of family stories and events
+- **Family History**: Record and preserve family stories
+- **Family Tree**: Visual representation of family relationships
+- **Events**: Calendar view and management of family events
+- **Media Vault**: Secure storage for family photos, videos, and documents
+
+## Getting Started
 
 1. Install dependencies
 
@@ -25,15 +34,51 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
-## Get a fresh project
+## Project Structure
 
-When you're ready, run:
+- **Root Directory**: `/Users/ruchitpatel/Documents/DynastyMobile/`
+- **Mobile App**: `/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile`
+- **Web App**: `/Users/ruchitpatel/Documents/DynastyMobile/apps/web`
+- **Firebase Functions**: `/Users/ruchitpatel/Documents/DynastyMobile/apps/firebase/functions/src`
 
-```bash
-npm run reset-project
+## Documentation
+
+- [Error Handling System](./docs/ERROR_HANDLING.md): Comprehensive guide to the app's error handling
+
+## Features
+
+### Error Handling System
+
+The app includes a comprehensive error handling system with the following components:
+
+- **ErrorHandlingService**: Core service for processing errors
+- **ErrorBoundary**: React component for catching rendering errors
+- **useErrorHandler**: Hook for handling errors in functional components
+- **Integration with Crashlytics**: Automatic error reporting
+
+To use the error handling system in a component:
+
+```typescript
+import useErrorHandler from '../../hooks/useErrorHandler';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+
+function MyComponent() {
+  const { handleError, withErrorHandling } = useErrorHandler();
+  
+  // Wrap an async function with error handling
+  const fetchData = withErrorHandling(async () => {
+    // Your code here
+  });
+  
+  return (
+    <ErrorBoundary screenName="MyComponent">
+      {/* Component content */}
+    </ErrorBoundary>
+  );
+}
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+For more details, see the [Error Handling documentation](./docs/ERROR_HANDLING.md).
 
 ## Learn more
 

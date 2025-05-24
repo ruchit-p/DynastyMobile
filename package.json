@@ -27,8 +27,10 @@
     "cliui": "^7.0.4"
   },
   "dependencies": {
+    "@craftzdog/react-native-buffer": "^6.0.5",
     "@react-native-community/datetimepicker": "^8.3.0",
     "@react-native-picker/picker": "^2.11.0",
+    "@signalapp/libsignal-client": "^0.72.1",
     "expo": "~53.0.8",
     "expo-document-picker": "^13.1.5",
     "expo-file-system": "^18.1.10",
@@ -36,7 +38,9 @@
     "expo-sharing": "~13.1.5",
     "react": "19.0.0",
     "react-native": "0.79.2",
+    "react-native-get-random-values": "^1.11.0",
     "react-native-google-places-autocomplete": "^2.5.7",
+    "react-native-keychain": "^10.0.0",
     "react-native-relatives-tree": "^0.1.1",
     "react-native-svg": "^15.11.2"
   },

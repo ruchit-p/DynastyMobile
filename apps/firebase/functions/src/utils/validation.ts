@@ -4,6 +4,17 @@ export const isValidEmail = (email: string): boolean => {
   return emailRegex.test(email);
 };
 
+// Validate required fields in an object
+export const validateRequiredFields = (data: any, requiredFields: string[]): void => {
+  const missingFields = requiredFields.filter((field) =>
+    data[field] === undefined || data[field] === null || data[field] === ""
+  );
+
+  if (missingFields.length > 0) {
+    throw new Error(`Missing required fields: ${missingFields.join(", ")}`);
+  }
+};
+
 // Password validation
 export const isValidPassword = (password: string): { isValid: boolean; message: string } => {
   if (password.length < 8) {
@@ -84,11 +95,14 @@ export const ERROR_MESSAGES = {
 export interface SignupData {
   email: string;
   password: string;
+  displayName?: string;
   firstName?: string;
   lastName?: string;
-  phone?: string;
+  phoneNumber?: string;
   dateOfBirth?: Date;
   gender?: "male" | "female" | "other" | "unspecified";
+  invitationId?: string;
+  familyTreeId?: string;
 }
 
 export function validateSignupData(data: any): { isValid: boolean; errors: { field: string; message: string }[] } {

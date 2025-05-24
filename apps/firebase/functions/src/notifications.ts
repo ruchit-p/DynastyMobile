@@ -1,11 +1,11 @@
 // MARK: - Notifications Firebase Functions
 
 import {onCall} from "firebase-functions/v2/https";
-import {logger} from "firebase-functions";
+import {logger} from "firebase-functions/v2";
 import {getFirestore, FieldValue} from "firebase-admin/firestore";
 import {getMessaging} from "firebase-admin/messaging";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
-import * as functions from "firebase-functions";
+import {createError, withErrorHandling, ErrorCode} from "./utils/errors";
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import {onSchedule} from "firebase-functions/v2/scheduler";
 
@@ -193,98 +193,68 @@ const createAndSendNotification = async (
 export const registerDeviceToken = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-}, async (request) => {
+}, withErrorHandling(async (request) => {
   const {auth, data} = request;
 
-  // Check if the user is authenticated
   if (!auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "You must be logged in to register a device token"
-    );
+    throw createError(ErrorCode.UNAUTHENTICATED, "You must be logged in to register a device token");
   }
 
-  try {
-    const {token, platform, deleteDuplicates} = data;
+  const {token, platform, deleteDuplicates} = data;
 
-    if (!token) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "Device token is required"
-      );
-    }
+  if (!token) {
+    throw createError(ErrorCode.INVALID_ARGUMENT, "Device token is required");
+  }
 
-    // Check if token already exists
-    const tokenSnapshot = await db.collection("userDevices")
-      .where("token", "==", token)
-      .limit(1)
-      .get();
+  const tokenSnapshot = await db.collection("userDevices")
+    .where("token", "==", token)
+    .limit(1)
+    .get();
 
-    // If token exists, just update the lastActive field
-    if (!tokenSnapshot.empty) {
-      await tokenSnapshot.docs[0].ref.update({
-        lastActive: FieldValue.serverTimestamp(),
-        // Update userId in case token was reassigned to a different user
-        userId: auth.uid,
-        // Update platform in case it changed
-        platform: platform || "web",
-      });
-
-      logger.info(`Updated existing device token for user ${auth.uid}`);
-
-      // If deleteDuplicates is true, remove other tokens for this user (except this one)
-      if (deleteDuplicates) {
-        const duplicatesSnapshot = await db.collection("userDevices")
-          .where("userId", "==", auth.uid)
-          .where("token", "!=", token)
-          .get();
-
-        if (!duplicatesSnapshot.empty) {
-          const deletePromises = duplicatesSnapshot.docs.map((doc) => doc.ref.delete());
-          await Promise.all(deletePromises);
-          logger.info(`Deleted ${duplicatesSnapshot.size} duplicate tokens for user ${auth.uid}`);
-        }
-      }
-
-      return {success: true, message: "Device token updated"};
-    }
-
-    // Otherwise, create a new device token document
-    const deviceRef = db.collection("userDevices").doc();
-    await deviceRef.set({
-      id: deviceRef.id,
-      userId: auth.uid,
-      token,
-      platform: platform || "web",
-      createdAt: FieldValue.serverTimestamp(),
+  if (!tokenSnapshot.empty) {
+    await tokenSnapshot.docs[0].ref.update({
       lastActive: FieldValue.serverTimestamp(),
+      userId: auth.uid,
+      platform: platform || "web",
     });
-
-    logger.info(`Registered new device token for user ${auth.uid}`);
-
-    // If deleteDuplicates is true, remove other tokens for this user
+    logger.info(`Updated existing device token for user ${auth.uid}`);
     if (deleteDuplicates) {
       const duplicatesSnapshot = await db.collection("userDevices")
         .where("userId", "==", auth.uid)
         .where("token", "!=", token)
         .get();
-
       if (!duplicatesSnapshot.empty) {
         const deletePromises = duplicatesSnapshot.docs.map((doc) => doc.ref.delete());
         await Promise.all(deletePromises);
         logger.info(`Deleted ${duplicatesSnapshot.size} duplicate tokens for user ${auth.uid}`);
       }
     }
-
-    return {success: true, message: "Device token registered"};
-  } catch (error) {
-    logger.error("Error registering device token:", error);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Error registering device token"
-    );
+    return {success: true, message: "Device token updated"};
   }
-});
+
+  const deviceRef = db.collection("userDevices").doc();
+  await deviceRef.set({
+    id: deviceRef.id,
+    userId: auth.uid,
+    token,
+    platform: platform || "web",
+    createdAt: FieldValue.serverTimestamp(),
+    lastActive: FieldValue.serverTimestamp(),
+  });
+  logger.info(`Registered new device token for user ${auth.uid}`);
+  if (deleteDuplicates) {
+    const duplicatesSnapshot = await db.collection("userDevices")
+      .where("userId", "==", auth.uid)
+      .where("token", "!=", token)
+      .get();
+    if (!duplicatesSnapshot.empty) {
+      const deletePromises = duplicatesSnapshot.docs.map((doc) => doc.ref.delete());
+      await Promise.all(deletePromises);
+      logger.info(`Deleted ${duplicatesSnapshot.size} duplicate tokens for user ${auth.uid}`);
+    }
+  }
+  return {success: true, message: "Device token registered"};
+}, "registerDeviceToken"));
 
 /**
  * Send a notification to a specific user
@@ -292,56 +262,35 @@ export const registerDeviceToken = onCall({
 export const sendNotification = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-}, async (request) => {
+}, withErrorHandling(async (request) => {
   const {auth, data} = request;
 
-  // Check if the user is authenticated
   if (!auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "You must be logged in to send a notification"
-    );
+    throw createError(ErrorCode.UNAUTHENTICATED, "You must be logged in to send a notification");
   }
 
-  try {
-    // Validate input data
-    const {userId, title, body, type, relatedItemId, link, imageUrl} = data;
-
-    if (!userId || !title || !body || !type) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "userId, title, body, and type are required"
-      );
-    }
-
-    // Create notification object
-    const notification: NotificationData = {
-      userId,
-      title,
-      body,
-      type,
-      isRead: false,
-      relatedItemId,
-      link,
-      imageUrl,
-    };
-
-    // Create and send notification
-    const notificationId = await createAndSendNotification(notification);
-
-    return {
-      success: true,
-      notificationId,
-    };
-  } catch (error) {
-    logger.error("Error sending notification:", error);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Failed to send notification",
-      error instanceof Error ? {message: error.message} : undefined
-    );
+  const {userId, title, body, type, relatedItemId, link, imageUrl} = data;
+  if (!userId || !title || !body || !type) {
+    throw createError(ErrorCode.INVALID_ARGUMENT, "userId, title, body, and type are required");
   }
-});
+
+  const notification: NotificationData = {
+    userId,
+    title,
+    body,
+    type,
+    isRead: false,
+    relatedItemId,
+    link,
+    imageUrl,
+  };
+
+  const notificationId = await createAndSendNotification(notification);
+  return {
+    success: true,
+    notificationId,
+  };
+}, "sendNotification"));
 
 /**
  * Mark a notification as read
@@ -349,64 +298,35 @@ export const sendNotification = onCall({
 export const markNotificationRead = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-}, async (request) => {
+}, withErrorHandling(async (request) => {
   const {auth, data} = request;
 
-  // Check if the user is authenticated
   if (!auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "You must be logged in to update notifications"
-    );
+    throw createError(ErrorCode.UNAUTHENTICATED, "You must be logged in to update notifications");
   }
 
-  try {
-    const {notificationId} = data;
-
-    if (!notificationId) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "Notification ID is required"
-      );
-    }
-
-    // Get the notification document
-    const notificationRef = db.collection("notifications").doc(notificationId);
-    const notificationDoc = await notificationRef.get();
-
-    if (!notificationDoc.exists) {
-      throw new functions.https.HttpsError(
-        "not-found",
-        "Notification not found"
-      );
-    }
-
-    const notificationData = notificationDoc.data();
-
-    // Check if user owns this notification
-    if (notificationData?.userId !== auth.uid) {
-      throw new functions.https.HttpsError(
-        "permission-denied",
-        "You don't have permission to update this notification"
-      );
-    }
-
-    // Update notification read status
-    await notificationRef.update({
-      isRead: true,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-
-    return {success: true, message: "Notification marked as read"};
-  } catch (error) {
-    logger.error("Error marking notification as read:", error);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Failed to mark notification as read",
-      error instanceof Error ? {message: error.message} : undefined
-    );
+  const {notificationId} = data;
+  if (!notificationId) {
+    throw createError(ErrorCode.INVALID_ARGUMENT, "Notification ID is required");
   }
-});
+
+  const notificationRef = db.collection("notifications").doc(notificationId);
+  const notificationDoc = await notificationRef.get();
+  if (!notificationDoc.exists) {
+    throw createError(ErrorCode.NOT_FOUND, "Notification not found");
+  }
+
+  const notificationData = notificationDoc.data();
+  if (notificationData?.userId !== auth.uid) {
+    throw createError(ErrorCode.PERMISSION_DENIED, "You don't have permission to update this notification");
+  }
+
+  await notificationRef.update({
+    isRead: true,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return {success: true, message: "Notification marked as read"};
+}, "markNotificationRead"));
 
 /**
  * Mark all notifications as read for a user
@@ -414,52 +334,34 @@ export const markNotificationRead = onCall({
 export const markAllNotificationsRead = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
-}, async (request) => {
+}, withErrorHandling(async (request) => {
   const {auth} = request;
 
-  // Check if the user is authenticated
   if (!auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "You must be logged in to update notifications"
-    );
+    throw createError(ErrorCode.UNAUTHENTICATED, "You must be logged in to update notifications");
   }
 
-  try {
-    // Get all unread notifications for this user
-    const notificationsSnapshot = await db.collection("notifications")
-      .where("userId", "==", auth.uid)
-      .where("isRead", "==", false)
-      .get();
+  const notificationsSnapshot = await db.collection("notifications")
+    .where("userId", "==", auth.uid)
+    .where("isRead", "==", false)
+    .get();
+  if (notificationsSnapshot.empty) {
+    return {success: true, message: "No unread notifications found"};
+  }
 
-    if (notificationsSnapshot.empty) {
-      return {success: true, message: "No unread notifications found"};
-    }
-
-    // Update all notifications in a batch
-    const batch = db.batch();
-    notificationsSnapshot.docs.forEach((doc) => {
-      batch.update(doc.ref, {
-        isRead: true,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
+  const batch = db.batch();
+  notificationsSnapshot.docs.forEach((doc) => {
+    batch.update(doc.ref, {
+      isRead: true,
+      updatedAt: FieldValue.serverTimestamp(),
     });
-
-    await batch.commit();
-
-    return {
-      success: true,
-      message: `Marked ${notificationsSnapshot.size} notifications as read`,
-    };
-  } catch (error) {
-    logger.error("Error marking all notifications as read:", error);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Failed to mark all notifications as read",
-      error instanceof Error ? {message: error.message} : undefined
-    );
-  }
-});
+  });
+  await batch.commit();
+  return {
+    success: true,
+    message: `Marked ${notificationsSnapshot.size} notifications as read`,
+  };
+}, "markAllNotificationsRead"));
 
 /**
  * Get notifications for a user
@@ -467,69 +369,42 @@ export const markAllNotificationsRead = onCall({
 export const getUserNotifications = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-}, async (request) => {
+}, withErrorHandling(async (request) => {
   const {auth, data} = request;
 
-  // Check if the user is authenticated
   if (!auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "You must be logged in to get notifications"
-    );
+    throw createError(ErrorCode.UNAUTHENTICATED, "You must be logged in to get notifications");
   }
 
-  try {
-    const {limit = 20, offset = 0, includeRead = true} = data || {};
-
-    // Create query for user's notifications
-    let query = db.collection("notifications")
-      .where("userId", "==", auth.uid)
-      .orderBy("createdAt", "desc");
-
-    // Filter by read status if needed
-    if (!includeRead) {
-      query = query.where("isRead", "==", false);
-    }
-
-    // Apply pagination
-    query = query.limit(limit).offset(offset);
-
-    const notificationsSnapshot = await query.get();
-
-    // Get total count of unread notifications for the badge count
-    const unreadCountSnapshot = await db.collection("notifications")
-      .where("userId", "==", auth.uid)
-      .where("isRead", "==", false)
-      .count()
-      .get();
-
-    const unreadCount = unreadCountSnapshot.data().count;
-
-    // Format notifications
-    const notifications = notificationsSnapshot.docs.map((doc) => {
-      const data = doc.data();
-      // Convert timestamps to ISO strings for serialization
-      return {
-        ...data,
-        createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : null,
-        updatedAt: data.updatedAt ? data.updatedAt.toDate().toISOString() : null,
-      };
-    });
-
+  const {limit = 20, offset = 0, includeRead = true} = data || {};
+  let query = db.collection("notifications")
+    .where("userId", "==", auth.uid)
+    .orderBy("createdAt", "desc");
+  if (!includeRead) {
+    query = query.where("isRead", "==", false);
+  }
+  query = query.limit(limit).offset(offset);
+  const notificationsSnapshot = await query.get();
+  const unreadCountSnapshot = await db.collection("notifications")
+    .where("userId", "==", auth.uid)
+    .where("isRead", "==", false)
+    .count()
+    .get();
+  const unreadCount = unreadCountSnapshot.data().count;
+  const notifications = notificationsSnapshot.docs.map((doc) => {
+    const docData = doc.data();
     return {
-      success: true,
-      notifications,
-      unreadCount,
+      ...docData,
+      createdAt: docData.createdAt ? docData.createdAt.toDate().toISOString() : null,
+      updatedAt: docData.updatedAt ? docData.updatedAt.toDate().toISOString() : null,
     };
-  } catch (error) {
-    logger.error("Error getting user notifications:", error);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Failed to get notifications",
-      error instanceof Error ? {message: error.message} : undefined
-    );
-  }
-});
+  });
+  return {
+    success: true,
+    notifications,
+    unreadCount,
+  };
+}, "getUserNotifications"));
 
 /**
  * Delete a notification
@@ -537,61 +412,32 @@ export const getUserNotifications = onCall({
 export const deleteNotification = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-}, async (request) => {
+}, withErrorHandling(async (request) => {
   const {auth, data} = request;
 
-  // Check if the user is authenticated
   if (!auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "You must be logged in to delete notifications"
-    );
+    throw createError(ErrorCode.UNAUTHENTICATED, "You must be logged in to delete notifications");
   }
 
-  try {
-    const {notificationId} = data;
-
-    if (!notificationId) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "Notification ID is required"
-      );
-    }
-
-    // Get the notification document
-    const notificationRef = db.collection("notifications").doc(notificationId);
-    const notificationDoc = await notificationRef.get();
-
-    if (!notificationDoc.exists) {
-      throw new functions.https.HttpsError(
-        "not-found",
-        "Notification not found"
-      );
-    }
-
-    const notificationData = notificationDoc.data();
-
-    // Check if user owns this notification
-    if (notificationData?.userId !== auth.uid) {
-      throw new functions.https.HttpsError(
-        "permission-denied",
-        "You don't have permission to delete this notification"
-      );
-    }
-
-    // Delete the notification
-    await notificationRef.delete();
-
-    return {success: true, message: "Notification deleted"};
-  } catch (error) {
-    logger.error("Error deleting notification:", error);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Failed to delete notification",
-      error instanceof Error ? {message: error.message} : undefined
-    );
+  const {notificationId} = data;
+  if (!notificationId) {
+    throw createError(ErrorCode.INVALID_ARGUMENT, "Notification ID is required");
   }
-});
+
+  const notificationRef = db.collection("notifications").doc(notificationId);
+  const notificationDoc = await notificationRef.get();
+  if (!notificationDoc.exists) {
+    throw createError(ErrorCode.NOT_FOUND, "Notification not found");
+  }
+
+  const notificationData = notificationDoc.data();
+  if (notificationData?.userId !== auth.uid) {
+    throw createError(ErrorCode.PERMISSION_DENIED, "You don't have permission to delete this notification");
+  }
+
+  await notificationRef.delete();
+  return {success: true, message: "Notification deleted"};
+}, "deleteNotification"));
 
 /**
  * Send a test notification
@@ -599,45 +445,29 @@ export const deleteNotification = onCall({
 export const sendTestNotification = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-}, async (request) => {
+}, withErrorHandling(async (request) => {
   const {auth} = request;
 
-  // Check if the user is authenticated
   if (!auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "You must be logged in to test notifications"
-    );
+    throw createError(ErrorCode.UNAUTHENTICATED, "You must be logged in to test notifications");
   }
 
-  try {
-    // Create test notification
-    const notification: NotificationData = {
-      userId: auth.uid,
-      title: "Test Notification",
-      body: "This is a test notification. If you can see this, push notifications are working!",
-      type: "system:announcement",
-      isRead: false,
-      link: "/notifications",
-    };
+  const notification: NotificationData = {
+    userId: auth.uid,
+    title: "Test Notification",
+    body: "This is a test notification. If you can see this, push notifications are working!",
+    type: "system:announcement",
+    isRead: false,
+    link: "/notifications",
+  };
 
-    // Send notification
-    const notificationId = await createAndSendNotification(notification);
-
-    return {
-      success: true,
-      message: "Test notification sent",
-      notificationId,
-    };
-  } catch (error) {
-    logger.error("Error sending test notification:", error);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Failed to send test notification",
-      error instanceof Error ? {message: error.message} : undefined
-    );
-  }
-});
+  const notificationId = await createAndSendNotification(notification);
+  return {
+    success: true,
+    message: "Test notification sent",
+    notificationId,
+  };
+}, "sendTestNotification"));
 
 /**
  * Cleanup duplicate device tokens - keeps only the most recent token per user
@@ -646,86 +476,47 @@ export const sendTestNotification = onCall({
 export const cleanupDuplicateTokens = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
-}, async (request) => {
+}, withErrorHandling(async (request) => {
   const {auth} = request;
 
-  // Check if the user is authenticated and is an admin
   if (!auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "You must be logged in to run this function"
-    );
+    throw createError(ErrorCode.UNAUTHENTICATED, "You must be logged in to run this function");
   }
 
-  // Optionally check if user is admin (uncomment if needed)
-  // const user = await admin.auth().getUser(auth.uid);
-  // if (!user.customClaims || !user.customClaims.admin) {
-  //   throw new functions.https.HttpsError(
-  //     "permission-denied",
-  //     "Only admins can run this function"
-  //   );
-  // }
-
-  try {
-    logger.info("Starting duplicate token cleanup");
-
-    // Get all users with device tokens
-    const usersWithDevices = await db.collection("userDevices")
-      .select("userId")
-      .get();
-
-    // Extract unique user IDs
-    const userIds = new Set<string>();
-    usersWithDevices.docs.forEach((doc) => {
-      const data = doc.data();
-      if (data.userId) {
-        userIds.add(data.userId);
-      }
-    });
-
-    logger.info(`Found ${userIds.size} users with registered devices`);
-
-    let tokensDeleted = 0;
-    let usersProcessed = 0;
-
-    // Process each user
-    for (const userId of userIds) {
-      // Get all devices for this user, ordered by last active timestamp
-      const userDevices = await db.collection("userDevices")
-        .where("userId", "==", userId)
-        .orderBy("lastActive", "desc")
-        .get();
-
-      // If user has multiple devices, keep only the most recent one
-      if (userDevices.size > 1) {
-        // Skip the first device (the most recently active one)
-        const devicesToDelete = userDevices.docs.slice(1);
-
-        // Delete all other devices
-        const deletePromises = devicesToDelete.map((doc) => doc.ref.delete());
-        await Promise.all(deletePromises);
-
-        tokensDeleted += devicesToDelete.length;
-        logger.info(`Deleted ${devicesToDelete.length} duplicate tokens for user ${userId}`);
-      }
-
-      usersProcessed++;
+  logger.info("Starting duplicate token cleanup");
+  const usersWithDevices = await db.collection("userDevices")
+    .select("userId")
+    .get();
+  const userIds = new Set<string>();
+  usersWithDevices.docs.forEach((doc) => {
+    const deviceData = doc.data();
+    if (deviceData.userId) {
+      userIds.add(deviceData.userId);
     }
-
-    logger.info(`Duplicate token cleanup complete. Processed ${usersProcessed} users and deleted ${tokensDeleted} duplicate tokens.`);
-
-    return {
-      success: true,
-      message: `Cleanup complete. Deleted ${tokensDeleted} duplicate tokens across ${usersProcessed} users.`,
-    };
-  } catch (error) {
-    logger.error("Error cleaning up duplicate tokens:", error);
-    throw new functions.https.HttpsError(
-      "internal",
-      "Error cleaning up duplicate tokens"
-    );
+  });
+  logger.info(`Found ${userIds.size} users with registered devices`);
+  let tokensDeleted = 0;
+  let usersProcessed = 0;
+  for (const userId of userIds) {
+    const userDevices = await db.collection("userDevices")
+      .where("userId", "==", userId)
+      .orderBy("lastActive", "desc")
+      .get();
+    if (userDevices.size > 1) {
+      const devicesToDelete = userDevices.docs.slice(1);
+      const deletePromises = devicesToDelete.map((doc) => doc.ref.delete());
+      await Promise.all(deletePromises);
+      tokensDeleted += devicesToDelete.length;
+      logger.info(`Deleted ${devicesToDelete.length} duplicate tokens for user ${userId}`);
+    }
+    usersProcessed++;
   }
-});
+  logger.info(`Duplicate token cleanup complete. Processed ${usersProcessed} users and deleted ${tokensDeleted} duplicate tokens.`);
+  return {
+    success: true,
+    message: `Cleanup complete. Deleted ${tokensDeleted} duplicate tokens across ${usersProcessed} users.`,
+  };
+}, "cleanupDuplicateTokens"));
 
 /**
  * Scheduled function to validate FCM tokens and remove invalid ones

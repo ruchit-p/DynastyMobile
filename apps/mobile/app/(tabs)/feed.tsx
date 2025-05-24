@@ -1,10 +1,13 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Alert, View, StyleSheet, Share, TouchableOpacity, Image, Text, ScrollView, RefreshControl } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { fetchAccessibleStoriesMobile } from '../../src/lib/storyUtils';
 import { getFirebaseDb, getFirebaseAuth } from '../../src/lib/firebase';
-import { Timestamp } from 'firebase/firestore';
+import { toDate } from '../../src/lib/dateUtils';
+import { useOffline } from '../../src/contexts/OfflineContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { FeedCacheService } from '../../src/services/FeedCacheService';
 
 // Import design system components
 import Screen from '../../components/ui/Screen';
@@ -15,7 +18,15 @@ import AnimatedActionSheet from '../../components/ui/AnimatedActionSheet';
 import { Ionicons } from '@expo/vector-icons';
 
 // Import design tokens
-import { Spacing } from '../../constants/Spacing';
+import { Spacing, BorderRadius, Shadows } from '../../constants/Spacing';
+import { Colors } from '../../constants/Colors';
+import Typography from '../../constants/Typography';
+import { showErrorAlert } from '../../src/lib/errorUtils';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { OfflineIndicator } from '../../components/ui/OfflineIndicator';
+import { SyncStatus } from '../../components/ui/SyncStatus';
 
 import type { Story as StoryType } from '../../src/lib/storyUtils';
 
@@ -44,12 +55,15 @@ const FeedScreen = () => {
   const { user, firestoreUser } = useAuth();
   const db = getFirebaseDb();
   const auth = getFirebaseAuth();
+  const { isOnline, forceSync } = useOffline();
+  const feedCache = FeedCacheService.getInstance();
   
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [isLoadingFeed, setIsLoadingFeed] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [actionSheetVisible, setActionSheetVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<FeedItem | null>(null);
+  const [isLoadingFromCache, setIsLoadingFromCache] = useState<boolean>(false);
   
   const feedMenuItems: FabMenuItemAction[] = [
     {
@@ -68,33 +82,68 @@ const FeedScreen = () => {
     },
   ];
   
-  const fetchFeedData = useCallback(async () => {
+  // Initialize our error handling hook
+  const { handleError, withErrorHandling } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Feed Error',
+    trackCurrentScreen: true
+  });
+
+  // Load cached data on mount
+  useEffect(() => {
+    const loadCachedData = async () => {
+      if (!user?.uid) return;
+      
+      setIsLoadingFromCache(true);
+      try {
+        // Try to load from cache first
+        const cachedData = await feedCache.getCachedFeed(user.uid, {});
+        if (cachedData && cachedData.length > 0) {
+          console.log('FeedScreen: Loaded cached data:', cachedData.length, 'items');
+          setFeedItems(cachedData as FeedItem[]);
+          setIsLoadingFeed(false);
+        }
+      } catch (error) {
+        console.error('FeedScreen: Error loading cached data:', error);
+      } finally {
+        setIsLoadingFromCache(false);
+      }
+    };
+
+    loadCachedData();
+  }, [user?.uid]);
+
+  const fetchFeedData = useCallback(async (isRefresh = false) => {
     if (!user?.uid || !firestoreUser?.familyTreeId) {
       setFeedItems([]);
       setIsLoadingFeed(false);
       setIsRefreshing(false);
       return;
     }
-    setIsLoadingFeed(true);
+    
+    // Don't show loading spinner if we already have cached data
+    if (!isRefresh && feedItems.length === 0) {
+      setIsLoadingFeed(true);
+    }
 
     try {
+      // Check if online, if not, use cached data
+      if (!isOnline && !isRefresh) {
+        console.log('FeedScreen: Offline, using cached data');
+        const cachedData = await feedCache.getCachedFeed(user.uid, {});
+        if (cachedData) {
+          setFeedItems(cachedData as FeedItem[]);
+        }
+        return;
+      }
+
       const stories = await fetchAccessibleStoriesMobile(user.uid, firestoreUser.familyTreeId);
       const mappedStories: FeedStory[] = stories.map(story => {
         let storyCreationDateForSorting: Date;
         const createdAt = story.createdAt; // Cache for clarity
 
-        if (createdAt instanceof Timestamp) {
-            storyCreationDateForSorting = createdAt.toDate();
-        } else if (createdAt && typeof createdAt === 'object' && 'seconds' in createdAt && 'nanoseconds' in createdAt) {
-            storyCreationDateForSorting = new Timestamp(createdAt.seconds, createdAt.nanoseconds).toDate();
-        } else {
-            const parsedDate = new Date(createdAt as any);
-            if (isNaN(parsedDate.getTime())) {
-                storyCreationDateForSorting = new Date(0); // Default to epoch for invalid/missing createdAt
-            } else {
-                storyCreationDateForSorting = parsedDate;
-            }
-        }
+        const dateResult = toDate(createdAt);
+        storyCreationDateForSorting = dateResult || new Date(0); // Default to epoch for invalid/missing createdAt
         return {
           ...story,
           type: 'story',
@@ -107,12 +156,8 @@ const FeedScreen = () => {
         const data = doc.data();
         let startDate = new Date();
         if (data.eventDate) {
-          const rawStartDate = data.eventDate instanceof Timestamp 
-            ? data.eventDate.toDate() 
-            : (data.eventDate && typeof data.eventDate === 'object' && 'seconds' in data.eventDate && 'nanoseconds' in data.eventDate)
-                ? new Timestamp(data.eventDate.seconds, data.eventDate.nanoseconds).toDate()
-                : new Date(data.eventDate);
-          startDate = rawStartDate;
+          const dateResult = toDate(data.eventDate);
+          startDate = dateResult || new Date();
           if (data.startTime) {
             const [hours, minutes] = data.startTime.split(':').map(Number);
             startDate.setHours(hours, minutes, 0, 0);
@@ -121,12 +166,8 @@ const FeedScreen = () => {
         
         let endDate = new Date(startDate);
         if (data.endDate) {
-            const rawEndDate = data.endDate instanceof Timestamp 
-                ? data.endDate.toDate() 
-                : (data.endDate && typeof data.endDate === 'object' && 'seconds' in data.endDate && 'nanoseconds' in data.endDate)
-                    ? new Timestamp(data.endDate.seconds, data.endDate.nanoseconds).toDate()
-                    : new Date(data.endDate);
-            endDate = rawEndDate;
+            const endDateResult = toDate(data.endDate);
+            endDate = endDateResult || new Date(startDate);
             if (data.endTime) {
                 const [endHours, endMinutes] = data.endTime.split(':').map(Number);
                 endDate.setHours(endHours, endMinutes, 0, 0);
@@ -141,18 +182,8 @@ const FeedScreen = () => {
         let eventCreationDateForSorting: Date;
         const createdAt = data.createdAt; // Cache for clarity, assuming events have createdAt
 
-        if (createdAt instanceof Timestamp) {
-            eventCreationDateForSorting = createdAt.toDate();
-        } else if (createdAt && typeof createdAt === 'object' && 'seconds' in createdAt && 'nanoseconds' in createdAt) {
-            eventCreationDateForSorting = new Timestamp(createdAt.seconds, createdAt.nanoseconds).toDate();
-        } else {
-            const parsedDate = new Date(createdAt as any);
-            if (isNaN(parsedDate.getTime())) {
-                eventCreationDateForSorting = new Date(0); // Default to epoch for invalid/missing createdAt
-            } else {
-                eventCreationDateForSorting = parsedDate;
-            }
-        }
+        const createdAtResult = toDate(createdAt);
+        eventCreationDateForSorting = createdAtResult || new Date(0); // Default to epoch for invalid/missing createdAt
 
         return {
           id: doc.id,
@@ -171,15 +202,33 @@ const FeedScreen = () => {
       combinedItems.sort((a, b) => b.primaryDate.getTime() - a.primaryDate.getTime());
       
       setFeedItems(combinedItems);
+      
+      // Cache the data for offline access
+      await feedCache.cacheFeedData(user.uid, combinedItems);
+      console.log('FeedScreen: Cached', combinedItems.length, 'feed items');
 
     } catch (error) {
-      console.error("Error fetching feed data: ", error);
-      Alert.alert("Error", "Could not fetch feed data.");
+      // Use our error handler instead of showErrorAlert
+      handleError(error, { 
+        action: 'fetchFeedData',
+        userId: user?.uid,
+        familyTreeId: firestoreUser?.familyTreeId
+      });
+      
+      // If online fetch fails, try cache
+      if (isOnline) {
+        console.log('FeedScreen: Online fetch failed, trying cache');
+        const cachedData = await feedCache.getCachedFeed(user.uid, {});
+        if (cachedData) {
+          setFeedItems(cachedData as FeedItem[]);
+          Alert.alert('Offline Mode', 'Showing cached content. Pull to refresh when online.');
+        }
+      }
     } finally {
       setIsLoadingFeed(false);
       setIsRefreshing(false);
     }
-  }, [user, firestoreUser, db]);
+  }, [user, firestoreUser, db, isOnline, feedItems.length]);
 
   useFocusEffect(
     useCallback(() => {
@@ -187,9 +236,21 @@ const FeedScreen = () => {
     }, [fetchFeedData])
   );
   
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setIsRefreshing(true);
-    fetchFeedData();
+    
+    // If online, trigger sync first
+    if (isOnline) {
+      try {
+        await forceSync();
+        console.log('FeedScreen: Sync completed, refreshing feed');
+      } catch (error) {
+        console.error('FeedScreen: Sync failed:', error);
+      }
+    }
+    
+    // Then refresh the feed data
+    await fetchFeedData(true);
   };
   
   const handleFeedItemPress = (item: FeedItem) => {
@@ -212,10 +273,12 @@ const FeedScreen = () => {
   };
   
   return (
-    <Screen
-      safeArea
-      scroll={false}
-    >
+    <ErrorBoundary screenName="FeedScreen">
+      <Screen
+        safeArea
+        scroll={false}
+      >
+      <OfflineIndicator isOnline={isOnline} />
       {isLoadingFeed && feedItems.length === 0 ? (
         <View style={styles.loadingStateContainer}>
           <EmptyState
@@ -312,7 +375,8 @@ const FeedScreen = () => {
           },
         ]}
       />
-    </Screen>
+      </Screen>
+    </ErrorBoundary>
   );
 };
 
@@ -334,35 +398,31 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   eventFeedItem: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
+    backgroundColor: Colors.light.background.primary,
+    borderRadius: BorderRadius.md,
     padding: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    ...Shadows.xs,
   },
   eventFeedImage: {
     width: 60,
     height: 60,
-    borderRadius: 6,
+    borderRadius: BorderRadius.sm,
     marginRight: Spacing.md,
   },
   eventFeedContent: {
     flex: 1,
   },
   eventFeedTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    ...Typography.styles.bodyMedium,
+    fontWeight: Typography.weight.bold,
+    color: Colors.light.text.secondary,
     marginBottom: Spacing.xs,
   },
   eventFeedDate: {
-    fontSize: 13,
-    color: '#666',
+    ...Typography.styles.caption,
+    color: Colors.light.text.tertiary,
   },
   moreOptionsButtonEvent: {
     padding: Spacing.sm,

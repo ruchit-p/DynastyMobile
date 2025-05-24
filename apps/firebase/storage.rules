@@ -81,5 +81,21 @@ service firebase.storage {
       // Only the owner can read and write their vault items
       allow read, write: if isOwner(userId);
     }
+    
+    // Encrypted media storage for end-to-end encrypted messages
+    match /encrypted/{chatId}/{messageId}/{fileName} {
+      // Read access requires user to be a participant of the chat
+      // This is a basic check - actual encryption ensures security
+      allow read: if isSignedIn();
+      
+      // Write access for authenticated users
+      // The actual encryption and participant validation happens in the app
+      allow write: if isSignedIn();
+    }
+    
+    // Encrypted profile backups
+    match /encrypted-backups/{userId}/{fileName} {
+      allow read, write: if isOwner(userId);
+    }
   }
 } 

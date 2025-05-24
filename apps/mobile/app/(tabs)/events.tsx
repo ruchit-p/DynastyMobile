@@ -2,6 +2,8 @@ import React from 'react';
 import { createStackNavigator, StackNavigationProp } from '@react-navigation/stack';
 import { View } from 'react-native';
 import { RouteProp } from '@react-navigation/native';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
 
 // Import screens
 import CalendarScreen from '../(screens)/CalendarScreen';
@@ -26,6 +28,19 @@ const Stack = createStackNavigator<EventsStackParamList>();
 
 const CalendarHeaderRight = ({ navigation }: CalendarHeaderRightProps) => {
   const primaryColor = Colors.palette.dynastyGreen.dark;
+  
+  // Initialize our error handler
+  const { withErrorHandling } = useErrorHandler({
+    title: 'Calendar Navigation Error',
+  });
+
+  const goToToday = withErrorHandling(() => {
+    navigation.setParams({ scrollToToday: new Date().toISOString() });
+  });
+
+  const goToEventList = withErrorHandling(() => {
+    navigation.navigate('EventList');
+  });
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -33,9 +48,7 @@ const CalendarHeaderRight = ({ navigation }: CalendarHeaderRightProps) => {
         title="Today"
         variant="text"
         size="small"
-        onPress={() => {
-          navigation.setParams({ scrollToToday: new Date().toISOString() });
-        }}
+        onPress={goToToday}
         style={{ marginRight: 8 }}
       />
       
@@ -43,7 +56,7 @@ const CalendarHeaderRight = ({ navigation }: CalendarHeaderRightProps) => {
         iconName="list-outline"
         size={24}
         color={primaryColor}
-        onPress={() => navigation.navigate('EventList')}
+        onPress={goToEventList}
         accessibilityLabel="View events list"
       />
     </View>
@@ -62,7 +75,8 @@ const EventsStackNavigator = () => {
   const primaryColor = Colors.palette.dynastyGreen.dark;
 
   return (
-    <Stack.Navigator 
+    <ErrorBoundary screenName="EventsNavigator">
+      <Stack.Navigator 
       initialRouteName="CalendarHome"
       screenOptions={{
         headerStyle: {
@@ -92,6 +106,7 @@ const EventsStackNavigator = () => {
         }}
       />
     </Stack.Navigator>
+    </ErrorBoundary>
   );
 };
 

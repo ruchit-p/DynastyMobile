@@ -4,6 +4,10 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Platform, View, Text, Alert, StyleSheet } from 'react-native';
 import AppHeader from '../../components/ui/AppHeader'; // Import the new AppHeader
 import IconButton, { IconSet } from '../../components/ui/IconButton'; // Import the new IconButton
+import NotificationBell from '../../components/ui/NotificationBell'; // Import NotificationBell
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
 // Define a placeholder for Colors if not imported (used for tab bar, not header anymore for Profile)
 const Colors = {
@@ -16,7 +20,7 @@ const Colors = {
 
 // Custom hook for header actions to avoid repeating logic
 // This hook is problematic if used outside a component context for router instance.
-// Let's simplify and manage router instance directly in TabLayout.
+// Let&apos;s simplify and manage router instance directly in TabLayout.
 /*
 const useHeaderActions = () => {
   const router = useRouter(); // This is fine if useHeaderActions is called inside TabLayout
@@ -29,22 +33,20 @@ const useHeaderActions = () => {
 
 export default function TabLayout() {
   const router = useRouter(); // Call useRouter at the top level of the component
+  const { handleError, withErrorHandling } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Tab Navigation Error',
+    trackCurrentScreen: true
+  });
 
   // const { navigateToNotifications, navigateToMessages } = useHeaderActions(); // Re-evaluate if this hook is still needed or integrate directly
-  const navigateToNotifications = () => router.push('/(screens)/notifications');
-  const navigateToMessages = () => router.navigate('/(screens)/chat' as any);
+  const navigateToNotifications = withErrorHandling(() => router.push('/(screens)/notifications'));
+  const navigateToMessages = withErrorHandling(() => router.navigate('/(screens)/chat' as any));
 
   // Define headerRight components to pass to AppHeader
   const feedHeaderRight = () => (
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-      <IconButton
-        iconName="notifications-outline"
-        size={26}
-        color={Colors.primary}
-        onPress={navigateToNotifications}
-        style={styles.headerIcon}
-        accessibilityLabel="View notifications"
-      />
+      <NotificationBell color={Colors.primary} size={26} />
       <IconButton
         iconName="chatbubbles-outline"
         size={26}
@@ -61,7 +63,7 @@ export default function TabLayout() {
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
       <Text
         style={{ color: Colors.primary, marginRight: 15, fontSize: 16 }}
-        onPress={() => console.log('Today pressed')} // Placeholder action
+        onPress={withErrorHandling(() => console.log('Today pressed'))} // Placeholder action
       >
         Today
       </Text>
@@ -70,9 +72,9 @@ export default function TabLayout() {
         iconName="list-outline"
         size={28}
         color={Colors.primary}
-        onPress={() => {
+        onPress={withErrorHandling(() => {
           currentRouter.push('/(screens)/EventListScreen');
-        }}
+        })}
         style={styles.headerIcon}
         accessibilityLabel="View events list"
       />
@@ -80,16 +82,17 @@ export default function TabLayout() {
   );
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Platform.OS === 'ios' ? Colors.secondary : Colors.primary,
-        tabBarInactiveTintColor: Colors.gray,
-        tabBarStyle: {
-          backgroundColor: Colors.white,
-        },
-        headerShown: false, // Important: We use custom header for all screens via options.header
-      }}
-    >
+    <ErrorBoundary screenName="TabLayoutScreen">
+      <Tabs
+        screenOptions={{
+          tabBarActiveTintColor: Platform.OS === 'ios' ? Colors.secondary : Colors.primary,
+          tabBarInactiveTintColor: Colors.gray,
+          tabBarStyle: {
+            backgroundColor: Colors.white,
+          },
+          headerShown: false, // Important: We use custom header for all screens via options.header
+        }}
+      >
       <Tabs.Screen
         name="feed"
         options={{
@@ -167,7 +170,8 @@ export default function TabLayout() {
           header: (props) => <AppHeader title={props.options.title || 'Profile'} />,
         }}
       />
-    </Tabs>
+      </Tabs>
+    </ErrorBoundary>
   );
 }
 

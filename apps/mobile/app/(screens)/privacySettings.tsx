@@ -2,9 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, Switch, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useNavigation, useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { auth, db } from '../../src/lib/firebase';
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { getFirebaseAuth, getFirebaseDb } from '../../src/lib/firebase';
+import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import { commonHeaderOptions } from '../../constants/headerConfig'; // Import common header options
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
 interface SettingToggleProps {
     label: string;
@@ -72,6 +75,11 @@ const PrivacySettingsScreen = () => {
     selectedStoryVisibility?: StoryVisibilityOption,
     fromScreen?: string 
   }>();
+  const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Privacy Settings Error',
+    trackCurrentScreen: true
+  });
 
   const initialSettings: PrivacySettings = {
       profileVisibility: 'Public', 
@@ -87,7 +95,11 @@ const PrivacySettingsScreen = () => {
   useFocusEffect(
     React.useCallback(() => {
       let isActive = true;
-      const loadSettings = async () => {
+      const loadSettings = withErrorHandling(async () => {
+        reset();
+        const auth = getFirebaseAuth();
+        const db = getFirebaseDb();
+        
         if (!auth.currentUser) {
           if (isActive) setIsLoading(false);
           console.warn("No user logged in, cannot load privacy settings.");
@@ -112,24 +124,31 @@ const PrivacySettingsScreen = () => {
             await saveSettings(currentSettings, false); // Save without showing alert for this case
         } else {
             // Otherwise, fetch from DB or initialize
-            const userDocRef = doc(db, "users", auth.currentUser.uid);
+            const userDocRef = db.collection('users').doc(auth.currentUser.uid);
             try {
-                const docSnap = await getDoc(userDocRef);
+                const docSnap = await userDocRef.get();
                 if (isActive) {
-                    if (docSnap.exists() && docSnap.data().privacySettings) {
+                    if (docSnap.exists && docSnap.data()?.privacySettings) {
                         // Merge with defaults to ensure all keys are present
-                        const fetchedSettings = { ...initialSettings, ...docSnap.data().privacySettings };
+                        const fetchedSettings = { ...initialSettings, ...docSnap.data()!.privacySettings };
                         setSettings(fetchedSettings);
                         currentSettings = fetchedSettings; // Update currentSettings to reflect fetched
                     } else {
                         // No saved settings, use defaults and save them
-                        await setDoc(userDocRef, { privacySettings: initialSettings }, { merge: true });
+                        await userDocRef.set({ privacySettings: initialSettings }, { merge: true });
                         setSettings(initialSettings);
                         currentSettings = initialSettings;
                     }
                 }
             } catch (error) {
-                console.error("Error fetching privacy settings:", error);
+                handleError(error, {
+                  action: 'fetchSettings',
+                  metadata: {
+                    screenName: 'PrivacySettings',
+                    userId: auth.currentUser?.uid,
+                    timestamp: new Date().toISOString()
+                  }
+                });
                 if (isActive) setSettings(initialSettings); // Revert to defaults
             }
         }
@@ -138,7 +157,7 @@ const PrivacySettingsScreen = () => {
             setSettings(currentSettings); // Ensure final state is set
             setIsLoading(false);
         }
-      };
+      });
 
       loadSettings();
       return () => { isActive = false; };
@@ -153,54 +172,123 @@ const PrivacySettingsScreen = () => {
     });
   }, [navigation]);
 
-  const saveSettings = async (updatedSettings: PrivacySettings, showAlert = true) => {
+  useEffect(() => {
+    if (!isError) {
+      // Clear any local error states when global error is cleared
+    }
+  }, [isError]);
+
+  const saveSettings = withErrorHandling(async (updatedSettings: PrivacySettings, showAlert = true) => {
+    reset();
+    const auth = getFirebaseAuth();
+    const db = getFirebaseDb();
+    
     if (!auth.currentUser) {
       if (showAlert) Alert.alert("Error", "You must be logged in to change settings.");
       return false;
     }
     try {
-      const userDocRef = doc(db, "users", auth.currentUser.uid);
-      await setDoc(userDocRef, { privacySettings: updatedSettings }, { merge: true });
+      const userDocRef = db.collection('users').doc(auth.currentUser.uid);
+      await userDocRef.set({ privacySettings: updatedSettings }, { merge: true });
       // if (showAlert) console.log("Privacy settings saved."); // Or a success toast
       return true;
     } catch (error) {
-      console.error("Error saving privacy settings:", error);
+      handleError(error, {
+        action: 'saveSettings',
+        metadata: {
+          screenName: 'PrivacySettings',
+          userId: auth.currentUser?.uid,
+          settingsChanged: Object.keys(updatedSettings),
+          timestamp: new Date().toISOString()
+        }
+      });
       if (showAlert) Alert.alert("Save Failed", "Could not save your settings. Please try again.");
       return false;
     }
-  };
+  });
 
-  const handleToggle = async (key: keyof Pick<PrivacySettings, 'allowFriendRequests' | 'showOnlineStatus'>) => {
+  const handleToggle = withErrorHandling(async (key: keyof Pick<PrivacySettings, 'allowFriendRequests' | 'showOnlineStatus'>) => {
+      reset();
       const newSettings = {
         ...settings,
         [key]: !settings[key],
       };
       setSettings(newSettings); // Optimistic UI update
-      const success = await saveSettings(newSettings);
-      if (!success) {
+      try {
+        const success = await saveSettings(newSettings);
+        if (!success) {
+          // Revert UI if save failed
+          setSettings(prev => ({...prev, [key]: !prev[key]})); 
+        }
+      } catch (error) {
+        handleError(error, {
+          action: 'toggleSetting',
+          metadata: {
+            screenName: 'PrivacySettings',
+            settingKey: key,
+            newValue: !settings[key],
+            timestamp: new Date().toISOString()
+          }
+        });
         // Revert UI if save failed
-        setSettings(prev => ({...prev, [key]: !prev[key]})); 
+        setSettings(prev => ({...prev, [key]: !prev[key]}));
       }
-  };
+  });
   
-  const handleProfileVisibilityPress = () => {
-    router.push({
-      pathname: '/(screens)/selectProfileVisibility', // Ensure this screen is created
-      params: { currentVisibility: settings.profileVisibility, previousPath: currentPath },
-    });
-  };
+  const handleProfileVisibilityPress = withErrorHandling(async () => {
+    reset();
+    try {
+      router.push({
+        pathname: '/(screens)/selectProfileVisibility', // Ensure this screen is created
+        params: { currentVisibility: settings.profileVisibility, previousPath: currentPath },
+      });
+    } catch (error) {
+      handleError(error, {
+        action: 'navigation',
+        metadata: {
+          destination: '/(screens)/selectProfileVisibility',
+          screenName: 'PrivacySettings',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+  });
 
-  const handleStoryVisibilityPress = () => {
-    router.push({
-      pathname: '/(screens)/selectStoryVisibility', // Ensure this screen is created
-      params: { currentVisibility: settings.storyVisibility, previousPath: currentPath },
-    });
-  };
+  const handleStoryVisibilityPress = withErrorHandling(async () => {
+    reset();
+    try {
+      router.push({
+        pathname: '/(screens)/selectStoryVisibility', // Ensure this screen is created
+        params: { currentVisibility: settings.storyVisibility, previousPath: currentPath },
+      });
+    } catch (error) {
+      handleError(error, {
+        action: 'navigation',
+        metadata: {
+          destination: '/(screens)/selectStoryVisibility',
+          screenName: 'PrivacySettings',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+  });
 
-  const handleBlockedUsersPress = () => {
+  const handleBlockedUsersPress = withErrorHandling(async () => {
+    reset();
+    try {
       router.push('/(screens)/blockedUsers'); // Ensure this screen is created
       console.log('Navigate to Blocked Users Screen');
-  };
+    } catch (error) {
+      handleError(error, {
+        action: 'navigation',
+        metadata: {
+          destination: '/(screens)/blockedUsers',
+          screenName: 'PrivacySettings',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+  });
 
   if (isLoading) {
     return (
@@ -214,40 +302,42 @@ const PrivacySettingsScreen = () => {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.container}>
-        <Text style={styles.sectionHeader}>Profile Privacy</Text>
-        <SettingNavigation 
-            label="Profile Visibility"
-            currentValue={settings.profileVisibility}
-            onPress={handleProfileVisibilityPress}
-        />
-        <SettingToggle 
-            label="Show Online Status"
-            isEnabled={settings.showOnlineStatus}
-            onToggle={() => handleToggle('showOnlineStatus')}
-        />
-        
-        <Text style={styles.sectionHeader}>Story Privacy</Text>
-        <SettingNavigation 
-            label="Default Story Visibility"
-            currentValue={settings.storyVisibility}
-            onPress={handleStoryVisibilityPress}
-        />
+    <ErrorBoundary screenName="PrivacySettingsScreen">
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView style={styles.container}>
+          <Text style={styles.sectionHeader}>Profile Privacy</Text>
+          <SettingNavigation 
+              label="Profile Visibility"
+              currentValue={settings.profileVisibility}
+              onPress={handleProfileVisibilityPress}
+          />
+          <SettingToggle 
+              label="Show Online Status"
+              isEnabled={settings.showOnlineStatus}
+              onToggle={() => handleToggle('showOnlineStatus')}
+          />
+          
+          <Text style={styles.sectionHeader}>Story Privacy</Text>
+          <SettingNavigation 
+              label="Default Story Visibility"
+              currentValue={settings.storyVisibility}
+              onPress={handleStoryVisibilityPress}
+          />
 
-        <Text style={styles.sectionHeader}>Connections</Text>
-         <SettingToggle 
-            label="Allow Friend Requests"
-            description="Allow others to send you connection requests."
-            isEnabled={settings.allowFriendRequests}
-            onToggle={() => handleToggle('allowFriendRequests')}
-        />
-         <SettingNavigation 
-            label="Blocked Users"
-            onPress={handleBlockedUsersPress}
-        />
-      </ScrollView>
-    </SafeAreaView>
+          <Text style={styles.sectionHeader}>Connections</Text>
+           <SettingToggle 
+              label="Allow Friend Requests"
+              description="Allow others to send you connection requests."
+              isEnabled={settings.allowFriendRequests}
+              onToggle={() => handleToggle('allowFriendRequests')}
+          />
+           <SettingNavigation 
+              label="Blocked Users"
+              onPress={handleBlockedUsersPress}
+          />
+        </ScrollView>
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 

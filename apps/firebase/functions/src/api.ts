@@ -1,8 +1,7 @@
-/* eslint-disable */
 // This file exports CORS configuration that can be used by other HTTP endpoints
 
 import cors from "cors";
-import {logger} from "firebase-functions";
+import {logger} from "firebase-functions/v2";
 import {CORS_ORIGINS} from "./common";
 
 /**
@@ -14,7 +13,7 @@ export const corsOptions = () => {
     CORS_ORIGINS.PRODUCTION, // Production domain
     CORS_ORIGINS.PRODUCTION_WWW, // www subdomain
     CORS_ORIGINS.DEVELOPMENT, // Local development
-    CORS_ORIGINS.FIREBASE_AUTH, // Firebase Auth domain 
+    CORS_ORIGINS.FIREBASE_AUTH, // Firebase Auth domain
   ];
 
   return cors({

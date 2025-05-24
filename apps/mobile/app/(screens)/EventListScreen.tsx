@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -18,9 +18,16 @@ import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/Float
 import AppHeader from '../../components/ui/AppHeader';
 import IconButton, { IconSet } from '../../components/ui/IconButton';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getFirebaseDb, getFirebaseAuth } from '../../src/lib/firebase';
-import { Timestamp } from 'firebase/firestore';
+import { getFirebaseAuth, getFirebaseDb } from '../../src/lib/firebase';
+import { getUpcomingEventsMobile, formatEventDate, formatEventTime } from '../../src/lib/eventUtils';
 import MediaGallery, { MediaItem } from '../../components/ui/MediaGallery';
+import { showErrorAlert } from '../../src/lib/errorUtils';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { useAuth } from '../../src/contexts/AuthContext';
+import { useOffline } from '../../src/contexts/OfflineContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Define Event interface for type safety
 interface Event {
@@ -46,7 +53,7 @@ interface EventCardProps {
 const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
   const formatEventDateTime = (date: Date) => {
     const dateString = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    const timeString = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    const timeString = formatEventTime(date.getHours() + ':' + date.getMinutes());
     return `${dateString}, ${timeString}`;
   };
 
@@ -137,11 +144,26 @@ const EventListScreen = () => {
   const segments = ['Upcoming', 'Past Events', 'My Events'];
   const router = useRouter();
   const db = getFirebaseDb();
-  const auth = getFirebaseAuth();
+  const { user } = useAuth();
+  const { isOnline, forceSync } = useOffline();
 
   const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Initialize error handler
+  const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Event List Error',
+    trackCurrentScreen: true
+  });
+
+  // Clear local errors when global error state resets
+  useEffect(() => {
+    if (!isError) {
+      // Reset any local error states if needed
+    }
+  }, [isError]);
 
   // --- Back Action Component ---
   const BackAction = () => (
@@ -150,7 +172,17 @@ const EventListScreen = () => {
       iconName={Platform.OS === 'ios' ? 'chevron-back' : 'arrow-back'}
       size={28}
       color={"#1A4B44"}
-      onPress={() => router.canGoBack() ? router.back() : router.push('/(tabs)/events')}
+      onPress={withErrorHandling(async () => {
+        try {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.push('/(tabs)/events');
+          }
+        } catch (error) {
+          handleError(error, { action: 'navigation_back', source: 'EventListScreen' });
+        }
+      })}
       accessibilityLabel="Go back"
       style={{ marginLeft: -5 }}
     />
@@ -162,210 +194,290 @@ const EventListScreen = () => {
       text: 'Create Event',
       iconName: 'calendar-plus',
       iconLibrary: 'MaterialCommunityIcons',
-      onPress: () => router.push('/(screens)/createEvent'),
+      onPress: withErrorHandling(async () => {
+        try {
+          if (user) {
+            router.push('/(screens)/createEvent');
+          } else {
+            showErrorAlert("Authentication Required", "Please sign in to create an event.");
+          }
+        } catch (error) {
+          handleError(error, { action: 'navigate_create_event', source: 'EventListScreen' });
+        }
+      }),
     },
   ];
 
-  const fetchEvents = useCallback(async () => {
-    if (!auth.currentUser) {
-      setIsLoadingEvents(false);
-      setRefreshing(false);
-      setAllEvents([]);
-      return;
-    }
-    setIsLoadingEvents(true);
+  const fetchEvents = useCallback(withErrorHandling(async (forceRefresh = false) => {
     try {
-      const eventsCollection = await db.collection('events')
-        .get();
-
-      const fetchedEventsPromises = eventsCollection.docs.map(async (doc) => {
-        const data = doc.data();
-        
-        let startDate = new Date();
-        if (data.eventDate && data.startTime) {
-          const [hours, minutes] = data.startTime.split(':').map(Number);
-          startDate = new Date(data.eventDate);
-          if (data.eventDate instanceof Timestamp) {
-             startDate = data.eventDate.toDate();
-          }
-          startDate.setHours(hours, minutes);
-        }
-
-        let endDate = new Date(startDate);
-        if (data.endDate && data.endTime) {
-          const [endHours, endMinutes] = data.endTime.split(':').map(Number);
-          endDate = new Date(data.endDate);
-           if (data.endDate instanceof Timestamp) {
-             endDate = data.endDate.toDate();
-          }
-          endDate.setHours(endHours, endMinutes);
-        } else if (data.endTime) {
-            const [endHours, endMinutes] = data.endTime.split(':').map(Number);
-            endDate.setHours(endHours, endMinutes);
-        }
-
-        // Process coverPhotos for MediaGallery
-        let eventCoverPhotos: MediaItem[] = [];
-        if (data.coverPhotoUrls && Array.isArray(data.coverPhotoUrls)) {
-          eventCoverPhotos = data.coverPhotoUrls.map((photoUrl: string) => {
-            const uri = photoUrl;
-            const type: 'image' | 'video' = /\.(mp4|mov|avi|mkv|webm)(?:\?|$)/i.test(uri.toLowerCase()) ? 'video' : 'image';
-            return {
-              uri: uri,
-              type: type,
-            };
-          }).filter(item => item.uri);
-        } else if (data.imageUrl) {
-          eventCoverPhotos = [{
-            uri: data.imageUrl,
-            type: /\.(mp4|mov|avi|mkv|webm)(?:\?|$)/i.test(data.imageUrl.toLowerCase()) ? 'video' : 'image',
-          }];
-        }
-
-        let organizerName = 'Unknown Host';
-        if (data.hostId) {
-          try {
-            const userDoc = await db.collection('users').doc(data.hostId).get();
-            if (userDoc.exists) {
-              const userData = userDoc.data();
-              if (userData) {
-                organizerName = userData.displayName || `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Unknown Host';
-              }
+      if (!user?.uid) {
+        setAllEvents([]);
+        setIsLoadingEvents(false);
+        setRefreshing(false);
+        return;
+      }
+      setIsLoadingEvents(true);
+      
+      // Try to get cached data first if offline or not forcing refresh
+      if (!isOnline || !forceRefresh) {
+        const cachedEventsData = await AsyncStorage.getItem('cachedEvents');
+        if (cachedEventsData) {
+          const cached = JSON.parse(cachedEventsData);
+          // Check if cache is not too old (e.g., 1 hour)
+          const cacheAge = Date.now() - (cached.timestamp || 0);
+          if (cacheAge < 3600000 || !isOnline) { // 1 hour or offline
+            console.log('EventListScreen: Using cached events');
+            setAllEvents(cached.events);
+            setIsLoadingEvents(false);
+            setRefreshing(false);
+            
+            // If online but using cache, still try to fetch fresh data in background
+            if (isOnline && !forceRefresh) {
+              getUpcomingEventsMobile(100).then(result => {
+                const fetchedEvents = mapEventsToInterface(result.events);
+                setAllEvents(fetchedEvents);
+                // Update cache
+                AsyncStorage.setItem('cachedEvents', JSON.stringify({
+                  events: fetchedEvents,
+                  timestamp: Date.now()
+                }));
+              }).catch(error => {
+                console.error('Background fetch failed:', error);
+              });
             }
-          } catch (userError) {
-            console.error(`Error fetching host details for ${data.hostId}:`, userError);
+            return;
           }
         }
-
-        return {
-          id: doc.id,
-          name: data.title || 'Untitled Event',
-          startDate: startDate,
-          endDate: endDate,
-          location: data.isVirtual ? (data.virtualLink || 'Virtual Event') : (data.location?.address || 'No location'),
-          coverPhotos: eventCoverPhotos,
-          organizer: data.hostId,
-          organizerName: organizerName,
-          description: data.description || '',
-          createdBy: data.hostId,
-        } as Event;
-      });
-      const fetchedEvents = await Promise.all(fetchedEventsPromises);
-      setAllEvents(fetchedEvents);
+      }
+      
+      // If online, fetch fresh data
+      if (isOnline) {
+        const result = await getUpcomingEventsMobile(100);
+        const fetchedEvents = mapEventsToInterface(result.events);
+        
+        setAllEvents(fetchedEvents);
+        
+        // Cache the events
+        await AsyncStorage.setItem('cachedEvents', JSON.stringify({
+          events: fetchedEvents,
+          timestamp: Date.now()
+        }));
+      } else {
+        // Offline with no cache
+        setAllEvents([]);
+      }
     } catch (error) {
       console.error("Error fetching events: ", error);
-      Alert.alert("Error", "Could not fetch events.");
-      setAllEvents([]);
+      handleError(error, { action: 'fetch_events', source: 'EventListScreen' });
+      
+      // Try to use cached data on error
+      try {
+        const cachedEventsData = await AsyncStorage.getItem('cachedEvents');
+        if (cachedEventsData) {
+          const cached = JSON.parse(cachedEventsData);
+          setAllEvents(cached.events);
+        } else {
+          setAllEvents([]);
+        }
+      } catch (cacheError) {
+        setAllEvents([]);
+      }
     } finally {
       setIsLoadingEvents(false);
       setRefreshing(false);
     }
-  }, [auth.currentUser, db]);
+  }), [user, handleError, isOnline]);
+  
+  // Helper function to map events
+  const mapEventsToInterface = (eventDetails: any[]): Event[] => {
+    return eventDetails.map(event => {
+      let eventStatus: 'Going' | 'Invited' | null = null;
+      if (event.userStatus === 'accepted') {
+        eventStatus = 'Going';
+      } else if (event.userStatus === 'pending') {
+        eventStatus = 'Invited';
+      }
+
+      return {
+        id: event.id,
+        name: event.title || 'Untitled Event',
+        startDate: new Date(event.eventDate), 
+        endDate: event.endDate ? new Date(event.endDate) : new Date(event.eventDate),
+        location: event.isVirtual ? 
+          (event.virtualLink || 'Virtual Event') : 
+          (event.location?.address || 'No location'),
+        coverPhotos: (event.coverPhotoUrls || []).map(url => ({
+          uri: url,
+          type: (/\.(mp4|mov|avi|mkv|webm)(?:\?|$)/i.test(url.toLowerCase()) ? 'video' : 'image') as 'video' | 'image',
+        })),
+        organizer: event.hostId,
+        organizerName: event.host?.name || 'Unknown Host',
+        description: event.description || '',
+        createdBy: event.hostId,
+        status: eventStatus
+      };
+    });
+  };
 
   useFocusEffect(
     useCallback(() => {
-      fetchEvents();
-    }, [fetchEvents])
+      const loadEventsOnFocus = withErrorHandling(async () => {
+        if (user?.uid) {
+          await fetchEvents();
+        } else {
+          setAllEvents([]);
+          setIsLoadingEvents(false);
+        }
+      });
+      loadEventsOnFocus();
+    }, [user, fetchEvents, handleError])
   );
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchEvents();
-  }, [fetchEvents]);
+  const onRefresh = useCallback(withErrorHandling(async () => {
+    try {
+      setRefreshing(true);
+      
+      // If online, trigger sync first
+      if (isOnline) {
+        try {
+          await forceSync();
+          console.log('EventListScreen: Sync completed, refreshing events');
+        } catch (error) {
+          console.error('EventListScreen: Sync failed:', error);
+        }
+      }
+      
+      // Force refresh to get latest data
+      await fetchEvents(true);
+    } catch (error) {
+      handleError(error, { action: 'refresh_events', source: 'EventListScreen' });
+    }
+  }), [fetchEvents, withErrorHandling, handleError, isOnline, forceSync]);
 
   const getEventsForSegment = (): Event[] => {
-    const now = new Date();
-    let eventsToFilter: Event[] = allEvents;
+    try {
+      const now = new Date();
+      let eventsToFilter: Event[] = allEvents;
 
-    if (currentSegment === 0) {
-      eventsToFilter = allEvents
-        .filter(event => event.endDate && event.endDate >= now)
-        .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
-    } else if (currentSegment === 1) {
-      eventsToFilter = allEvents
-        .filter(event => event.endDate && event.endDate < now)
-        .sort((a, b) => b.startDate.getTime() - a.startDate.getTime());
-    } else if (currentSegment === 2) {
-      const currentUserId = auth.currentUser?.uid;
-      eventsToFilter = allEvents
-        .filter(event => event.createdBy === currentUserId)
-        .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
-    }
+      if (currentSegment === 0) {
+        eventsToFilter = allEvents
+          .filter(event => event.endDate && event.endDate >= now)
+          .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+      } else if (currentSegment === 1) {
+        eventsToFilter = allEvents
+          .filter(event => event.endDate && event.endDate < now)
+          .sort((a, b) => b.startDate.getTime() - a.startDate.getTime());
+      } else if (currentSegment === 2) {
+        const currentUserId = user?.uid;
+        eventsToFilter = allEvents
+          .filter(event => event.createdBy === currentUserId)
+          .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+      }
 
-    if (searchText) {
-      const lowerSearchText = searchText.toLowerCase();
-      return eventsToFilter.filter((event: Event) =>
-        event.name.toLowerCase().includes(lowerSearchText) ||
-        (event.location && event.location.toLowerCase().includes(lowerSearchText))
-      );
+      if (searchText) {
+        const lowerSearchText = searchText.toLowerCase();
+        return eventsToFilter.filter((event: Event) =>
+          event.name.toLowerCase().includes(lowerSearchText) ||
+          (event.location && event.location.toLowerCase().includes(lowerSearchText))
+        );
+      }
+      return eventsToFilter;
+    } catch (error) {
+      handleError(error, { 
+        action: 'filter_events', 
+        currentSegment, 
+        searchText,
+        source: 'EventListScreen' 
+      });
+      return [];
     }
-    return eventsToFilter;
   };
 
   const displayedEvents = getEventsForSegment();
 
   if (isLoadingEvents && !refreshing && allEvents.length === 0) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={[ 'left', 'right', 'bottom' ]}>
-        <Stack.Screen options={{ headerShown: false }} />
-        <AppHeader title="Events" headerLeft={BackAction} />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0A5C36" />
-          <Text style={styles.loadingText}>Loading events...</Text>
-        </View>
-      </SafeAreaView>
+      <ErrorBoundary screenName="EventListScreen">
+        <SafeAreaView style={styles.safeArea} edges={[ 'left', 'right', 'bottom' ]}>
+          <Stack.Screen options={{ headerShown: false }} />
+          <AppHeader title="Events" headerLeft={BackAction} />
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#0A5C36" />
+            <Text style={styles.loadingText}>Loading events...</Text>
+          </View>
+        </SafeAreaView>
+      </ErrorBoundary>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={[ 'left', 'right', 'bottom' ]}>
-      <Stack.Screen options={{ headerShown: false }} />
-      <AppHeader title="Events" headerLeft={BackAction} />
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search events..."
-          placeholderTextColor="#888"
-          value={searchText}
-          onChangeText={setSearchText}
+    <ErrorBoundary screenName="EventListScreen">
+      <SafeAreaView style={styles.safeArea} edges={[ 'left', 'right', 'bottom' ]}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <AppHeader title="Events" headerLeft={BackAction} />
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search events..."
+            placeholderTextColor="#888"
+            value={searchText}
+            onChangeText={setSearchText}
+          />
+        </View>
+
+        <SegmentedControl
+          segments={segments}
+          currentIndex={currentSegment}
+          onChange={setCurrentSegment}
         />
-      </View>
-
-      <SegmentedControl
-        segments={segments}
-        currentIndex={currentSegment}
-        onChange={setCurrentSegment}
-      />
-
-      <ScrollView 
-        contentContainerStyle={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#0A5C36"]}/>}
-      >
-        {displayedEvents.length === 0 ? (
-          <View style={styles.noEventsContainer}>
-            <MaterialCommunityIcons name="calendar-remove-outline" size={70} color="#D0D0D0" />
-            <Text style={styles.noEventsText}>No events found</Text>
-            <Text style={styles.noEventsSubText}>
-              {currentSegment === 0 && "You don't have any upcoming events."}
-              {currentSegment === 1 && "There are no past events to show."}
-              {currentSegment === 2 && "You haven't created or been added to any events yet."}
-            </Text>
+        
+        {!isOnline && (
+          <View style={styles.offlineIndicator}>
+            <MaterialIcons name="cloud-off" size={16} color="#666" />
+            <Text style={styles.offlineText}>Offline - Showing cached events</Text>
           </View>
-        ) : (
-          displayedEvents.map((event: Event) => (
-            <EventCard
-              key={event.id}
-              event={event}
-              onPress={() => router.push({ pathname: '/(screens)/eventDetail', params: { eventId: event.id } })}
-            />
-          ))
         )}
-      </ScrollView>
 
-      <FloatingActionMenu menuItems={eventMenuItems} fabIconName="plus" fabIconLibrary="MaterialCommunityIcons" />
-    </SafeAreaView>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#0A5C36"]}/>}
+        >
+          {displayedEvents.length === 0 ? (
+            <View style={styles.noEventsContainer}>
+              <MaterialCommunityIcons name="calendar-remove-outline" size={70} color="#D0D0D0" />
+              <Text style={styles.noEventsText}>No events found</Text>
+              <Text style={styles.noEventsSubText}>
+                {currentSegment === 0 && "You don't have any upcoming events."}
+                {currentSegment === 1 && "There are no past events to show."}
+                {currentSegment === 2 && "You haven't created or been added to any events yet."}
+              </Text>
+            </View>
+          ) : (
+            displayedEvents.map((event: Event) => (
+              <EventCard
+                key={event.id}
+                event={event}
+                onPress={withErrorHandling(async () => {
+                  try {
+                    router.push({ pathname: '/(screens)/eventDetail', params: { eventId: event.id } });
+                  } catch (error) {
+                    handleError(error, { 
+                      action: 'navigate_event_detail', 
+                      eventId: event.id,
+                      source: 'EventListScreen' 
+                    });
+                  }
+                })}
+              />
+            ))
+          )}
+        </ScrollView>
+
+        <FloatingActionMenu menuItems={eventMenuItems} fabIconName="plus" fabIconLibrary="MaterialCommunityIcons" />
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 
@@ -554,6 +666,22 @@ const styles = StyleSheet.create({
   eventDetailText: {
     fontSize: 14,
     color: '#555555',
+    marginLeft: 8,
+  },
+  offlineIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFF3E0',
+    marginHorizontal: 15,
+    marginBottom: 10,
+    borderRadius: 8,
+  },
+  offlineText: {
+    fontSize: 14,
+    color: '#666',
     marginLeft: 8,
   },
 });

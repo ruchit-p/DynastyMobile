@@ -5,7 +5,8 @@ import {
   Alert,
   Platform,
   RefreshControl,
-  ScrollView
+  ScrollView,
+  Text
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 
@@ -14,6 +15,7 @@ import Screen from '../../components/ui/Screen';
 import EmptyState from '../../components/ui/EmptyState';
 import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/FloatingActionMenu';
 import StoryPost from '../../components/ui/StoryPost';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
 
 // Import design tokens
 import { Spacing } from '../../constants/Spacing';
@@ -22,14 +24,25 @@ import { Spacing } from '../../constants/Spacing';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { fetchUserStoriesMobile } from '../../src/lib/storyUtils';
 import type { Story } from '../../src/lib/storyUtils';
+import { showErrorAlert } from '../../src/lib/errorUtils';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { useOffline } from '../../src/contexts/OfflineContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Main History Screen
 const HistoryScreen = () => {
   const router = useRouter();
   const { user } = useAuth();
+  const { isOnline, forceSync } = useOffline();
   const [userStories, setUserStories] = useState<Story[]>([]);
   const [isLoadingStories, setIsLoadingStories] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  // Initialize our error handler
+  const { handleError, withErrorHandling } = useErrorHandler({
+    title: 'History Error',
+  });
 
   useFocusEffect(
     React.useCallback(() => {
@@ -37,19 +50,63 @@ const HistoryScreen = () => {
         setIsLoadingStories(true);
         try {
           if (user?.uid) {
-            const stories = await fetchUserStoriesMobile(user.uid);
-            setUserStories(stories);
+            // Try to get cached data first if offline
+            if (!isOnline) {
+              const cachedUserStories = await AsyncStorage.getItem(`userStories_${user.uid}`);
+              if (cachedUserStories) {
+                const cached = JSON.parse(cachedUserStories);
+                console.log('HistoryScreen: Using cached user stories');
+                setUserStories(cached.stories || []);
+                setIsLoadingStories(false);
+                return;
+              }
+            }
+            
+            // If online, fetch fresh data
+            if (isOnline) {
+              const stories = await fetchUserStoriesMobile(user.uid);
+              setUserStories(stories);
+              
+              // Cache the stories
+              await AsyncStorage.setItem(`userStories_${user.uid}`, JSON.stringify({
+                stories,
+                timestamp: Date.now()
+              }));
+            } else {
+              // Offline with no cache
+              setUserStories([]);
+            }
           }
         } catch (error) {
-          console.error('Error fetching user stories:', error);
-          Alert.alert('Error', 'Could not fetch your stories. Please try again later.');
+          handleError(error, {
+            severity: ErrorSeverity.ERROR,
+            metadata: {
+              action: 'fetchUserStories',
+              userId: user?.uid,
+              isOffline: !isOnline
+            },
+            showAlert: true
+          });
+          
+          // Try to use cached data on error
+          if (user?.uid) {
+            try {
+              const cachedUserStories = await AsyncStorage.getItem(`userStories_${user.uid}`);
+              if (cachedUserStories) {
+                const cached = JSON.parse(cachedUserStories);
+                setUserStories(cached.stories || []);
+              }
+            } catch (cacheError) {
+              setUserStories([]);
+            }
+          }
         } finally {
           setIsLoadingStories(false);
           setIsRefreshing(false);
         }
       };
       fetchStories();
-    }, [user])
+    }, [user, handleError, isOnline])
   );
 
   // Menu items for History Screen
@@ -63,14 +120,14 @@ const HistoryScreen = () => {
     },
   ];
 
-  const handleStoryPress = (story: Story) => {
+  const handleStoryPress = withErrorHandling((story: Story) => {
     router.push({ 
       pathname: '/(screens)/storyDetail', 
       params: { storyId: story.id } 
     });
-  };
+  });
   
-  const handleMoreOptions = (story: Story) => {
+  const handleMoreOptions = withErrorHandling((story: Story) => {
     Alert.alert(
       'Story Options',
       '',
@@ -89,7 +146,14 @@ const HistoryScreen = () => {
         { 
           text: 'Delete Story', 
           style: 'destructive',
-          onPress: () => console.log('Delete story', story.id) // Implement delete functionality
+          onPress: () => {
+            // Implement delete functionality
+            handleError(new Error('Delete functionality not yet implemented'), {
+              severity: ErrorSeverity.INFO,
+              metadata: { action: 'deleteStory', storyId: story.id },
+              showAlert: true
+            });
+          }
         },
         { 
           text: 'Cancel', 
@@ -97,35 +161,67 @@ const HistoryScreen = () => {
         }
       ]
     );
-  };
+  });
   
-  const handleRefresh = () => {
+  const handleRefresh = withErrorHandling(() => {
     setIsRefreshing(true);
     // Re-fetch stories
     (async () => {
       try {
+        // If online, trigger sync first
+        if (isOnline) {
+          try {
+            await forceSync();
+            console.log('HistoryScreen: Sync completed, refreshing stories');
+          } catch (error) {
+            console.error('HistoryScreen: Sync failed:', error);
+          }
+        }
+        
         if (user?.uid) {
-          const stories = await fetchUserStoriesMobile(user.uid);
-          setUserStories(stories);
+          if (isOnline) {
+            const stories = await fetchUserStoriesMobile(user.uid);
+            setUserStories(stories);
+            
+            // Update cache
+            await AsyncStorage.setItem(`userStories_${user.uid}`, JSON.stringify({
+              stories,
+              timestamp: Date.now()
+            }));
+          } else {
+            // Offline - just reload from cache
+            const cachedUserStories = await AsyncStorage.getItem(`userStories_${user.uid}`);
+            if (cachedUserStories) {
+              const cached = JSON.parse(cachedUserStories);
+              setUserStories(cached.stories || []);
+            }
+          }
         }
       } catch (error) {
-        console.error('Error refreshing user stories:', error);
-        Alert.alert('Error', 'Could not refresh your stories. Please try again later.');
+        handleError(error, {
+          severity: ErrorSeverity.ERROR,
+          metadata: {
+            action: 'refreshUserStories',
+            userId: user?.uid,
+            isOffline: !isOnline
+          }
+        });
       } finally {
         setIsRefreshing(false);
       }
     })();
-  };
+  });
 
-  const handleCreateStory = () => {
+  const handleCreateStory = withErrorHandling(() => {
     router.push('/(screens)/createStory');
-  };
+  });
   
   return (
-    <Screen
-      safeArea
-      scroll={false}
-    >
+    <ErrorBoundary screenName="HistoryScreen">
+      <Screen
+        safeArea
+        scroll={false}
+      >
       {isLoadingStories && userStories.length === 0 ? (
         <View style={styles.loadingStateContainer}>
           <EmptyState
@@ -145,6 +241,11 @@ const HistoryScreen = () => {
         </View>
       ) : (
         <View style={styles.storiesContainer}>
+          {!isOnline && (
+            <View style={styles.offlineIndicator}>
+              <Text style={styles.offlineText}>📴 Offline - Showing cached stories</Text>
+            </View>
+          )}
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: Spacing.xl + Spacing.lg }}
@@ -170,7 +271,8 @@ const HistoryScreen = () => {
       
       {/* Floating Action Button Menu - Using fixed positioning */}
       <FloatingActionMenu menuItems={historyMenuItems} absolutePosition={false} />
-    </Screen>
+      </Screen>
+    </ErrorBoundary>
   );
 };
 
@@ -190,6 +292,17 @@ const styles = StyleSheet.create({
   },
   storyItem: {
     marginBottom: Spacing.sm, // Reduced spacing between posts from md (16) to sm (8)
+  },
+  offlineIndicator: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFF3E0',
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  offlineText: {
+    fontSize: 14,
+    color: '#666',
   },
 });
 

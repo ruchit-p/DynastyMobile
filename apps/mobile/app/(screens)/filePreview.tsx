@@ -8,11 +8,20 @@ import * as FileSystem from 'expo-file-system'; // Import FileSystem
 import { commonHeaderOptions } from '../../constants/headerConfig';
 import { Colors } from '../../constants/Colors';
 import Fonts from '../../constants/Fonts';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import * as Sharing from 'expo-sharing';
+import * as WebBrowser from 'expo-web-browser';
+import Screen from '../../components/ui/Screen';
+import Button from '../../components/ui/Button';
+import ThemedText from '../../components/ThemedText';
+import { Spacing } from '../../constants/Spacing';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const FilePreviewScreen = () => {
-  const params = useLocalSearchParams<{ fileUri: string; fileName: string; fileType: 'image' | 'video' }>();
+  const params = useLocalSearchParams<{ fileUri: string; fileName: string; fileType: 'image' | 'video' | 'audio' | 'document' | 'other'; mimeType?: string }>();
   const router = useRouter();
   const videoViewRef = useRef<VideoView>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -20,7 +29,19 @@ const FilePreviewScreen = () => {
   const [mediaUriToDisplay, setMediaUriToDisplay] = useState<string | null>(null);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
 
-  const { fileUri: initialFileUri, fileName, fileType } = params;
+  const { handleError, withErrorHandling, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'File Preview Error',
+    trackCurrentScreen: true
+  });
+
+  const { fileUri: initialFileUri, fileName, fileType, mimeType } = params;
+
+  // Reset error state when component mounts or params change
+  useEffect(() => {
+    reset();
+    setError(null);
+  }, [initialFileUri, fileName, fileType, reset]);
 
   const player = useVideoPlayer(mediaUriToDisplay && fileType === 'video' ? mediaUriToDisplay : null, (p) => {
     p.loop = true;
@@ -40,7 +61,7 @@ const FilePreviewScreen = () => {
   useEffect(() => {
     let isMounted = true;
 
-    const setupAudioAndPrepareMedia = async () => {
+    const setupAudioAndPrepareMedia = withErrorHandling(async () => {
       if (!isMounted) return;
 
       if (fileType === 'video') {
@@ -56,7 +77,7 @@ const FilePreviewScreen = () => {
           }
           await setAudioModeAsync(mode);
         } catch (e) {
-          console.error('Failed to set audio mode for video playback:', e);
+          handleError(e, { functionName: 'setupAudioMode', fileType });
         }
       }
 
@@ -95,18 +116,33 @@ const FilePreviewScreen = () => {
                   setMediaUriToDisplay(null);
                 }
               } catch (infoError: any) {
-                console.error("Error getting file info after download:", infoError);
+                handleError(infoError, { 
+                  functionName: 'getFileInfo', 
+                  downloadUri: downloadResult.uri,
+                  originalUri: initialFileUri
+                });
                 setError(`Failed to verify downloaded file. ${infoError.message}`);
                 setMediaUriToDisplay(null);
               }
             } else {
-              console.error("Download failed. Status:", downloadResult.status, "URI:", initialFileUri);
+              const downloadError = new Error(`Download failed with status ${downloadResult.status}`);
+              handleError(downloadError, { 
+                functionName: 'downloadFile',
+                httpStatus: downloadResult.status,
+                originalUri: initialFileUri,
+                fileType
+              });
               setError(`Failed to download media. HTTP status ${downloadResult.status}.`);
               setMediaUriToDisplay(null); // Ensure we don't try to display a bad URI
             }
           }
         } catch (e: any) {
-          console.error(`Error downloading ${fileType} from ${initialFileUri}:`, e);
+          handleError(e, { 
+            functionName: 'downloadFile',
+            originalUri: initialFileUri,
+            fileType,
+            localPath
+          });
           if (isMounted) {
             setError(`Failed to download media for preview. ${e.message || 'Check network or permissions.'}`);
             setMediaUriToDisplay(null);
@@ -121,7 +157,7 @@ const FilePreviewScreen = () => {
           setIsLoading(false);
         }
       }
-    };
+    }, { functionName: 'setupAudioAndPrepareMedia', fileType, fileName });
 
     setupAudioAndPrepareMedia();
 
@@ -130,7 +166,12 @@ const FilePreviewScreen = () => {
       if (mediaUriToDisplay && mediaUriToDisplay.startsWith(FileSystem.cacheDirectory || '')) {
         FileSystem.deleteAsync(mediaUriToDisplay, { idempotent: true })
           .then(() => console.log("Deleted cached preview file:", mediaUriToDisplay))
-          .catch(e => console.warn("Failed to delete cached preview file:", mediaUriToDisplay, e));
+          .catch(e => {
+            handleError(e, { 
+              functionName: 'deleteCache', 
+              cacheUri: mediaUriToDisplay 
+            });
+          });
       }
     };
   }, [initialFileUri, fileName, fileType]);
@@ -147,6 +188,37 @@ const FilePreviewScreen = () => {
     console.log('Video ready for display/playback');
   };
 
+  const handleShare = async () => {
+    try {
+      if (!(await Sharing.isAvailableAsync())) {
+        setError('Sharing is not available on this device');
+        return;
+      }
+      
+      await Sharing.shareAsync(mediaUriToDisplay || initialFileUri, {
+        mimeType: mimeType || 'application/octet-stream',
+        dialogTitle: `Share ${fileName}`,
+      });
+    } catch (e: any) {
+      handleError(e, { functionName: 'shareFile' });
+    }
+  };
+
+  const handleOpenExternally = async () => {
+    try {
+      if (mediaUriToDisplay?.startsWith('http')) {
+        await WebBrowser.openBrowserAsync(mediaUriToDisplay);
+      } else {
+        await Sharing.shareAsync(mediaUriToDisplay || initialFileUri, {
+          mimeType: mimeType || 'application/octet-stream',
+          dialogTitle: `Open ${fileName}`,
+        });
+      }
+    } catch (e: any) {
+      handleError(e, { functionName: 'openExternally' });
+    }
+  };
+
   const renderActualContent = () => {
     if (error && !mediaUriToDisplay) { 
         return (
@@ -160,7 +232,7 @@ const FilePreviewScreen = () => {
         );
     }
     
-    if (!mediaUriToDisplay) {
+    if (!mediaUriToDisplay && fileType !== 'document' && fileType !== 'other') {
         return null; 
     }
 
@@ -171,7 +243,12 @@ const FilePreviewScreen = () => {
           style={styles.image}
           resizeMode="contain"
           onError={(e) => {
-            console.error("Image rendering error (from local URI):", e.nativeEvent.error);
+            const renderError = new Error(`Image rendering failed: ${e.nativeEvent.error}`);
+            handleError(renderError, { 
+              functionName: 'renderImage',
+              mediaUri: mediaUriToDisplay,
+              nativeError: e.nativeEvent.error
+            });
             if (!error) setError(`Failed to render image. ${e.nativeEvent.error || ''}`);
           }}
         />
@@ -192,6 +269,60 @@ const FilePreviewScreen = () => {
       );
     }
 
+    if (fileType === 'audio') {
+      return (
+        <View style={styles.audioContainer}>
+          <Ionicons name="musical-notes" size={80} color={Colors.dynastyGreen} />
+          <ThemedText variant="heading3" style={styles.fileName}>{fileName}</ThemedText>
+          <ThemedText variant="bodyMedium" color="secondary">Audio file</ThemedText>
+          <View style={styles.actionButtons}>
+            <Button
+              variant="primary"
+              size="medium"
+              onPress={handleOpenExternally}
+              leftIcon={<Ionicons name="play-circle" size={20} color="white" />}
+            >
+              Play Audio
+            </Button>
+          </View>
+        </View>
+      );
+    }
+
+    if (fileType === 'document' || fileType === 'other') {
+      const isDocument = fileType === 'document';
+      const iconName = isDocument ? 'document-text' : 'document-attach';
+      
+      return (
+        <View style={styles.documentContainer}>
+          <Ionicons name={iconName} size={80} color={Colors.dynastyGreen} />
+          <ThemedText variant="heading3" style={styles.fileName}>{fileName}</ThemedText>
+          <ThemedText variant="bodyMedium" color="secondary">
+            {isDocument ? 'Document' : 'File'} • {mimeType || 'Unknown type'}
+          </ThemedText>
+          <View style={styles.actionButtons}>
+            <Button
+              variant="primary"
+              size="medium"
+              onPress={handleOpenExternally}
+              leftIcon={<Ionicons name="open-outline" size={20} color="white" />}
+            >
+              Open File
+            </Button>
+            <Button
+              variant="secondary"
+              size="medium"
+              onPress={handleShare}
+              leftIcon={<Ionicons name="share-outline" size={20} color={Colors.light.text.primary} />}
+              style={styles.shareButton}
+            >
+              Share
+            </Button>
+          </View>
+        </View>
+      );
+    }
+
     return (
         <View style={styles.containerCentered}>
             <Text style={styles.errorText}>Unsupported file type for preview.</Text>
@@ -203,7 +334,8 @@ const FilePreviewScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <ErrorBoundary screenName="FilePreviewScreen">
+      <View style={styles.container}>
       <Stack.Screen
         options={{
           title: fileName || 'Preview',
@@ -241,7 +373,8 @@ const FilePreviewScreen = () => {
           </TouchableOpacity>
         </View>
       )}
-    </View>
+      </View>
+    </ErrorBoundary>
   );
 };
 
@@ -313,6 +446,30 @@ const styles = StyleSheet.create({
     color: Colors.light.button.primary.text,
     fontSize: Fonts.size.medium,
     fontFamily: Fonts.type.bold,
+  },
+  audioContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.xl,
+  },
+  documentContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.xl,
+  },
+  fileName: {
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xs,
+    textAlign: 'center',
+  },
+  actionButtons: {
+    marginTop: Spacing.xl,
+    gap: Spacing.md,
+  },
+  shareButton: {
+    marginTop: Spacing.sm,
   },
 });
 

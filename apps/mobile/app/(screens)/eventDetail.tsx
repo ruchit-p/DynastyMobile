@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, ScrollView, Image, TouchableOpacity, Linking, Platform, ActivityIndicator, Share, StyleSheet, Alert } from 'react-native';
+import { View, ScrollView, Image, TouchableOpacity, Linking, Platform, ActivityIndicator, Share, StyleSheet, Alert, TextInput, Keyboard, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import ThemedText from '@/components/ThemedText';
@@ -13,11 +13,18 @@ import { Typography } from '@/constants/Typography';
 import { Spacing, BorderRadius, Shadows } from '@/constants/Spacing';
 import { commonHeaderOptions } from '@/constants/headerConfig';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { getEventDetailsMobile, MobileEventDetails } from '@src/lib/firebaseUtils';
+import { getEventDetailsMobile, EventDetails as MobileEventDetails, addCommentToEventMobile, deleteEventCommentMobile, EventComment, RsvpStatus , deleteEventMobile, rsvpToEventMobile } from '@src/lib/eventUtils';
 import { formatDate, formatTimeAgo, toDate } from '@src/lib/dateUtils';
 import { useAuth } from '@/src/contexts/AuthContext';
 import AnimatedActionSheet, { ActionSheetAction } from '@/components/ui/AnimatedActionSheet';
 import MediaGallery, { MediaItem } from '@/components/ui/MediaGallery';
+import { showErrorAlert } from '@src/lib/errorUtils';
+import ErrorBoundary from '@/components/ui/ErrorBoundary';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { ErrorSeverity } from '@/src/lib/ErrorHandlingService';
+import GuestListManagement from '@/components/ui/GuestListManagement';
+import RSVPStatusIndicator, { RSVPProgressBar, RSVPDeadlineCountdown } from '@/components/ui/RSVPStatusIndicator';
+import RSVPSummary, { RSVPSummaryData } from '@/components/ui/RSVPSummary';
 
 const EventDetailScreen = () => {
   const router = useRouter();
@@ -26,6 +33,11 @@ const EventDetailScreen = () => {
   const eventId = params.eventId;
   const colorScheme = useColorScheme();
   const { user } = useAuth();
+  const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
+    severity: ErrorSeverity.ERROR,
+    title: 'Event Detail Error',
+    trackCurrentScreen: true
+  });
 
   const scheme = colorScheme ?? 'light';
 
@@ -33,15 +45,37 @@ const EventDetailScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isActionSheetVisible, setActionSheetVisible] = useState(false);
+  
+  // Comment-related state
+  const [commentText, setCommentText] = useState('');
+  const [isAddingComment, setIsAddingComment] = useState(false);
+  const [replyingToComment, setReplyingToComment] = useState<string | null>(null);
+  const [showCommentInput, setShowCommentInput] = useState(false);
+  
+  // RSVP/Plus One related state
+  const [showPlusOneOptions, setShowPlusOneOptions] = useState(false);
+  const [plusOneName, setPlusOneName] = useState('');
+  
+  // Guest List Management state
+  const [showGuestManagement, setShowGuestManagement] = useState(false);
+  const [showRSVPSummary, setShowRSVPSummary] = useState(false);
+
+  useEffect(() => {
+    if (!isError) {
+      setError(null);
+    }
+  }, [isError]);
 
   useEffect(() => {
     if (eventId) {
-      const fetchEventData = async () => {
+      const fetchEventData = withErrorHandling(async () => {
+        reset();
         setIsLoading(true);
         setError(null);
         navigation.setOptions({ title: 'Loading Event...' });
         try {
           console.log(`[EventDetailScreen] Fetching details for event: ${eventId}`);
+          // Use the utility function from eventUtils
           const details = await getEventDetailsMobile(eventId);
           if (details) {
             console.log('[EventDetailScreen] Event details fetched:', details);
@@ -91,12 +125,23 @@ const EventDetailScreen = () => {
           }
         } catch (err: any) {
           console.error('[EventDetailScreen] Error fetching event details:', err);
+          
+          handleError(err, {
+            action: 'fetchEventData',
+            metadata: {
+              eventId,
+              userId: user?.uid,
+              errorCode: err.code,
+              errorMessage: err.message
+            }
+          });
+
           setError(err.message || 'Failed to load event details.');
           navigation.setOptions({ title: 'Error' });
         } finally {
           setIsLoading(false);
         }
-      };
+      });
       fetchEventData();
     } else {
       setError("Event ID is missing.");
@@ -105,18 +150,30 @@ const EventDetailScreen = () => {
     }
   }, [eventId, navigation, router, user, scheme]);
 
-  const handleShareEventInternal = async () => {
+  const handleShareEventInternal = withErrorHandling(async () => {
+    reset();
     if (!eventDetails) return;
     try {
       await Share.share({
         message: `Check out this event: ${eventDetails.title} on ${formatDate(toDate(eventDetails.eventDate))}! More info: [Your App Event Link Here] `,
         title: eventDetails.title,
       });
-    } catch (shareError) {
+    } catch (shareError: any) {
       console.error('Error sharing event:', shareError);
-      Alert.alert('Error', 'Could not share the event.');
+      
+      handleError(shareError, {
+        action: 'handleShareEventInternal',
+        metadata: {
+          eventId: eventDetails.id,
+          eventTitle: eventDetails.title,
+          errorCode: shareError.code,
+          errorMessage: shareError.message
+        }
+      });
+
+      showErrorAlert(shareError, 'Share Error');
     }
-  };
+  });
 
   const handleEditEvent = () => {
     if (!eventDetails) return;
@@ -127,7 +184,8 @@ const EventDetailScreen = () => {
     setActionSheetVisible(false);
   };
 
-  const handleDeleteEvent = async () => {
+  const handleDeleteEvent = withErrorHandling(async () => {
+    reset();
     if (!eventDetails || !user) return;
     setActionSheetVisible(false);
     Alert.alert(
@@ -140,16 +198,34 @@ const EventDetailScreen = () => {
           style: "destructive",
           onPress: async () => {
             try {
-              Alert.alert("Placeholder", "Delete functionality to be implemented.");
-            } catch (error) {
+              // Use the utility function from eventUtils to delete the event
+              const success = await deleteEventMobile(eventDetails.id);
+              if (success) {
+                Alert.alert("Success", "Event has been deleted.");
+                router.back();
+              } else {
+                Alert.alert("Error", "Failed to delete the event. Please try again.");
+              }
+            } catch (error: any) {
               console.error("Error deleting event:", error);
-              Alert.alert("Error", "An unexpected error occurred while deleting the event.");
+              
+              handleError(error, {
+                action: 'handleDeleteEvent',
+                metadata: {
+                  eventId: eventDetails.id,
+                  eventTitle: eventDetails.title,
+                  hostId: eventDetails.hostId,
+                  userId: user.uid
+                }
+              });
+
+              showErrorAlert(error, 'Delete Error');
             }
           },
         },
       ]
     );
-  };
+  });
 
   const eventHostActions: ActionSheetAction[] = [
     {
@@ -187,6 +263,261 @@ const EventDetailScreen = () => {
     if (!eventDetails?.host?.id || !user) return;
     console.log("Contacting host:", eventDetails.host.id);
     alert("Navigate to chat with host: " + eventDetails.host.name);
+  };
+
+  // Comment handling functions
+  const handleAddComment = withErrorHandling(async () => {
+    reset();
+    if (!eventDetails || !user || !commentText.trim()) return;
+    
+    setIsAddingComment(true);
+    try {
+      const newComment = await addCommentToEventMobile(
+        eventDetails.id, 
+        commentText.trim(),
+        replyingToComment || undefined
+      );
+      
+      if (newComment) {
+        // Update local state with new comment
+        setEventDetails(prev => prev ? {
+          ...prev,
+          comments: prev.comments ? [...prev.comments, newComment] : [newComment]
+        } : null);
+        
+        setCommentText('');
+        setReplyingToComment(null);
+        setShowCommentInput(false);
+        Keyboard.dismiss();
+        Alert.alert('Success', 'Your comment has been added!');
+      }
+    } catch (error: any) {
+      handleError(error, {
+        action: 'addComment',
+        metadata: {
+          eventId: eventDetails.id,
+          commentLength: commentText.length,
+          isReply: !!replyingToComment
+        }
+      });
+      showErrorAlert(error, 'Comment Error');
+    } finally {
+      setIsAddingComment(false);
+    }
+  });
+
+  const handleDeleteComment = withErrorHandling(async (commentId: string) => {
+    reset();
+    if (!eventDetails || !user) return;
+    
+    Alert.alert(
+      "Delete Comment",
+      "Are you sure you want to delete this comment?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const success = await deleteEventCommentMobile(eventDetails.id, commentId);
+              if (success) {
+                // Update local state to remove comment
+                setEventDetails(prev => prev ? {
+                  ...prev,
+                  comments: prev.comments?.filter(comment => comment.id !== commentId) || []
+                } : null);
+                Alert.alert('Success', 'Comment has been deleted.');
+              }
+            } catch (error: any) {
+              handleError(error, {
+                action: 'deleteComment',
+                metadata: {
+                  eventId: eventDetails.id,
+                  commentId
+                }
+              });
+              showErrorAlert(error, 'Delete Comment Error');
+            }
+          }
+        }
+      ]
+    );
+  });
+  
+  const handleReplyToComment = (commentId: string) => {
+    setReplyingToComment(commentId);
+    setShowCommentInput(true);
+  };
+  
+  const handleRSVPWithStatus = withErrorHandling(async (status: RsvpStatus) => {
+    reset();
+    if (!eventDetails || !user) return;
+    
+    // If event allows plus one and user is accepting, show plus one options
+    if (status === 'accepted' && eventDetails.allowGuestPlusOne) {
+      setShowPlusOneOptions(true);
+      return;
+    }
+    
+    // Otherwise, proceed with RSVP directly
+    try {
+      const success = await rsvpToEventMobile(eventDetails.id, status);
+      if (success) {
+        setEventDetails(prev => prev ? {...prev, userStatus: status} : null);
+        const statusMessage = status === 'accepted' ? "You're going to this event!" :
+                             status === 'declined' ? "We'll miss you!" : 
+                             "Your response has been recorded.";
+        Alert.alert("RSVP Updated", statusMessage);
+      }
+    } catch (error) {
+      handleError(error, {
+        action: 'rsvpToEvent',
+        metadata: {
+          eventId: eventDetails.id,
+          status
+        }
+      });
+      showErrorAlert(error, 'RSVP Error');
+    }
+  });
+
+  const handleConfirmRSVPWithPlusOne = withErrorHandling(async (includePlusOne: boolean) => {
+    reset();
+    if (!eventDetails || !user) return;
+    
+    try {
+      const success = await rsvpToEventMobile(
+        eventDetails.id, 
+        'accepted', 
+        includePlusOne,
+        includePlusOne ? plusOneName.trim() || undefined : undefined
+      );
+      
+      if (success) {
+        setEventDetails(prev => prev ? {
+          ...prev, 
+          userStatus: 'accepted',
+          userHasPlusOne: includePlusOne
+        } : null);
+        setShowPlusOneOptions(false);
+        setPlusOneName('');
+        Alert.alert("RSVP Confirmed", 
+          includePlusOne ? "You and your guest are going to this event!" : "You're going to this event!");
+      }
+    } catch (error) {
+      handleError(error, {
+        action: 'rsvpToEvent',
+        metadata: {
+          eventId: eventDetails.id,
+          status: 'accepted',
+          plusOne: includePlusOne
+        }
+      });
+      showErrorAlert(error, 'RSVP Error');
+    }
+  });
+
+  const checkRSVPDeadline = (): { canRSVP: boolean; message?: string } => {
+    if (!eventDetails.rsvpDeadline) return { canRSVP: true };
+    
+    const deadline = toDate(eventDetails.rsvpDeadline);
+    const now = new Date();
+    
+    if (!deadline) return { canRSVP: true };
+    
+    if (now > deadline) {
+      return {
+        canRSVP: false,
+        message: 'RSVP deadline has passed'
+      };
+    }
+    
+    // Show warning if within 24 hours
+    const hoursLeft = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
+    if (hoursLeft <= 24 && hoursLeft > 0) {
+      return {
+        canRSVP: true,
+        message: `RSVP deadline is in ${Math.round(hoursLeft)} hour(s)`
+      };
+    }
+    
+    return { canRSVP: true };
+  };
+
+  const handleRSVP = withErrorHandling(async () => {
+    reset();
+    if (!eventDetails || !user) return;
+    
+    const rsvpCheck = checkRSVPDeadline();
+    
+    if (!rsvpCheck.canRSVP) {
+      Alert.alert('RSVP Closed', rsvpCheck.message || 'RSVP is no longer available for this event.');
+      return;
+    }
+    
+    if (rsvpCheck.message) {
+      Alert.alert(
+        'Deadline Warning',
+        rsvpCheck.message + '. Would you like to continue?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Continue', onPress: () => showRSVPOptions() }
+        ]
+      );
+      return;
+    }
+    
+    showRSVPOptions();
+  });
+  
+  const showRSVPOptions = () => {
+    // Show action sheet with RSVP options
+    setActionSheetVisible(true);
+    const rsvpActions: ActionSheetAction[] = [
+      {
+        title: "I'm Going",
+        icon: "checkmark-circle-outline",
+        onPress: () => {
+          setActionSheetVisible(false);
+          handleRSVPWithStatus('accepted');
+        },
+      },
+      {
+        title: "Maybe",
+        icon: "help-circle-outline",
+        onPress: () => {
+          setActionSheetVisible(false);
+          handleRSVPWithStatus('maybe');
+        },
+      },
+      {
+        title: "I Can't Go",
+        icon: "close-circle-outline",
+        onPress: () => {
+          setActionSheetVisible(false);
+          handleRSVPWithStatus('declined');
+        },
+      },
+      {
+        title: "Cancel",
+        style: "cancel",
+        onPress: () => setActionSheetVisible(false),
+      },
+    ];
+    
+    // Need to update the action sheet actions
+    navigation.setOptions({
+      headerRight: () => (
+        <AnimatedActionSheet
+          isVisible={isActionSheetVisible}
+          onClose={() => setActionSheetVisible(false)}
+          actions={rsvpActions}
+          title="RSVP to Event"
+          message="Let the host know if you'll be attending."
+        />
+      ),
+    });
   };
 
   const renderHostItem = (host: MobileEventDetails['host']) => (
@@ -245,8 +576,9 @@ const EventDetailScreen = () => {
   const formattedRsvpDeadline = rsvpDeadlineObject ? `RSVP by ${formatDate(rsvpDeadlineObject, 'MMM d, yyyy')}` : null;
   
   return (
-    <Screen safeArea scroll>
-      <ThemedView style={styles.container} variant="primary">
+    <ErrorBoundary screenName="EventDetailScreen">
+      <Screen safeArea scroll>
+        <ThemedView style={styles.container} variant="primary">
         {/* Event Cover Media Gallery */}
         {eventDetails.coverPhotoUrls && eventDetails.coverPhotoUrls.length > 0 ? (
           <MediaGallery
@@ -295,12 +627,33 @@ const EventDetailScreen = () => {
               )}
               
               <View style={styles.rsvpContainer}>
+                {/* RSVP Status Indicator */}
+                {eventDetails.userStatus && eventDetails.userStatus !== 'pending' && (
+                  <RSVPStatusIndicator 
+                    status={eventDetails.userStatus}
+                    size="medium"
+                    style={{ marginBottom: Spacing.sm }}
+                  />
+                )}
+                
+                {/* RSVP Deadline Countdown */}
+                {eventDetails.rsvpDeadline && (
+                  <RSVPDeadlineCountdown 
+                    deadline={eventDetails.rsvpDeadline}
+                    style={{ marginBottom: Spacing.sm }}
+                  />
+                )}
+                
                 <Button 
-                  title={eventDetails.userStatus === 'going' ? "You're Going!" : "RSVP Now"} 
-                  onPress={() => alert('RSVP action')} 
+                  title={eventDetails.userStatus === 'accepted' ? "You're Going!" : 
+                         eventDetails.userStatus === 'declined' ? "Not Going" : 
+                         eventDetails.userStatus === 'maybe' ? "Maybe" : "RSVP Now"} 
+                  onPress={handleRSVP} 
                   variant="primary"
                   style={styles.rsvpButton}
-                  leftIcon={eventDetails.userStatus === 'going' ? "checkmark-circle" : "calendar"}
+                  leftIcon={eventDetails.userStatus === 'accepted' ? "checkmark-circle" : 
+                           eventDetails.userStatus === 'declined' ? "close-circle" : 
+                           eventDetails.userStatus === 'maybe' ? "help-circle" : "calendar"}
                 />
                 {formattedRsvpDeadline && (
                   <ThemedText 
@@ -337,38 +690,180 @@ const EventDetailScreen = () => {
             </Card>
           )}
 
+          {/* RSVP Summary for Hosts */}
+          {eventDetails.isHost && eventDetails.attendees && eventDetails.attendees.length > 0 && (
+            <RSVPSummary
+              data={{
+                totalInvited: eventDetails.attendees.length,
+                accepted: eventDetails.attendees.filter(a => a.status === 'accepted').length,
+                declined: eventDetails.attendees.filter(a => a.status === 'declined').length,
+                maybe: eventDetails.attendees.filter(a => a.status === 'maybe').length,
+                pending: eventDetails.attendees.filter(a => a.status === 'pending').length,
+                plusOnes: eventDetails.attendees.filter(a => a.plusOne).length,
+                responseRate: ((eventDetails.attendees.length - eventDetails.attendees.filter(a => a.status === 'pending').length) / eventDetails.attendees.length) * 100,
+                estimatedAttendance: eventDetails.attendees.filter(a => a.status === 'accepted').length + (eventDetails.attendees.filter(a => a.status === 'maybe').length * 0.7)
+              }}
+              style={styles.card}
+            />
+          )}
+
           {eventDetails.attendees && eventDetails.attendees.length > 0 && eventDetails.showGuestList && (
             <Card style={styles.card}>
-              <Card.Header>
+              <Card.Header style={styles.attendeesHeader}>
                 <ThemedText variant="h4" style={styles.sectionTitleNoMargin}>Attendees ({eventDetails.attendees.length})</ThemedText>
+                {eventDetails.isHost && (
+                  <TouchableOpacity 
+                    onPress={() => setShowGuestManagement(!showGuestManagement)}
+                    style={styles.manageGuestsButton}
+                  >
+                    <Ionicons 
+                      name={showGuestManagement ? "people" : "settings"} 
+                      size={20} 
+                      color={Colors[scheme].text.link} 
+                    />
+                    <ThemedText variant="caption" color="link" style={{ marginLeft: Spacing.xs }}>
+                      {showGuestManagement ? "Hide" : "Manage"}
+                    </ThemedText>
+                  </TouchableOpacity>
+                )}
               </Card.Header>
               <Card.Content>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.attendeesScrollContainer}>
-                  {eventDetails.attendees.map(renderAttendeeAvatar)}
-                </ScrollView>
+                {showGuestManagement && eventDetails.isHost ? (
+                  <GuestListManagement
+                    eventId={eventDetails.id}
+                    isHost={true}
+                    allowGuestPlusOne={eventDetails.allowGuestPlusOne}
+                    onSendReminder={(userId) => {
+                      // TODO: Implement send reminder functionality
+                      Alert.alert('Reminder Sent', 'RSVP reminder sent to guest!');
+                    }}
+                  />
+                ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.attendeesScrollContainer}>
+                    {eventDetails.attendees.map(renderAttendeeAvatar)}
+                  </ScrollView>
+                )}
               </Card.Content>
             </Card>
           )}
 
-          {eventDetails.comments && eventDetails.comments.length > 0 && (
-            <Card style={styles.card}>
-              <Card.Header>
-                <ThemedText variant="h4" style={styles.sectionTitleNoMargin}>Comments ({eventDetails.comments.length})</ThemedText>
-              </Card.Header>
-              <Card.Content>
-                {eventDetails.comments.map(comment => (
-                  <ThemedView key={comment.id} style={styles.commentItemContainer} variant="secondary">
-                    <Avatar source={comment.user.avatar ?? undefined} fallback={comment.user.name?.substring(0,1)} size="sm" />
-                    <View style={styles.commentContent}>
-                      <ThemedText variant="bodyMedium" style={{ fontWeight: Typography.weight.bold }}>{comment.user.name}</ThemedText>
-                      <ThemedText variant="bodySmall">{comment.text}</ThemedText>
-                      <ThemedText variant="caption" color="secondary">{formatTimeAgo(toDate(comment.timestamp))}</ThemedText>
+          {/* Comments Section */}
+          <Card style={styles.card}>
+            <Card.Header style={styles.commentHeader}>
+              <ThemedText variant="h4" style={styles.sectionTitleNoMargin}>
+                Comments ({eventDetails.comments?.length || 0})
+              </ThemedText>
+              <TouchableOpacity 
+                onPress={() => setShowCommentInput(!showCommentInput)}
+                style={styles.addCommentButton}
+              >
+                <Ionicons 
+                  name={showCommentInput ? "close" : "add"} 
+                  size={20} 
+                  color={Colors[scheme].text.link} 
+                />
+              </TouchableOpacity>
+            </Card.Header>
+            <Card.Content>
+              {/* Add Comment Input */}
+              {showCommentInput && (
+                <View style={styles.addCommentContainer}>
+                  {replyingToComment && (
+                    <View style={styles.replyIndicator}>
+                      <ThemedText variant="caption" color="secondary">
+                        Replying to comment...
+                      </ThemedText>
+                      <TouchableOpacity onPress={() => setReplyingToComment(null)}>
+                        <Ionicons name="close" size={16} color={Colors[scheme].text.secondary} />
+                      </TouchableOpacity>
                     </View>
-                  </ThemedView>
-                ))}
-              </Card.Content>
-            </Card>
-          )}
+                  )}
+                  <View style={styles.commentInputContainer}>
+                    <Avatar 
+                      source={user?.photoURL ?? undefined} 
+                      fallback={user?.displayName?.substring(0,1) || 'U'} 
+                      size="sm" 
+                    />
+                    <TextInput
+                      style={styles.commentInput}
+                      placeholder="Write a comment..."
+                      placeholderTextColor={Colors[scheme].text.secondary}
+                      value={commentText}
+                      onChangeText={setCommentText}
+                      multiline
+                      maxLength={500}
+                    />
+                    <TouchableOpacity 
+                      onPress={handleAddComment}
+                      disabled={!commentText.trim() || isAddingComment}
+                      style={[
+                        styles.sendCommentButton, 
+                        (!commentText.trim() || isAddingComment) && styles.sendCommentButtonDisabled
+                      ]}
+                    >
+                      {isAddingComment ? (
+                        <ActivityIndicator size="small" color={Colors[scheme].background.primary} />
+                      ) : (
+                        <Ionicons 
+                          name="send" 
+                          size={16} 
+                          color={Colors[scheme].background.primary} 
+                        />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+              
+              {/* Comments List */}
+              {eventDetails.comments && eventDetails.comments.length > 0 ? (
+                eventDetails.comments.map(comment => (
+                  <View key={comment.id} style={styles.commentItemContainer}>
+                    <Avatar 
+                      source={comment.user.avatar ?? undefined} 
+                      fallback={comment.user.name?.substring(0,1)} 
+                      size="sm" 
+                    />
+                    <View style={styles.commentContent}>
+                      <View style={styles.commentHeader}>
+                        <ThemedText variant="bodyMedium" style={{ fontWeight: Typography.weight.bold }}>
+                          {comment.user.name}
+                        </ThemedText>
+                        <View style={styles.commentActions}>
+                          <TouchableOpacity 
+                            onPress={() => handleReplyToComment(comment.id)}
+                            style={styles.commentActionButton}
+                          >
+                            <Ionicons name="arrow-undo-outline" size={14} color={Colors[scheme].text.secondary} />
+                          </TouchableOpacity>
+                          {(user?.uid === comment.userId || user?.uid === eventDetails.hostId) && (
+                            <TouchableOpacity 
+                              onPress={() => handleDeleteComment(comment.id)}
+                              style={styles.commentActionButton}
+                            >
+                              <Ionicons name="trash-outline" size={14} color={Colors[scheme].text.error} />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                      <ThemedText variant="bodySmall" style={styles.commentText}>
+                        {comment.text}
+                      </ThemedText>
+                      <ThemedText variant="caption" color="secondary" style={styles.commentTimestamp}>
+                        {formatTimeAgo(toDate(comment.timestamp))}
+                      </ThemedText>
+                    </View>
+                  </View>
+                ))
+              ) : !showCommentInput ? (
+                <View style={styles.noCommentsContainer}>
+                  <ThemedText variant="bodyMedium" color="secondary">
+                    No comments yet. Be the first to comment!
+                  </ThemedText>
+                </View>
+              ) : null}
+            </Card.Content>
+          </Card>
 
           {/* Additional Information Section */}
           {(eventDetails.dresscode || eventDetails.whatToBring || eventDetails.additionalInfo) && (
@@ -432,16 +927,77 @@ const EventDetailScreen = () => {
           </Card>
         </View>
       </ThemedView>
-      {eventDetails && user?.uid === eventDetails.hostId && (
-        <AnimatedActionSheet
-          isVisible={isActionSheetVisible}
-          onClose={() => setActionSheetVisible(false)}
-          actions={eventHostActions}
-          title="Event Options"
-          message="Manage your event."
-        />
-      )}
-    </Screen>
+        {eventDetails && user?.uid === eventDetails.hostId && (
+          <AnimatedActionSheet
+            isVisible={isActionSheetVisible}
+            onClose={() => setActionSheetVisible(false)}
+            actions={eventHostActions}
+            title="Event Options"
+            message="Manage your event."
+          />
+        )}
+        
+        {/* Plus One Modal */}
+        {showPlusOneOptions && (
+          <ThemedView style={styles.modalOverlay}>
+            <ThemedView style={styles.plusOneModal} variant="primary">
+              <ThemedText variant="h3" style={styles.modalTitle}>
+                Bring a Guest?
+              </ThemedText>
+              <ThemedText variant="bodyMedium" color="secondary" style={styles.modalSubtitle}>
+                This event allows you to bring a +1 guest
+              </ThemedText>
+              
+              <View style={styles.plusOneInputContainer}>
+                <ThemedText variant="bodyMedium" style={styles.inputLabel}>
+                  Guest name (optional)
+                </ThemedText>
+                <TextInput
+                  style={styles.plusOneInput}
+                  placeholder="Enter guest's name"
+                  placeholderTextColor={Colors[scheme].text.secondary}
+                  value={plusOneName}
+                  onChangeText={setPlusOneName}
+                  maxLength={50}
+                />
+              </View>
+              
+              <View style={styles.modalButtonContainer}>
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.modalButtonSecondary]}
+                  onPress={() => handleConfirmRSVPWithPlusOne(false)}
+                >
+                  <ThemedText variant="bodyMedium" color="secondary">
+                    Just Me
+                  </ThemedText>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.modalButtonPrimary]}
+                  onPress={() => handleConfirmRSVPWithPlusOne(true)}
+                >
+                  <ThemedText variant="bodyMedium" style={styles.modalButtonText}>
+                    Bring Guest
+                  </ThemedText>
+                </TouchableOpacity>
+              </View>
+              
+              <TouchableOpacity 
+                style={styles.modalCancelButton}
+                onPress={() => {
+                  setShowPlusOneOptions(false);
+                  setPlusOneName('');
+                }}
+              >
+                <ThemedText variant="bodySmall" color="secondary">
+                  Cancel
+                </ThemedText>
+              </TouchableOpacity>
+            </ThemedView>
+          </ThemedView>
+        )}
+      </Screen>
+    </ErrorBoundary>
   );
 };
 
@@ -532,6 +1088,16 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
     textAlign: 'center',
   },
+  attendeesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  manageGuestsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.xs,
+  },
   commentItemContainer: {
     flexDirection: 'row',
     marginBottom: Spacing.md,
@@ -541,6 +1107,144 @@ const styles = StyleSheet.create({
   commentContent: {
     marginLeft: Spacing.md,
     flex: 1,
+  },
+  commentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  commentActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  commentActionButton: {
+    padding: Spacing.xs,
+    marginLeft: Spacing.xs,
+  },
+  commentText: {
+    marginBottom: Spacing.xs,
+  },
+  commentTimestamp: {
+    marginTop: Spacing.xs,
+  },
+  addCommentButton: {
+    padding: Spacing.xs,
+  },
+  addCommentContainer: {
+    marginBottom: Spacing.md,
+  },
+  commentInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: Spacing.sm,
+    backgroundColor: Colors.light.background.secondary,
+    borderRadius: BorderRadius.md,
+  },
+  commentInput: {
+    flex: 1,
+    marginLeft: Spacing.sm,
+    marginRight: Spacing.sm,
+    minHeight: 40,
+    maxHeight: 120,
+    fontSize: 16,
+    color: Colors.light.text.primary,
+    paddingVertical: Spacing.xs,
+  },
+  sendCommentButton: {
+    backgroundColor: Colors.light.text.link,
+    borderRadius: BorderRadius.sm,
+    padding: Spacing.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 36,
+    height: 36,
+  },
+  sendCommentButtonDisabled: {
+    backgroundColor: Colors.light.text.secondary,
+    opacity: 0.5,
+  },
+  replyIndicator: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+    padding: Spacing.sm,
+    backgroundColor: Colors.light.background.tertiary,
+    borderRadius: BorderRadius.sm,
+  },
+  noCommentsContainer: {
+    padding: Spacing.lg,
+    alignItems: 'center',
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  plusOneModal: {
+    marginHorizontal: Spacing.lg,
+    padding: Spacing.xl,
+    borderRadius: BorderRadius.lg,
+    maxWidth: 400,
+    width: '100%',
+    ...Shadows.lg,
+  },
+  modalTitle: {
+    textAlign: 'center',
+    marginBottom: Spacing.sm,
+  },
+  modalSubtitle: {
+    textAlign: 'center',
+    marginBottom: Spacing.lg,
+  },
+  plusOneInputContainer: {
+    marginBottom: Spacing.lg,
+  },
+  inputLabel: {
+    marginBottom: Spacing.sm,
+    fontWeight: Typography.weight.semiBold,
+  },
+  plusOneInput: {
+    borderWidth: 1,
+    borderColor: Colors.light.text.secondary,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    fontSize: 16,
+    color: Colors.light.text.primary,
+  },
+  modalButtonContainer: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  modalButton: {
+    flex: 1,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+  },
+  modalButtonSecondary: {
+    backgroundColor: Colors.light.background.tertiary,
+    borderWidth: 1,
+    borderColor: Colors.light.text.secondary,
+  },
+  modalButtonPrimary: {
+    backgroundColor: Colors.light.text.link,
+  },
+  modalButtonText: {
+    color: Colors.light.background.primary,
+    fontWeight: Typography.weight.semiBold,
+  },
+  modalCancelButton: {
+    alignItems: 'center',
+    padding: Spacing.sm,
   },
   headerButton: {
     padding: Spacing.sm,
