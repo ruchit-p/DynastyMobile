@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, memo } from 'react';
 import { ViewToken } from 'react-native';
-import FlashList from './FlashList';
+import { FlashList } from './FlashList';
 import MessageOptimizationService from '../../src/services/MessageOptimizationService';
 import { Message } from '../../src/services/encryption/ChatEncryptionService';
 

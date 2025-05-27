@@ -10,6 +10,7 @@ import { getMessageSyncService } from './MessageSyncService';
 import { getFirebaseAuth } from '../lib/firebase';
 import { SyncDatabase } from '../database/SyncDatabase';
 import NetInfo from '@react-native-community/netinfo';
+import { logger } from './LoggingService';
 
 // MARK: - Constants
 const BACKGROUND_SYNC_TASK_NAME = 'dynasty-background-sync';
@@ -18,16 +19,16 @@ const BACKGROUND_SYNC_TASK_NAME = 'dynasty-background-sync';
 // Define the background task - this must be in global scope
 TaskManager.defineTask(BACKGROUND_SYNC_TASK_NAME, async () => {
   try {
-    console.log('[BackgroundSync] Background task started at:', new Date().toISOString());
+    logger.debug('[BackgroundSync] Background task started at:', new Date().toISOString());
     
     // Get the singleton instance and perform sync
     const syncService = BackgroundSyncTask.getInstance();
     await syncService.performSyncOperation();
     
-    console.log('[BackgroundSync] Background task completed successfully');
+    logger.debug('[BackgroundSync] Background task completed successfully');
     return BackgroundTask.BackgroundTaskResult.Success;
   } catch (error) {
-    console.error('[BackgroundSync] Background task failed:', error);
+    logger.error('[BackgroundSync] Background task failed:', error);
     return BackgroundTask.BackgroundTaskResult.Failed;
   }
 });
@@ -51,17 +52,17 @@ export class BackgroundSyncTask {
    */
   async configure(): Promise<void> {
     if (this.isConfigured) {
-      console.log('[BackgroundSync] Already configured');
+      logger.debug('[BackgroundSync] Already configured');
       return;
     }
 
     try {
       // Check if background tasks are available
       const status = await BackgroundTask.getStatusAsync();
-      console.log('[BackgroundSync] Background task status:', BackgroundTask.BackgroundTaskStatus[status]);
+      logger.debug('[BackgroundSync] Background task status:', BackgroundTask.BackgroundTaskStatus[status]);
 
       if (status === BackgroundTask.BackgroundTaskStatus.Restricted) {
-        console.warn('[BackgroundSync] Background tasks are restricted on this device');
+        logger.warn('[BackgroundSync] Background tasks are restricted on this device');
         return;
       }
 
@@ -69,10 +70,10 @@ export class BackgroundSyncTask {
       await this.registerTask();
       
       this.isConfigured = true;
-      console.log('[BackgroundSync] Configuration complete');
+      logger.debug('[BackgroundSync] Configuration complete');
       
     } catch (error) {
-      console.error('[BackgroundSync] Configuration failed:', error);
+      logger.error('[BackgroundSync] Configuration failed:', error);
       throw error;
     }
   }
@@ -89,10 +90,10 @@ export class BackgroundSyncTask {
       });
 
       this.isRegistered = true;
-      console.log('[BackgroundSync] Background task registered successfully');
+      logger.debug('[BackgroundSync] Background task registered successfully');
       
     } catch (error) {
-      console.error('[BackgroundSync] Failed to register background task:', error);
+      logger.error('[BackgroundSync] Failed to register background task:', error);
       throw error;
     }
   }
@@ -102,13 +103,13 @@ export class BackgroundSyncTask {
    * This method is called by the background task
    */
   async performSyncOperation(): Promise<void> {
-    console.log('[BackgroundSync] Starting sync operation...');
+    logger.debug('[BackgroundSync] Starting sync operation...');
 
     try {
       // Check network connectivity
       const netInfo = await NetInfo.fetch();
       if (!netInfo.isConnected) {
-        console.log('[BackgroundSync] No network connection, skipping sync');
+        logger.debug('[BackgroundSync] No network connection, skipping sync');
         return;
       }
 
@@ -116,7 +117,7 @@ export class BackgroundSyncTask {
       const auth = getFirebaseAuth();
       const currentUser = auth.currentUser;
       if (!currentUser) {
-        console.log('[BackgroundSync] No authenticated user, skipping sync');
+        logger.debug('[BackgroundSync] No authenticated user, skipping sync');
         return;
       }
 
@@ -125,26 +126,26 @@ export class BackgroundSyncTask {
       await sqliteDb.open();
 
       // 1. Process message queue
-      console.log('[BackgroundSync] Processing message queue...');
+      logger.debug('[BackgroundSync] Processing message queue...');
       await syncService.retryFailedMessages();
 
       // 2. Sync recent conversations
-      console.log('[BackgroundSync] Syncing conversations...');
+      logger.debug('[BackgroundSync] Syncing conversations...');
       await syncService.syncConversations(currentUser.uid);
 
       // 3. Clean up expired media cache
-      console.log('[BackgroundSync] Cleaning expired media...');
+      logger.debug('[BackgroundSync] Cleaning expired media...');
       const cleaned = await sqliteDb.cleanExpiredMedia();
       if (cleaned > 0) {
-        console.log(`[BackgroundSync] Cleaned ${cleaned} expired media items`);
+        logger.debug(`[BackgroundSync] Cleaned ${cleaned} expired media items`);
       }
 
       // 4. Get sync statistics
       const stats = await sqliteDb.getDatabaseStats();
-      console.log('[BackgroundSync] Sync complete. Stats:', stats);
+      logger.debug('[BackgroundSync] Sync complete. Stats:', stats);
 
     } catch (error) {
-      console.error('[BackgroundSync] Sync operation failed:', error);
+      logger.error('[BackgroundSync] Sync operation failed:', error);
       throw error;
     }
   }
@@ -155,16 +156,16 @@ export class BackgroundSyncTask {
   async triggerSyncForTesting(): Promise<boolean> {
     if (__DEV__) {
       try {
-        console.log('[BackgroundSync] Triggering sync for testing...');
+        logger.debug('[BackgroundSync] Triggering sync for testing...');
         const result = await BackgroundTask.triggerTaskWorkerForTestingAsync();
-        console.log('[BackgroundSync] Test trigger result:', result);
+        logger.debug('[BackgroundSync] Test trigger result:', result);
         return result;
       } catch (error) {
-        console.error('[BackgroundSync] Failed to trigger test sync:', error);
+        logger.error('[BackgroundSync] Failed to trigger test sync:', error);
         return false;
       }
     } else {
-      console.warn('[BackgroundSync] Test trigger only available in development mode');
+      logger.warn('[BackgroundSync] Test trigger only available in development mode');
       return false;
     }
   }
@@ -177,14 +178,14 @@ export class BackgroundSyncTask {
       if (this.isRegistered) {
         await BackgroundTask.unregisterTaskAsync(BACKGROUND_SYNC_TASK_NAME);
         this.isRegistered = false;
-        console.log('[BackgroundSync] Background task unregistered');
+        logger.debug('[BackgroundSync] Background task unregistered');
       }
       
       this.isConfigured = false;
-      console.log('[BackgroundSync] Background sync stopped');
+      logger.debug('[BackgroundSync] Background sync stopped');
       
     } catch (error) {
-      console.error('[BackgroundSync] Failed to stop sync:', error);
+      logger.error('[BackgroundSync] Failed to stop sync:', error);
       throw error;
     }
   }
@@ -208,7 +209,7 @@ export class BackgroundSyncTask {
         status,
       };
     } catch (error) {
-      console.error('[BackgroundSync] Failed to get status:', error);
+      logger.error('[BackgroundSync] Failed to get status:', error);
       return {
         available: false,
         configured: this.isConfigured,

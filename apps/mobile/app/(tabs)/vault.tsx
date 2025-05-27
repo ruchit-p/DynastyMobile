@@ -1,20 +1,19 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { StyleSheet, View, Alert, Platform, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import FloatingActionMenu, { FabMenuItemAction, FloatingActionMenuRef } from '../../components/ui/FloatingActionMenu';
 import Screen from '../../components/ui/Screen';
 import EmptyState from '../../components/ui/EmptyState';
-import ThemedText from '../../components/ThemedText';
+import { ThemedText } from '../../components/ThemedText';
 import IconButton, { IconSet } from '../../components/ui/IconButton';
 import AppHeader from '../../components/ui/AppHeader';
 import FileListItem, { type VaultListItemType as UIVaultItem } from '../../components/ui/FileListItem';
 import FileListItemWithPreview from '../../components/ui/FileListItemWithPreview';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
-import FlashList from '../../components/ui/FlashList';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
+import { FlashList } from '../../components/ui/FlashList';
 import { Colors } from '../../constants/Colors';
-import Fonts from '../../constants/Fonts';
-import { Spacing, BorderRadius, Shadows } from '../../constants/Spacing';
+import { Spacing, BorderRadius } from '../../constants/Spacing';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
@@ -29,16 +28,15 @@ import {
   getUploadSignedUrlMobile,
 } from '../../src/lib/firebaseUtils';
 import firebase from '@react-native-firebase/app';
-import { showErrorAlert } from '../../src/lib/errorUtils';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
-import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
-import { useSmartMediaUpload, MediaContext } from '../../hooks/useSmartMediaUpload';
+import { useSmartMediaUpload } from '../../hooks/useSmartMediaUpload';
 import { useEncryption } from '../../src/contexts/EncryptionContext';
 import { getVaultService, VaultItem as ServiceVaultItem } from '../../src/services/VaultService';
 import VaultSearchBar, { VaultSearchFilters } from '../../components/ui/VaultSearchBar';
 import Checkbox from '../../components/ui/Checkbox';
 import UploadProgressBar from '../../components/ui/UploadProgressBar';
 import Button from '../../components/ui/Button';
+import { logger } from '../../src/services/LoggingService';
 
 // MARK: - Helper Functions
 
@@ -244,7 +242,7 @@ const VaultScreen = () => {
           {
             encrypt: smartUpload.isEncrypted && isEncryptionReady,
             onProgress: (progress) => {
-              console.log(`Upload progress for ${assetName}: ${progress}%`);
+              logger.debug(`Upload progress for ${assetName}: ${progress}%`);
             }
           }
         );
@@ -291,7 +289,7 @@ const VaultScreen = () => {
       if (!result.canceled && result.assets) {
         await handleAddItemsToVault(result.assets);
       } else if (result.canceled === true) {
-        console.log('Document picking cancelled');
+        logger.debug('Document picking cancelled');
       }
     } catch (error) {
       handleError(error, {
@@ -354,7 +352,7 @@ const VaultScreen = () => {
                     await createVaultFolderMobile(folderName.trim(), currentPathId);
                     fetchItems(currentPathId);
                   } catch (e) {
-                    console.error('Error creating folder:', e);
+                    logger.error('Error creating folder:', e);
                     showErrorAlert(e, 'Folder Creation Error');
                   }
                 }
@@ -364,7 +362,7 @@ const VaultScreen = () => {
         );
       }
     } catch (error) {
-      console.error('Error accessing folder:', error);
+      logger.error('Error accessing folder:', error);
       showErrorAlert(error, 'Folder Access Error');
     }
   };
@@ -457,7 +455,7 @@ const VaultScreen = () => {
           });
         } catch (e: any) { // Catch specific error type
           setIsLoading(false);
-          console.error('Error sharing file:', e);
+          logger.error('Error sharing file:', e);
           showErrorAlert(e, 'File Opening Error');
         }
       }
@@ -478,7 +476,7 @@ const VaultScreen = () => {
               Alert.alert('Deleted', `"${item.name}" has been deleted.`);
               fetchItems(currentPathId);
             } catch (e) {
-              console.error('Delete error:', e);
+              logger.error('Delete error:', e);
               showErrorAlert(e, 'Delete Error');
             }
           }
@@ -500,7 +498,7 @@ const VaultScreen = () => {
                 Alert.alert('Renamed', `"${item.name}" -> "${newName.trim()}"`);
                 fetchItems(currentPathId);
               } catch (e) {
-                console.error('Rename error:', e);
+                logger.error('Rename error:', e);
                 showErrorAlert(e, 'Rename Error');
               }
             }

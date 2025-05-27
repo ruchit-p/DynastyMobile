@@ -1,9 +1,10 @@
 import { Stack } from 'expo-router';
 import React from 'react';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
+import { logger } from '../../src/services/LoggingService';
 
 export default function AuthLayout() {
-  console.log('[[AuthLayout]] Mounting or Re-rendering');
+  logger.debug('[[AuthLayout]] Mounting or Re-rendering');
   return (
     <ErrorBoundary screenName="AuthLayout">
       <Stack screenOptions={{ headerShown: false }}>

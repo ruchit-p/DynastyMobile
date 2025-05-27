@@ -5,6 +5,9 @@ import {logger} from "firebase-functions/v2";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
 import {ErrorCode, createError, withErrorHandling} from "./utils/errors";
 import {withAuth, withResourceAccess, PermissionLevel, RateLimitType} from "./middleware";
+import {sanitizeUserInput} from "./utils/xssSanitization";
+import {validateRequest} from "./utils/request-validator";
+import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
 
 // MARK: - Types
 
@@ -412,11 +415,33 @@ export const createStory = onCall(
   withAuth(
     async (request) => {
       try {
-        const storyData = request.data.story;
-        const callerUid = request.auth?.uid;
+        const callerUid = request.auth?.uid!;
 
-        if (!storyData) {
-          throw createError(ErrorCode.MISSING_PARAMETERS, "Story data is required");
+        // Validate and sanitize input using centralized validator
+        const validatedData = validateRequest(
+          request.data,
+          VALIDATION_SCHEMAS.createStory,
+          callerUid
+        );
+
+        const storyData = validatedData.story;
+
+        // Additional sanitization for blocks as they may contain HTML
+        if (storyData.blocks && Array.isArray(storyData.blocks)) {
+          storyData.blocks = storyData.blocks.map((block: StorageBlock) => {
+            if (block.type === "text" && typeof block.data === "string") {
+              // Allow basic HTML formatting for text blocks
+              return {
+                ...block,
+                data: sanitizeUserInput(block.data, {
+                  allowHtml: true,
+                  allowedTags: ["b", "i", "u", "strong", "em", "p", "br", "blockquote"],
+                  maxLength: 50000, // Allow longer content for story blocks
+                }),
+              };
+            }
+            return block;
+          });
         }
 
         logger.info(`Creating story for user ${callerUid}`, {
@@ -424,7 +449,7 @@ export const createStory = onCall(
           storyDataKeys: Object.keys(storyData),
         });
 
-        // Validate required fields
+        // Extract fields from validated data
         const {
           title,
           authorID,
@@ -541,11 +566,14 @@ export const createStory = onCall(
       }
     },
     "createStory",
-    "verified", // Require verified user for story creation
     {
-      type: RateLimitType.WRITE,
-      maxRequests: 10, // 10 stories per hour
-      windowSeconds: 3600,
+      authLevel: "verified", // Require verified user for story creation
+      rateLimitConfig: {
+        type: RateLimitType.WRITE,
+        maxRequests: 10, // 10 stories per hour
+        windowSeconds: 3600,
+      },
+      enableCSRF: true, // Enable CSRF protection for story creation
     }
   )
 );
@@ -612,9 +640,12 @@ export const updateStory = onCall(
     },
     "updateStory",
     {
-      resourceType: "story",
-      resourceIdField: "storyId",
-      requiredLevel: PermissionLevel.ADMIN, // Only story author can update
+      resourceConfig: {
+        resourceType: "story",
+        resourceIdField: "storyId",
+        requiredLevel: PermissionLevel.ADMIN, // Only story author can update
+      },
+      enableCSRF: true, // Enable CSRF protection for story updates
     }
   )
 );
@@ -668,9 +699,12 @@ export const deleteStory = onCall(
     },
     "deleteStory",
     {
-      resourceType: "story",
-      resourceIdField: "storyId",
-      requiredLevel: [PermissionLevel.ADMIN, PermissionLevel.TREE_OWNER], // Story author or tree owner can delete
+      resourceConfig: {
+        resourceType: "story",
+        resourceIdField: "storyId",
+        requiredLevel: [PermissionLevel.ADMIN, PermissionLevel.TREE_OWNER], // Story author or tree owner can delete
+      },
+      enableCSRF: true, // Enable CSRF protection for story deletion
     }
   )
 );
@@ -720,16 +754,19 @@ export const likeStory = onCall(
     },
     "likeStory",
     {
-      resourceType: "story",
-      resourceIdField: "storyId",
-      requiredLevel: [PermissionLevel.ADMIN, PermissionLevel.FAMILY_MEMBER],
-      additionalPermissionCheck: async (resource, uid) => {
-        // Same access check as getStoryById - if you can view it, you can like it
-        if (resource.privacy === "custom") {
-          return resource.customAccessMembers?.includes(uid) || false;
-        }
-        return resource.privacy === "family";
+      resourceConfig: {
+        resourceType: "story",
+        resourceIdField: "storyId",
+        requiredLevel: [PermissionLevel.ADMIN, PermissionLevel.FAMILY_MEMBER],
+        additionalPermissionCheck: async (resource, uid) => {
+          // Same access check as getStoryById - if you can view it, you can like it
+          if (resource.privacy === "custom") {
+            return resource.customAccessMembers?.includes(uid) || false;
+          }
+          return resource.privacy === "family";
+        },
       },
+      enableCSRF: true, // Enable CSRF protection for liking stories
     }
   )
 );
@@ -743,7 +780,7 @@ export const unlikeStory = onCall(
     memory: "128MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
+  withAuth(async (request) => {
     const {storyId} = request.data;
     const userId = request.auth?.uid;
 
@@ -773,7 +810,10 @@ export const unlikeStory = onCall(
 
     logger.info(`User ${userId} unliked story ${storyId}.`);
     return {success: true, message: "Story unliked successfully."};
-  }, "unlikeStory")
+  }, "unlikeStory", {
+    authLevel: "auth",
+    enableCSRF: true, // Enable CSRF protection for unliking stories
+  })
 );
 
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import ThemedText from '../ThemedText';
+import { ThemedText } from '../ThemedText';
 import { Colors } from '../../constants/Colors';
 import { Spacing, BorderRadius } from '../../constants/Spacing';
 import Fonts from '../../constants/Fonts';

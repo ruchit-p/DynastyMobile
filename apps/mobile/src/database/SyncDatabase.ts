@@ -18,6 +18,7 @@ import {
   SyncableEntity
 } from './schema';
 import { initializeDatabase, needsMigration } from './migrations';
+import { logger } from '../services/LoggingService';
 
 SQLite.enablePromise(true);
 
@@ -63,9 +64,9 @@ export class SyncDatabase {
         await initializeDatabase(this.db);
       }
       
-      console.log('[Database] Connection opened successfully');
+      logger.debug('[Database] Connection opened successfully');
     } catch (error) {
-      console.error('[Database] Failed to open connection:', error);
+      logger.error('[Database] Failed to open connection:', error);
       throw error;
     }
   }
@@ -77,7 +78,7 @@ export class SyncDatabase {
     if (this.db) {
       await this.db.close();
       this.db = null;
-      console.log('[Database] Connection closed');
+      logger.debug('[Database] Connection closed');
     }
   }
   

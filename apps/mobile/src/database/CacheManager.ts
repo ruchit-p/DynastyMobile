@@ -6,8 +6,9 @@
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Device from 'expo-device';
-import SyncDatabase from './SyncDatabase';
+import { SyncDatabase } from './SyncDatabase';
 import { CacheMetadata, MediaCache } from './schema';
+import { logger } from '../services/LoggingService';
 
 interface CachePolicy {
   maxSize: number; // Maximum cache size in bytes
@@ -112,7 +113,7 @@ export class CacheManager {
         };
       }
     } catch (error) {
-      console.error('[CacheManager] Failed to load stats:', error);
+      logger.error('[CacheManager] Failed to load stats:', error);
     }
   }
   
@@ -123,7 +124,7 @@ export class CacheManager {
     try {
       await AsyncStorage.setItem('cache_stats', JSON.stringify(this.stats));
     } catch (error) {
-      console.error('[CacheManager] Failed to save stats:', error);
+      logger.error('[CacheManager] Failed to save stats:', error);
     }
   }
   
@@ -154,7 +155,7 @@ export class CacheManager {
         [new Date().toISOString(), entityType, entityId]
       );
     } catch (error) {
-      console.error('[CacheManager] Failed to update access metadata:', error);
+      logger.error('[CacheManager] Failed to update access metadata:', error);
     }
   }
   
@@ -258,7 +259,7 @@ export class CacheManager {
    * Perform cache cleanup
    */
   async performCleanup(entityType?: string): Promise<void> {
-    console.log('[CacheManager] Starting cleanup...');
+    logger.debug('[CacheManager] Starting cleanup...');
     const startTime = Date.now();
     
     try {
@@ -289,9 +290,9 @@ export class CacheManager {
       await this.saveStats();
       
       const duration = Date.now() - startTime;
-      console.log(`[CacheManager] Cleanup completed in ${duration}ms`);
+      logger.debug(`[CacheManager] Cleanup completed in ${duration}ms`);
     } catch (error) {
-      console.error('[CacheManager] Cleanup failed:', error);
+      logger.error('[CacheManager] Cleanup failed:', error);
     }
   }
   
@@ -419,7 +420,7 @@ export class CacheManager {
    * Clear all cache
    */
   async clearAllCache(): Promise<void> {
-    console.log('[CacheManager] Clearing all cache...');
+    logger.debug('[CacheManager] Clearing all cache...');
     
     try {
       // Clear cache metadata
@@ -449,9 +450,9 @@ export class CacheManager {
       
       await this.saveStats();
       
-      console.log('[CacheManager] All cache cleared');
+      logger.debug('[CacheManager] All cache cleared');
     } catch (error) {
-      console.error('[CacheManager] Failed to clear cache:', error);
+      logger.error('[CacheManager] Failed to clear cache:', error);
       throw error;
     }
   }
@@ -470,7 +471,7 @@ export class CacheManager {
       
       // If storage is above 90% full, aggressively prune cache
       if (usedPercentage > 90) {
-        console.log('[CacheManager] Low storage detected, pruning cache...');
+        logger.debug('[CacheManager] Low storage detected, pruning cache...');
         
         // Reduce cache limits temporarily
         const originalPolicies = { ...this.policies };
@@ -490,7 +491,7 @@ export class CacheManager {
         this.policies = originalPolicies;
       }
     } catch (error) {
-      console.error('[CacheManager] Failed to prune based on storage:', error);
+      logger.error('[CacheManager] Failed to prune based on storage:', error);
     }
   }
   
@@ -498,7 +499,7 @@ export class CacheManager {
    * Optimize cache for performance
    */
   async optimizeCache(): Promise<void> {
-    console.log('[CacheManager] Optimizing cache...');
+    logger.debug('[CacheManager] Optimizing cache...');
     
     try {
       // Vacuum the database to reclaim space
@@ -508,9 +509,9 @@ export class CacheManager {
       await this.db.executeSql('ANALYZE cacheMetadata');
       await this.db.executeSql('ANALYZE mediaCache');
       
-      console.log('[CacheManager] Cache optimization completed');
+      logger.debug('[CacheManager] Cache optimization completed');
     } catch (error) {
-      console.error('[CacheManager] Failed to optimize cache:', error);
+      logger.error('[CacheManager] Failed to optimize cache:', error);
     }
   }
 }

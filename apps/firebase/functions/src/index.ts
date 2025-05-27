@@ -30,3 +30,29 @@ export * from "./encryption"; // End-to-end encryption functions
 export * from "./sync"; // Offline sync functions
 export * from "./messaging"; // Chat messaging and notifications
 export * from "./chatManagement"; // Chat management APIs
+export * from "./migrations/userDocumentConsistency"; // User document consistency migration
+export {generateCSRFToken, validateCSRFToken} from "./middleware/csrf"; // CSRF protection endpoints
+export * from "./deviceFingerprint"; // Device fingerprinting and trust management
+export * from "./signal"; // Signal Protocol key management and verification
+export * from "./sms"; // Twilio SMS functions for invitations and notifications
+
+// R2 Migration functions (only when enabled)
+if (process.env.ENABLE_R2_MIGRATION === "true") {
+  console.log("R2 migration functions enabled");
+  // Dynamic imports for optional functions
+  import("./migrations/r2VaultMigration").then((module) => {
+    Object.keys(module).forEach((key) => {
+      (exports as any)[key] = (module as any)[key];
+    });
+  });
+}
+
+// R2 Test functions (only in development)
+if (process.env.NODE_ENV !== "production" && process.env.ENABLE_R2_TESTS === "true") {
+  console.log("R2 test functions enabled");
+  import("./test/r2ServiceTest").then((module) => {
+    Object.keys(module).forEach((key) => {
+      (exports as any)[key] = (module as any)[key];
+    });
+  });
+}

@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, Switch } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../src/lib/firebase'; // Import auth for user info
 // import { sendPasswordResetEmail } from 'firebase/auth'; // REMOVED - For password reset
 import { commonHeaderOptions } from '../../constants/headerConfig'; // Import common header options
 import { showErrorAlert } from '../../src/lib/errorUtils'; // Added import
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
-import { useErrorHandler } from '../../hooks/useErrorHandler';
-import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
+import { useErrorHandler, ErrorSeverity } from '../../hooks/useErrorHandler';
 import { useEncryption } from '../../src/contexts/EncryptionContext';
 import { Colors } from '../../constants/Colors';
+import { useAuth } from '../../src/contexts/AuthContext';
 
 // Mock data - replace with actual data fetching if needed
 const MOCK_LOGIN_ACTIVITY: { id: string; device: string; location: string; lastLogin: string }[] = [];
@@ -24,7 +24,21 @@ const AccountSecurityScreen = () => {
     trackCurrentScreen: true
   });
   const { isEncryptionEnabled } = useEncryption();
-  const [isTwoFactorEnabled, setIsTwoFactorEnabled] = useState(false); // Mock state
+  const {
+    enrolledMfaFactors,
+    getEnrolledMfaFactors,
+    startPhoneMfaEnrollment,
+    confirmPhoneMfaEnrollment,
+    unenrollMfaFactor,
+    isMfaSetupInProgress,
+    mfaVerificationId,
+    mfaError,
+    clearMfaError,
+    cancelMfaProcess,
+  } = useAuth();
+
+  const [newPhoneNumber, setNewPhoneNumber] = useState('');
+  const [enrollmentOtp, setEnrollmentOtp] = useState('');
 
   // Reset error state when isError changes
   useEffect(() => {
@@ -32,6 +46,11 @@ const AccountSecurityScreen = () => {
       // Clear any local error states when global error is cleared
     }
   }, [isError]);
+
+  // Fetch enrolled factors on component mount
+  useEffect(() => {
+    getEnrolledMfaFactors();
+  }, [getEnrolledMfaFactors]);
 
   useEffect(() => {
     navigation.setOptions({
@@ -71,24 +90,61 @@ const AccountSecurityScreen = () => {
     // and then use Firebase Auth's updatePassword method.
   });
 
-  const handleToggleTwoFactor = withErrorHandling(async () => {
-    reset();
-    
-    try {
-      const newState = !isTwoFactorEnabled;
-      setIsTwoFactorEnabled(newState);
-      // TODO: Implement actual 2FA setup/disable logic with Firebase Auth (e.g., phone MFA)
-      Alert.alert('Two-Factor Authentication', `2FA is now ${newState ? "enabled" : "disabled"} (mock).`);
-    } catch (error: any) {
-      handleError(error, { 
-        action: 'toggleTwoFactor',
-        metadata: { 
-          currentState: isTwoFactorEnabled,
-          targetState: !isTwoFactorEnabled
-        }
-      });
-      showErrorAlert(error, "Two-Factor Authentication Error");
+  const handleEnrollNewPhone = withErrorHandling(async () => {
+    if (!newPhoneNumber.trim()) {
+      Alert.alert('Input Required', 'Please enter a phone number.');
+      return;
     }
+    clearMfaError();
+    try {
+      await startPhoneMfaEnrollment(newPhoneNumber);
+      Alert.alert('Verification Code Sent', 'A verification code has been sent to your phone.');
+      // UI will now show OTP input based on isMfaSetupInProgress and mfaVerificationId
+    } catch (err: any) {
+      // mfaError will be set by AuthContext, or use err here
+      showErrorAlert(err, 'Enrollment Error');
+    }
+  });
+
+  const handleConfirmEnrollmentOtp = withErrorHandling(async () => {
+    if (!enrollmentOtp.trim()) {
+      Alert.alert('Input Required', 'Please enter the OTP.');
+      return;
+    }
+    clearMfaError();
+    try {
+      await confirmPhoneMfaEnrollment(enrollmentOtp, `Phone (${newPhoneNumber.slice(-4)})`);
+      Alert.alert('Success', 'Phone number enrolled for 2FA.');
+      setNewPhoneNumber('');
+      setEnrollmentOtp('');
+      // getEnrolledMfaFactors() is called within confirmPhoneMfaEnrollment in AuthContext
+    } catch (err: any) {
+      showErrorAlert(err, 'Verification Error');
+    }
+  });
+
+  const handleUnenrollFactor = withErrorHandling(async (factorUid: string) => {
+    clearMfaError();
+    Alert.alert(
+      'Confirm Unenroll',
+      'Are you sure you want to remove this two-factor authentication method?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unenroll',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await unenrollMfaFactor(factorUid);
+              Alert.alert('Success', 'Two-factor method removed.');
+              // getEnrolledMfaFactors() is called within unenrollMfaFactor in AuthContext
+            } catch (err: any) {
+              showErrorAlert(err, 'Unenrollment Error');
+            }
+          },
+        },
+      ]
+    );
   });
 
   return (
@@ -103,20 +159,70 @@ const AccountSecurityScreen = () => {
         </TouchableOpacity>
 
         <Text style={styles.sectionHeader}>Two-Factor Authentication</Text>
-        <View style={styles.settingItemContainer}>
-            <View style={styles.textContainer}>
-                <Text style={styles.settingLabel}>Enable 2FA</Text>
-                 <Text style={styles.settingDescription}>Adds an extra layer of security to your account.</Text>
+        
+        {mfaError && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{mfaError}</Text>
+            <TouchableOpacity onPress={clearMfaError}>
+              <Text style={styles.clearErrorText}>Dismiss</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Display Enrolled Factors */}
+        {enrolledMfaFactors.length > 0 ? (
+          enrolledMfaFactors.map((factor) => (
+            <View key={factor.uid} style={styles.settingItemContainer}>
+              <View style={styles.textContainer}>
+                <Text style={styles.settingLabel}>{factor.displayName || 'Phone Number'}</Text>
+                {factor.phoneNumber && <Text style={styles.settingDescription}>{factor.phoneNumber}</Text>}
+              </View>
+              <TouchableOpacity onPress={() => handleUnenrollFactor(factor.uid)} style={styles.unenrollButton}>
+                <Text style={styles.unenrollButtonText}>Remove</Text>
+              </TouchableOpacity>
             </View>
-            <Switch
-                trackColor={{ false: "#767577", true: "#81b0ff" }}
-                thumbColor={isTwoFactorEnabled ? "#007AFF" : "#f4f3f4"}
-                ios_backgroundColor="#E0E0E0"
-                onValueChange={handleToggleTwoFactor}
-                value={isTwoFactorEnabled}
-            />
+          ))
+        ) : (
+          <View style={styles.settingItemContainer}>
+            <Text style={styles.settingDescription}>No two-factor authentication methods enabled.</Text>
+          </View>
+        )}
+
+        {/* Enroll New Phone Factor */}
+        <View style={styles.enrollSection}>
+          <Text style={styles.subSectionHeader}>Add Phone Verification</Text>
+          {!isMfaSetupInProgress || !mfaVerificationId ? (
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter phone number (e.g., +15551234567)"
+                value={newPhoneNumber}
+                onChangeText={setNewPhoneNumber}
+                keyboardType="phone-pad"
+                textContentType="telephoneNumber"
+              />
+              <TouchableOpacity style={styles.actionButton} onPress={handleEnrollNewPhone}>
+                <Text style={styles.actionButtonText}>Send Verification Code</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter OTP from SMS"
+                value={enrollmentOtp}
+                onChangeText={setEnrollmentOtp}
+                keyboardType="number-pad"
+              />
+              <TouchableOpacity style={styles.actionButton} onPress={handleConfirmEnrollmentOtp}>
+                <Text style={styles.actionButtonText}>Verify and Enroll Phone</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => { cancelMfaProcess(); setNewPhoneNumber(''); setEnrollmentOtp(''); }} style={styles.cancelButton}>
+                 <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
-        {/* TODO: Add navigation to 2FA setup screen if isTwoFactorEnabled is false and user wants to set it up */}
 
         <Text style={styles.sectionHeader}>Encryption</Text>
         
@@ -238,12 +344,12 @@ const styles = StyleSheet.create({
   },
   settingLabel: {
       fontSize: 16,
-      color: '#333',
+      color: '#000',
   },
   settingDescription: {
       fontSize: 13,
-      color: '#777',
-      marginTop: 3,
+      color: '#666',
+      marginTop: 2,
   },
   encryptionPrompt: {
     backgroundColor: '#FFFFFF',
@@ -290,6 +396,75 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  errorContainer: {
+    backgroundColor: '#FFD2D2',
+    padding: 10,
+    marginHorizontal: 15,
+    marginVertical: 10,
+    borderRadius: 5,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#D8000C',
+    flex: 1,
+  },
+  clearErrorText: {
+    color: '#D8000C',
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
+  unenrollButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: '#FF3B30',
+    borderRadius: 5,
+  },
+  unenrollButtonText: {
+    color: '#fff',
+    fontSize: 14,
+  },
+  enrollSection: {
+    marginTop: 15,
+    paddingHorizontal: 15,
+  },
+  subSectionHeader: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 10,
+  },
+  input: {
+    backgroundColor: '#fff',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#DCDCDC',
+    borderRadius: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    fontSize: 16,
+    marginBottom: 10,
+  },
+  actionButton: {
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 12,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  cancelButton: {
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: Colors.light.text,
+    fontSize: 15,
   },
 });
 

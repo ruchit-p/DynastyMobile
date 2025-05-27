@@ -8,6 +8,8 @@ import {createError, ErrorCode} from "../../utils/errors";
 import {withResourceAccess, PermissionLevel} from "../../middleware";
 import {UserDocument} from "../types/user";
 import {MAX_OPERATIONS_PER_BATCH} from "../config/constants";
+import {validateRequest} from "../../utils/request-validator";
+import {VALIDATION_SCHEMAS} from "../../config/validation-schemas";
 
 /**
  * Handles cleanup when a user deletes their account.
@@ -26,7 +28,14 @@ export const handleAccountDeletion = onCall(
   },
   withResourceAccess(
     async (request) => {
-      const {userId} = request.data;
+      // Validate and sanitize input using centralized validator
+      const validatedData = validateRequest(
+        request.data,
+        VALIDATION_SCHEMAS.handleAccountDeletion,
+        request.auth?.uid
+      );
+
+      const {userId} = validatedData;
 
       logger.info(`Starting account deletion for user ${userId}`);
       const db = getFirestore();
@@ -215,7 +224,14 @@ export const updateUserProfile = onCall(
   },
   withResourceAccess(
     async (request) => {
-      const {uid, ...profileData} = request.data;
+      // Validate and sanitize input using centralized validator
+      const validatedData = validateRequest(
+        request.data,
+        VALIDATION_SCHEMAS.updateUserProfile,
+        request.auth?.uid
+      );
+
+      const {uid, ...profileData} = validatedData;
 
       const db = getFirestore();
       const userRef = db.collection("users").doc(uid);
@@ -228,8 +244,18 @@ export const updateUserProfile = onCall(
       if (profileData.gender !== undefined) firestoreUpdates.gender = profileData.gender;
       // if (profileData.dateOfBirth !== undefined) firestoreUpdates.dateOfBirth = Timestamp.fromDate(new Date(profileData.dateOfBirth));
       if (profileData.phoneNumber !== undefined) firestoreUpdates.phoneNumber = profileData.phoneNumber; // Handle phone verification separately if needed
-      if (profileData.profilePicture !== undefined) firestoreUpdates.profilePicture = profileData.profilePicture;
-      if (profileData.photoURL !== undefined) firestoreUpdates.profilePicture = profileData.photoURL; // Support both field names
+      // Handle profile picture - convert string URL to proper object structure
+      if (profileData.profilePicture !== undefined) {
+        if (typeof profileData.profilePicture === "string") {
+          firestoreUpdates.profilePicture = {url: profileData.profilePicture, path: ""};
+        } else {
+          firestoreUpdates.profilePicture = profileData.profilePicture;
+        }
+      }
+      if (profileData.photoURL !== undefined) {
+        // Support photoURL field name but convert to profilePicture object
+        firestoreUpdates.profilePicture = {url: profileData.photoURL, path: ""};
+      }
       if (profileData.onboardingCompleted !== undefined) firestoreUpdates.onboardingCompleted = profileData.onboardingCompleted;
       if (profileData.dataRetentionPeriod !== undefined) {
         firestoreUpdates.dataRetentionPeriod = profileData.dataRetentionPeriod;
@@ -286,7 +312,14 @@ export const updateDataRetention = onCall({
   timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
 }, async (request) => {
   try {
-    const {userId, retentionPeriod} = request.data;
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.updateDataRetention,
+      request.auth?.uid
+    );
+
+    const {userId, retentionPeriod} = validatedData;
     logger.info(`Updating data retention settings for user ${userId} to ${retentionPeriod}`);
 
     const db = getFirestore();
@@ -323,7 +356,14 @@ export const getFamilyMembers = onCall(
   },
   withResourceAccess(
     async (request) => {
-      const {familyTreeId} = request.data;
+      // Validate and sanitize input using centralized validator
+      const validatedData = validateRequest(
+        request.data,
+        VALIDATION_SCHEMAS.getFamilyMembers,
+        request.auth?.uid
+      );
+
+      const {familyTreeId} = validatedData;
 
       const db = getFirestore();
       const membersSnapshot = await db.collection("users")

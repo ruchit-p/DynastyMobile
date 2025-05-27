@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { Spacing, BorderRadius } from '../../constants/Spacing';
 import { useBackgroundColor, useTextColor } from '../../hooks/useThemeColor';
-import ThemedText from '../ThemedText';
+import { ThemedText } from '../ThemedText';
 
 // The time slots to show in the day view
 const TIME_SLOTS = [

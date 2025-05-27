@@ -36,6 +36,7 @@ describe('StoryPost', () => {
     story: mockStory,
     author: mockAuthor,
     currentUserId: 'test-user-id',
+    onPress: jest.fn(),
     onLike: jest.fn(),
     onComment: jest.fn(),
     onShare: jest.fn(),

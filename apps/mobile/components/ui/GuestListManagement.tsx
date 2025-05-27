@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, TouchableOpacity, Alert, RefreshControl, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import ThemedText from '@/components/ThemedText';
-import ThemedView from '@/components/ThemedView';
+import { ThemedText } from '@/components/ThemedText';
+import { ThemedView } from '@/components/ThemedView';
 import Avatar from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
-import Colors from '@/constants/Colors';
+import { Colors } from '@/constants/Colors';
 import { Typography } from '@/constants/Typography';
 import { Spacing, BorderRadius } from '@/constants/Spacing';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -67,7 +67,7 @@ const GuestListManagement: React.FC<GuestListManagementProps> = ({
 
   useEffect(() => {
     loadAttendees();
-  }, [eventId]);
+  }, [eventId, loadAttendees]);
 
   const onRefresh = withErrorHandling(async () => {
     setRefreshing(true);

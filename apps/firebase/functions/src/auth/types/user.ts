@@ -13,6 +13,7 @@ export interface UserDocument {
   familyTreeId?: string;
   historyBookId?: string;
   gender?: "male" | "female" | "other" | "unspecified";
+  dateOfBirth?: Date | null;
   isAdmin: boolean;
   canAddMembers: boolean;
   canEdit: boolean;

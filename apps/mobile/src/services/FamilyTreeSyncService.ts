@@ -1,6 +1,7 @@
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import { getErrorMessage } from '../lib/errorUtils';
 import { getFirebaseDb } from '../lib/firebase';
+import { logger } from './LoggingService';
 
 // Types
 export interface FamilyMember {
@@ -76,7 +77,7 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
   private syncInProgress: Set<string> = new Set();
 
   private constructor() {
-    console.log('[FamilyTreeSyncService] Initialized');
+    logger.debug('[FamilyTreeSyncService] Initialized');
   }
 
   static getInstance(): FamilyTreeSyncService {
@@ -87,10 +88,10 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
   }
 
   async syncFamilyTree(familyId: string): Promise<void> {
-    console.log(`[FamilyTreeSyncService] Syncing family tree: ${familyId}`);
+    logger.debug(`[FamilyTreeSyncService] Syncing family tree: ${familyId}`);
     
     if (this.syncInProgress.has(familyId)) {
-      console.log(`[FamilyTreeSyncService] Sync already in progress for family: ${familyId}`);
+      logger.debug(`[FamilyTreeSyncService] Sync already in progress for family: ${familyId}`);
       return;
     }
     
@@ -118,7 +119,7 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
         members.push({ id: doc.id, ...doc.data() } as FamilyMember);
       });
       
-      console.log(`[FamilyTreeSyncService] Found ${members.length} family members`);
+      logger.debug(`[FamilyTreeSyncService] Found ${members.length} family members`);
       
       // Fetch relationships
       await this.syncRelationships(familyId);
@@ -127,7 +128,7 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
       const cachedTree = this.treeCache.get(familyId);
       if (cachedTree) {
         // TODO: Merge with local changes
-        console.log('[FamilyTreeSyncService] Merging with cached tree data');
+        logger.debug('[FamilyTreeSyncService] Merging with cached tree data');
       }
       
       this.treeCache.set(familyId, {
@@ -138,7 +139,7 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
         syncStatus: 'synced'
       });
     } catch (error) {
-      console.error('[FamilyTreeSyncService] Error syncing family tree:', getErrorMessage(error));
+      logger.error('[FamilyTreeSyncService] Error syncing family tree:', getErrorMessage(error));
       throw error;
     } finally {
       this.syncInProgress.delete(familyId);
@@ -146,7 +147,7 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
   }
 
   async syncRelationships(familyId: string): Promise<void> {
-    console.log(`[FamilyTreeSyncService] Syncing relationships for family: ${familyId}`);
+    logger.debug(`[FamilyTreeSyncService] Syncing relationships for family: ${familyId}`);
     
     try {
       // TODO: Implement relationship sync
@@ -167,14 +168,14 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
         relationships.push({ id: doc.id, ...doc.data() } as Relationship);
       });
       
-      console.log(`[FamilyTreeSyncService] Found ${relationships.length} relationships`);
+      logger.debug(`[FamilyTreeSyncService] Found ${relationships.length} relationships`);
       
       // Validate relationships
       for (const rel of relationships) {
         // TODO: Check that both members exist
         // TODO: Validate relationship type consistency
         // TODO: Check for circular relationships
-        console.log(`[FamilyTreeSyncService] Validating relationship: ${rel.sourceId} -> ${rel.targetId}`);
+        logger.debug(`[FamilyTreeSyncService] Validating relationship: ${rel.sourceId} -> ${rel.targetId}`);
       }
       
       // Update cached tree
@@ -183,14 +184,14 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
         cachedTree.relationships = relationships;
       }
     } catch (error) {
-      console.error('[FamilyTreeSyncService] Error syncing relationships:', getErrorMessage(error));
+      logger.error('[FamilyTreeSyncService] Error syncing relationships:', getErrorMessage(error));
       throw error;
     }
   }
 
   async queueMemberAdd(member: Omit<FamilyMember, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     const memberId = `member_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.log(`[FamilyTreeSyncService] Queueing member addition: ${memberId}`);
+    logger.debug(`[FamilyTreeSyncService] Queueing member addition: ${memberId}`);
     
     try {
       // TODO: Implement member addition queue
@@ -225,13 +226,13 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
       
       return memberId;
     } catch (error) {
-      console.error('[FamilyTreeSyncService] Error queueing member addition:', getErrorMessage(error));
+      logger.error('[FamilyTreeSyncService] Error queueing member addition:', getErrorMessage(error));
       throw error;
     }
   }
 
   async queueMemberUpdate(memberId: string, updates: Partial<FamilyMember>): Promise<void> {
-    console.log(`[FamilyTreeSyncService] Queueing member update: ${memberId}`, updates);
+    logger.debug(`[FamilyTreeSyncService] Queueing member update: ${memberId}`, updates);
     
     try {
       // TODO: Implement member update queue
@@ -268,13 +269,13 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
         }
       }
     } catch (error) {
-      console.error('[FamilyTreeSyncService] Error queueing member update:', getErrorMessage(error));
+      logger.error('[FamilyTreeSyncService] Error queueing member update:', getErrorMessage(error));
       throw error;
     }
   }
 
   async queueRelationshipUpdate(relationship: Relationship): Promise<void> {
-    console.log(`[FamilyTreeSyncService] Queueing relationship update:`, relationship);
+    logger.debug(`[FamilyTreeSyncService] Queueing relationship update:`, relationship);
     
     try {
       // TODO: Implement relationship update queue
@@ -310,13 +311,13 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
         cachedTree.syncStatus = 'pending';
       }
     } catch (error) {
-      console.error('[FamilyTreeSyncService] Error queueing relationship update:', getErrorMessage(error));
+      logger.error('[FamilyTreeSyncService] Error queueing relationship update:', getErrorMessage(error));
       throw error;
     }
   }
 
   async resolveTreeConflicts(conflict: TreeConflict): Promise<void> {
-    console.log('[FamilyTreeSyncService] Resolving tree conflict:', conflict);
+    logger.debug('[FamilyTreeSyncService] Resolving tree conflict:', conflict);
     
     try {
       // TODO: Implement conflict resolution
@@ -333,34 +334,34 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
           
           // Prefer most recently updated
           if (localMember.updatedAt.toMillis() > remoteMember.updatedAt.toMillis()) {
-            console.log('[FamilyTreeSyncService] Keeping local member data');
+            logger.debug('[FamilyTreeSyncService] Keeping local member data');
             // TODO: Queue update to remote
           } else {
-            console.log('[FamilyTreeSyncService] Using remote member data');
+            logger.debug('[FamilyTreeSyncService] Using remote member data');
             // TODO: Update local cache
           }
           break;
           
         case 'relationship':
           // Check for duplicate relationships
-          console.log('[FamilyTreeSyncService] Checking for duplicate relationships');
+          logger.debug('[FamilyTreeSyncService] Checking for duplicate relationships');
           // TODO: Implement duplicate detection and merging
           break;
           
         case 'structure':
           // Validate overall tree structure
-          console.log('[FamilyTreeSyncService] Validating tree structure integrity');
+          logger.debug('[FamilyTreeSyncService] Validating tree structure integrity');
           await this.validateTreeIntegrity(conflict.familyId);
           break;
       }
     } catch (error) {
-      console.error('[FamilyTreeSyncService] Error resolving conflicts:', getErrorMessage(error));
+      logger.error('[FamilyTreeSyncService] Error resolving conflicts:', getErrorMessage(error));
       throw error;
     }
   }
 
   async batchSyncLargeTree(familyId: string, batchSize: number = 50): Promise<void> {
-    console.log(`[FamilyTreeSyncService] Batch syncing large tree: ${familyId} (batch size: ${batchSize})`);
+    logger.debug(`[FamilyTreeSyncService] Batch syncing large tree: ${familyId} (batch size: ${batchSize})`);
     
     try {
       // TODO: Implement batch sync for large trees
@@ -379,7 +380,7 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
         .get();
       
       const totalMembers = memberCount.data().count;
-      console.log(`[FamilyTreeSyncService] Total members to sync: ${totalMembers}`);
+      logger.debug(`[FamilyTreeSyncService] Total members to sync: ${totalMembers}`);
       
       // Sync in batches
       let lastDoc: FirebaseFirestoreTypes.QueryDocumentSnapshot | null = null;
@@ -408,7 +409,7 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
         });
         
         syncedCount += batchMembers.length;
-        console.log(`[FamilyTreeSyncService] Synced ${syncedCount}/${totalMembers} members`);
+        logger.debug(`[FamilyTreeSyncService] Synced ${syncedCount}/${totalMembers} members`);
         
         // TODO: Update local cache incrementally
         // TODO: Emit progress events
@@ -417,13 +418,13 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
       // Sync relationships in batches
       await this.syncRelationships(familyId);
     } catch (error) {
-      console.error('[FamilyTreeSyncService] Error in batch sync:', getErrorMessage(error));
+      logger.error('[FamilyTreeSyncService] Error in batch sync:', getErrorMessage(error));
       throw error;
     }
   }
 
   async validateTreeIntegrity(familyId: string): Promise<boolean> {
-    console.log(`[FamilyTreeSyncService] Validating tree integrity for family: ${familyId}`);
+    logger.debug(`[FamilyTreeSyncService] Validating tree integrity for family: ${familyId}`);
     
     try {
       // TODO: Implement tree integrity validation
@@ -435,7 +436,7 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
       
       const cachedTree = this.treeCache.get(familyId);
       if (!cachedTree) {
-        console.log('[FamilyTreeSyncService] No cached tree found');
+        logger.debug('[FamilyTreeSyncService] No cached tree found');
         return false;
       }
       
@@ -445,7 +446,7 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
       // Check all relationships reference valid members
       for (const rel of relationships) {
         if (!memberIds.has(rel.sourceId) || !memberIds.has(rel.targetId)) {
-          console.error(`[FamilyTreeSyncService] Invalid relationship: ${rel.sourceId} -> ${rel.targetId}`);
+          logger.error(`[FamilyTreeSyncService] Invalid relationship: ${rel.sourceId} -> ${rel.targetId}`);
           return false;
         }
       }
@@ -455,10 +456,10 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
       // - Validate spouse relationships
       // - Check for relationship loops
       
-      console.log('[FamilyTreeSyncService] Tree integrity validated successfully');
+      logger.debug('[FamilyTreeSyncService] Tree integrity validated successfully');
       return true;
     } catch (error) {
-      console.error('[FamilyTreeSyncService] Error validating tree integrity:', getErrorMessage(error));
+      logger.error('[FamilyTreeSyncService] Error validating tree integrity:', getErrorMessage(error));
       return false;
     }
   }
@@ -469,7 +470,7 @@ export class FamilyTreeSyncService implements IFamilyTreeSyncService {
     // Validate relationship type consistency
     // Check for impossible relationships (e.g., someone being their own parent)
     
-    console.log('[FamilyTreeSyncService] Validating relationship:', relationship);
+    logger.debug('[FamilyTreeSyncService] Validating relationship:', relationship);
   }
 }
 

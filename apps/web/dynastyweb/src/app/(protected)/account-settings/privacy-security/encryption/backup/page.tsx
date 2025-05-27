@@ -66,19 +66,6 @@ export default function KeyBackupPage() {
     errors: [] as string[],
   });
 
-  useEffect(() => {
-    loadBackups();
-  }, [loadBackups]);
-
-  useEffect(() => {
-    if (backupForm.password) {
-      const validation = keyBackupService.validateBackupPassword(backupForm.password);
-      setPasswordValidation(validation);
-    } else {
-      setPasswordValidation({ isValid: false, errors: [] });
-    }
-  }, [backupForm.password]);
-
   const loadBackups = useCallback(async () => {
     setLoading(true);
     try {
@@ -95,6 +82,19 @@ export default function KeyBackupPage() {
       setLoading(false);
     }
   }, [toast]);
+
+  useEffect(() => {
+    loadBackups();
+  }, [loadBackups]);
+
+  useEffect(() => {
+    if (backupForm.password) {
+      const validation = keyBackupService.validateBackupPassword(backupForm.password);
+      setPasswordValidation(validation);
+    } else {
+      setPasswordValidation({ isValid: false, errors: [] });
+    }
+  }, [backupForm.password]);
 
   const handleCreateBackup = async () => {
     if (!passwordValidation.isValid) {

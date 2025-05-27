@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Alert } from 'react-native';
-import { E2EEService } from '../src/services/encryption';
+import { LibsignalService } from '../src/services/encryption';
 
 interface KeyInfo {
   hasIdentityKey: boolean;
@@ -19,7 +19,7 @@ export const useEncryptionKeys = () => {
   const checkKeys = useCallback(async () => {
     try {
       setIsLoading(true);
-      const identity = await E2EEService.getInstance().getIdentityKeyPair();
+      const identity = await LibsignalService.getInstance().getIdentityKeyPair();
       
       setKeyInfo({
         hasIdentityKey: !!identity,
@@ -69,7 +69,7 @@ export const useEncryptionKeys = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await E2EEService.clearAllData();
+              await LibsignalService.clearAllData();
               await checkKeys();
               Alert.alert('Success', 'Encryption has been reset');
             } catch (error) {

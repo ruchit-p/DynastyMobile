@@ -25,7 +25,7 @@ jest.spyOn(Alert, 'alert');
 
 // Mock BottomSheet
 jest.mock('@gorhom/bottom-sheet', () => {
-  const React = require('react');
+  const React = jest.requireActual('react');
   const { forwardRef } = React;
   
   const MockBottomSheet = forwardRef(({ children, snapPoints, onChange, enablePanDownToClose, backdropComponent }: any, ref: any) => {
@@ -45,7 +45,7 @@ jest.mock('@gorhom/bottom-sheet', () => {
       if (currentIndex === -1) return null;
       
       return (
-        <div testID="bottom-sheet">
+        <div data-testid="bottom-sheet">
           {backdropComponent && React.createElement(backdropComponent)}
           {children}
         </div>
@@ -58,7 +58,7 @@ jest.mock('@gorhom/bottom-sheet', () => {
       __esModule: true,
       default: MockBottomSheet,
       BottomSheetBackdrop: ({ onPress }: any) => (
-      <div testID="backdrop" onPress={onPress} />
+      <div data-testid="backdrop" onPress={onPress} />
     ),
   };
 });
@@ -70,7 +70,7 @@ describe('MessageActionsSheet', () => {
     senderId: 'current-user-id',
     timestamp: new Date(),
     status: 'delivered' as const,
-    reactions: {},
+    reactions: Record<string, never>,
   };
 
   const mockOnReply = jest.fn();

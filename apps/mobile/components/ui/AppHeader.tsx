@@ -3,9 +3,9 @@ import { View, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Import design system components and utilities
-import ThemedText from '../ThemedText';
-import { Spacing, Shadows } from '../../constants/Spacing';
-import { useBackgroundColor, useTextColor, useBorderColor } from '../../hooks/useThemeColor';
+import { ThemedText } from '../ThemedText';
+import { Spacing } from '../../constants/Spacing';
+import { useBackgroundColor, useBorderColor } from '../../hooks/useThemeColor';
 import { Colors } from '../../constants/Colors';
 
 interface AppHeaderProps {

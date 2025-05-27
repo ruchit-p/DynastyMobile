@@ -12,15 +12,16 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useNavigation } from 'expo-router';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
-import FlashList from '../../components/ui/FlashList';
+import { FlashList } from '../../components/ui/FlashList';
 import { useOffline } from '../../src/contexts/OfflineContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { getFirebaseDb } from '../../src/lib/firebase';
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import { logger } from '../../src/services/LoggingService';
 
 // Helper function to format timestamps
 const formatTimestamp = (timestamp: FirebaseFirestoreTypes.Timestamp | { seconds: number, nanoseconds: number }): string => {
@@ -79,7 +80,8 @@ const ChatListScreen = () => {
   }, [isError]);
 
   // Fetch chats with offline support
-  const fetchChats = useCallback(withErrorHandling(async (forceRefresh = false) => {
+  const fetchChats = useCallback(async (forceRefresh = false) => {
+    return withErrorHandling(async () => {
     try {
       if (!user?.uid) {
         setChats([]);
@@ -96,7 +98,7 @@ const ChatListScreen = () => {
           // Check if cache is not too old (e.g., 30 minutes)
           const cacheAge = Date.now() - (cached.timestamp || 0);
           if (cacheAge < 1800000 || !isOnline) { // 30 minutes or offline
-            console.log('ChatListScreen: Using cached chats');
+            logger.debug('ChatListScreen: Using cached chats');
             setChats(cached.chats || []);
             setIsLoadingChats(false);
             setIsRefreshing(false);
@@ -105,7 +107,7 @@ const ChatListScreen = () => {
             if (isOnline && !forceRefresh) {
               // Fetch fresh data in background without blocking UI
               fetchChats(true).catch(error => {
-                console.error('Background chat fetch failed:', error);
+                logger.error('Background chat fetch failed:', error);
               });
             }
             return;
@@ -115,7 +117,7 @@ const ChatListScreen = () => {
       
       // If online, fetch fresh data
       if (isOnline) {
-        console.log('ChatListScreen: Fetching chats from Firebase...');
+        logger.debug('ChatListScreen: Fetching chats from Firebase...');
         const db = getFirebaseDb();
         
         try {
@@ -181,7 +183,7 @@ const ChatListScreen = () => {
           });
 
           const chatsData = (await Promise.all(chatPromises)).filter(Boolean) as ChatListItem[];
-          console.log(`ChatListScreen: Loaded ${chatsData.length} chats`);
+          logger.debug(`ChatListScreen: Loaded ${chatsData.length} chats`);
           
           setChats(chatsData);
           
@@ -191,7 +193,7 @@ const ChatListScreen = () => {
             timestamp: Date.now()
           }));
         } catch (error) {
-          console.error("Error fetching chats: ", error);
+          logger.error("Error fetching chats: ", error);
           handleError(error, { action: 'fetch_chats', source: 'ChatListScreen' });
         }
       } else {
@@ -215,7 +217,8 @@ const ChatListScreen = () => {
       setIsLoadingChats(false);
       setIsRefreshing(false);
     }
-  }), [user, handleError, isOnline, withErrorHandling]);
+    })();
+  }, [user, handleError, isOnline, withErrorHandling]);
 
   // Load chats on mount
   useEffect(() => {
@@ -226,7 +229,7 @@ const ChatListScreen = () => {
   useEffect(() => {
     if (!user?.uid || !isOnline) return;
 
-    console.log('ChatListScreen: Setting up real-time listeners...');
+    logger.debug('ChatListScreen: Setting up real-time listeners...');
     const db = getFirebaseDb();
     
     // Listen to user's chat references for real-time updates
@@ -237,28 +240,28 @@ const ChatListScreen = () => {
       .onSnapshot(
         (snapshot) => {
           if (!snapshot.metadata.fromCache) {
-            console.log('ChatListScreen: Real-time update detected');
+            logger.debug('ChatListScreen: Real-time update detected');
             // Refresh chat list when changes occur
             fetchChats(false).catch(error => {
-              console.error('Real-time chat refresh failed:', error);
+              logger.error('Real-time chat refresh failed:', error);
             });
           }
         },
         (error) => {
-          console.error('ChatListScreen: Real-time listener error:', error);
+          logger.error('ChatListScreen: Real-time listener error:', error);
         }
       );
 
     setUnsubscribe(() => unsubscribeChats);
 
     return () => {
-      console.log('ChatListScreen: Cleaning up real-time listeners');
+      logger.debug('ChatListScreen: Cleaning up real-time listeners');
       unsubscribeChats();
     };
   }, [user?.uid, isOnline, fetchChats]);
 
   // Handle pull to refresh
-  const onRefresh = useCallback(withErrorHandling(async () => {
+  const onRefresh = useCallback(() => withErrorHandling(async () => {
     try {
       setIsRefreshing(true);
       
@@ -266,9 +269,9 @@ const ChatListScreen = () => {
       if (isOnline) {
         try {
           await forceSync();
-          console.log('ChatListScreen: Sync completed, refreshing chats');
+          logger.debug('ChatListScreen: Sync completed, refreshing chats');
         } catch (error) {
-          console.error('ChatListScreen: Sync failed:', error);
+          logger.error('ChatListScreen: Sync failed:', error);
         }
       }
       
@@ -277,7 +280,7 @@ const ChatListScreen = () => {
     } catch (error) {
       handleError(error, { action: 'refresh_chats', source: 'ChatListScreen' });
     }
-  }), [fetchChats, withErrorHandling, handleError, isOnline, forceSync]);
+  })(), [fetchChats, withErrorHandling, handleError, isOnline, forceSync]);
 
   const filteredChats = chats.filter(chat => 
     chat.userName.toLowerCase().includes(searchText.toLowerCase()) ||

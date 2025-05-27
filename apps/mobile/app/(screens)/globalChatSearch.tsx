@@ -15,11 +15,12 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Colors } from '../../constants/Colors';
 import { useThemeColor } from '../../hooks/useThemeColor';
-import FlashList from '../../components/ui/FlashList';
-import ChatEncryptionService, { Message, Chat } from '../../src/services/encryption/ChatEncryptionService';
+import { FlashList } from '../../components/ui/FlashList';
+import { ChatEncryptionService, Message, Chat } from '../../src/services/encryption/ChatEncryptionService';
 import { getFirebaseDb } from '../../src/lib/firebase';
 import { debounce } from 'lodash';
 import { format } from 'date-fns';
+import { logger } from '../../src/services/LoggingService';
 
 interface SearchResult extends Message {
   highlightedText?: string;
@@ -89,7 +90,7 @@ export default function GlobalChatSearchScreen() {
       
       setMessageResults(processedResults);
     } catch (error) {
-      console.error('Message search failed:', error);
+      logger.error('Message search failed:', error);
       setMessageResults([]);
     }
   }, [db]);
@@ -171,7 +172,7 @@ export default function GlobalChatSearchScreen() {
       
       setChatResults(results);
     } catch (error) {
-      console.error('Chat search failed:', error);
+      logger.error('Chat search failed:', error);
       setChatResults([]);
     }
   }, [db, user]);

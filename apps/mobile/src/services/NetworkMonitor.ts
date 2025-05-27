@@ -7,6 +7,7 @@ import NetInfo, { NetInfoState, NetInfoSubscription } from '@react-native-commun
 import { getMessageSyncService } from './MessageSyncService';
 import { backgroundSyncTask } from './BackgroundSyncTask';
 import { EventEmitter } from 'events';
+import { logger } from './LoggingService';
 
 export type NetworkStatus = 'online' | 'offline' | 'unknown';
 
@@ -40,11 +41,11 @@ export class NetworkMonitor extends EventEmitter {
    */
   start(): void {
     if (this.isMonitoring) {
-      console.log('[NetworkMonitor] Already monitoring');
+      logger.debug('[NetworkMonitor] Already monitoring');
       return;
     }
 
-    console.log('[NetworkMonitor] Starting network monitoring');
+    logger.debug('[NetworkMonitor] Starting network monitoring');
 
     // Get initial state
     NetInfo.fetch().then(state => {
@@ -68,7 +69,7 @@ export class NetworkMonitor extends EventEmitter {
       this.subscription = null;
     }
     this.isMonitoring = false;
-    console.log('[NetworkMonitor] Stopped network monitoring');
+    logger.debug('[NetworkMonitor] Stopped network monitoring');
   }
 
   /**
@@ -103,7 +104,7 @@ export class NetworkMonitor extends EventEmitter {
     // Determine network status
     const status: NetworkStatus = state.isConnected ? 'online' : 'offline';
     
-    console.log(`[NetworkMonitor] Network state changed:`, {
+    logger.debug(`[NetworkMonitor] Network state changed:`, {
       status,
       type: state.type,
       isInternetReachable: state.isInternetReachable,
@@ -121,10 +122,10 @@ export class NetworkMonitor extends EventEmitter {
 
     // Check if we just came back online
     if (!previousState?.isConnected && state.isConnected) {
-      console.log('[NetworkMonitor] Connection restored');
+      logger.debug('[NetworkMonitor] Connection restored');
       this.handleConnectionRestored();
     } else if (previousState?.isConnected && !state.isConnected) {
-      console.log('[NetworkMonitor] Connection lost');
+      logger.debug('[NetworkMonitor] Connection lost');
       this.wasOffline = true;
       this.emit('connectionLost');
     }
@@ -142,17 +143,17 @@ export class NetworkMonitor extends EventEmitter {
     // Wait a bit for connection to stabilize
     setTimeout(async () => {
       try {
-        console.log('[NetworkMonitor] Triggering sync after connection restored');
+        logger.debug('[NetworkMonitor] Triggering sync after connection restored');
         
-        // Schedule background sync
-        await backgroundSyncTask.scheduleSync();
+        // Trigger background sync
+        await backgroundSyncTask.performSyncOperation();
         
         // Also try immediate sync
         const syncService = getMessageSyncService();
         await syncService.retryFailedMessages();
         
       } catch (error) {
-        console.error('[NetworkMonitor] Failed to trigger sync:', error);
+        logger.error('[NetworkMonitor] Failed to trigger sync:', error);
       }
     }, 2000); // 2 second delay
   }
@@ -171,7 +172,7 @@ export class NetworkMonitor extends EventEmitter {
    */
   configure(config: {
     reachabilityUrl?: string;
-    reachabilityTest?: (response: Response) => boolean;
+    reachabilityTest?: (response: Response) => Promise<boolean>;
     reachabilityLongTimeout?: number;
     reachabilityShortTimeout?: number;
     reachabilityRequestTimeout?: number;

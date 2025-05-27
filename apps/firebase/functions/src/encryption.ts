@@ -3,14 +3,18 @@ import * as admin from "firebase-admin";
 import {getFirestore, Timestamp, FieldValue} from "firebase-admin/firestore";
 import {createError, ErrorCode, handleError} from "./utils/errors";
 import {withAuth, withResourceAccess, PermissionLevel} from "./middleware/auth";
+import {validateRequest} from "./utils/request-validator";
+import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
 import {
   randomBytes,
   createHash,
   generateKeyPairSync,
   pbkdf2Sync,
+  pbkdf2,
   createCipheriv,
   createDecipheriv,
 } from "crypto";
+import {promisify} from "util";
 
 // Initialize if not already done
 if (!admin.apps.length) {
@@ -18,6 +22,9 @@ if (!admin.apps.length) {
 }
 
 const db = getFirestore();
+
+// Promisify pbkdf2 for async usage
+const pbkdf2Async = promisify(pbkdf2);
 
 /**
  * Encryption Module Documentation
@@ -55,20 +62,29 @@ const db = getFirestore();
  */
 
 // Encryption configuration
-const PBKDF2_ITERATIONS = 100000; // High iteration count for security
+const PBKDF2_ITERATIONS = 210000; // Updated to OWASP 2024 recommendation for PBKDF2 with SHA256
 const SALT_LENGTH = 32; // 256 bits
 const IV_LENGTH = 16; // 128 bits for AES
 const KEY_LENGTH = 32; // 256 bits for AES-256
 
 /**
- * Derives an encryption key from a password using PBKDF2
+ * Derives an encryption key from a password using PBKDF2 (synchronous)
+ * @deprecated Use deriveKeyFromPasswordAsync for better performance
  */
 function deriveKeyFromPassword(password: string, salt: Buffer): Buffer {
   return pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, KEY_LENGTH, "sha256");
 }
 
 /**
- * Encrypts data using AES-256-GCM
+ * Derives an encryption key from a password using PBKDF2 (asynchronous)
+ */
+async function deriveKeyFromPasswordAsync(password: string, salt: Buffer): Promise<Buffer> {
+  return await pbkdf2Async(password, salt, PBKDF2_ITERATIONS, KEY_LENGTH, "sha256");
+}
+
+/**
+ * Encrypts data using AES-256-GCM (synchronous)
+ * @deprecated Use encryptDataAsync for better performance
  */
 function encryptData(data: string, password: string): {
   encrypted: string;
@@ -95,8 +111,37 @@ function encryptData(data: string, password: string): {
 }
 
 /**
- * Decrypts data using AES-256-GCM
+ * Encrypts data using AES-256-GCM (asynchronous)
  */
+async function encryptDataAsync(data: string, password: string): Promise<{
+  encrypted: string;
+  salt: string;
+  iv: string;
+  authTag: string;
+}> {
+  const salt = randomBytes(SALT_LENGTH);
+  const iv = randomBytes(IV_LENGTH);
+  const key = await deriveKeyFromPasswordAsync(password, salt);
+
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  let encrypted = cipher.update(data, "utf8", "hex");
+  encrypted += cipher.final("hex");
+
+  const authTag = cipher.getAuthTag();
+
+  return {
+    encrypted,
+    salt: salt.toString("hex"),
+    iv: iv.toString("hex"),
+    authTag: authTag.toString("hex"),
+  };
+}
+
+/**
+ * Decrypts data using AES-256-GCM (synchronous)
+ * @deprecated Use decryptDataAsync for better performance
+ */
+/*
 function decryptData(
   encryptedData: string,
   password: string,
@@ -105,6 +150,27 @@ function decryptData(
   authTag: string
 ): string {
   const key = deriveKeyFromPassword(password, Buffer.from(salt, "hex"));
+  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "hex"));
+  decipher.setAuthTag(Buffer.from(authTag, "hex"));
+
+  let decrypted = decipher.update(encryptedData, "hex", "utf8");
+  decrypted += decipher.final("utf8");
+
+  return decrypted;
+}
+*/
+
+/**
+ * Decrypts data using AES-256-GCM (asynchronous)
+ */
+async function decryptDataAsync(
+  encryptedData: string,
+  password: string,
+  salt: string,
+  iv: string,
+  authTag: string
+): Promise<string> {
+  const key = await deriveKeyFromPasswordAsync(password, Buffer.from(salt, "hex"));
   const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "hex"));
   decipher.setAuthTag(Buffer.from(authTag, "hex"));
 
@@ -200,7 +266,15 @@ function convertBase64DERToPEM(base64Key: string, keyType: "PUBLIC" | "PRIVATE")
 export const generateUserKeys = onCall(withAuth(async (request) => {
   try {
     const userId = request.auth!.uid;
-    const {password, returnFormat = "pem"} = request.data; // returnFormat can be "pem" or "der"
+
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.generateUserKeys,
+      userId
+    );
+
+    const {password, returnFormat = "pem"} = validatedData; // returnFormat can be "pem" or "der"
 
     // Password is optional for backward compatibility
     // Mobile app may generate keys client-side
@@ -307,11 +381,16 @@ export const generateUserKeys = onCall(withAuth(async (request) => {
  */
 export const getUserPublicKey = onCall(withAuth(async (request) => {
   try {
-    const {userId} = request.data;
+    const requestingUserId = request.auth!.uid;
 
-    if (!userId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "User ID is required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getUserPublicKey,
+      requestingUserId
+    );
+
+    const {userId} = validatedData;
 
     const userDoc = await db.collection("users").doc(userId).get();
     if (!userDoc.exists) {
@@ -336,11 +415,15 @@ export const getUserPublicKey = onCall(withAuth(async (request) => {
 export const getUserPrivateKeys = onCall(withAuth(async (request) => {
   try {
     const userId = request.auth!.uid;
-    const {password} = request.data;
 
-    if (!password) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Password required to decrypt private keys");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getUserPrivateKeys,
+      userId
+    );
+
+    const {password} = validatedData;
 
     // Fetch encrypted private keys
     const keysDoc = await db.collection("userKeys").doc(userId).get();
@@ -351,8 +434,8 @@ export const getUserPrivateKeys = onCall(withAuth(async (request) => {
     const keysData = keysDoc.data()!;
 
     try {
-      // Decrypt encryption private key
-      const encryptionPrivateKey = decryptData(
+      // Decrypt encryption private key (using async for better performance)
+      const encryptionPrivateKey = await decryptDataAsync(
         keysData.encryptedPrivateKey,
         password,
         keysData.encryptionSalt,
@@ -360,8 +443,8 @@ export const getUserPrivateKeys = onCall(withAuth(async (request) => {
         keysData.encryptionAuthTag
       );
 
-      // Decrypt signing private key
-      const signingPrivateKey = decryptData(
+      // Decrypt signing private key (using async for better performance)
+      const signingPrivateKey = await decryptDataAsync(
         keysData.encryptedSigningKey,
         password,
         keysData.signingSalt,
@@ -392,12 +475,15 @@ export const uploadEncryptionKeys = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {password, publicKey, signingPublicKey, encryptedPrivateKeys} = request.data;
 
-    // Validate input
-    if (!password || !publicKey || !signingPublicKey || !encryptedPrivateKeys) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Missing required encryption data");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.uploadEncryptionKeys,
+      userId
+    );
+
+    const {publicKey, signingPublicKey, encryptedPrivateKeys} = validatedData;
 
     // If client-side key generation is preferred, validate and store the provided keys
     // Otherwise, generate keys server-side
@@ -440,9 +526,11 @@ export const uploadEncryptionKeys = onCall(
       const encryptionKeys = generateSecureKeyPair();
       const signingKeys = generateSigningKeyPair();
 
-      // Encrypt the private keys with user's password
-      const encryptedEncryptionKey = encryptData(encryptionKeys.privateKey, password);
-      const encryptedSigningKey = encryptData(signingKeys.privateKey, password);
+      // Encrypt the private keys with user's password (using async for better performance)
+      const [encryptedEncryptionKey, encryptedSigningKey] = await Promise.all([
+        encryptDataAsync(encryptionKeys.privateKey, password),
+        encryptDataAsync(signingKeys.privateKey, password),
+      ]);
 
       // Store public keys in user document (publicly accessible)
       await db.collection("users").doc(userId).update({
@@ -500,11 +588,15 @@ export const storeClientGeneratedKeys = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {identityKey, signingKey, keyFormat = "der"} = request.data;
 
-    if (!identityKey || !signingKey) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Missing required keys");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.storeClientGeneratedKeys,
+      userId
+    );
+
+    const {identityKey, signingKey, keyFormat = "der"} = validatedData;
 
     const keyId = `key_${Date.now()}_${randomBytes(8).toString("hex")}`;
 
@@ -552,11 +644,16 @@ export const getUserEncryptionKeys = onCall(
     timeoutSeconds: 60,
   },
   withAuth(async (request) => {
-    const {userId} = request.data;
+    const requestingUserId = request.auth!.uid;
 
-    if (!userId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "User ID is required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getUserEncryptionKeys,
+      requestingUserId
+    );
+
+    const {userId} = validatedData;
 
     // Try encryption keys collection first (preferred)
     const encryptionDoc = await db.collection("encryptionKeys").doc(userId).get();
@@ -597,11 +694,15 @@ export const initializeEncryptedChat = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {participantIds, groupName} = request.data;
 
-    if (!participantIds || !Array.isArray(participantIds)) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Participant IDs array is required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.initializeEncryptedChat,
+      userId
+    );
+
+    const {participantIds, groupName} = validatedData;
     // Include current user in participants
     const allParticipants = Array.from(new Set([...participantIds, userId])).sort();
     const chatType = allParticipants.length === 2 ? "direct" : "group";
@@ -692,11 +793,15 @@ export const verifyKeyFingerprint = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {targetUserId, fingerprint} = request.data;
 
-    if (!targetUserId || !fingerprint) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Target user ID and fingerprint are required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.verifyKeyFingerprint,
+      userId
+    );
+
+    const {targetUserId, fingerprint} = validatedData;
 
     // Store verification status
     await db.doc(`users/${userId}/keyVerifications/${targetUserId}`).set({
@@ -726,6 +831,13 @@ export const getEncryptionStatus = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
+
+    // Validate request (even if empty) for consistency
+    validateRequest(
+      request.data || {},
+      VALIDATION_SCHEMAS.getEncryptionStatus,
+      userId
+    );
 
     try {
       // Check if user has encryption keys in multiple locations
@@ -774,11 +886,15 @@ export const getKeyVerificationStatus = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {targetUserId} = request.data;
 
-    if (!targetUserId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Target user ID is required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getKeyVerificationStatus,
+      userId
+    );
+
+    const {targetUserId} = validatedData;
 
     const verificationDoc = await db
       .doc(`users/${userId}/keyVerifications/${targetUserId}`)
@@ -806,15 +922,15 @@ export const updateMessageDelivery = onCall(
   },
   withResourceAccess(async (request, resource) => {
     const userId = request.auth!.uid;
-    const {chatId, messageId, status} = request.data;
 
-    if (!chatId || !messageId || !status) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Chat ID, message ID, and status are required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.updateMessageDelivery,
+      userId
+    );
 
-    if (!["delivered", "read"].includes(status)) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Status must be 'delivered' or 'read'");
-    }
+    const {chatId, messageId, status} = validatedData;
 
     const chatData = resource;
     if (!chatData?.participants.includes(userId)) {
@@ -841,7 +957,14 @@ export const cleanupOldMessages = onCall(
   {
     timeoutSeconds: 300, // Increased for batch operations
   },
-  async () => {
+  async (request) => {
+    // Validate request (even if empty) for consistency
+    validateRequest(
+      request.data || {},
+      VALIDATION_SCHEMAS.cleanupOldMessages,
+      "system"
+    );
+
     try {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - 30);
@@ -994,11 +1117,13 @@ export const getChatEncryptionStatus = onCall(
   },
   withResourceAccess(async (request, resource) => {
     const userId = request.auth!.uid;
-    const {chatId} = request.data;
 
-    if (!chatId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Chat ID is required");
-    }
+    // Validate and sanitize input using centralized validator
+    validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getChatEncryptionStatus,
+      userId
+    );
 
     const chatData = resource;
 
@@ -1042,11 +1167,15 @@ export const registerDevice = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {deviceId, deviceName, devicePublicKey, deviceInfo} = request.data;
 
-    if (!deviceId || !deviceName || !devicePublicKey) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Device ID, name, and public key are required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.registerDevice,
+      userId
+    );
+
+    const {deviceId, deviceName, devicePublicKey, deviceInfo} = validatedData;
 
     const deviceData = {
       deviceId,
@@ -1081,11 +1210,15 @@ export const syncDeviceMessages = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {deviceId, lastSyncTimestamp} = request.data;
 
-    if (!deviceId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Device ID is required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.syncDeviceMessages,
+      userId
+    );
+
+    const {deviceId, lastSyncTimestamp} = validatedData;
 
     // Verify device belongs to user
     const deviceDoc = await db.doc(`users/${userId}/devices/${deviceId}`).get();
@@ -1140,11 +1273,15 @@ export const rotateEncryptionKeys = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {newPublicKey, oldKeyId, rotationProof} = request.data;
 
-    if (!newPublicKey || !oldKeyId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "New public key and old key ID are required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.rotateEncryptionKeys,
+      userId
+    );
+
+    const {newPublicKey, oldKeyId, rotationProof} = validatedData;
     const batch = db.batch();
 
     // Create new key entry
@@ -1212,11 +1349,15 @@ export const createKeyBackup = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {encryptedPrivateKey, publicKey, salt, iterations, hint} = request.data;
 
-    if (!encryptedPrivateKey || !publicKey || !salt) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Missing required backup data");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.createKeyBackup,
+      userId
+    );
+
+    const {encryptedPrivateKey, publicKey, salt, iterations, hint} = validatedData;
     const backupId = `backup_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const backupData = {
       id: backupId,
@@ -1275,11 +1416,15 @@ export const initializeGroupEncryption = onCall(
   },
   withResourceAccess(async (request, resource) => {
     const userId = request.auth!.uid;
-    const {groupId, memberIds, senderKeyPublic} = request.data;
 
-    if (!groupId || !memberIds || !Array.isArray(memberIds) || !senderKeyPublic) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Missing required group data");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.initializeGroupEncryption,
+      userId
+    );
+
+    const {groupId, memberIds, senderKeyPublic} = validatedData;
 
     const groupData = resource;
     if (groupData?.createdBy !== userId && !groupData?.admins?.includes(userId)) {
@@ -1288,7 +1433,7 @@ export const initializeGroupEncryption = onCall(
 
     // Get member public keys
     const memberKeys = await Promise.all(
-      memberIds.map(async (memberId) => {
+      memberIds.map(async (memberId: string) => {
         const keysDoc = await db.doc(`encryptionKeys/${memberId}`).get();
         if (!keysDoc.exists) {
           throw createError(ErrorCode.FAILED_PRECONDITION, `Member ${memberId} has no encryption keys`);
@@ -1352,11 +1497,15 @@ export const initializeDoubleRatchet = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {sessionId, recipientId, ephemeralPublicKey} = request.data;
 
-    if (!sessionId || !recipientId || !ephemeralPublicKey) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Missing required session data");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.initializeDoubleRatchet,
+      userId
+    );
+
+    const {sessionId, recipientId, ephemeralPublicKey} = validatedData;
 
     // Store session initialization data
     const sessionData = {
@@ -1390,11 +1539,15 @@ export const checkDeviceRegistration = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {deviceId} = request.data;
 
-    if (!deviceId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Device ID is required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.checkDeviceRegistration,
+      userId
+    );
+
+    const {deviceId} = validatedData;
 
     const deviceDoc = await db.doc(`users/${userId}/devices/${deviceId}`).get();
 
@@ -1414,11 +1567,15 @@ export const updateDeviceLastSeen = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {deviceId} = request.data;
 
-    if (!deviceId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Device ID is required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.updateDeviceLastSeen,
+      userId
+    );
+
+    const {deviceId} = validatedData;
 
     await db.doc(`users/${userId}/devices/${deviceId}`).update({
       lastActive: FieldValue.serverTimestamp(),
@@ -1437,11 +1594,15 @@ export const removeDevice = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {deviceId} = request.data;
 
-    if (!deviceId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Device ID is required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.removeDevice,
+      userId
+    );
+
+    const {deviceId} = validatedData;
 
     const batch = db.batch();
 
@@ -1467,6 +1628,13 @@ export const getUserDevices = onCall(
   withAuth(async (request) => {
     const userId = request.auth!.uid;
 
+    // Validate request (even if empty) for consistency
+    validateRequest(
+      request.data || {},
+      VALIDATION_SCHEMAS.getUserDevices,
+      userId
+    );
+
     const devicesSnapshot = await db
       .collection(`users/${userId}/devices`)
       .where("isActive", "==", true)
@@ -1491,11 +1659,15 @@ export const consumeOneTimePreKey = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {targetUserId} = request.data;
 
-    if (!targetUserId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Target user ID is required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.consumeOneTimePreKey,
+      userId
+    );
+
+    const {targetUserId} = validatedData;
 
     // Get an available one-time pre-key
     const preKeysQuery = await db
@@ -1534,11 +1706,15 @@ export const uploadRotatedEncryptionKey = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {newPublicKey, oldKeyId, rotationProof} = request.data;
 
-    if (!newPublicKey || !oldKeyId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "New public key and old key ID are required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.uploadRotatedEncryptionKey,
+      userId
+    );
+
+    const {newPublicKey, oldKeyId, rotationProof} = validatedData;
 
     // This is similar to rotateEncryptionKeys but specifically for the rotation service
     const batch = db.batch();
@@ -1577,7 +1753,14 @@ export const cleanupExpiredEncryption = onCall(
   {
     timeoutSeconds: 60,
   },
-  async () => {
+  async (request) => {
+    // Validate request (even if empty) for consistency
+    validateRequest(
+      request.data || {},
+      VALIDATION_SCHEMAS.cleanupExpiredEncryption,
+      "system"
+    );
+
     try {
       const now = Timestamp.now();
       const batch = db.batch();
@@ -1624,11 +1807,15 @@ export const logSecureShareEvent = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {shareId, eventType, metadata, timestamp} = request.data;
 
-    if (!shareId || !eventType) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Share ID and event type are required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.logSecureShareEvent,
+      userId
+    );
+
+    const {shareId, eventType, metadata, timestamp} = validatedData;
 
     // Store share event in audit log
     const eventData = {
@@ -1668,11 +1855,15 @@ export const getShareLinkStats = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {shareId} = request.data;
 
-    if (!shareId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Share ID is required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getShareLinkStats,
+      userId
+    );
+
+    const {shareId} = validatedData;
 
     // Get share link document
     const shareDoc = await db.doc(`shareLinks/${shareId}`).get();
@@ -1716,20 +1907,28 @@ export const exportAuditLogs = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {startDate, endDate, eventTypes, format} = request.data;
+
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.exportAuditLogs,
+      userId
+    );
+
+    const {startDate, endDate, eventTypes, format, ownLogsOnly} = validatedData;
 
     // Verify user is admin or requesting their own logs
     const userDoc = await db.doc(`users/${userId}`).get();
     const userData = userDoc.data();
 
-    if (!userData?.isAdmin && !request.data.ownLogsOnly) {
+    if (!userData?.isAdmin && !ownLogsOnly) {
       throw createError(ErrorCode.PERMISSION_DENIED, "Only admins can export all audit logs");
     }
 
     // Build query - fix type issues by using proper Query type
     let query: admin.firestore.Query = db.collection("auditLogs");
 
-    if (request.data.ownLogsOnly || !userData?.isAdmin) {
+    if (ownLogsOnly || !userData?.isAdmin) {
       query = query.where("userId", "==", userId);
     }
 
@@ -1796,11 +1995,15 @@ export const logAuditEvent = onCall(
   },
   withAuth(async (request) => {
     const userId = request.auth!.uid;
-    const {eventType, description, resourceId, metadata, timestamp} = request.data;
 
-    if (!eventType || !description) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Event type and description are required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.logAuditEvent,
+      userId
+    );
+
+    const {eventType, description, resourceId, metadata, timestamp} = validatedData;
 
     // Store audit log entry
     const auditData = {

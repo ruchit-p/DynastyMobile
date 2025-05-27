@@ -5,18 +5,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirebaseDb } from '../lib/firebase';
 import { callFirebaseFunction } from '../lib/errorUtils';
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
-import NetInfo from '@react-native-community/netinfo';
 import DeviceInfo from 'react-native-device-info';
+import { logger } from './LoggingService';
 
 // Types
 export type NotificationType = 
   | 'story:new' 
   | 'story:liked' 
+  | 'story:tagged'
   | 'comment:new' 
   | 'comment:reply' 
   | 'event:invitation' 
   | 'event:updated' 
   | 'event:reminder'
+  | 'event:rsvp'
   | 'family:invitation'
   | 'system:announcement'
   | 'message:new';
@@ -72,12 +74,12 @@ export class NotificationService {
    */
   async initialize(userId: string): Promise<void> {
     try {
-      console.log('[NotificationService] Initializing for user:', userId);
+      logger.debug('[NotificationService] Initializing for user:', userId);
 
       // Request permissions
       const hasPermission = await this.requestPermissions();
       if (!hasPermission) {
-        console.log('[NotificationService] Notification permissions denied');
+        logger.debug('[NotificationService] Notification permissions denied');
         return;
       }
 
@@ -95,9 +97,9 @@ export class NotificationService {
       // Load notification preferences
       await this.loadNotificationPreferences();
 
-      console.log('[NotificationService] Initialization complete');
+      logger.debug('[NotificationService] Initialization complete');
     } catch (error) {
-      console.error('[NotificationService] Initialization failed:', error);
+      logger.error('[NotificationService] Initialization failed:', error);
       throw error;
     }
   }
@@ -108,7 +110,7 @@ export class NotificationService {
   private async requestPermissions(): Promise<boolean> {
     try {
       if (Platform.OS === 'ios') {
-        console.log('[NotificationService] Requesting iOS notification permissions...');
+        logger.debug('[NotificationService] Requesting iOS notification permissions...');
         const authStatus = await messaging().requestPermission({
           alert: true,
           badge: true,
@@ -124,18 +126,18 @@ export class NotificationService {
           authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
         if (enabled) {
-          console.log('[NotificationService] iOS permissions granted:', authStatus);
+          logger.debug('[NotificationService] iOS permissions granted:', authStatus);
         } else {
-          console.log('[NotificationService] iOS permissions denied:', authStatus);
+          logger.debug('[NotificationService] iOS permissions denied:', authStatus);
         }
         return enabled;
       } else {
         // Android permissions are granted during app install
-        console.log('[NotificationService] Android permissions granted by default');
+        logger.debug('[NotificationService] Android permissions granted by default');
         return true;
       }
     } catch (error) {
-      console.error('[NotificationService] Permission request failed:', error);
+      logger.error('[NotificationService] Permission request failed:', error);
       return false;
     }
   }
@@ -170,9 +172,9 @@ export class NotificationService {
         sound: 'default',
       });
 
-      console.log('[NotificationService] Android channels created');
+      logger.debug('[NotificationService] Android channels created');
     } catch (error) {
-      console.error('[NotificationService] Failed to create channels:', error);
+      logger.error('[NotificationService] Failed to create channels:', error);
     }
   }
 
@@ -183,16 +185,16 @@ export class NotificationService {
     try {
       // For iOS, always register device for remote messages first
       if (Platform.OS === 'ios') {
-        console.log('[NotificationService] Registering iOS device for remote messages...');
+        logger.debug('[NotificationService] Registering iOS device for remote messages...');
         await messaging().registerDeviceForRemoteMessages();
-        console.log('[NotificationService] iOS device registered for remote messages');
+        logger.debug('[NotificationService] iOS device registered for remote messages');
       }
 
       // Check for existing token
       const existingToken = await AsyncStorage.getItem(STORAGE_KEYS.FCM_TOKEN);
       
       // Get current FCM token
-      console.log('[NotificationService] Getting FCM token...');
+      logger.debug('[NotificationService] Getting FCM token...');
       const token = await messaging().getToken();
       
       if (token && token !== existingToken) {
@@ -211,20 +213,20 @@ export class NotificationService {
           // Save token locally
           await AsyncStorage.setItem(STORAGE_KEYS.FCM_TOKEN, token);
           this.fcmToken = token;
-          console.log('[NotificationService] FCM token registered');
+          logger.debug('[NotificationService] FCM token registered');
         }
       } else if (token) {
         this.fcmToken = token;
-        console.log('[NotificationService] Using existing FCM token');
+        logger.debug('[NotificationService] Using existing FCM token');
       }
 
       // Listen for token refresh
       this.unsubscribeTokenRefresh = messaging().onTokenRefresh(async (newToken) => {
-        console.log('[NotificationService] FCM token refreshed');
+        logger.debug('[NotificationService] FCM token refreshed');
         await this.updateFCMToken(newToken);
       });
     } catch (error) {
-      console.error('[NotificationService] Failed to register FCM token:', error);
+      logger.error('[NotificationService] Failed to register FCM token:', error);
     }
   }
 
@@ -246,7 +248,7 @@ export class NotificationService {
       await AsyncStorage.setItem(STORAGE_KEYS.FCM_TOKEN, token);
       this.fcmToken = token;
     } catch (error) {
-      console.error('[NotificationService] Failed to update FCM token:', error);
+      logger.error('[NotificationService] Failed to update FCM token:', error);
     }
   }
 
@@ -256,27 +258,27 @@ export class NotificationService {
   private setupMessageHandlers(): void {
     // Handle foreground messages
     this.unsubscribeMessageHandler = messaging().onMessage(async (remoteMessage) => {
-      console.log('[NotificationService] Foreground message received:', remoteMessage);
+      logger.debug('[NotificationService] Foreground message received:', remoteMessage);
       await this.displayLocalNotification(remoteMessage);
     });
 
     // Handle background message (when app is in background)
     messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-      console.log('[NotificationService] Background message received:', remoteMessage);
+      logger.debug('[NotificationService] Background message received:', remoteMessage);
       // The notification will be displayed automatically by FCM
       // We can add custom handling here if needed
     });
 
     // Handle notification opened from background state
     messaging().onNotificationOpenedApp((remoteMessage) => {
-      console.log('[NotificationService] Notification opened app from background:', remoteMessage);
+      logger.debug('[NotificationService] Notification opened app from background:', remoteMessage);
       this.handleNotificationPress(remoteMessage);
     });
 
     // Check if app was opened from a notification (when app was killed)
     messaging().getInitialNotification().then((remoteMessage) => {
       if (remoteMessage) {
-        console.log('[NotificationService] App opened from notification:', remoteMessage);
+        logger.debug('[NotificationService] App opened from notification:', remoteMessage);
         this.handleNotificationPress(remoteMessage);
       }
     });
@@ -284,7 +286,7 @@ export class NotificationService {
     // Handle Notifee events (for local notifications)
     notifee.onForegroundEvent(({ type, detail }) => {
       if (type === EventType.PRESS) {
-        console.log('[NotificationService] Local notification pressed:', detail);
+        logger.debug('[NotificationService] Local notification pressed:', detail);
         this.handleLocalNotificationPress(detail.notification);
       }
     });
@@ -323,10 +325,8 @@ export class NotificationService {
       };
 
       // Add image if available
-      if (notification.android?.imageUrl || notification.ios?.imageUrl) {
-        const imageUrl = Platform.OS === 'android' 
-          ? notification.android.imageUrl 
-          : notification.ios?.imageUrl;
+      if (data?.imageUrl) {
+        const imageUrl = data.imageUrl;
           
         if (imageUrl) {
           notificationOptions.android.largeIcon = imageUrl;
@@ -339,7 +339,7 @@ export class NotificationService {
 
       await notifee.displayNotification(notificationOptions);
     } catch (error) {
-      console.error('[NotificationService] Failed to display local notification:', error);
+      logger.error('[NotificationService] Failed to display local notification:', error);
     }
   }
 
@@ -367,7 +367,7 @@ export class NotificationService {
     
     if (data?.notificationId) {
       // Mark as read
-      this.markAsRead(data.notificationId);
+      this.markAsRead(String(data.notificationId));
     }
 
     // Navigate based on notification type and data
@@ -382,7 +382,7 @@ export class NotificationService {
     
     if (data?.notificationId) {
       // Mark as read
-      this.markAsRead(data.notificationId);
+      this.markAsRead(String(data.notificationId));
     }
 
     // Navigate based on notification type and data
@@ -442,7 +442,7 @@ export class NotificationService {
 
       return notifications;
     } catch (error) {
-      console.error('[NotificationService] Failed to get notifications:', error);
+      logger.error('[NotificationService] Failed to get notifications:', error);
       
       // Try to return cached notifications
       const cached = await AsyncStorage.getItem(`notifications_${userId}`);
@@ -477,7 +477,7 @@ export class NotificationService {
           onUpdate(notifications);
         },
         (error) => {
-          console.error('[NotificationService] Subscription error:', error);
+          logger.error('[NotificationService] Subscription error:', error);
         }
       );
 
@@ -491,7 +491,7 @@ export class NotificationService {
     try {
       await callFirebaseFunction('markNotificationAsRead', { notificationId });
     } catch (error) {
-      console.error('[NotificationService] Failed to mark as read:', error);
+      logger.error('[NotificationService] Failed to mark as read:', error);
     }
   }
 
@@ -502,7 +502,7 @@ export class NotificationService {
     try {
       await callFirebaseFunction('markAllNotificationsAsRead', { userId });
     } catch (error) {
-      console.error('[NotificationService] Failed to mark all as read:', error);
+      logger.error('[NotificationService] Failed to mark all as read:', error);
     }
   }
 
@@ -513,7 +513,7 @@ export class NotificationService {
     try {
       await callFirebaseFunction('deleteNotification', { notificationId });
     } catch (error) {
-      console.error('[NotificationService] Failed to delete notification:', error);
+      logger.error('[NotificationService] Failed to delete notification:', error);
     }
   }
 
@@ -538,7 +538,7 @@ export class NotificationService {
         system: true,
       };
     } catch (error) {
-      console.error('[NotificationService] Failed to get preferences:', error);
+      logger.error('[NotificationService] Failed to get preferences:', error);
       return {
         enabled: true,
         stories: true,
@@ -569,7 +569,7 @@ export class NotificationService {
       // Update backend preferences
       await callFirebaseFunction('updateNotificationPreferences', updated);
     } catch (error) {
-      console.error('[NotificationService] Failed to update preferences:', error);
+      logger.error('[NotificationService] Failed to update preferences:', error);
       throw error;
     }
   }
@@ -580,9 +580,9 @@ export class NotificationService {
   private async loadNotificationPreferences(): Promise<void> {
     try {
       const prefs = await this.getNotificationPreferences();
-      console.log('[NotificationService] Loaded preferences:', prefs);
+      logger.debug('[NotificationService] Loaded preferences:', prefs);
     } catch (error) {
-      console.error('[NotificationService] Failed to load preferences:', error);
+      logger.error('[NotificationService] Failed to load preferences:', error);
     }
   }
 
@@ -595,7 +595,7 @@ export class NotificationService {
       return hasPermission === messaging.AuthorizationStatus.AUTHORIZED ||
              hasPermission === messaging.AuthorizationStatus.PROVISIONAL;
     } catch (error) {
-      console.error('[NotificationService] Failed to check permissions:', error);
+      logger.error('[NotificationService] Failed to check permissions:', error);
       return false;
     }
   }

@@ -49,10 +49,10 @@ const Footer = () => {
               Building bridges across generations through shared stories, memories, and heritage.
             </p>
             <div className="flex space-x-4">
-              <SocialIcon icon={<Instagram size={20} />} />
-              <SocialIcon icon={<Twitter size={20} />} />
-              <SocialIcon icon={<Facebook size={20} />} />
-              <SocialIcon icon={<Mail size={20} />} />
+              <SocialIcon href="https://instagram.com/dynastyapp" icon={<Instagram size={20} />} />
+              <SocialIcon href="https://twitter.com/dynastyapp" icon={<Twitter size={20} />} />
+              <SocialIcon href="https://facebook.com/dynastyapp" icon={<Facebook size={20} />} />
+              <SocialIcon href="mailto:support@mydynastyapp.com" icon={<Mail size={20} />} />
             </div>
           </div>
           
@@ -69,21 +69,39 @@ const Footer = () => {
           <div>
             <h4 className="font-medium text-white mb-4">Company</h4>
             <ul className="space-y-3">
-              <FooterLink href="#">About Us</FooterLink>
-              <FooterLink href="#">Contact</FooterLink>
-              <FooterLink href="#">Privacy Policy</FooterLink>
-              <FooterLink href="#">Terms of Service</FooterLink>
+              <FooterLink href="/about">About Us</FooterLink>
+              <FooterLink href="/contact">Contact</FooterLink>
+              <FooterLink href="/privacy">Privacy Policy</FooterLink>
+              <FooterLink href="/terms">Terms of Service</FooterLink>
             </ul>
           </div>
           
           <div>
             <h4 className="font-medium text-white mb-4">Resources</h4>
             <ul className="space-y-3">
-              <FooterLink href="#">Help Center</FooterLink>
-              <FooterLink href="#">Family History Tips</FooterLink>
-              <FooterLink href="#">Genealogy Resources</FooterLink>
-              <FooterLink href="#">Community</FooterLink>
+              <FooterLink href="/help">Help Center</FooterLink>
+              <FooterLink href="/blog/family-history-tips">Family History Tips</FooterLink>
+              <FooterLink href="/resources/genealogy">Genealogy Resources</FooterLink>
+              <FooterLink href="/community">Community</FooterLink>
             </ul>
+          </div>
+        </div>
+        
+        {/* Legal Links Row */}
+        <div className="border-t border-dynasty-neutral-dark pt-8 pb-4">
+          <div className="flex flex-wrap justify-center gap-4 text-sm">
+            <FooterLink href="/cookie-policy">Cookie Policy</FooterLink>
+            <span className="text-dynasty-neutral-dark">|</span>
+            <FooterLink href="/dmca">DMCA Policy</FooterLink>
+            <span className="text-dynasty-neutral-dark">|</span>
+            <FooterLink href="/do-not-sell">Do Not Sell My Info</FooterLink>
+            <span className="text-dynasty-neutral-dark">|</span>
+            <button 
+              onClick={() => window.dynastyShowCookieSettings?.()}
+              className="text-dynasty-neutral-light opacity-75 hover:opacity-100 transition-opacity duration-300"
+            >
+              Cookie Settings
+            </button>
           </div>
         </div>
         
@@ -100,11 +118,14 @@ const Footer = () => {
   );
 };
 
-const SocialIcon = ({ icon }: { icon: React.ReactNode }) => {
+const SocialIcon = ({ href, icon }: { href: string; icon: React.ReactNode }) => {
   return (
     <a 
-      href="#" 
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer" 
       className="w-9 h-9 flex items-center justify-center rounded-full bg-dynasty-neutral-dark hover:bg-dynasty-gold hover:text-dynasty-neutral-darkest transition-colors duration-300"
+      aria-label="Social media link"
     >
       {icon}
     </a>

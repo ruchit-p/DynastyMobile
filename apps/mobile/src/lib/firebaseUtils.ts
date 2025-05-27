@@ -1,4 +1,5 @@
 import { parseFirebaseFunctionError, callFirebaseFunction } from './errorUtils';
+import { logger } from '../services/LoggingService';
 
 // import { type RelativeItem as MobileRelativeItemType } from '../../react-native-relatives-tree/src'; // Adjusted path
 
@@ -55,7 +56,7 @@ export const getFamilyTreeDataMobile = async (userId: string): Promise<{ treeNod
     const result = await callFirebaseFunction<{ userId: string }, { treeNodes: FamilyTreeNode[] }>('getFamilyTreeData', { userId });
     return result;
   } catch (error) {
-    console.error("Error fetching family tree data:", error);
+    logger.error("Error fetching family tree data:", error);
     // The error is already an AppError from callFirebaseFunction, can be rethrown or handled
     throw error;
   }
@@ -96,7 +97,7 @@ export const getMemberProfileDataMobile = async (memberId: string): Promise<Memb
       // Add any other fields you want to expose
     };
   } catch (error) {
-    console.error("Error fetching member profile data:", error);
+    logger.error("Error fetching member profile data:", error);
     throw parseFirebaseFunctionError(error); // Ensure it's an AppError
   }
 };
@@ -152,7 +153,7 @@ export const updateMemberProfileDataMobile = async (memberId: string, profileDat
     const result = await callFirebaseFunction<{ userId: string, updates: any }, { success: boolean }>('updateUserProfile', { userId: memberId, updates: updatesPayload });
     return result;
   } catch (error) {
-    console.error("Error updating member profile data:", error);
+    logger.error("Error updating member profile data:", error);
     throw error;
   }
 };
@@ -190,7 +191,7 @@ export const createFamilyMemberMobile = async (
     });
     return result;
   } catch (error) {
-    console.error(`Error creating family member (type: ${relationType}):`, error);
+    logger.error(`Error creating family member (type: ${relationType}):`, error);
     throw error;
   }
 };
@@ -212,7 +213,7 @@ export const updateFamilyRelationshipsMobile = async (
     const result = await callFirebaseFunction<any, { success: boolean }>('updateFamilyRelationships', { userId, updates });
     return result;
   } catch (error) {
-    console.error("Error updating family relationships:", error);
+    logger.error("Error updating family relationships:", error);
     throw error;
   }
 };
@@ -226,7 +227,7 @@ export const deleteFamilyMemberMobile = async (
     const result = await callFirebaseFunction<any, { success: boolean }>('deleteFamilyMember', { memberId, familyTreeId, currentUserId });
     return result;
   } catch (error) {
-    console.error("Error deleting family member:", error);
+    logger.error("Error deleting family member:", error);
     throw error;
   }
 };
@@ -268,7 +269,7 @@ export const getUploadSignedUrlMobile = async (
     const result = await callFirebaseFunction<any, { signedUrl: string; storagePath: string; parentPathInVault: string; isEncrypted: boolean }>('getVaultUploadSignedUrl', { fileName, mimeType, parentId, isEncrypted });
     return result;
   } catch (error) {
-    console.error("Error getting upload signed URL:", error);
+    logger.error("Error getting upload signed URL:", error);
     throw error;
   }
 };
@@ -283,7 +284,7 @@ export const getVaultItemsMobile = async (
     const result = await callFirebaseFunction<any, { items: VaultItem[] }>('getVaultItems', { parentId });
     return result;
   } catch (error) {
-    console.error("Error fetching vault items:", error);
+    logger.error("Error fetching vault items:", error);
     throw error;
   }
 };
@@ -299,7 +300,7 @@ export const createVaultFolderMobile = async (
     const result = await callFirebaseFunction<any, { id: string }>('createVaultFolder', { name, parentId });
     return result;
   } catch (error) {
-    console.error("Error creating vault folder:", error);
+    logger.error("Error creating vault folder:", error);
     throw error;
   }
 };
@@ -325,7 +326,7 @@ export const addVaultFileMobile = async (
     const result = await callFirebaseFunction<any, { id: string; downloadURL: string; isEncrypted?: boolean }>('addVaultFile', payload);
     return result;
   } catch (error) {
-    console.error("Error adding vault file metadata:", error);
+    logger.error("Error adding vault file metadata:", error);
     throw error;
   }
 };
@@ -341,7 +342,7 @@ export const renameVaultItemMobile = async (
     const result = await callFirebaseFunction<any, { success: boolean }>('renameVaultItem', { itemId, newName });
     return result;
   } catch (error) {
-    console.error("Error renaming vault item:", error);
+    logger.error("Error renaming vault item:", error);
     throw error;
   }
 };
@@ -357,7 +358,7 @@ export const moveVaultItemMobile = async (
     const result = await callFirebaseFunction<any, { success: boolean }>('moveVaultItem', { itemId, newParentId });
     return result;
   } catch (error) {
-    console.error("Error moving vault item:", error);
+    logger.error("Error moving vault item:", error);
     throw error;
   }
 };
@@ -372,7 +373,7 @@ export const deleteVaultItemMobile = async (
     const result = await callFirebaseFunction<any, { success: boolean }>('deleteVaultItem', { itemId });
     return result;
   } catch (error) {
-    console.error("Error deleting vault item:", error);
+    logger.error("Error deleting vault item:", error);
     throw error;
   }
 };
@@ -450,17 +451,17 @@ export const getEventDetailsMobile = async (eventId: string): Promise<{ event: M
       'getEventDetails',
       { eventId }
     );
-    console.log('[firebaseUtils] Raw response from getEventDetails:', result);
+    logger.debug('[firebaseUtils] Raw response from getEventDetails:', result);
 
     if (!result || !result.event) {
-      console.error("Error: Event data not found in function response.", result);
+      logger.error("Error: Event data not found in function response.", result);
       throw parseFirebaseFunctionError({ code: 'not-found', message: 'Event data not found in response from getEventDetails' });
     }
     // TODO: Add any necessary mapping from server (EnrichedEventData) to MobileEventDetails if they differ
     // e.g., converting Timestamps to JS Dates or formatted strings
     return { event: result.event };
   } catch (error: any) {
-    console.error(`Error fetching event details for ${eventId}:`, error);
+    logger.error(`Error fetching event details for ${eventId}:`, error);
     // The error should already be an AppError from callFirebaseFunction
     throw error;
   }
@@ -475,7 +476,7 @@ export const createEventMobile = async (eventData: MobileEventCreationData): Pro
     );
     return result;
   } catch (error) {
-    console.error("Error creating event:", error);
+    logger.error("Error creating event:", error);
     throw error; // Error is already AppError
   }
 };
@@ -487,9 +488,11 @@ export const createEventMobile = async (eventData: MobileEventCreationData): Pro
  * Typically, all fields are optional, and only provided fields will be updated.
  * The eventId is crucial for identifying which event to update.
  */
-export interface MobileEventUpdateData extends Partial<Omit<MobileEventCreationData, 'familyTreeId' | 'invitedMemberIds'>> { // familyTreeId and invitedMemberIds are usually set at creation or via specific endpoints
+export interface MobileEventUpdateData extends Partial<Omit<MobileEventCreationData, 'familyTreeId' | 'invitedMemberIds'>> {
+  // familyTreeId and invitedMemberIds are usually set at creation or via specific endpoints
   // Omitting coverPhotoStoragePaths as that's handled by completeEventCoverPhotoUpload
   // hostId is implicit from the authenticated user on the backend.
+  [key: string]: unknown;
 }
 
 export const updateEventMobile = async (
@@ -506,7 +509,7 @@ export const updateEventMobile = async (
     );
     return result;
   } catch (error) {
-    console.error(`Error updating event ${eventId}:`, error);
+    logger.error(`Error updating event ${eventId}:`, error);
     throw error;
   }
 };
@@ -536,7 +539,7 @@ export const rsvpToEventMobile = async (rsvpData: RsvpData): Promise<RsvpRespons
     );
     return result;
   } catch (error) {
-    console.error(`Error RSVPing to event ${rsvpData.eventId}:`, error);
+    logger.error(`Error RSVPing to event ${rsvpData.eventId}:`, error);
     throw error;
   }
 };
@@ -550,7 +553,7 @@ export const deleteEventMobile = async (eventId: string): Promise<{ success: boo
     );
     return result;
   } catch (error) {
-    console.error(`Error deleting event ${eventId}:`, error);
+    logger.error(`Error deleting event ${eventId}:`, error);
     throw error;
   }
 };
@@ -574,7 +577,7 @@ export const getEventAttendeesMobile = async (eventId: string): Promise<{ attend
     );
     return result;
   } catch (error) {
-    console.error(`Error fetching attendees for event ${eventId}:`, error);
+    logger.error(`Error fetching attendees for event ${eventId}:`, error);
     throw error;
   }
 };
@@ -620,7 +623,7 @@ export const getUpcomingEventsForUserMobile = async (
     );
     return result;
   } catch (error) {
-    console.error("Error fetching upcoming events:", error);
+    logger.error("Error fetching upcoming events:", error);
     throw error;
   }
 };
@@ -653,7 +656,7 @@ export const addCommentToEventMobile = async (
     );
     return result;
   } catch (error) {
-    console.error(`Error adding comment to event ${eventId}:`, error);
+    logger.error(`Error adding comment to event ${eventId}:`, error);
     throw error;
   }
 };
@@ -666,7 +669,7 @@ export const getEventCommentsMobile = async (eventId: string): Promise<{ comment
     );
     return result;
   } catch (error) {
-    console.error(`Error fetching comments for event ${eventId}:`, error);
+    logger.error(`Error fetching comments for event ${eventId}:`, error);
     throw error;
   }
 };
@@ -685,7 +688,7 @@ export const deleteEventCommentMobile = async (
     );
     return result;
   } catch (error) {
-    console.error(`Error deleting comment ${commentId} from event ${eventId}:`, error);
+    logger.error(`Error deleting comment ${commentId} from event ${eventId}:`, error);
     throw error;
   }
 };
@@ -712,7 +715,7 @@ export const getEventCoverPhotoUploadUrlMobile = async (
     );
     return result;
   } catch (error) {
-    console.error(`Error getting cover photo upload URL for event ${eventId}:`, error);
+    logger.error(`Error getting cover photo upload URL for event ${eventId}:`, error);
     throw error;
   }
 };
@@ -741,7 +744,7 @@ export const completeEventCoverPhotoUploadMobile = async (
     );
     return result;
   } catch (error) {
-    console.error(`Error completing cover photo upload for event ${payload.eventId}:`, error);
+    logger.error(`Error completing cover photo upload for event ${payload.eventId}:`, error);
     throw error;
   }
 };

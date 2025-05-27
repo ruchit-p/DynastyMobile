@@ -5,7 +5,7 @@ import { useColorScheme } from '../../hooks/useColorScheme';
 import { useTextColor } from '../../hooks/useThemeColor';
 import { Spacing } from '../../constants/Spacing';
 import { Colors } from '../../constants/Colors';
-import ThemedText from '../ThemedText';
+import { ThemedText } from '../ThemedText';
 import Button from './Button';
 
 export interface EmptyStateProps {

@@ -74,7 +74,7 @@ export const FamilyTree: React.FC<FamilyTreeProps> = ({
         onTreeReady?.();
       });
     }
-  }, [treeData, performanceMode]);
+  }, [treeData, performanceMode, opacity, onTreeReady]);
 
   const visibleNodes = useMemo(() => {
     if (!virtualizationEngine.current || !viewport) return [];

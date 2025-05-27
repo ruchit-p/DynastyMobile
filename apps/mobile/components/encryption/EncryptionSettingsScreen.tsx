@@ -5,7 +5,7 @@ import { Button } from '../ui/Button';
 import { Screen } from '../ui/Screen';
 import { ListItem } from '../ListItem';
 import { Colors } from '../../constants/Colors';
-import Typography from '../../constants/Typography';
+import { Typography } from '../../constants/Typography';
 import { Spacing } from '../../constants/Spacing';
 import { EncryptionContext } from '../../src/contexts/EncryptionContext';
 import { KeyRotationService, KeyBackupService } from '../../src/services/encryption';

@@ -1,4 +1,6 @@
 import { normalizeError, showErrorAlert, AppError } from './errorUtils';
+import { logger, LogLevel } from '../services/LoggingService';
+import * as Sentry from '@sentry/react-native';
 
 export enum ErrorSeverity {
   INFO = 'info',
@@ -54,6 +56,12 @@ class ErrorHandlingService {
 
   setUserId(userId: string | null | undefined) {
     this.userId = userId || undefined;
+    // Update logger with user context
+    if (userId) {
+      logger.setUser(userId);
+    } else {
+      logger.clearUser();
+    }
   }
 
   getUserId(): string | undefined {
@@ -79,8 +87,21 @@ class ErrorHandlingService {
       }
     };
 
-    // Log error for debugging
-    console.error(`[${config.severity.toUpperCase()}] ${config.title}:`, enhancedError);
+    // Log error using LoggingService
+    switch (config.severity) {
+      case ErrorSeverity.INFO:
+        logger.info(`${config.title}: ${enhancedError.message}`, enhancedError);
+        break;
+      case ErrorSeverity.WARNING:
+        logger.warn(`${config.title}: ${enhancedError.message}`, enhancedError);
+        break;
+      case ErrorSeverity.ERROR:
+        logger.error(`${config.title}: ${enhancedError.message}`, enhancedError.originalError || enhancedError, enhancedError);
+        break;
+      case ErrorSeverity.FATAL:
+        logger.fatal(`${config.title}: ${enhancedError.message}`, enhancedError.originalError || enhancedError, enhancedError);
+        break;
+    }
 
     // Show alert if configured to do so (default: true for ERROR and FATAL)
     const shouldShowAlert = config.showAlert !== false && 
@@ -98,10 +119,23 @@ class ErrorHandlingService {
     return enhancedError;
   }
 
-  private logToAnalytics(errorData: any) {
-    // In a real app, this would send to analytics service
-    // For now, just log to console
-    console.log('Analytics Error Log:', errorData);
+  private logToAnalytics(errorData: EnhancedAppError) {
+    // Log event for analytics
+    logger.logEvent('error_occurred', {
+      severity: errorData.severity,
+      code: errorData.code,
+      screen: errorData.screenName,
+      message: errorData.message,
+      metadata: errorData.metadata
+    });
+
+    // Add Sentry context
+    if (errorData.screenName) {
+      Sentry.setTag('screen', errorData.screenName);
+    }
+    if (errorData.metadata?.userId) {
+      Sentry.setUser({ id: errorData.metadata.userId });
+    }
   }
 
   /**
@@ -166,8 +200,22 @@ class ErrorHandlingService {
    * Initialize the error handling service
    */
   initialize() {
-    // Set up global error handlers if needed
-    console.log('ErrorHandlingService initialized');
+    // Set up global error handlers
+    const originalHandler = ErrorUtils.getGlobalHandler();
+    
+    ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
+      // Log to our service
+      if (isFatal) {
+        logger.fatal('Unhandled error (fatal)', error);
+      } else {
+        logger.error('Unhandled error', error);
+      }
+      
+      // Call original handler
+      originalHandler(error, isFatal);
+    });
+    
+    logger.info('ErrorHandlingService initialized');
     return this;
   }
 }

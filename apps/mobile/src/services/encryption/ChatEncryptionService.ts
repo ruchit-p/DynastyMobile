@@ -1,15 +1,21 @@
-import E2EEService, { EncryptedMessage as E2EEMessage } from './E2EEService';
-import MediaEncryptionService, { EncryptedFile } from './MediaEncryptionService';
+import { MediaEncryptionService, EncryptedFile } from './MediaEncryptionService';
 import { OfflineQueueService } from './OfflineQueueService';
-import MetadataEncryptionService from './MetadataEncryptionService';
-import KeyRotationService from './KeyRotationService';
-import EncryptedSearchService from './EncryptedSearchService';
-import AuditLogService from './AuditLogService';
+import { MetadataEncryptionService } from './MetadataEncryptionService';
+import { EncryptedSearchService } from './EncryptedSearchService';
+import { AuditLogService } from './AuditLogService';
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import { getFirebaseDb, getFirebaseAuth } from '../../lib/firebase';
 import { callFirebaseFunction } from '../../lib/errorUtils';
 import { Buffer } from '@craftzdog/react-native-buffer';
 import NetInfo from '@react-native-community/netinfo';
+import { logger } from '../LoggingService';
+import { sanitizeUserInput, sanitizeFilename } from '../../lib/xssSanitization';
+
+// Signal Protocol imports
+import { LibsignalService } from './libsignal/LibsignalService';
+import { KeyDistributionService } from './libsignal/services/KeyDistributionService';
+import { SignalProtocolStore } from './libsignal/stores/SignalProtocolStore';
+import { KeyGenerationService } from './libsignal/services/KeyGenerationService';
 
 // Types
 type Timestamp = FirebaseFirestoreTypes.Timestamp;
@@ -63,21 +69,27 @@ export interface EncryptedMessageData {
   senderId: string;
   timestamp: Timestamp;
   type: 'text' | 'media' | 'file' | 'voice';
-  // Encrypted payloads for each recipient
-  encryptedPayloads: {
-    [recipientId: string]: {
-      encryptedContent: string; // Base64
-      ephemeralPublicKey: string; // Base64
-      nonce: string; // Base64
-      mac: string; // Base64
+  
+  // Signal Protocol metadata
+  signalMetadata: {
+    senderDeviceId: number;
+    recipients: {
+      [userId: string]: {
+        [deviceId: string]: {
+          encryptedPayload: string;
+          messageType: number;
+        }
+      }
     };
   };
+  
   // Encrypted metadata
   encryptedMetadata?: {
     encryptedData: string;
     nonce: string;
     mac: string;
   };
+  
   // For media messages
   media?: {
     encryptedUrl: string;
@@ -92,24 +104,62 @@ export interface EncryptedMessageData {
       tag: string;
     };
   };
+  
   // For voice messages
   duration?: number; // in seconds
   delivered: string[];
   read: string[];
-  // Reactions
-  reactions?: MessageReaction[];
 }
 
+export interface DecryptedMessage extends Message {
+  decryptionTime?: number;
+  decryptionErrors?: string[];
+}
+
+// interface SyncOperation {
+//   type: 'message' | 'delivery' | 'read' | 'reaction';
+//   messageId: string;
+//   data: any;
+//   timestamp: number;
+// }
+
+/**
+ * Main service for handling encrypted chat messages
+ * Uses Signal Protocol for end-to-end encryption
+ */
 export class ChatEncryptionService {
   private static instance: ChatEncryptionService;
-  private db = getFirebaseDb();
-  private currentUserId?: string;
+  private db: FirebaseFirestoreTypes.Module;
+  private currentUserId: string | null = null;
+  
+  // Signal Protocol services
+  private libsignalService: LibsignalService;
+  private keyDistributionService: KeyDistributionService;
+  private signalStore: SignalProtocolStore;
+  
+  // Performance tracking
+  private metrics = {
+    messagesEncrypted: 0,
+    messagesDecrypted: 0,
+    totalEncryptionTime: 0,
+    totalDecryptionTime: 0,
+    errors: 0
+  };
 
   private constructor() {
-    // Listen for auth changes
-    getFirebaseAuth().onAuthStateChanged((user) => {
-      this.currentUserId = user?.uid;
-    });
+    this.db = getFirebaseDb();
+    
+    const auth = getFirebaseAuth();
+    this.currentUserId = auth.currentUser?.uid || null;
+    
+    // Initialize Signal Protocol services
+    this.libsignalService = LibsignalService.getInstance();
+    this.signalStore = new SignalProtocolStore();
+    const keyGenService = new KeyGenerationService(this.signalStore);
+    this.keyDistributionService = new KeyDistributionService(keyGenService, this.signalStore);
+    
+    // Initialize services
+    this.initialize();
   }
 
   static getInstance(): ChatEncryptionService {
@@ -120,189 +170,79 @@ export class ChatEncryptionService {
   }
 
   /**
-   * Initialize encryption for the current user
+   * Initialize the service and Signal Protocol
    */
-  async initializeEncryption(): Promise<void> {
-    try {
-      const auth = getFirebaseAuth();
-      if (!auth.currentUser) {
-        throw new Error('User not authenticated');
-      }
-
-      const userId = auth.currentUser.uid;
-      
-      // Initialize E2EE
-      await E2EEService.initialize(userId);
-      
-      // Initialize metadata encryption
-      await MetadataEncryptionService.initialize(userId);
-      
-      // Initialize key rotation
-      await KeyRotationService.initialize();
-      
-      // Subscribe to rotation events
-      KeyRotationService.onRotationEvent((event) => {
-        console.log('Key rotation event:', event);
-        if (event.type === 'rotation_completed') {
-          // Re-upload public keys after rotation
-          this.uploadPublicKeys(userId);
-        }
-      });
-      
-      // Initialize encrypted search
-      await EncryptedSearchService.initialize(userId);
-      
-      // Upload public keys to Firestore
-      await this.uploadPublicKeys(userId);
-      
-      // Set up dependency injection to avoid circular dependency
-      const offlineQueueService = OfflineQueueService.getInstance();
-      offlineQueueService.setChatEncryptionService(this);
-      
-      // Log successful initialization
-      await AuditLogService.getInstance().logEvent(
-        'encryption_initialized',
-        'Chat encryption initialized successfully',
-        {
-          userId,
-          metadata: { keysGenerated: true }
-        }
-      );
-      
-      console.log('Chat encryption initialized');
-    } catch (error) {
-      console.error('Failed to initialize chat encryption:', error);
-      
-      // Log initialization failure
-      await AuditLogService.getInstance().logEvent(
-        'encryption_initialization_failed',
-        'Failed to initialize chat encryption',
-        {
-          userId: getFirebaseAuth().currentUser?.uid,
-          metadata: { error: error.message }
-        }
-      );
-      
-      throw error;
-    }
-  }
-
-  /**
-   * Upload user's public keys to Firestore
-   */
-  private async uploadPublicKeys(userId: string): Promise<void> {
-    try {
-      const keysBundle = await E2EEService.getInstance().getPublicKeyBundle();
-      if (!keysBundle) {
-        throw new Error('Failed to get public keys bundle');
-      }
-
-      const userKeysData: UserKeys = {
-        userId,
-        identityPublicKey: keysBundle.identityKey,
-        lastUpdated: FirebaseFirestoreTypes.FieldValue.serverTimestamp() as any
-      };
-
-      // Store in Firestore
-      await this.db.collection('users').doc(userId).collection('keys').doc('public').set(userKeysData);
-    } catch (error) {
-      console.error('Failed to upload public keys:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get user's public keys from Firestore
-   */
-  async getUserPublicKeys(userId: string): Promise<UserKeys | null> {
-    try {
-      const keysDoc = await this.db.collection('users').doc(userId).collection('keys').doc('public').get();
-      
-      if (!keysDoc.exists) {
-        return null;
-      }
-
-      return keysDoc.data() as UserKeys;
-    } catch (error) {
-      console.error('Failed to get user public keys:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Create or get an encrypted chat
-   */
-  async createOrGetChat(participantIds: string[]): Promise<Chat> {
+  private async initialize(): Promise<void> {
     try {
       if (!this.currentUserId) {
-        throw new Error('User not authenticated');
+        logger.warn('No authenticated user, skipping initialization');
+        return;
       }
-
-      // Sort participant IDs for consistent chat ID
-      const sortedParticipants = [...participantIds, this.currentUserId].sort();
-      const chatType = sortedParticipants.length === 2 ? 'direct' : 'group';
       
-      // For direct chats, use deterministic ID
-      let chatId: string;
-      if (chatType === 'direct') {
-        chatId = `chat_${sortedParticipants.join('_')}`;
-      } else {
-        // For group chats, generate new ID
-        chatId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      }
-
-      // Check if chat exists
-      const chatDoc = await this.db.collection('chats').doc(chatId).get();
+      logger.info('Initializing Signal Protocol');
       
-      if (chatDoc.exists) {
-        return { id: chatId, ...chatDoc.data() } as Chat;
+      // Initialize Signal Protocol
+      await this.libsignalService.initialize();
+      
+      // Generate keys if not already present
+      const hasKeys = await this.libsignalService.hasIdentityKey();
+      if (!hasKeys) {
+        logger.info('No Signal Protocol keys found, generating new ones');
+        await this.ensureEncryptionKeys();
       }
-
-      // Create new chat
-      const newChat: Chat = {
-        id: chatId,
-        type: chatType,
-        participants: sortedParticipants,
-        createdAt: FirebaseFirestoreTypes.FieldValue.serverTimestamp() as any,
-        lastMessageAt: FirebaseFirestoreTypes.FieldValue.serverTimestamp() as any,
-        encryptionEnabled: true
-      };
-
-      await this.db.collection('chats').doc(chatId).set(newChat);
-
-      // Initialize sessions with all participants
-      for (const participantId of participantIds) {
-        if (participantId !== this.currentUserId) {
-          await this.initializeSession(participantId);
-        }
-      }
-
-      return newChat;
+      
+      // Setup audit logging
+      AuditLogService.getInstance();
+      
+      logger.info('ChatEncryptionService initialized with Signal Protocol');
     } catch (error) {
-      console.error('Failed to create or get chat:', error);
+      logger.error('Failed to initialize ChatEncryptionService:', error);
       throw error;
     }
   }
 
   /**
-   * Initialize encryption session with another user
+   * Get user's Signal Protocol bundle from Firebase
    */
-  private async initializeSession(remoteUserId: string): Promise<void> {
+  async getUserSignalBundle(userId: string): Promise<any> {
     try {
-      // Get remote user's public keys
-      const remoteKeys = await this.getUserPublicKeys(remoteUserId);
-      if (!remoteKeys) {
-        throw new Error(`No public keys found for user: ${remoteUserId}`);
+      // Try to get the bundle from the key distribution service
+      const bundle = await this.keyDistributionService.fetchUserBundle(userId);
+      if (bundle) {
+        return bundle;
       }
-
-      // With our E2EE implementation, we don't need to pre-establish sessions
-      // Sessions are created on-demand using ephemeral keys
-      console.log(`Ready to encrypt messages for user: ${remoteUserId}`);
+      
+      // Fallback to direct Firebase query
+      const doc = await this.db.collection('users').doc(userId).get();
+      if (!doc.exists) {
+        throw new Error(`User ${userId} not found`);
+      }
+      
+      const data = doc.data();
+      if (!data?.signalBundle) {
+        throw new Error(`No Signal bundle found for user ${userId}`);
+      }
+      
+      return data.signalBundle;
     } catch (error) {
-      console.error(`Failed to initialize session with ${remoteUserId}:`, error);
+      logger.error('Failed to get user Signal bundle:', error);
       throw error;
     }
   }
+
+  /**
+   * Ensure user has Signal Protocol keys set up
+   */
+  async ensureEncryptionKeys(): Promise<void> {
+    if (!this.currentUserId) {
+      throw new Error('User not authenticated');
+    }
+
+    // Generate and publish Signal Protocol bundle
+    await this.keyDistributionService.generateAndPublishBundle(this.currentUserId);
+    logger.info('Signal Protocol bundle published:', { userId: this.currentUserId });
+  }
+
 
   /**
    * Send an encrypted text message
@@ -313,13 +253,20 @@ export class ChatEncryptionService {
         throw new Error('User not authenticated');
       }
 
+      // Sanitize the message text before processing
+      const sanitizedText = sanitizeUserInput(text, { maxLength: 5000, trim: true });
+      if (!sanitizedText) {
+        logger.warn('Message was empty after sanitization');
+        return;
+      }
+
       // Check network status
       const netInfo = await NetInfo.fetch();
       if (!netInfo.isConnected) {
         // Queue message for offline sending
         const offlineQueueService = OfflineQueueService.getInstance();
-        await offlineQueueService.queueMessage(chatId, 'text', text);
-        console.log('Message queued for offline sending');
+        await offlineQueueService.queueMessage(chatId, 'text', sanitizedText);
+        logger.debug('Message queued for offline sending');
         return;
       }
 
@@ -332,113 +279,111 @@ export class ChatEncryptionService {
       const chat = chatDoc.data() as Chat;
       const recipients = chat.participants.filter(id => id !== this.currentUserId);
 
-      // Encrypt message for each recipient
-      const encryptedPayloads: { [recipientId: string]: any } = {};
-      
-      for (const recipientId of recipients) {
-        try {
-          // Get recipient's public key
-          const recipientKeys = await this.getUserPublicKeys(recipientId);
-          if (!recipientKeys) {
-            throw new Error(`No public keys found for recipient: ${recipientId}`);
-          }
-
-          const encrypted = await E2EEService.encryptMessage(text, recipientKeys.identityPublicKey);
-          encryptedPayloads[recipientId] = {
-            encryptedContent: encrypted.content,
-            ephemeralPublicKey: encrypted.ephemeralPublicKey,
-            nonce: encrypted.nonce,
-            mac: encrypted.mac
-          };
-        } catch (error) {
-          console.error(`Failed to encrypt for ${recipientId}:`, error);
-          throw error;
-        }
-      }
-
-      // Encrypt metadata
-      const metadata = {
-        timestamp: Date.now(),
-        senderId: this.currentUserId,
-        messageType: 'text',
-      };
-      
-      const encryptedMetadata = await MetadataEncryptionService.encryptMessageMetadata(metadata);
-
-      // Create encrypted message document
-      const messageData: EncryptedMessageData = {
-        id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        chatId,
-        senderId: this.currentUserId,
-        timestamp: FirebaseFirestoreTypes.FieldValue.serverTimestamp() as any,
-        type: 'text',
-        encryptedPayloads,
-        encryptedMetadata,
-        delivered: [],
-        read: []
-      };
-
-      // Add to Firestore
-      const messageRef = await this.db.collection('chats').doc(chatId).collection('messages').add(messageData);
-
-      // Update chat's last message timestamp
-      await this.db.collection('chats').doc(chatId).update({
-        lastMessageAt: FirebaseFirestoreTypes.FieldValue.serverTimestamp()
-      });
-
-      // Index message for search (fire and forget)
-      EncryptedSearchService.indexMessage(
-        messageRef.id,
-        chatId,
-        text,
-        metadata
-      ).catch(error => console.error('Failed to index message:', error));
-
-      console.log('Encrypted message sent');
-      
-      // Send push notifications (fire and forget)
-      callFirebaseFunction('sendMessageNotification', {
-        chatId,
-        messageId: messageRef.id,
-      }).catch(error => console.error('Failed to send notification:', error));
-      
-      // Log successful message send
-      await AuditLogService.getInstance().logEvent(
-        'message_sent',
-        'Encrypted text message sent',
-        {
-          userId: this.currentUserId,
-          resourceId: messageRef.id,
-          metadata: {
-            chatId,
-            recipientCount: recipients.length,
-            messageType: 'text'
-          }
-        }
-      );
+      // Send using Signal Protocol
+      await this.sendWithSignalProtocol(chatId, sanitizedText, recipients);
     } catch (error) {
-      console.error('Failed to send encrypted message:', error);
-      
-      // Log message send failure
-      await AuditLogService.getInstance().logEvent(
-        'message_send_failed',
-        'Failed to send encrypted message',
-        {
-          userId: this.currentUserId,
-          metadata: {
-            chatId,
-            error: error.message,
-            messageType: 'text'
-          }
-        }
-      );
-      
+      logger.error('Failed to send text message:', error);
       throw error;
     }
   }
 
   /**
-   * Send an encrypted media message
+   * Send message using Signal Protocol
+   */
+  private async sendWithSignalProtocol(
+    chatId: string,
+    text: string,
+    recipients: string[]
+  ): Promise<void> {
+    if (!this.currentUserId) {
+      throw new Error('User not authenticated');
+    }
+
+    const startTime = Date.now();
+    const messageRef = this.db.collection('messages').doc();
+    const metadata = {
+      chatId,
+      senderId: this.currentUserId,
+      timestamp: Date.now()
+    };
+
+    // Encrypt message for all recipients
+    const signalMetadata: any = {
+      senderDeviceId: 1, // Default device ID
+      recipients: {}
+    };
+
+    for (const recipientId of recipients) {
+      try {
+        // Get recipient's Signal bundle
+        const _bundle = await this.getUserSignalBundle(recipientId); // eslint-disable-line @typescript-eslint/no-unused-vars
+        
+        // Encrypt message for this recipient
+        const encrypted = await this.libsignalService.encryptMessage(
+          recipientId,
+          Buffer.from(JSON.stringify({ text, metadata }))
+        );
+        
+        // Store encrypted payload
+        if (!signalMetadata.recipients[recipientId]) {
+          signalMetadata.recipients[recipientId] = {};
+        }
+        
+        signalMetadata.recipients[recipientId]['1'] = {
+          encryptedPayload: encrypted.toString('base64'),
+          messageType: 3 // Whisper message type
+        };
+      } catch (error) {
+        logger.error(`Failed to encrypt for ${recipientId}:`, error);
+        // Continue with other recipients
+      }
+    }
+
+    if (Object.keys(signalMetadata.recipients).length === 0) {
+      throw new Error('Failed to encrypt message for any recipient');
+    }
+
+    // Encrypt metadata
+    const encryptedMetadata = await MetadataEncryptionService.getInstance().encryptMetadata(metadata);
+
+    // Create message document
+    const messageData: EncryptedMessageData = {
+      id: messageRef.id,
+      chatId,
+      senderId: this.currentUserId,
+      timestamp: FirebaseFirestoreTypes.FieldValue.serverTimestamp() as any,
+      type: 'text',
+      signalMetadata,
+      encryptedMetadata,
+      delivered: [],
+      read: []
+    };
+
+    await messageRef.set(messageData);
+
+    // Update chat last message
+    await this.db.collection('chats').doc(chatId).update({
+      lastMessageAt: FirebaseFirestoreTypes.FieldValue.serverTimestamp()
+    });
+
+    // Index message for search (fire and forget)
+    EncryptedSearchService.getInstance().indexMessage(
+      messageRef.id,
+      chatId,
+      text,
+      metadata
+    ).catch(error => logger.error('Failed to index message:', error));
+
+    logger.debug('Message sent with Signal Protocol');
+    
+    // Track metrics
+    const encryptionTime = Date.now() - startTime;
+    this.updateMetrics('encryption', encryptionTime, true);
+  }
+
+
+  /**
+   * Send an encrypted media message (photo, video, file, voice)
    */
   async sendMediaMessage(
     chatId: string,
@@ -452,20 +397,17 @@ export class ChatEncryptionService {
         throw new Error('User not authenticated');
       }
 
+      // Sanitize the filename
+      const sanitizedFileName = sanitizeFilename(fileName);
+
       // Check network status
       const netInfo = await NetInfo.fetch();
       if (!netInfo.isConnected) {
         // Queue media message for offline sending
         const offlineQueueService = OfflineQueueService.getInstance();
-        await offlineQueueService.queueMessage(chatId, 'media', undefined, fileUri);
-        console.log('Media message queued for offline sending');
+        await offlineQueueService.queueOfflineMessage(chatId, 'media', undefined, fileUri);
+        logger.debug('Media message queued for offline sending');
         return;
-      }
-
-      // Validate file
-      const validation = await MediaEncryptionService.validateFile(fileUri);
-      if (!validation.isValid) {
-        throw new Error(validation.error || 'Invalid file');
       }
 
       // Get chat info
@@ -478,57 +420,57 @@ export class ChatEncryptionService {
       const recipients = chat.participants.filter(id => id !== this.currentUserId);
 
       // Upload and encrypt file
-      const encryptedFile = await MediaEncryptionService.uploadEncryptedFile(
+      const encryptedFile = await MediaEncryptionService.getInstance().uploadEncryptedFile(
         fileUri,
-        fileName,
+        sanitizedFileName,
         mimeType,
         chatId
       );
 
-      // Encrypt the file key for each recipient
+      // Encrypt the file key for each recipient using Signal Protocol
       const encryptedKeys: { [recipientId: string]: string } = {};
       
       for (const recipientId of recipients) {
         try {
-          // Get recipient's public key
-          const recipientKeys = await this.getUserPublicKeys(recipientId);
-          if (!recipientKeys) {
-            throw new Error(`No public keys found for recipient: ${recipientId}`);
-          }
-
-          const encrypted = await E2EEService.encryptMessage(
-            encryptedFile.encryptedKey,
-            recipientKeys.identityPublicKey
+          // Get recipient's Signal bundle
+          await this.getUserSignalBundle(recipientId);
+          
+          // Encrypt the file key for this recipient
+          const encrypted = await this.libsignalService.encryptMessage(
+            recipientId,
+            Buffer.from(encryptedFile.encryptionKey)
           );
-          // Store the entire encrypted object as JSON for the key
-          encryptedKeys[recipientId] = JSON.stringify({
-            content: encrypted.content,
-            ephemeralPublicKey: encrypted.ephemeralPublicKey,
-            nonce: encrypted.nonce,
-            mac: encrypted.mac
-          });
+          
+          encryptedKeys[recipientId] = encrypted.toString('base64');
         } catch (error) {
-          console.error(`Failed to encrypt key for ${recipientId}:`, error);
-          throw error;
+          logger.error(`Failed to encrypt file key for ${recipientId}:`, error);
+          // Continue with other recipients
         }
+      }
+
+      if (Object.keys(encryptedKeys).length === 0) {
+        throw new Error('Failed to encrypt file key for any recipient');
       }
 
       // Determine message type based on mimeType
       let messageType: 'media' | 'file' | 'voice' = 'file';
       if (mimeType.startsWith('image/') || mimeType.startsWith('video/')) {
         messageType = 'media';
-      } else if (mimeType.startsWith('audio/')) {
+      } else if (mimeType.startsWith('audio/') && duration !== undefined) {
         messageType = 'voice';
       }
 
-      // Create encrypted message document
+      // Create encrypted message document with Signal Protocol metadata
       const messageData: EncryptedMessageData = {
         id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         chatId,
         senderId: this.currentUserId,
         timestamp: FirebaseFirestoreTypes.FieldValue.serverTimestamp() as any,
         type: messageType,
-        encryptedPayloads: {}, // No text content
+        signalMetadata: {
+          senderDeviceId: 1,
+          recipients: {} // Empty for media messages, keys are in media.encryptedKeys
+        },
         media: {
           encryptedUrl: encryptedFile.encryptedUrl,
           encryptedKeys,
@@ -538,431 +480,424 @@ export class ChatEncryptionService {
         read: []
       };
 
-      // Add duration for voice messages
-      if (messageType === 'voice' && duration !== undefined) {
+      if (duration !== undefined) {
         messageData.duration = duration;
       }
 
-      // Add to Firestore
-      const messageRef = await this.db.collection('chats').doc(chatId).collection('messages').add(messageData);
+      // Save to Firestore
+      await this.db.collection('messages').doc(messageData.id).set(messageData);
 
-      // Update chat's last message timestamp
+      // Update chat last message
       await this.db.collection('chats').doc(chatId).update({
         lastMessageAt: FirebaseFirestoreTypes.FieldValue.serverTimestamp()
       });
 
+      logger.debug(`Encrypted ${messageType} message sent`);
+      
       // Send push notifications (fire and forget)
       callFirebaseFunction('sendMessageNotification', {
         chatId,
-        messageId: messageRef.id,
-      }).catch(error => console.error('Failed to send notification:', error));
-
-      console.log('Encrypted media message sent');
+        senderId: this.currentUserId,
+        recipientIds: recipients,
+        messageType,
+        fileName: sanitizedFileName
+      }).catch(error => logger.error('Failed to send notification:', error));
+      
     } catch (error) {
-      console.error('Failed to send encrypted media message:', error);
+      logger.error('Failed to send media message:', error);
       throw error;
     }
   }
 
   /**
-   * Decrypt a received message
+   * Decrypt a message
    */
-  async decryptMessage(encryptedMessage: EncryptedMessageData): Promise<Message> {
+  async decryptMessage(encryptedMessage: EncryptedMessageData): Promise<DecryptedMessage> {
+    const startTime = Date.now();
+    
     try {
       if (!this.currentUserId) {
         throw new Error('User not authenticated');
       }
 
-      // Decrypt metadata if present
-      let decryptedTimestamp = encryptedMessage.timestamp;
-      let decryptedSenderId = encryptedMessage.senderId;
-      
-      if (encryptedMessage.encryptedMetadata) {
-        try {
-          const decryptedMetadata = await MetadataEncryptionService.decryptMessageMetadata(
-            encryptedMessage.encryptedMetadata
-          );
-          // Use decrypted metadata values
-          decryptedTimestamp = new FirebaseFirestoreTypes.Timestamp(
-            Math.floor(decryptedMetadata.timestamp / 1000),
-            (decryptedMetadata.timestamp % 1000) * 1000000
-          ) as any;
-          decryptedSenderId = decryptedMetadata.senderId;
-        } catch (error) {
-          console.error('Failed to decrypt metadata:', error);
-        }
-      }
-
-      // Calculate status based on delivered/read arrays
-      let status: Message['status'] = 'sent';
-      if (decryptedSenderId === this.currentUserId) {
-        // For own messages, calculate status
-        const chatDoc = await this.db.collection('chats').doc(encryptedMessage.chatId).get();
-        if (chatDoc.exists) {
-          const participants = chatDoc.data()?.participants || [];
-          const otherParticipants = participants.filter((p: string) => p !== this.currentUserId).length;
-          
-          if (encryptedMessage.read.length >= otherParticipants) {
-            status = 'read';
-          } else if (encryptedMessage.delivered.length >= otherParticipants) {
-            status = 'delivered';
-          }
-        }
-      }
-
-      const decryptedMessage: Message = {
-        id: encryptedMessage.id,
-        chatId: encryptedMessage.chatId,
-        senderId: decryptedSenderId,
-        timestamp: decryptedTimestamp,
-        type: encryptedMessage.type,
-        encrypted: true,
-        delivered: encryptedMessage.delivered,
-        read: encryptedMessage.read,
-        status
-      };
-
-      // Add duration for voice messages
-      if (encryptedMessage.type === 'voice' && encryptedMessage.duration !== undefined) {
-        decryptedMessage.duration = encryptedMessage.duration;
-      }
-
-      // Add reactions
-      if (encryptedMessage.reactions) {
-        decryptedMessage.reactions = encryptedMessage.reactions;
-      }
-
-      // Decrypt text content if present
-      if (encryptedMessage.encryptedPayloads[this.currentUserId]) {
-        const payload = encryptedMessage.encryptedPayloads[this.currentUserId];
-        const encryptedMsg: E2EEMessage = {
-          content: payload.encryptedContent,
-          ephemeralPublicKey: payload.ephemeralPublicKey,
-          nonce: payload.nonce,
-          mac: payload.mac
-        };
-
-        try {
-          const decryptedText = await E2EEService.decryptMessage(encryptedMsg);
-          decryptedMessage.text = decryptedText;
-        } catch (error) {
-          console.error('Failed to decrypt message:', error);
-          decryptedMessage.text = '[Failed to decrypt message]';
-        }
-      }
-
-      // Handle media if present
-      if (encryptedMessage.media && encryptedMessage.media.encryptedKeys[this.currentUserId]) {
-        try {
-          // Decrypt the file encryption key
-          const encryptedKeyData = JSON.parse(encryptedMessage.media.encryptedKeys[this.currentUserId]);
-          const encryptedKeyMsg: E2EEMessage = {
-            content: encryptedKeyData.content,
-            ephemeralPublicKey: encryptedKeyData.ephemeralPublicKey,
-            nonce: encryptedKeyData.nonce,
-            mac: encryptedKeyData.mac
-          };
-          
-          const decryptedKey = await E2EEService.decryptMessage(encryptedKeyMsg);
-
-          decryptedMessage.media = {
-            encryptedUrl: encryptedMessage.media.encryptedUrl,
-            encryptedKey: decryptedKey,
-            metadata: encryptedMessage.media.metadata
-          };
-        } catch (error) {
-          console.error('Failed to decrypt media key:', error);
-        }
-      }
-
-      return decryptedMessage;
+      // Decrypt using Signal Protocol
+      return await this.decryptWithSignalProtocol(encryptedMessage);
     } catch (error) {
-      console.error('Failed to decrypt message:', error);
+      logger.error('Failed to decrypt message:', error);
       throw error;
+    } finally {
+      const decryptionTime = Date.now() - startTime;
+      this.updateMetrics('decryption', decryptionTime, true);
     }
   }
 
   /**
-   * Subscribe to encrypted messages in a chat
+   * Decrypt using Signal Protocol
    */
-  subscribeToMessages(
-    chatId: string,
-    onMessage: (message: Message) => void,
-    onError?: (error: Error) => void
-  ): () => void {
-    try {
-      const messagesQuery = this.db
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .orderBy('timestamp', 'asc');
+  private async decryptWithSignalProtocol(
+    encryptedMessage: EncryptedMessageData
+  ): Promise<DecryptedMessage> {
+    if (!this.currentUserId) {
+      throw new Error('User not authenticated');
+    }
 
-      const unsubscribe = messagesQuery.onSnapshot(
-        async (snapshot) => {
-          for (const change of snapshot.docChanges()) {
-            if (change.type === 'added') {
-              try {
-                const encryptedMessage = change.doc.data() as EncryptedMessageData;
-                const decryptedMessage = await this.decryptMessage(encryptedMessage);
-                onMessage(decryptedMessage);
+    const decryptedContent: DecryptedMessage = {
+      id: encryptedMessage.id,
+      chatId: encryptedMessage.chatId,
+      senderId: encryptedMessage.senderId,
+      timestamp: encryptedMessage.timestamp,
+      type: encryptedMessage.type,
+      encrypted: true,
+      delivered: encryptedMessage.delivered || [],
+      read: encryptedMessage.read || [],
+      decryptionTime: Date.now()
+    };
 
-                // Mark as delivered if not sender
-                if (encryptedMessage.senderId !== this.currentUserId && 
-                    !encryptedMessage.delivered.includes(this.currentUserId!)) {
-                  await change.doc.ref.update({
-                    delivered: FirebaseFirestoreTypes.FieldValue.arrayUnion(this.currentUserId)
-                  });
-                }
-              } catch (error) {
-                console.error('Error processing message:', error);
-                onError?.(error as Error);
-              }
-            }
-          }
-        },
-        (error) => {
-          console.error('Error subscribing to messages:', error);
-          onError?.(error);
+    // Decrypt text content if this is a text message
+    if (encryptedMessage.type === 'text' && encryptedMessage.signalMetadata) {
+      try {
+        // Find encrypted payload for current user and device
+        const userPayloads = encryptedMessage.signalMetadata.recipients[this.currentUserId];
+        if (!userPayloads) {
+          throw new Error('No encrypted payload found for current user');
         }
-      );
+        
+        // Get payload for default device (device ID 1)
+        const devicePayload = userPayloads['1'];
+        if (!devicePayload) {
+          throw new Error('No encrypted payload found for current device');
+        }
+        
+        // Decrypt the message
+        const decryptedBuffer = await this.libsignalService.decryptMessage(
+          encryptedMessage.senderId,
+          Buffer.from(devicePayload.encryptedPayload, 'base64')
+        );
+        
+        const decryptedData = JSON.parse(decryptedBuffer.toString());
+        decryptedContent.text = decryptedData.text;
+      } catch (error) {
+        logger.error('Failed to decrypt text content:', error);
+        decryptedContent.decryptionErrors = ['Failed to decrypt message content'];
+      }
+    }
 
-      return unsubscribe;
+    // Handle media messages
+    if (encryptedMessage.media && encryptedMessage.type !== 'text') {
+      await this.decryptMediaMessage(encryptedMessage, decryptedContent);
+    }
+
+    // Decrypt metadata if available
+    if (encryptedMessage.encryptedMetadata) {
+      try {
+        const metadata = await MetadataEncryptionService.getInstance().decryptMetadata(
+          encryptedMessage.encryptedMetadata
+        );
+        // Apply decrypted metadata to message
+        Object.assign(decryptedContent, metadata);
+      } catch (error) {
+        logger.error('Failed to decrypt metadata:', error);
+      }
+    }
+
+    // Handle voice message duration
+    if (encryptedMessage.duration !== undefined) {
+      decryptedContent.duration = encryptedMessage.duration;
+    }
+
+    return decryptedContent;
+  }
+
+
+  /**
+   * Decrypt media message content
+   */
+  private async decryptMediaMessage(
+    encryptedMessage: EncryptedMessageData,
+    decryptedContent: DecryptedMessage
+  ): Promise<void> {
+    if (!encryptedMessage.media || !this.currentUserId) {
+      return;
+    }
+
+    try {
+      // Get the encrypted file key for current user
+      const encryptedKeyData = encryptedMessage.media.encryptedKeys[this.currentUserId];
+      if (!encryptedKeyData) {
+        throw new Error('No encrypted key found for current user');
+      }
+
+      // Decrypt the file key using Signal Protocol
+      const fileKey = await this.libsignalService.decryptMessage(
+        encryptedMessage.senderId,
+        Buffer.from(encryptedKeyData, 'base64')
+      ).then(buffer => buffer.toString());
+
+      // Prepare decrypted media info
+      decryptedContent.media = {
+        encryptedUrl: encryptedMessage.media.encryptedUrl,
+        encryptionKey: fileKey,
+        metadata: encryptedMessage.media.metadata
+      } as any;
     } catch (error) {
-      console.error('Failed to subscribe to messages:', error);
-      throw error;
+      logger.error('Failed to decrypt media content:', error);
+      decryptedContent.decryptionErrors = decryptedContent.decryptionErrors || [];
+      decryptedContent.decryptionErrors.push('Failed to decrypt media');
+    }
+  }
+
+  /**
+   * Mark message as delivered
+   */
+  async markAsDelivered(messageId: string): Promise<void> {
+    try {
+      if (!this.currentUserId) {
+        throw new Error('User not authenticated');
+      }
+
+      await this.db.collection('messages').doc(messageId).update({
+        delivered: FirebaseFirestoreTypes.FieldValue.arrayUnion(this.currentUserId)
+      });
+
+      logger.debug(`Message ${messageId} marked as delivered`);
+    } catch (error) {
+      logger.error('Failed to mark message as delivered:', error);
     }
   }
 
   /**
    * Mark message as read
    */
-  async markMessageAsRead(chatId: string, messageId: string): Promise<void> {
+  async markAsRead(messageId: string): Promise<void> {
     try {
-      if (!this.currentUserId) return;
+      if (!this.currentUserId) {
+        throw new Error('User not authenticated');
+      }
 
-      const messageRef = this.db.collection('chats').doc(chatId).collection('messages').doc(messageId);
-      await messageRef.update({
+      await this.db.collection('messages').doc(messageId).update({
         read: FirebaseFirestoreTypes.FieldValue.arrayUnion(this.currentUserId)
       });
+
+      logger.debug(`Message ${messageId} marked as read`);
     } catch (error) {
-      console.error('Failed to mark message as read:', error);
+      logger.error('Failed to mark message as read:', error);
     }
   }
 
   /**
-   * Download and decrypt a media file
+   * Add reaction to message
    */
-  async downloadMediaFile(media: EncryptedFile): Promise<string> {
+  async addReaction(messageId: string, emoji: string): Promise<void> {
     try {
-      const decryptedUri = await MediaEncryptionService.downloadAndDecryptFile(
-        media.encryptedUrl,
-        media.encryptedKey,
-        media.metadata.iv,
-        media.metadata.tag
-      );
+      if (!this.currentUserId) {
+        throw new Error('User not authenticated');
+      }
 
-      return decryptedUri;
+      const messageRef = this.db.collection('messages').doc(messageId);
+      
+      await this.db.runTransaction(async (transaction) => {
+        const messageDoc = await transaction.get(messageRef);
+        if (!messageDoc.exists) {
+          throw new Error('Message not found');
+        }
+
+        const reactions = messageDoc.data()?.reactions || [];
+        const existingReaction = reactions.find((r: MessageReaction) => r.emoji === emoji);
+
+        if (existingReaction) {
+          // Add user to existing reaction
+          if (!existingReaction.userIds.includes(this.currentUserId!)) {
+            existingReaction.userIds.push(this.currentUserId!);
+          }
+        } else {
+          // Create new reaction
+          reactions.push({
+            emoji,
+            userIds: [this.currentUserId!]
+          });
+        }
+
+        transaction.update(messageRef, { reactions });
+      });
+
+      logger.debug(`Added reaction ${emoji} to message ${messageId}`);
     } catch (error) {
-      console.error('Failed to download media file:', error);
+      logger.error('Failed to add reaction:', error);
       throw error;
     }
   }
 
   /**
-   * Check if encryption is properly set up
+   * Remove reaction from message
    */
-  async isEncryptionReady(): Promise<boolean> {
+  async removeReaction(messageId: string, emoji: string): Promise<void> {
     try {
-      const identity = await E2EEService.getInstance().getIdentityKeyPair();
-      return identity !== null;
+      if (!this.currentUserId) {
+        throw new Error('User not authenticated');
+      }
+
+      const messageRef = this.db.collection('messages').doc(messageId);
+      
+      await this.db.runTransaction(async (transaction) => {
+        const messageDoc = await transaction.get(messageRef);
+        if (!messageDoc.exists) {
+          throw new Error('Message not found');
+        }
+
+        let reactions = messageDoc.data()?.reactions || [];
+        const reactionIndex = reactions.findIndex((r: MessageReaction) => r.emoji === emoji);
+
+        if (reactionIndex !== -1) {
+          const reaction = reactions[reactionIndex];
+          const userIndex = reaction.userIds.indexOf(this.currentUserId!);
+          
+          if (userIndex !== -1) {
+            reaction.userIds.splice(userIndex, 1);
+            
+            // Remove reaction if no users left
+            if (reaction.userIds.length === 0) {
+              reactions.splice(reactionIndex, 1);
+            }
+          }
+        }
+
+        transaction.update(messageRef, { reactions });
+      });
+
+      logger.debug(`Removed reaction ${emoji} from message ${messageId}`);
     } catch (error) {
-      console.error('Failed to check encryption status:', error);
-      return false;
+      logger.error('Failed to remove reaction:', error);
+      throw error;
     }
   }
 
   /**
-   * Get encryption status for a chat
+   * Delete message (soft delete)
    */
-  async getChatEncryptionStatus(chatId: string): Promise<{
-    enabled: boolean;
-    verifiedParticipants: string[];
-  }> {
+  async deleteMessage(messageId: string): Promise<void> {
     try {
-      const chatDoc = await this.db.collection('chats').doc(chatId).get();
-      if (!chatDoc.exists) {
-        return { enabled: false, verifiedParticipants: [] };
+      if (!this.currentUserId) {
+        throw new Error('User not authenticated');
       }
 
-      const chat = chatDoc.data() as Chat;
-      
-      // Check key verification status for all participants
-      const verifiedParticipants: string[] = [];
-      for (const participantId of chat.participants) {
-        if (participantId === this.currentUserId) continue;
-        
-        const verified = await callFirebaseFunction('getKeyVerificationStatus', {
-          targetUserId: participantId
-        });
-        
-        if (verified.result?.verified) {
-          verifiedParticipants.push(participantId);
-        }
-      }
-      
-      return {
-        enabled: chat.encryptionEnabled,
-        verifiedParticipants
-      };
+      // For now, just mark as deleted for the current user
+      // In a real implementation, you might want to handle this differently
+      await this.db.collection('messages').doc(messageId).update({
+        [`deletedBy.${this.currentUserId}`]: FirebaseFirestoreTypes.FieldValue.serverTimestamp()
+      });
+
+      logger.debug(`Message ${messageId} marked as deleted`);
     } catch (error) {
-      console.error('Failed to get chat encryption status:', error);
-      return { enabled: false, verifiedParticipants: [] };
+      logger.error('Failed to delete message:', error);
+      throw error;
     }
   }
 
   /**
    * Search encrypted messages
    */
-  async searchMessages(query: string, chatId?: string): Promise<Message[]> {
+  async searchMessages(chatId: string, query: string): Promise<Message[]> {
     try {
-      if (!query || query.trim().length < 3) {
-        return [];
-      }
-
-      // Search using encrypted search service
-      const searchResults = await EncryptedSearchService.searchMessages(query, chatId);
-
-      // Fetch and decrypt the actual messages
-      const messages: Message[] = [];
+      const results = await EncryptedSearchService.getInstance().searchMessages(chatId, query);
       
-      for (const result of searchResults) {
+      // Decrypt the search results
+      const decryptedMessages: Message[] = [];
+      
+      for (const result of results) {
         try {
-          // Get message from Firestore
-          const messageDoc = await this.db
-            .collection('chats')
-            .doc(result.chatId)
-            .collection('messages')
-            .doc(result.messageId)
-            .get();
-
+          // Fetch the full encrypted message
+          const messageDoc = await this.db.collection('messages').doc(result.messageId).get();
           if (messageDoc.exists) {
-            const encryptedData = messageDoc.data() as EncryptedMessageData;
-            const decryptedMessage = await this.decryptMessage(encryptedData);
-            messages.push(decryptedMessage);
+            const encryptedMessage = messageDoc.data() as EncryptedMessageData;
+            const decrypted = await this.decryptMessage(encryptedMessage);
+            decryptedMessages.push(decrypted);
           }
         } catch (error) {
-          console.error(`Failed to fetch message ${result.messageId}:`, error);
+          logger.error(`Failed to decrypt search result ${result.messageId}:`, error);
         }
       }
-
-      return messages;
-    } catch (error) {
-      console.error('Search failed:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Toggle reaction on a message
-   */
-  async toggleReaction(chatId: string, messageId: string, emoji: string): Promise<void> {
-    try {
-      if (!this.currentUserId) {
-        throw new Error('User not authenticated');
-      }
-
-      const messageRef = this.db
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .doc(messageId);
-
-      // Get current message data
-      const messageDoc = await messageRef.get();
-      if (!messageDoc.exists) {
-        throw new Error('Message not found');
-      }
-
-      const messageData = messageDoc.data() as EncryptedMessageData;
-      const reactions = messageData.reactions || [];
-
-      // Find existing reaction with this emoji
-      const existingReactionIndex = reactions.findIndex(r => r.emoji === emoji);
       
-      if (existingReactionIndex !== -1) {
-        // Reaction exists, toggle user
-        const reaction = reactions[existingReactionIndex];
-        const userIndex = reaction.userIds.indexOf(this.currentUserId);
-        
-        if (userIndex !== -1) {
-          // Remove user from reaction
-          reaction.userIds.splice(userIndex, 1);
-          
-          // Remove reaction if no users left
-          if (reaction.userIds.length === 0) {
-            reactions.splice(existingReactionIndex, 1);
-          }
-        } else {
-          // Add user to reaction
-          reaction.userIds.push(this.currentUserId);
-        }
-      } else {
-        // Add new reaction
-        reactions.push({
-          emoji,
-          userIds: [this.currentUserId],
-        });
-      }
-
-      // Update message with new reactions
-      await messageRef.update({
-        reactions,
-        lastReactionAt: FirebaseFirestoreTypes.FieldValue.serverTimestamp(),
-      });
-
-      // Log reaction event
-      await AuditLogService.getInstance().logEvent(
-        'message_reaction_toggled',
-        'User toggled reaction on message',
-        {
-          userId: this.currentUserId,
-          resourceId: messageId,
-          metadata: {
-            chatId,
-            emoji,
-            action: existingReactionIndex !== -1 ? 'toggled' : 'added',
-          }
-        }
-      );
+      return decryptedMessages;
     } catch (error) {
-      console.error('Failed to toggle reaction:', error);
-      throw error;
+      logger.error('Failed to search messages:', error);
+      return [];
     }
   }
 
   /**
-   * Get reactions for a message
+   * Handle offline queue when coming back online
    */
-  async getMessageReactions(chatId: string, messageId: string): Promise<MessageReaction[]> {
+  async processOfflineQueue(): Promise<void> {
     try {
-      const messageDoc = await this.db
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .doc(messageId)
-        .get();
-
-      if (!messageDoc.exists) {
-        return [];
-      }
-
-      const messageData = messageDoc.data() as EncryptedMessageData;
-      return messageData.reactions || [];
+      const offlineQueueService = OfflineQueueService.getInstance();
+      await offlineQueueService.processOfflineQueue();
     } catch (error) {
-      console.error('Failed to get message reactions:', error);
-      return [];
+      logger.error('Failed to process offline queue:', error);
+    }
+  }
+
+  /**
+   * Update performance metrics
+   */
+  private updateMetrics(operation: 'encryption' | 'decryption', time: number, success: boolean): void {
+    if (operation === 'encryption') {
+      this.metrics.messagesEncrypted++;
+      this.metrics.totalEncryptionTime += time;
+    } else {
+      this.metrics.messagesDecrypted++;
+      this.metrics.totalDecryptionTime += time;
+    }
+    
+    if (!success) {
+      this.metrics.errors++;
+    }
+  }
+
+  /**
+   * Get performance metrics
+   */
+  getMetrics(): {
+    messagesEncrypted: number;
+    messagesDecrypted: number;
+    averageEncryptionTime: number;
+    averageDecryptionTime: number;
+    errorRate: number;
+  } {
+    const totalOperations = this.metrics.messagesEncrypted + this.metrics.messagesDecrypted;
+    
+    return {
+      messagesEncrypted: this.metrics.messagesEncrypted,
+      messagesDecrypted: this.metrics.messagesDecrypted,
+      averageEncryptionTime: this.metrics.messagesEncrypted > 0 
+        ? this.metrics.totalEncryptionTime / this.metrics.messagesEncrypted 
+        : 0,
+      averageDecryptionTime: this.metrics.messagesDecrypted > 0 
+        ? this.metrics.totalDecryptionTime / this.metrics.messagesDecrypted 
+        : 0,
+      errorRate: totalOperations > 0 ? this.metrics.errors / totalOperations : 0
+    };
+  }
+  
+  /**
+   * Cleanup and reset service
+   */
+  async cleanup(): Promise<void> {
+    try {
+      await this.libsignalService.clearAllData();
+      this.currentUserId = null;
+      this.metrics = {
+        messagesEncrypted: 0,
+        messagesDecrypted: 0,
+        totalEncryptionTime: 0,
+        totalDecryptionTime: 0,
+        errors: 0
+      };
+      
+      logger.info('ChatEncryptionService cleaned up');
+    } catch (error) {
+      logger.error('Failed to cleanup ChatEncryptionService:', error);
     }
   }
 }
 
-export default ChatEncryptionService.getInstance();
+export default ChatEncryptionService;

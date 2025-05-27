@@ -2,28 +2,15 @@ import {onCall} from "firebase-functions/v2/https";
 import {getFirestore, FieldValue, Timestamp} from "firebase-admin/firestore";
 import {logger} from "firebase-functions/v2";
 import * as crypto from "crypto";
-import sgMail from "@sendgrid/mail";
-import {defineSecret} from "firebase-functions/params";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT, DEFAULT_MEMORY} from "./common";
 import {createError, ErrorCode} from "./utils/errors";
 import {withAuth, withResourceAccess, PermissionLevel, RateLimitType} from "./middleware";
-
-// MARK: - Secret Definitions
-const SENDGRID_APIKEY = defineSecret("SENDGRID_APIKEY");
-const SENDGRID_FROMEMAIL = defineSecret("SENDGRID_FROMEMAIL");
-const SENDGRID_TEMPLATES_INVITE = defineSecret("SENDGRID_TEMPLATES_INVITE");
-const FRONTEND_URL = defineSecret("FRONTEND_URL");
+import {SENDGRID_CONFIG, FRONTEND_URL} from "./auth/config/secrets";
+import {sendEmail} from "./auth/utils/sendgridHelper";
+import {validateRequest} from "./utils/request-validator";
+import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
 
 // MARK: - Function Configuration
-
-// MARK: - Helper function to initialize SendGrid within each function
-const initSendGrid = () => {
-  const apiKey = SENDGRID_APIKEY.value();
-  if (!apiKey || apiKey.length === 0) {
-    throw createError(ErrorCode.INTERNAL, "SendGrid API key is not configured.");
-  }
-  sgMail.setApiKey(apiKey);
-};
 
 // Helper function to generate a secure random token
 const generateSecureToken = (): string => {
@@ -160,10 +147,14 @@ export const getFamilyTreeData = onCall(
     secrets: [FRONTEND_URL],
   },
   withAuth(async (request) => {
-    const {userId} = request.data;
-    if (!userId) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "User ID is required.");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getFamilyTreeData,
+      request.auth!.uid
+    );
+
+    const {userId} = validatedData;
     const db = getFirestore();
 
     // Get the user document which contains the familyTreeId
@@ -293,10 +284,14 @@ export const updateFamilyRelationships = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withResourceAccess(async (request, resource) => {
-    const {userId, updates} = request.data;
-    if (!updates) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "Updates are required.");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.updateFamilyRelationships,
+      request.auth!.uid
+    );
+
+    const {userId, updates} = validatedData;
     const db = getFirestore();
 
     const userRef = db.collection("users").doc(userId);
@@ -332,10 +327,14 @@ export const updateFamilyRelationships = onCall(
     await batch.commit();
     return {success: true};
   }, "updateFamilyRelationships", {
-    resourceType: "user",
-    resourceIdField: "userId",
-    requiredLevel: [PermissionLevel.FAMILY_MEMBER, PermissionLevel.TREE_OWNER],
-  }, {type: RateLimitType.WRITE})
+    resourceConfig: {
+      resourceType: "user",
+      resourceIdField: "userId",
+      requiredLevel: [PermissionLevel.FAMILY_MEMBER, PermissionLevel.TREE_OWNER],
+    },
+    enableCSRF: true,
+    rateLimitConfig: {type: RateLimitType.WRITE},
+  })
 );
 
 /**
@@ -346,24 +345,25 @@ export const createFamilyMember = onCall(
     region: DEFAULT_REGION,
     memory: DEFAULT_MEMORY.SHORT,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-    secrets: [SENDGRID_APIKEY, SENDGRID_FROMEMAIL, SENDGRID_TEMPLATES_INVITE, FRONTEND_URL],
+    secrets: [SENDGRID_CONFIG, FRONTEND_URL],
   },
   withResourceAccess(async (request, selectedNode) => {
-    const {userData, relationType, selectedNodeId, options} = request.data;
     const auth = request.auth!;
+
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.createFamilyMember,
+      auth.uid
+    );
+
+    const {userData, relationType, selectedNodeId, options} = validatedData;
 
     logger.info(`Creating ${relationType} relationship: ${selectedNodeId} -> new member: ${userData.firstName} ${userData.lastName}`);
 
-    // Input validation
-    if (!userData || !relationType) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "Required parameters missing.");
-    }
+    // Additional validation for userData
     if (!userData.familyTreeId) {
       throw createError(ErrorCode.MISSING_PARAMETERS, "Family Tree ID is missing in userData.");
-    }
-
-    if (!["parent", "child", "spouse"].includes(relationType)) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid relationship type.");
     }
 
     const db = getFirestore();
@@ -542,13 +542,10 @@ export const createFamilyMember = onCall(
         const invitationLink = `${FRONTEND_URL.value()}/signup/invited?token=${invitationToken}&id=${invitationRef.id}`;
 
         // Initialize SendGrid before sending email
-        initSendGrid();
-
-        // Send email using SendGrid
-        const msg = {
+        // Send invitation email
+        await sendEmail({
           to: invitationData.inviteeEmail,
-          from: SENDGRID_FROMEMAIL.value(),
-          templateId: SENDGRID_TEMPLATES_INVITE.value(),
+          templateType: "invite",
           dynamicTemplateData: {
             name: invitationData.inviteeName,
             inviterName: invitationData.inviterName,
@@ -556,9 +553,7 @@ export const createFamilyMember = onCall(
             signUpLink: invitationLink,
             year: new Date().getFullYear(),
           },
-        };
-
-        await sgMail.send(msg);
+        });
         logger.info(`Sent invitation email to ${userData.email} for family tree ${userData.familyTreeId}`);
       } catch (emailError) {
         logger.error("Error sending invitation email:", emailError);
@@ -568,10 +563,14 @@ export const createFamilyMember = onCall(
 
     return {success: true, userId: newUserId};
   }, "createFamilyMember", {
-    resourceType: "user",
-    resourceIdField: "selectedNodeId",
-    requiredLevel: [PermissionLevel.FAMILY_MEMBER, PermissionLevel.TREE_OWNER],
-  }, {type: RateLimitType.WRITE})
+    resourceConfig: {
+      resourceType: "user",
+      resourceIdField: "selectedNodeId",
+      requiredLevel: [PermissionLevel.FAMILY_MEMBER, PermissionLevel.TREE_OWNER],
+    },
+    enableCSRF: true,
+    rateLimitConfig: {type: RateLimitType.WRITE},
+  })
 );
 
 /**
@@ -588,13 +587,17 @@ export const deleteFamilyMember = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withResourceAccess(async (request, member) => {
-    const {memberId, familyTreeId} = request.data;
     const auth = request.auth!;
     const currentUserId = auth.uid;
 
-    if (!familyTreeId) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "Family Tree ID is required.");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.deleteFamilyMember,
+      currentUserId
+    );
+
+    const {memberId, familyTreeId} = validatedData;
     const db = getFirestore();
     const batch = db.batch();
 
@@ -803,23 +806,27 @@ export const deleteFamilyMember = onCall(
       rootNode,
     };
   }, "deleteFamilyMember", {
-    resourceType: "user",
-    resourceIdField: "memberId",
-    requiredLevel: [PermissionLevel.TREE_OWNER, PermissionLevel.ADMIN],
-    additionalPermissionCheck: async (resource: any, uid: string) => {
-      // Allow if user is admin of the family tree
-      const familyTreeId = resource.familyTreeId;
-      if (familyTreeId) {
-        const db = getFirestore();
-        const treeDoc = await db.collection("familyTrees").doc(familyTreeId).get();
-        if (treeDoc.exists) {
-          const treeData = treeDoc.data();
-          return treeData?.adminUserIds?.includes(uid) || false;
+    resourceConfig: {
+      resourceType: "user",
+      resourceIdField: "memberId",
+      requiredLevel: [PermissionLevel.TREE_OWNER, PermissionLevel.ADMIN],
+      additionalPermissionCheck: async (resource: any, uid: string) => {
+        // Allow if user is admin of the family tree
+        const familyTreeId = resource.familyTreeId;
+        if (familyTreeId) {
+          const db = getFirestore();
+          const treeDoc = await db.collection("familyTrees").doc(familyTreeId).get();
+          if (treeDoc.exists) {
+            const treeData = treeDoc.data();
+            return treeData?.adminUserIds?.includes(uid) || false;
+          }
         }
-      }
-      return false;
+        return false;
+      },
     },
-  }, {type: RateLimitType.WRITE})
+    enableCSRF: true,
+    rateLimitConfig: {type: RateLimitType.WRITE},
+  })
 );
 
 /**
@@ -830,15 +837,24 @@ export const updateFamilyMember = onCall(
     region: DEFAULT_REGION,
     memory: DEFAULT_MEMORY.SHORT,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-    secrets: [SENDGRID_APIKEY, SENDGRID_FROMEMAIL, SENDGRID_TEMPLATES_INVITE, FRONTEND_URL],
+    secrets: [SENDGRID_CONFIG, FRONTEND_URL],
   },
   withResourceAccess(async (request, member) => {
-    const {memberId, updates, familyTreeId} = request.data;
     const auth = request.auth!;
     const currentUserId = auth.uid;
 
-    if (!updates || !familyTreeId) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "Updates and Family Tree ID are required.");
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.updateFamilyMember,
+      currentUserId
+    );
+
+    const {memberId, updatedData} = validatedData;
+    const {familyTreeId, ...updates} = updatedData;
+
+    if (!familyTreeId) {
+      throw createError(ErrorCode.MISSING_PARAMETERS, "Family Tree ID is required.");
     }
 
     const db = getFirestore();
@@ -896,9 +912,6 @@ export const updateFamilyMember = onCall(
     // If a new email was added or email was changed, send invitation
     if (isNewEmail && updates.email) {
       try {
-        // Initialize SendGrid
-        initSendGrid();
-
         // Get the current user (updater) information
         const updaterDoc = await db.collection("users").doc(currentUserId).get();
         const updaterData = updaterDoc.data() || {};
@@ -956,11 +969,10 @@ export const updateFamilyMember = onCall(
         // Create invitation link
         const invitationLink = `${FRONTEND_URL.value()}/signup/invited?token=${invitationToken}&id=${invitationRef.id}`;
 
-        // Send email using SendGrid
-        const msg = {
+        // Send invitation email
+        await sendEmail({
           to: updates.email,
-          from: SENDGRID_FROMEMAIL.value(),
-          templateId: SENDGRID_TEMPLATES_INVITE.value(),
+          templateType: "invite",
           dynamicTemplateData: {
             name: invitationData.inviteeName,
             inviterName: invitationData.inviterName,
@@ -968,9 +980,7 @@ export const updateFamilyMember = onCall(
             signUpLink: invitationLink,
             year: new Date().getFullYear(),
           },
-        };
-
-        await sgMail.send(msg);
+        });
         logger.info(`Sent invitation email to ${updates.email} for family tree ${familyTreeId}`);
       } catch (emailError) {
         logger.error("Error sending invitation email:", emailError);
@@ -980,23 +990,27 @@ export const updateFamilyMember = onCall(
 
     return {success: true};
   }, "updateFamilyMember", {
-    resourceType: "user",
-    resourceIdField: "memberId",
-    requiredLevel: [PermissionLevel.FAMILY_MEMBER, PermissionLevel.TREE_OWNER],
-    additionalPermissionCheck: async (resource: any, uid: string) => {
-      // Allow if user is admin of the family tree
-      const familyTreeId = resource.familyTreeId;
-      if (familyTreeId) {
-        const db = getFirestore();
-        const treeDoc = await db.collection("familyTrees").doc(familyTreeId).get();
-        if (treeDoc.exists) {
-          const treeData = treeDoc.data();
-          return treeData?.adminUserIds?.includes(uid) || false;
+    resourceConfig: {
+      resourceType: "user",
+      resourceIdField: "memberId",
+      requiredLevel: [PermissionLevel.FAMILY_MEMBER, PermissionLevel.TREE_OWNER],
+      additionalPermissionCheck: async (resource: any, uid: string) => {
+        // Allow if user is admin of the family tree
+        const familyTreeId = resource.familyTreeId;
+        if (familyTreeId) {
+          const db = getFirestore();
+          const treeDoc = await db.collection("familyTrees").doc(familyTreeId).get();
+          if (treeDoc.exists) {
+            const treeData = treeDoc.data();
+            return treeData?.adminUserIds?.includes(uid) || false;
+          }
         }
-      }
-      return false;
+        return false;
+      },
     },
-  }, {type: RateLimitType.WRITE})
+    enableCSRF: true,
+    rateLimitConfig: {type: RateLimitType.WRITE},
+  })
 );
 
 /**
@@ -1014,13 +1028,17 @@ export const promoteToAdmin = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withResourceAccess(async (request, familyTree) => {
-    const {memberId, familyTreeId} = request.data;
     const auth = request.auth!;
     const currentUserId = auth.uid;
 
-    if (!memberId) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "Member ID is required.");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.promoteToAdmin,
+      currentUserId
+    );
+
+    const {memberId, familyTreeId} = validatedData;
     const db = getFirestore();
 
     const treeData = familyTree as FamilyTreeDocument;
@@ -1051,11 +1069,15 @@ export const promoteToAdmin = onCall(
     logger.info(`User ${currentUserId} promoted member ${memberId} to admin in family tree ${familyTreeId}`);
     return {success: true};
   }, "promoteToAdmin", {
-    resourceType: "family_tree",
-    resourceIdField: "familyTreeId",
-    collectionPath: "familyTrees",
-    requiredLevel: PermissionLevel.TREE_OWNER,
-  }, {type: RateLimitType.WRITE})
+    resourceConfig: {
+      resourceType: "family_tree",
+      resourceIdField: "familyTreeId",
+      collectionPath: "familyTrees",
+      requiredLevel: PermissionLevel.TREE_OWNER,
+    },
+    enableCSRF: true,
+    rateLimitConfig: {type: RateLimitType.WRITE},
+  })
 );
 
 /**
@@ -1073,13 +1095,17 @@ export const demoteToMember = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withResourceAccess(async (request, familyTree) => {
-    const {memberId, familyTreeId} = request.data;
     const auth = request.auth!;
     const currentUserId = auth.uid;
 
-    if (!memberId) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "Member ID is required.");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.demoteToMember,
+      currentUserId
+    );
+
+    const {memberId, familyTreeId} = validatedData;
     const db = getFirestore();
 
     const treeData = familyTree as FamilyTreeDocument;
@@ -1104,11 +1130,15 @@ export const demoteToMember = onCall(
     logger.info(`User ${currentUserId} demoted admin ${memberId} to regular member in family tree ${familyTreeId}`);
     return {success: true};
   }, "demoteToMember", {
-    resourceType: "family_tree",
-    resourceIdField: "familyTreeId",
-    collectionPath: "familyTrees",
-    requiredLevel: PermissionLevel.TREE_OWNER,
-  }, {type: RateLimitType.WRITE})
+    resourceConfig: {
+      resourceType: "family_tree",
+      resourceIdField: "familyTreeId",
+      collectionPath: "familyTrees",
+      requiredLevel: PermissionLevel.TREE_OWNER,
+    },
+    enableCSRF: true,
+    rateLimitConfig: {type: RateLimitType.WRITE},
+  })
 );
 
 /**

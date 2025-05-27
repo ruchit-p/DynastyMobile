@@ -16,8 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { commonHeaderOptions } from '../../constants/headerConfig';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { getFirebaseDb } from '../../src/lib/firebase';
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, addDoc } from 'firebase/firestore';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import firestore from '@react-native-firebase/firestore';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 import Fonts from '../../constants/Fonts';
@@ -83,89 +83,86 @@ const FamilyManagementScreen = () => {
   }, [navigation]);
 
   // MARK: - Data Loading Functions
-  const loadFamilyData = withErrorHandling(async () => {
-    if (!user?.uid || !firestoreUser?.familyId) {
-      throw new Error('User not authenticated or not part of a family');
-    }
-
-    setLoading(true);
-
-    try {
-      // Load family document
-      const familyQuery = query(
-        collection(db, 'families'),
-        where('id', '==', firestoreUser.familyId)
-      );
-      const familySnapshot = await getDocs(familyQuery);
-
-      if (familySnapshot.empty) {
-        throw new Error('Family not found');
+  const loadFamilyData = useCallback(
+    withErrorHandling(async () => {
+      if (!user?.uid || !firestoreUser?.familyId) {
+        throw new Error('User not authenticated or not part of a family');
       }
 
-      const familyDoc = familySnapshot.docs[0];
-      const familyInfo = familyDoc.data();
+      setLoading(true);
 
-      // Load family members
-      const membersQuery = query(
-        collection(db, 'users'),
-        where('familyId', '==', firestoreUser.familyId)
-      );
-      const membersSnapshot = await getDocs(membersQuery);
+      try {
+        // Load family document
+        const familyQuery = db.collection('families')
+          .where('id', '==', firestoreUser.familyId);
+        const familySnapshot = await familyQuery.get();
 
-      const members: FamilyMember[] = membersSnapshot.docs.map(doc => {
-        const userData = doc.data();
-        return {
-          id: doc.id,
-          displayName: userData.displayName || 'Unknown',
-          email: userData.email || '',
-          role: userData.role || 'member',
-          profilePicture: userData.profilePicture,
-          joinedAt: userData.joinedAt?.toDate() || new Date(),
-          status: 'active'
+        if (familySnapshot.empty) {
+          throw new Error('Family not found');
+        }
+
+        const familyDoc = familySnapshot.docs[0];
+        const familyInfo = familyDoc.data();
+
+        // Load family members
+        const membersQuery = db.collection('users')
+          .where('familyId', '==', firestoreUser.familyId);
+        const membersSnapshot = await membersQuery.get();
+
+        const members: FamilyMember[] = membersSnapshot.docs.map(doc => {
+          const userData = doc.data();
+          return {
+            id: doc.id,
+            displayName: userData.displayName || 'Unknown',
+            email: userData.email || '',
+            role: userData.role || 'member',
+            profilePicture: userData.profilePicture,
+            joinedAt: userData.joinedAt?.toDate() || new Date(),
+            status: 'active'
+          };
+        });
+
+        // Load pending invitations
+        const invitationsQuery = db.collection('familyInvitations')
+          .where('familyId', '==', firestoreUser.familyId)
+          .where('status', '==', 'pending');
+        const invitationsSnapshot = await invitationsQuery.get();
+
+        const invitations: FamilyInvitation[] = invitationsSnapshot.docs.map(doc => {
+          const inviteData = doc.data();
+          return {
+            id: doc.id,
+            email: inviteData.email || '',
+            sentAt: inviteData.sentAt?.toDate() || new Date(),
+            sentBy: inviteData.sentBy || '',
+            status: 'pending'
+          };
+        });
+
+        const family: FamilyData = {
+          id: familyDoc.id,
+          name: familyInfo.name || 'Our Family',
+          description: familyInfo.description,
+          createdBy: familyInfo.createdBy || '',
+          members,
+          invitations
         };
-      });
 
-      // Load pending invitations
-      const invitationsQuery = query(
-        collection(db, 'familyInvitations'),
-        where('familyId', '==', firestoreUser.familyId),
-        where('status', '==', 'pending')
-      );
-      const invitationsSnapshot = await getDocs(invitationsQuery);
-
-      const invitations: FamilyInvitation[] = invitationsSnapshot.docs.map(doc => {
-        const inviteData = doc.data();
-        return {
-          id: doc.id,
-          email: inviteData.email || '',
-          sentAt: inviteData.sentAt?.toDate() || new Date(),
-          sentBy: inviteData.sentBy || '',
-          status: 'pending'
-        };
-      });
-
-      const family: FamilyData = {
-        id: familyDoc.id,
-        name: familyInfo.name || 'Our Family',
-        description: familyInfo.description,
-        createdBy: familyInfo.createdBy || '',
-        members,
-        invitations
-      };
-
-      setFamilyData(family);
-    } catch (error) {
-      handleError(error, { 
-        context: 'loadFamilyData',
-        familyId: firestoreUser.familyId,
-        userId: user.uid
-      });
-      throw error;
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  });
+        setFamilyData(family);
+      } catch (error) {
+        handleError(error, { 
+          context: 'loadFamilyData',
+          familyId: firestoreUser.familyId,
+          userId: user.uid
+        });
+        throw error;
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }),
+    [user?.uid, firestoreUser?.familyId, handleError, withErrorHandling]
+  );
 
   // MARK: - Member Management Functions
   const updateMemberRole = withErrorHandling(async (memberId: string, newRole: 'admin' | 'member') => {
@@ -182,8 +179,7 @@ const FamilyManagementScreen = () => {
     setActionLoading(`role-${memberId}`);
 
     try {
-      const memberRef = doc(db, 'users', memberId);
-      await updateDoc(memberRef, { role: newRole });
+      await db.collection('users').doc(memberId).update({ role: newRole });
 
       // Update local state
       setFamilyData(prev => {
@@ -228,8 +224,7 @@ const FamilyManagementScreen = () => {
     setActionLoading(`remove-${memberId}`);
 
     try {
-      const memberRef = doc(db, 'users', memberId);
-      await updateDoc(memberRef, { 
+      await db.collection('users').doc(memberId).update({ 
         familyId: null,
         role: null 
       });
@@ -289,7 +284,7 @@ const FamilyManagementScreen = () => {
         status: 'pending'
       };
 
-      const inviteRef = await addDoc(collection(db, 'familyInvitations'), invitation);
+      const inviteRef = await db.collection('familyInvitations').add(invitation);
 
       // Update local state
       const newInvitation: FamilyInvitation = {
@@ -325,8 +320,7 @@ const FamilyManagementScreen = () => {
     setActionLoading(`cancel-${invitationId}`);
 
     try {
-      const inviteRef = doc(db, 'familyInvitations', invitationId);
-      await deleteDoc(inviteRef);
+      await db.collection('familyInvitations').doc(invitationId).delete();
 
       // Update local state
       setFamilyData(prev => {
@@ -353,7 +347,7 @@ const FamilyManagementScreen = () => {
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadFamilyData();
-  }, []);
+  }, [loadFamilyData]);
 
   const handleInvitePress = useCallback(() => {
     Alert.prompt(
@@ -411,7 +405,7 @@ const FamilyManagementScreen = () => {
   // Load initial data
   useEffect(() => {
     loadFamilyData();
-  }, []);
+  }, [loadFamilyData]);
 
   // MARK: - Render Functions
   const renderMember = (member: FamilyMember) => {

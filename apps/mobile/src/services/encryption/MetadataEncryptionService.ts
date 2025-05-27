@@ -1,6 +1,7 @@
 import { randomBytes, createCipheriv, createDecipheriv, createHash } from 'react-native-quick-crypto';
 import { Buffer } from '@craftzdog/react-native-buffer';
-import E2EEService from './E2EEService';
+import { LibsignalService } from './libsignal/LibsignalService';
+import { logger } from '../LoggingService';
 
 interface EncryptedMetadata {
   encryptedData: string; // Base64
@@ -63,7 +64,7 @@ export class MetadataEncryptionService {
   async initialize(userId: string) {
     try {
       // Derive a metadata-specific key from the user's master key
-      const masterKey = await E2EEService.getUserKeyPair(userId);
+      const masterKey = await LibsignalService.getInstance().getIdentityKeyPair();
       if (!masterKey) {
         throw new Error('Master key not found');
       }
@@ -79,7 +80,7 @@ export class MetadataEncryptionService {
       
       this.metadataKey = Buffer.from(hash.digest()).slice(0, this.KEY_LENGTH);
     } catch (error) {
-      console.error('Failed to initialize metadata encryption:', error);
+      logger.error('Failed to initialize metadata encryption:', error);
       throw error;
     }
   }
@@ -119,7 +120,7 @@ export class MetadataEncryptionService {
         mac: authTag.toString('base64')
       };
     } catch (error) {
-      console.error('Failed to encrypt message metadata:', error);
+      logger.error('Failed to encrypt message metadata:', error);
       throw error;
     }
   }
@@ -154,7 +155,7 @@ export class MetadataEncryptionService {
       const metadataJson = decrypted.toString('utf8');
       return JSON.parse(metadataJson) as MessageMetadata;
     } catch (error) {
-      console.error('Failed to decrypt message metadata:', error);
+      logger.error('Failed to decrypt message metadata:', error);
       throw error;
     }
   }
@@ -194,7 +195,7 @@ export class MetadataEncryptionService {
         mac: authTag.toString('base64')
       };
     } catch (error) {
-      console.error('Failed to encrypt file metadata:', error);
+      logger.error('Failed to encrypt file metadata:', error);
       throw error;
     }
   }
@@ -229,7 +230,7 @@ export class MetadataEncryptionService {
       const metadataJson = decrypted.toString('utf8');
       return JSON.parse(metadataJson) as FileMetadata;
     } catch (error) {
-      console.error('Failed to decrypt file metadata:', error);
+      logger.error('Failed to decrypt file metadata:', error);
       throw error;
     }
   }

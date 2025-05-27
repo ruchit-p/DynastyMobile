@@ -1,4 +1,5 @@
 import NetInfo, { NetInfoState, NetInfoSubscription } from '@react-native-community/netinfo';
+import { logger } from './LoggingService';
 
 type NetworkChangeListener = (isOnline: boolean, state: NetInfoState) => void;
 
@@ -23,15 +24,15 @@ class NetworkService {
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) {
-      console.log('NetworkService: Already initialized');
+      logger.debug('NetworkService: Already initialized');
       return;
     }
 
-    console.log('NetworkService: Initializing...');
+    logger.debug('NetworkService: Initializing...');
     
     // Get initial state
     this.currentState = await NetInfo.fetch();
-    console.log('NetworkService: Initial state:', {
+    logger.debug('NetworkService: Initial state:', {
       isConnected: this.currentState.isConnected,
       type: this.currentState.type
     });
@@ -45,13 +46,13 @@ class NetworkService {
       
       // Only notify if online status changed
       if (wasOnline !== isOnline) {
-        console.log(`NetworkService: Network ${isOnline ? 'connected' : 'disconnected'}`);
+        logger.debug(`NetworkService: Network ${isOnline ? 'connected' : 'disconnected'}`);
         this.notifyListeners(isOnline, state);
       }
     });
 
     this.isInitialized = true;
-    console.log('NetworkService: Initialization complete');
+    logger.debug('NetworkService: Initialization complete');
   }
 
   /**
@@ -143,7 +144,7 @@ class NetworkService {
       try {
         listener(isOnline, state);
       } catch (error) {
-        console.error('NetworkService: Error in listener:', error);
+        logger.error('NetworkService: Error in listener:', error);
       }
     });
   }

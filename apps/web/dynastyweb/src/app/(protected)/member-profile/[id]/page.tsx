@@ -18,7 +18,6 @@ import {
   Users,
   Crown,
   UserPlus,
-  MessageSquare,
   Camera,
   FileText,
 } from 'lucide-react';
@@ -104,26 +103,6 @@ export default function MemberProfilePage() {
     }
   }, [memberId, toast, router]);
 
-  const handleStartChat = async () => {
-    try {
-      const createChat = httpsCallable(functions, 'createChat');
-      const result = await createChat({
-        participantIds: [currentUser?.uid, memberId],
-        type: 'direct',
-        isEncrypted: true,
-      });
-
-      const chatId = (result.data as { chatId: string }).chatId;
-      router.push(`/chat/${chatId}`);
-    } catch (error) {
-      console.error('Error starting chat:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to start conversation',
-        variant: 'destructive',
-      });
-    }
-  };
 
   if (loading) {
     return (
@@ -218,12 +197,6 @@ export default function MemberProfilePage() {
                   onClick={() => router.push(`/edit-profile${isOwnProfile ? '' : `/${memberId}`}`)}
                 >
                   Edit Profile
-                </Button>
-              )}
-              {!isOwnProfile && (
-                <Button onClick={handleStartChat}>
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                  Message
                 </Button>
               )}
             </div>

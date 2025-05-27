@@ -19,3 +19,4 @@ export * from "./modules/authentication";
 export * from "./modules/password-management";
 export * from "./modules/email-verification";
 export * from "./modules/family-invitations";
+export * from "./modules/account-lockout";

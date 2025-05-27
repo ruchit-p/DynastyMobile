@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text, StyleSheet, TextProps, StyleProp, TextStyle } from 'react-native';
 import { useTextColor } from '../hooks/useThemeColor';
-import Typography from '../constants/Typography';
+import { Typography } from '../constants/Typography';
 
 export type TextVariant = 
   | 'h1' | 'h2' | 'h3' | 'h4' | 'h5'

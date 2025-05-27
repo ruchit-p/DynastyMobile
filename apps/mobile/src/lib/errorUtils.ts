@@ -1,5 +1,6 @@
 import { Alert } from 'react-native';
 import { FirebaseFunctionsTypes } from '@react-native-firebase/functions';
+import { logger } from '../services/LoggingService';
 
 /**
  * Standard error codes that match the server-side codes
@@ -118,7 +119,7 @@ export interface AppError {
  * Convert any error to a standardized AppError
  */
 export function normalizeError(error: any): AppError {
-  console.error('Error occurred:', error);
+  logger.error('Error occurred:', error);
   
   // Already an AppError
   if (error && error.code && Object.values(ErrorCode).includes(error.code)) {
@@ -181,7 +182,7 @@ export function showErrorAlert(
   );
   
   // Log the error for analytics/debugging
-  console.error(`Error (${appError.code}): ${appError.message}`, appError);
+  logger.error(`Error (${appError.code}): ${appError.message}`, appError);
 }
 
 /**
@@ -230,6 +231,16 @@ export async function callFirebaseFunction<T = any, R = any>(
   } catch (error) {
     throw parseFirebaseFunctionError(error);
   }
+}
+
+/**
+ * Get user-friendly error message from error object
+ */
+export function getErrorMessage(error: any): string {
+  if (!error) return ErrorMessages[ErrorCode.UNKNOWN];
+  
+  const appError = normalizeError(error);
+  return appError.message;
 }
 
 /**

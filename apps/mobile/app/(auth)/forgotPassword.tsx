@@ -3,23 +3,26 @@ import {
   StyleSheet,
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   SafeAreaView,
   Platform,
-  Alert,
   ActivityIndicator,
   Image
 } from 'react-native';
 import { useRouter, Stack, Link } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../src/contexts/AuthContext'; // Updated path
+import { useAuth } from '../../src/contexts/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { httpsCallable } from '@react-native-firebase/functions'; // Import from @react-native-firebase/functions
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { httpsCallable } from '@react-native-firebase/functions';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { z } from 'zod';
+import { forgotPasswordSchema, formatValidationErrors } from '../../src/lib/validation';
+import { ValidatedInput } from '../../components/ui/ValidatedInput';
+import { useSanitizedInput } from '../../src/hooks/useSanitizedInput';
+
 
 const dynastyLogo = require('../../assets/images/dynasty.png');
 
@@ -31,9 +34,13 @@ export default function ForgotPasswordScreen() {
     title: 'Password Reset Error',
     trackCurrentScreen: true
   });
-  const [email, setEmail] = useState('');
+  
+  // Use sanitized input hook for email
+  const emailInput = useSanitizedInput('', 'email');
+  
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
 
@@ -43,41 +50,61 @@ export default function ForgotPasswordScreen() {
     }
   }, [isError]);
 
+  // Monitor XSS detection
+  useEffect(() => {
+    if (emailInput.xssDetected) {
+      setError('Email contains potentially harmful content');
+    } else if (error === 'Email contains potentially harmful content') {
+      setError(null);
+    }
+  }, [emailInput.xssDetected, error]);
+
+  // Clear field error when user types
+  const handleFieldChange = () => {
+    if (fieldErrors.email) {
+      setFieldErrors({});
+    }
+  };
+
   const handleSendResetLink = withErrorHandling(async () => {
     reset();
     setError(null);
+    setFieldErrors({});
     setSuccessMessage(null);
-    if (!email) {
-      setError('Please enter your email address.');
+
+    // Check for XSS patterns before submission
+    if (emailInput.xssDetected) {
+      setError('Please remove any special characters and try again');
       return;
     }
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-        setError('Please enter a valid email address.');
-        return;
-    }
 
-    setIsLoading(true);
     try {
+      // Validate form data using sanitized value
+      const validatedData = forgotPasswordSchema.parse({ email: emailInput.sanitizedValue });
+
+      setIsLoading(true);
       const initiatePasswordReset = httpsCallable(functions, 'initiatePasswordReset');
-      const result = await initiatePasswordReset({ email });
+      const result = await initiatePasswordReset({ email: validatedData.email });
       
       // Assuming the function returns { success: true } on success
       // @ts-ignore
       if (result.data.success) {
         setSuccessMessage('Password reset email sent. Please check your inbox (and spam folder).');
-        setEmail(''); // Clear email field on success
+        emailInput.clear(); // Clear email field on success
       } else {
         // @ts-ignore
         setError(result.data.error || 'Failed to send password reset email. Please try again.');
       }
     } catch (e: any) {
-      handleError(e, { 
-        action: 'sendPasswordReset',
-        metadata: { email: email || 'unknown' }
-      });
-      setError(e.message || 'An unexpected error occurred. Please try again.');
+      if (e instanceof z.ZodError) {
+        setFieldErrors(formatValidationErrors(e.errors));
+      } else {
+        handleError(e, { 
+          action: 'sendPasswordReset',
+          metadata: { email: emailInput.sanitizedValue || 'unknown' }
+        });
+        setError(e.message || 'An unexpected error occurred. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -101,15 +128,19 @@ export default function ForgotPasswordScreen() {
         <Text style={styles.title}>Forgot Password?</Text>
         <Text style={styles.subtitle}>Enter your email address below and we&apos;ll send you a link to reset your password.</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email Address"
-          placeholderTextColor="#888"
-          value={email}
-          onChangeText={setEmail}
+        <ValidatedInput
+          label="Email Address"
+          placeholder="Enter your email"
+          value={emailInput.value}
+          onChangeText={(value) => {
+            emailInput.setValue(value);
+            handleFieldChange();
+          }}
           keyboardType="email-address"
           autoCapitalize="none"
           autoComplete="email"
+          error={fieldErrors.email || (emailInput.xssDetected ? 'Invalid characters detected' : undefined)}
+          required
         />
 
         {error && <Text style={styles.errorText}>{error}</Text>}

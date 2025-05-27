@@ -1,30 +1,30 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, ScrollView, Image, TouchableOpacity, Linking, Platform, ActivityIndicator, Share, StyleSheet, Alert, TextInput, Keyboard, Modal } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, ScrollView, TouchableOpacity, Linking, Platform, ActivityIndicator, Share, StyleSheet, TextInput, Keyboard, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import ThemedText from '@/components/ThemedText';
-import ThemedView from '@/components/ThemedView';
+import { ThemedText } from '@/components/ThemedText';
+import { ThemedView } from '@/components/ThemedView';
 import Screen from '@/components/ui/Screen';
 import Button from '@/components/ui/Button';
 import Avatar from '@/components/ui/Avatar';
 import Card from '@/components/ui/Card';
-import Colors from '@/constants/Colors';
+import { Colors } from '@/constants/Colors';
 import { Typography } from '@/constants/Typography';
-import { Spacing, BorderRadius, Shadows } from '@/constants/Spacing';
+import { Spacing, BorderRadius } from '@/constants/Spacing';
 import { commonHeaderOptions } from '@/constants/headerConfig';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { getEventDetailsMobile, EventDetails as MobileEventDetails, addCommentToEventMobile, deleteEventCommentMobile, EventComment, RsvpStatus , deleteEventMobile, rsvpToEventMobile } from '@src/lib/eventUtils';
+import { getEventDetailsMobile, EventDetails as MobileEventDetails, addCommentToEventMobile, deleteEventCommentMobile, RsvpStatus , deleteEventMobile, rsvpToEventMobile } from '@src/lib/eventUtils';
 import { formatDate, formatTimeAgo, toDate } from '@src/lib/dateUtils';
 import { useAuth } from '@/src/contexts/AuthContext';
 import AnimatedActionSheet, { ActionSheetAction } from '@/components/ui/AnimatedActionSheet';
-import MediaGallery, { MediaItem } from '@/components/ui/MediaGallery';
+import MediaGallery from '@/components/ui/MediaGallery';
 import { showErrorAlert } from '@src/lib/errorUtils';
-import ErrorBoundary from '@/components/ui/ErrorBoundary';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { ErrorSeverity } from '@/src/lib/ErrorHandlingService';
 import GuestListManagement from '@/components/ui/GuestListManagement';
-import RSVPStatusIndicator, { RSVPProgressBar, RSVPDeadlineCountdown } from '@/components/ui/RSVPStatusIndicator';
-import RSVPSummary, { RSVPSummaryData } from '@/components/ui/RSVPSummary';
+import RSVPStatusIndicator, { RSVPDeadlineCountdown } from '@/components/ui/RSVPStatusIndicator';
+import { logger } from '../../src/services/LoggingService';
 
 const EventDetailScreen = () => {
   const router = useRouter();
@@ -58,7 +58,7 @@ const EventDetailScreen = () => {
   
   // Guest List Management state
   const [showGuestManagement, setShowGuestManagement] = useState(false);
-  const [showRSVPSummary, setShowRSVPSummary] = useState(false);
+  const [_showRSVPSummary, _setShowRSVPSummary] = useState(false);
 
   useEffect(() => {
     if (!isError) {
@@ -74,11 +74,11 @@ const EventDetailScreen = () => {
         setError(null);
         navigation.setOptions({ title: 'Loading Event...' });
         try {
-          console.log(`[EventDetailScreen] Fetching details for event: ${eventId}`);
+          logger.debug(`[EventDetailScreen] Fetching details for event: ${eventId}`);
           // Use the utility function from eventUtils
           const details = await getEventDetailsMobile(eventId);
           if (details) {
-            console.log('[EventDetailScreen] Event details fetched:', details);
+            logger.debug('[EventDetailScreen] Event details fetched:', details);
             setEventDetails(details);
 
             const isHost = user?.uid === details.hostId;
@@ -119,12 +119,12 @@ const EventDetailScreen = () => {
               ),
             });
           } else {
-            console.log('[EventDetailScreen] No event details returned or event not found.');
+            logger.debug('[EventDetailScreen] No event details returned or event not found.');
             setError('Event not found or an error occurred.');
             navigation.setOptions({ title: 'Error' });
           }
         } catch (err: any) {
-          console.error('[EventDetailScreen] Error fetching event details:', err);
+          logger.error('[EventDetailScreen] Error fetching event details:', err);
           
           handleError(err, {
             action: 'fetchEventData',
@@ -148,7 +148,7 @@ const EventDetailScreen = () => {
       setIsLoading(false);
       navigation.setOptions({ title: 'Error' });
     }
-  }, [eventId, navigation, router, user, scheme]);
+  }, [eventId, navigation, router, user, scheme, handleError, handleShareEventInternal, reset, withErrorHandling]);
 
   const handleShareEventInternal = withErrorHandling(async () => {
     reset();
@@ -159,7 +159,7 @@ const EventDetailScreen = () => {
         title: eventDetails.title,
       });
     } catch (shareError: any) {
-      console.error('Error sharing event:', shareError);
+      logger.error('Error sharing event:', shareError);
       
       handleError(shareError, {
         action: 'handleShareEventInternal',
@@ -207,7 +207,7 @@ const EventDetailScreen = () => {
                 Alert.alert("Error", "Failed to delete the event. Please try again.");
               }
             } catch (error: any) {
-              console.error("Error deleting event:", error);
+              logger.error("Error deleting event:", error);
               
               handleError(error, {
                 action: 'handleDeleteEvent',
@@ -261,7 +261,7 @@ const EventDetailScreen = () => {
   
   const handleContactHost = () => {
     if (!eventDetails?.host?.id || !user) return;
-    console.log("Contacting host:", eventDetails.host.id);
+    logger.debug("Contacting host:", eventDetails.host.id);
     alert("Navigate to chat with host: " + eventDetails.host.name);
   };
 

@@ -31,7 +31,7 @@ export interface RecoveryOptions {
 
 class KeyBackupService {
   private static instance: KeyBackupService;
-  private readonly iterations = 100000;
+  private readonly iterations = 210000; // Updated to OWASP 2024 recommendation
 
   private constructor() {}
 

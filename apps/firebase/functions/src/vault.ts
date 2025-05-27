@@ -8,6 +8,17 @@ import {
   withErrorHandling,
   ErrorCode,
 } from "./utils/errors";
+import {withAuth, requireAuth} from "./middleware";
+import {SECURITY_CONFIG} from "./config/security-config";
+import {StorageAdapter} from "./services/storageAdapter";
+import {R2Service} from "./services/r2Service";
+import {validateUploadRequest} from "./config/r2Security";
+import {fileSecurityService} from "./services/fileSecurityService";
+import {R2_CONFIG} from "./config/r2Secrets";
+import {createLogContext, formatErrorForLogging} from "./utils/sanitization";
+import {sanitizeFilename} from "./utils/xssSanitization";
+import {validateRequest} from "./utils/request-validator";
+import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
 
 // MARK: - Types
 interface VaultItem {
@@ -37,6 +48,15 @@ interface VaultItem {
   };
   // Access level for the current user (added during queries)
   accessLevel?: "owner" | "read" | "write";
+  // R2 Storage fields (when using R2)
+  storageProvider?: "firebase" | "r2";
+  r2Bucket?: string;
+  r2Key?: string;
+  // Cached URLs with expiration
+  cachedUploadUrl?: string;
+  cachedUploadUrlExpiry?: Timestamp;
+  cachedDownloadUrl?: string;
+  cachedDownloadUrlExpiry?: Timestamp;
 }
 
 const MAX_UPDATE_DEPTH = 10;
@@ -99,7 +119,8 @@ async function verifyVaultItemAccess(
 
     return {hasAccess: false, reason: "Invalid permission level"};
   } catch (error) {
-    logger.error(`Error verifying vault item access for user ${userId}, item ${itemId}:`, error);
+    const {message, context} = formatErrorForLogging(error, {userId, itemId});
+    logger.error("Error verifying vault item access", {message, ...context});
     return {hasAccess: false, reason: "Access verification failed"};
   }
 }
@@ -192,26 +213,24 @@ export const getVaultUploadSignedUrl = onCall(
     region: DEFAULT_REGION,
     memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+    secrets: [R2_CONFIG],
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
-    }
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
 
-    const {fileName, mimeType, parentId = null, isEncrypted = false, fileSize} = request.data;
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getVaultUploadSignedUrl,
+      uid
+    );
 
-    if (!fileName || !mimeType) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "fileName and mimeType are required.");
-    }
+    const {fileName, mimeType, parentId = null, isEncrypted = false, fileSize} = validatedData;
 
-    // Validate file size (100MB limit)
-    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
-    if (fileSize && fileSize > MAX_FILE_SIZE) {
-      throw createError(
-        ErrorCode.INVALID_REQUEST,
-        `File size exceeds maximum allowed size of ${MAX_FILE_SIZE / (1024 * 1024)}MB`
-      );
+    // Additional validation with security rules
+    const validation = validateUploadRequest(fileName, mimeType, fileSize);
+    if (!validation.valid) {
+      throw createError(ErrorCode.INVALID_REQUEST, validation.error || "Invalid upload request");
     }
 
     const db = getFirestore();
@@ -224,27 +243,94 @@ export const getVaultUploadSignedUrl = onCall(
       parentPath = (parentDoc.data() as VaultItem).path;
     }
 
-    // Construct the storage path
-    // Path in vault items is like /folder/file.ext or /file.ext
-    // Storage path is like vault/userId/parentId_or_root/fileName
-    const effectiveParentIdForStorage = parentId || "root";
-    const storagePath = `vault/${uid}/${effectiveParentIdForStorage}/${fileName}`;
+    // Initialize storage adapter
+    const storageAdapter = new StorageAdapter();
+    const storageProvider = process.env.STORAGE_PROVIDER === "r2" ? "r2" : "firebase";
 
-    const fiveMinutesInSeconds = 5 * 60;
-    const expires = Date.now() + fiveMinutesInSeconds * 1000;
+    let signedUrl: string;
+    let storagePath: string;
+    let r2Bucket: string | undefined;
+    let r2Key: string | undefined;
 
-    const [signedUrl] = await getStorage()
-      .bucket()
-      .file(storagePath)
-      .getSignedUrl({
-        version: "v4",
-        action: "write",
-        expires,
-        contentType: mimeType,
-      });
+    if (storageProvider === "r2") {
+      // Use R2 storage
+      r2Bucket = R2Service.getBucketName("vault");
+      r2Key = R2Service.generateStorageKey("vault", uid, fileName, parentId || undefined);
 
-    return {signedUrl, storagePath, parentPathInVault: parentPath, isEncrypted};
-  }, "getVaultUploadSignedUrl")
+      const result = await storageAdapter.generateUploadUrl(
+        r2Key,
+        mimeType,
+        300, // 5 minutes
+        {
+          uploadedBy: uid,
+          originalName: fileName,
+          parentId: parentId || "root",
+          isEncrypted: isEncrypted.toString(),
+        }
+      );
+
+      signedUrl = result.signedUrl;
+      storagePath = r2Key; // For R2, storagePath is the key
+    } else {
+      // Use Firebase Storage (existing logic)
+      const effectiveParentIdForStorage = parentId || "root";
+      storagePath = `vault/${uid}/${effectiveParentIdForStorage}/${fileName}`;
+
+      const fiveMinutesInSeconds = 5 * 60;
+      const expires = Date.now() + fiveMinutesInSeconds * 1000;
+
+      const [url] = await getStorage()
+        .bucket()
+        .file(storagePath)
+        .getSignedUrl({
+          version: "v4",
+          action: "write",
+          expires,
+          contentType: mimeType,
+        });
+
+      signedUrl = url;
+    }
+
+    // Pre-create the vault item with cached upload URL
+    const vaultItem: Partial<VaultItem> = {
+      userId: uid,
+      name: fileName,
+      type: "file",
+      parentId,
+      path: parentPath ? `${parentPath}/${fileName}` : `/${fileName}`,
+      createdAt: FieldValue.serverTimestamp() as Timestamp,
+      updatedAt: FieldValue.serverTimestamp() as Timestamp,
+      size: fileSize,
+      mimeType,
+      isDeleted: false,
+      isEncrypted,
+      storageProvider,
+      storagePath,
+      ...(r2Bucket && {r2Bucket}),
+      ...(r2Key && {r2Key}),
+      cachedUploadUrl: signedUrl,
+      cachedUploadUrlExpiry: Timestamp.fromMillis(Date.now() + 300000), // 5 minutes
+    };
+
+    // Create the item in Firestore
+    const docRef = await db.collection("vaultItems").add(vaultItem);
+
+    return {
+      signedUrl,
+      storagePath,
+      parentPathInVault: parentPath,
+      isEncrypted,
+      itemId: docRef.id,
+      storageProvider,
+      ...(r2Bucket && {r2Bucket}),
+      ...(r2Key && {r2Key}),
+    };
+  }, "getVaultUploadSignedUrl", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.upload,
+  })
 );
 
 /**
@@ -262,7 +348,14 @@ export const getVaultItems = onCall(
       throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
     }
 
-    const parentId = request.data.parentId ?? null;
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getVaultItems,
+      uid
+    );
+
+    const parentId = validatedData.parentId ?? null;
     const db = getFirestore();
 
     // Get all accessible items (owned + shared) for the specified parent
@@ -276,7 +369,11 @@ export const getVaultItems = onCall(
       return a.name.localeCompare(b.name);
     });
 
-    logger.info(`Retrieved ${items.length} vault items for user ${uid} in parent ${parentId || "root"}`);
+    logger.info("Retrieved vault items", createLogContext({
+      itemCount: items.length,
+      userId: uid,
+      parentId: parentId || "root",
+    }));
     return {items};
   }, "getVaultItems")
 );
@@ -290,30 +387,36 @@ export const createVaultFolder = onCall(
     memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
-    }
-    const name: string = request.data.name;
-    const parentId: string | null = request.data.parentId ?? null;
-    if (!name || !name.trim()) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "Folder name is required");
-    }
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.createVaultFolder,
+      uid
+    );
+
+    const {name, parentFolderId} = validatedData;
+    const parentId = parentFolderId ?? null;
+
+    // Additional sanitization for filename
+    const sanitizedName = sanitizeFilename(name);
+
     const db = getFirestore();
-    // Build path
-    let path = `/${name.trim()}`;
+    // Build path with sanitized name
+    let path = `/${sanitizedName}`;
     if (parentId) {
       const parentDoc = await db.collection("vaultItems").doc(parentId).get();
       if (!parentDoc.exists) {
         throw createError(ErrorCode.NOT_FOUND, "Parent folder not found");
       }
       const parentData = parentDoc.data() as VaultItem;
-      path = `${parentData.path}/${name.trim()}`;
+      path = `${parentData.path}/${sanitizedName}`;
     }
     const docRef = await db.collection("vaultItems").add({
       userId: uid,
-      name: name.trim(),
+      name: sanitizedName,
       type: "folder",
       parentId,
       path,
@@ -322,12 +425,17 @@ export const createVaultFolder = onCall(
       isDeleted: false,
     });
     return {id: docRef.id};
-  }, "createVaultFolder")
+  }, "createVaultFolder", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  })
 );
 
 /**
  * Add a new file entry to the vault (metadata only)
  * This function is called AFTER the file has been uploaded to storage via a signed URL.
+ * Updated to handle pre-created items from getVaultUploadSignedUrl
  */
 export const addVaultFile = onCall(
   {
@@ -335,12 +443,18 @@ export const addVaultFile = onCall(
     memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
-    }
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.addVaultFile,
+      uid
+    );
+
     const {
+      itemId, // New: ID of pre-created item from getVaultUploadSignedUrl
       name, // The file name
       parentId = null, // The ID of the parent folder in the vault
       storagePath, // The full path in Firebase Storage where the file was uploaded
@@ -351,8 +465,188 @@ export const addVaultFile = onCall(
       // Encryption fields
       isEncrypted = false,
       encryptionKeyId = null,
-    } = request.data;
+    } = validatedData;
 
+    const db = getFirestore();
+
+    // If itemId is provided, update the pre-created item
+    if (itemId) {
+      const itemRef = db.collection("vaultItems").doc(itemId);
+      const itemDoc = await itemRef.get();
+
+      if (!itemDoc.exists) {
+        throw createError(ErrorCode.NOT_FOUND, "Pre-created vault item not found");
+      }
+
+      const existingItem = itemDoc.data() as VaultItem;
+
+      // Verify ownership
+      if (existingItem.userId !== uid) {
+        throw createError(ErrorCode.PERMISSION_DENIED, "You don't have permission to update this item");
+      }
+
+      // Update the item with final details
+      const updateData: any = {
+        updatedAt: FieldValue.serverTimestamp(),
+        // Update size if provided
+        ...(size && {size}),
+        // Clear cached upload URL
+        cachedUploadUrl: FieldValue.delete(),
+        cachedUploadUrlExpiry: FieldValue.delete(),
+      };
+
+      // Add encryption fields if file is encrypted
+      if (isEncrypted && encryptionKeyId) {
+        updateData.isEncrypted = true;
+        updateData.encryptionKeyId = encryptionKeyId;
+        updateData.encryptedBy = uid;
+      }
+
+      await itemRef.update(updateData);
+
+      // Perform security scan on the uploaded file
+      try {
+        logger.info("Starting security scan for file", createLogContext({
+          fileName: existingItem.name,
+          fileSize: size || existingItem.size || 0,
+          userId: uid,
+        }));
+
+        let fileBuffer: Buffer;
+
+        if (existingItem.storageProvider === "r2" && existingItem.r2Key) {
+          // Download from R2
+          const storageAdapter = new StorageAdapter();
+          const downloadUrl = await storageAdapter.generateDownloadUrl({
+            path: existingItem.r2Key,
+            expiresIn: 300, // 5 minutes expiry
+            bucket: existingItem.r2Bucket,
+            provider: "r2",
+          });
+
+          // Fetch the file content
+          const response = await fetch(downloadUrl.signedUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to download file from R2: ${response.statusText}`);
+          }
+          const arrayBuffer = await response.arrayBuffer();
+          fileBuffer = Buffer.from(arrayBuffer);
+        } else {
+          // Download from Firebase Storage
+          const storagePath = existingItem.storagePath || "";
+          if (!storagePath) {
+            throw new Error("Storage path is missing");
+          }
+          const file = getStorage().bucket().file(storagePath);
+          const [exists] = await file.exists();
+
+          if (!exists) {
+            throw new Error("Uploaded file not found in storage");
+          }
+
+          const [buffer] = await file.download();
+          fileBuffer = buffer;
+        }
+
+        // Scan the file
+        const scanResult = await fileSecurityService.scanFile(
+          fileBuffer,
+          existingItem.name,
+          existingItem.mimeType || "application/octet-stream",
+          size || existingItem.size || 0,
+          uid
+        );
+
+        if (!scanResult.safe) {
+          // File is not safe - delete it and the vault item
+          logger.warn("File failed security scan", createLogContext({
+            fileName: existingItem.name,
+            threats: scanResult.threats,
+            userId: uid,
+          }));
+
+          // Delete the file from storage
+          if (existingItem.storageProvider === "r2" && existingItem.r2Key) {
+            // TODO: Implement R2 delete when method is available
+            logger.warn("R2 file deletion not yet implemented", {
+              bucket: existingItem.r2Bucket,
+              key: existingItem.r2Key,
+            });
+          } else if (existingItem.storagePath) {
+            await getStorage().bucket().file(existingItem.storagePath).delete();
+          }
+
+          // Delete the vault item
+          await itemRef.delete();
+
+          throw createError(
+            ErrorCode.INVALID_REQUEST,
+            `File failed security scan: ${scanResult.threats.join(", ")}`
+          );
+        }
+
+        // Update item with scan results
+        await itemRef.update({
+          lastScannedAt: FieldValue.serverTimestamp(),
+          scanResult: "safe",
+        });
+
+        logger.info("File passed security scan", createLogContext({
+          fileName: existingItem.name,
+          userId: uid,
+        }));
+      } catch (scanError) {
+        const {message, context} = formatErrorForLogging(scanError, {
+          fileName: existingItem.name,
+          userId: uid,
+        });
+        logger.error("Error during file security scan", {message, ...context});
+
+        // On scan error, we can either fail open or closed
+        // For security, we'll fail closed (reject the file)
+        if (existingItem.storageProvider === "r2" && existingItem.r2Key) {
+          // TODO: Implement R2 delete when method is available
+          logger.warn("R2 file deletion not yet implemented", {
+            bucket: existingItem.r2Bucket,
+            key: existingItem.r2Key,
+          });
+        } else if (existingItem.storagePath) {
+          await getStorage().bucket().file(existingItem.storagePath).delete().catch(() => {});
+        }
+
+        await itemRef.delete();
+
+        throw createError(
+          ErrorCode.INTERNAL,
+          "File security scan failed. File has been rejected for safety."
+        );
+      }
+
+      // Generate download URL based on storage provider
+      let finalDownloadURL = "";
+      if (existingItem.storageProvider === "r2" && existingItem.r2Bucket && existingItem.r2Key) {
+        // For R2, we'll generate download URLs on demand in getVaultDownloadUrl
+        finalDownloadURL = ""; // R2 doesn't have permanent public URLs
+      } else {
+        // Firebase Storage download URL
+        const bucket = getStorage().bucket();
+        const defaultBucketName = bucket.name;
+        const encodedStoragePath = encodeURIComponent(existingItem.storagePath || storagePath);
+        finalDownloadURL = `https://firebasestorage.googleapis.com/v0/b/${defaultBucketName}/o/${encodedStoragePath}?alt=media`;
+
+        if (process.env.FUNCTIONS_EMULATOR === "true") {
+          const projectId = process.env.GCLOUD_PROJECT;
+          if (projectId) {
+            const emulatorHost = "127.0.0.1:9199";
+            finalDownloadURL = `http://${emulatorHost}/v0/b/${projectId}.appspot.com/o/${encodedStoragePath}?alt=media`;
+          }
+        }
+      }
+
+      return {id: itemId, downloadURL: finalDownloadURL, isEncrypted};
+    }
+
+    // Legacy flow: create new item (for backward compatibility)
     if (!name || !storagePath) {
       throw createError(ErrorCode.MISSING_PARAMETERS, "Missing file name or storagePath");
     }
@@ -366,7 +660,6 @@ export const addVaultFile = onCall(
       );
     }
 
-    const db = getFirestore();
     // Build vault item path (logical path, not storage path)
     let vaultPath = `/${name}`;
     if (parentId) {
@@ -378,29 +671,21 @@ export const addVaultFile = onCall(
       vaultPath = `${parentData.path}/${name}`;
     }
 
-    // Generate the downloadURL
-    // This will be the publicly accessible URL (or a long-lived signed URL if files are not public by default)
-    // For simplicity, we'll construct the standard GCS public URL format.
-    // This needs to be emulator-aware.
+    // Generate the downloadURL for Firebase Storage
     const bucket = getStorage().bucket();
     const defaultBucketName = bucket.name;
     const encodedStoragePath = encodeURIComponent(storagePath);
     let finalDownloadURL = `https://firebasestorage.googleapis.com/v0/b/${defaultBucketName}/o/${encodedStoragePath}?alt=media`;
 
-    // Check for emulator environment
-    // process.env.FUNCTIONS_EMULATOR is 'true' when running in functions emulator
-    // process.env.GCLOUD_PROJECT holds the project ID
     if (process.env.FUNCTIONS_EMULATOR === "true") {
       const projectId = process.env.GCLOUD_PROJECT;
-      if (!projectId) {
-        logger.warn("Running in emulator but GCLOUD_PROJECT env var not found. Cannot form emulator-specific storage URL reliably.");
-        // Fallback or throw error, for now, we proceed, but URL might be live-like
-      } else {
-        // Storage emulator typically runs on 127.0.0.1:9199
-        // The bucket name format for emulator URLs is <project_id>.appspot.com
-        const emulatorHost = "127.0.0.1:9199"; // This should ideally be configurable if it can change
+      if (projectId) {
+        const emulatorHost = "127.0.0.1:9199";
         finalDownloadURL = `http://${emulatorHost}/v0/b/${projectId}.appspot.com/o/${encodedStoragePath}?alt=media`;
-        logger.info(`Generated emulator download URL: ${finalDownloadURL} for project ${projectId}`);
+        logger.info("Generated emulator download URL", createLogContext({
+          projectId,
+          storageProvider: "firebase",
+        }));
       }
     }
 
@@ -409,15 +694,16 @@ export const addVaultFile = onCall(
       name,
       type: "file",
       parentId,
-      path: vaultPath, // Logical path in the vault
+      path: vaultPath,
       fileType,
       size,
-      storagePath, // Actual path in GCS
-      downloadURL: finalDownloadURL, // Generated download URL
+      storagePath,
+      downloadURL: finalDownloadURL,
       mimeType,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       isDeleted: false,
+      storageProvider: "firebase", // Legacy items use Firebase
     };
 
     // Add encryption fields if file is encrypted
@@ -429,7 +715,11 @@ export const addVaultFile = onCall(
 
     const docRef = await db.collection("vaultItems").add(vaultItem);
     return {id: docRef.id, downloadURL: finalDownloadURL, isEncrypted};
-  }, "addVaultFile")
+  }, "addVaultFile", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  })
 );
 
 /**
@@ -441,16 +731,21 @@ export const renameVaultItem = onCall(
     memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
-    }
-    const itemId: string = request.data.itemId;
-    const newName: string = request.data.newName;
-    if (!itemId || !newName || !newName.trim()) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "Item ID and new name are required");
-    }
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.renameVaultItem,
+      uid
+    );
+
+    const {itemId, newName} = validatedData;
+
+    // Additional sanitization for filename
+    const sanitizedName = sanitizeFilename(newName);
+
     const db = getFirestore();
     const docRef = db.collection("vaultItems").doc(itemId);
     const doc = await docRef.get();
@@ -461,18 +756,22 @@ export const renameVaultItem = onCall(
     if (data.userId !== uid) {
       throw createError(ErrorCode.PERMISSION_DENIED, "Permission denied");
     }
-    const trimmed = newName.trim();
-    // Build new path
+
+    // Build new path with sanitized name
     const parentPath = data.parentId ? (await db.collection("vaultItems").doc(data.parentId).get()).data()!.path : "";
-    const newPath = parentPath ? `${parentPath}/${trimmed}` : `/${trimmed}`;
+    const newPath = parentPath ? `${parentPath}/${sanitizedName}` : `/${sanitizedName}`;
     // Update this item
-    await docRef.update({name: trimmed, path: newPath, updatedAt: FieldValue.serverTimestamp()});
+    await docRef.update({name: sanitizedName, path: newPath, updatedAt: FieldValue.serverTimestamp()});
     // If folder, update descendants
     if (data.type === "folder") {
       await updateDescendantPathsRecursive(db, itemId, newPath);
     }
     return {success: true};
-  }, "renameVaultItem")
+  }, "renameVaultItem", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  })
 );
 
 /**
@@ -484,16 +783,17 @@ export const moveVaultItem = onCall(
     memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
-    }
-    const itemId: string = request.data.itemId;
-    const newParentId: string | null = request.data.newParentId ?? null;
-    if (!itemId) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "Item ID is required");
-    }
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.moveVaultItem,
+      uid
+    );
+
+    const {itemId, newParentId = null} = validatedData;
     const db = getFirestore();
     const docRef = db.collection("vaultItems").doc(itemId);
     const doc = await docRef.get();
@@ -526,7 +826,11 @@ export const moveVaultItem = onCall(
       await updateDescendantPathsRecursive(db, itemId, newPath);
     }
     return {success: true};
-  }, "moveVaultItem")
+  }, "moveVaultItem", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  })
 );
 
 /**
@@ -538,15 +842,17 @@ export const deleteVaultItem = onCall(
     memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
-    }
-    const itemId: string = request.data.itemId;
-    if (!itemId) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "Item ID is required");
-    }
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.deleteVaultItem,
+      uid
+    );
+
+    const {itemId} = validatedData;
     const db = getFirestore();
     const bucket = getStorage().bucket();
     const docRef = db.collection("vaultItems").doc(itemId);
@@ -559,7 +865,14 @@ export const deleteVaultItem = onCall(
       throw createError(ErrorCode.PERMISSION_DENIED, "Permission denied");
     }
     // Recursively collect IDs to delete
-    const itemsToDeleteDetails: Array<{id: string, type: "file" | "folder", storagePath?: string}> = [];
+    const itemsToDeleteDetails: Array<{
+      id: string,
+      type: "file" | "folder",
+      storagePath?: string,
+      storageProvider?: "firebase" | "r2",
+      r2Bucket?: string,
+      r2Key?: string
+    }> = [];
     const stack = [itemId];
     while (stack.length) {
       const currentFolderId = stack.pop()!;
@@ -567,7 +880,14 @@ export const deleteVaultItem = onCall(
       const childrenSnapshot = await db.collection("vaultItems").where("parentId", "==", currentFolderId).where("isDeleted", "==", false).get();
       for (const childDoc of childrenSnapshot.docs) {
         const childData = childDoc.data() as VaultItem;
-        itemsToDeleteDetails.push({id: childDoc.id, type: childData.type, storagePath: childData.storagePath});
+        itemsToDeleteDetails.push({
+          id: childDoc.id,
+          type: childData.type,
+          storagePath: childData.storagePath,
+          storageProvider: childData.storageProvider,
+          r2Bucket: childData.r2Bucket,
+          r2Key: childData.r2Key,
+        });
         if (childData.type === "folder") {
           stack.push(childDoc.id); // Add subfolder to stack for further processing
         }
@@ -580,7 +900,14 @@ export const deleteVaultItem = onCall(
       // If the item being deleted is a folder, its direct children are processed above.
       // We need to add the folder itself to the list of items to be soft-deleted.
       // If it's a file, it won't be a currentFolderId, so it needs to be added here.
-      itemsToDeleteDetails.unshift({id: itemId, type: data.type, storagePath: data.storagePath});
+      itemsToDeleteDetails.unshift({
+        id: itemId,
+        type: data.type,
+        storagePath: data.storagePath,
+        storageProvider: data.storageProvider,
+        r2Bucket: data.r2Bucket,
+        r2Key: data.r2Key,
+      });
     }
 
     // Batch delete Firestore documents
@@ -599,35 +926,86 @@ export const deleteVaultItem = onCall(
       });
       firestoreOpsCount++;
 
-      // If it's a file and has a storagePath, schedule GCS deletion
-      if (itemDetail.type === "file" && itemDetail.storagePath) {
-        gcsDeletePromises.push(
-          bucket.file(itemDetail.storagePath).delete()
-            .then(() => logger.info(`Deleted GCS file: ${itemDetail.storagePath} for vault item ${itemDetail.id}`))
-            .catch((e) => logger.warn(`Failed to delete GCS file: ${itemDetail.storagePath}`, e))
-        );
+      // If it's a file, schedule storage deletion based on provider
+      if (itemDetail.type === "file") {
+        if (itemDetail.storageProvider === "r2" && itemDetail.r2Bucket && itemDetail.r2Key) {
+          // Schedule R2 deletion
+          const r2Key = itemDetail.r2Key;
+          const r2Bucket = itemDetail.r2Bucket;
+          gcsDeletePromises.push(
+            (async () => {
+              try {
+                const storageAdapter = new StorageAdapter();
+                await storageAdapter.deleteFile({
+                  path: r2Key,
+                  bucket: r2Bucket,
+                  provider: "r2",
+                });
+                logger.info("Deleted R2 file", createLogContext({
+                  r2Key,
+                  itemId: itemDetail.id,
+                  userId: uid,
+                }));
+              } catch (e) {
+                const {message, context} = formatErrorForLogging(e, {r2Key, itemId: itemDetail.id});
+                logger.warn("Failed to delete R2 file", {message, ...context});
+              }
+            })()
+          );
+        } else if (itemDetail.storagePath) {
+          // Schedule Firebase Storage deletion
+          gcsDeletePromises.push(
+            bucket.file(itemDetail.storagePath).delete()
+              .then(() => logger.info("Deleted GCS file", createLogContext({
+                storagePath: itemDetail.storagePath,
+                itemId: itemDetail.id,
+                userId: uid,
+              })))
+              .catch((e) => {
+                const {message, context} = formatErrorForLogging(e, {
+                  storagePath: itemDetail.storagePath,
+                  itemId: itemDetail.id,
+                });
+                logger.warn("Failed to delete GCS file", {message, ...context});
+              })
+          );
+        }
       }
 
       if (firestoreOpsCount >= MAX_FIRESTORE_OPS) {
         await firestoreBatch.commit();
         firestoreBatch = db.batch(); // Start a new batch
         firestoreOpsCount = 0;
-        logger.info("Committed a partial batch of vault item soft-deletes.");
+        logger.info("Committed partial batch of vault item soft-deletes", createLogContext({
+          batchSize: MAX_FIRESTORE_OPS,
+          userId: uid,
+        }));
       }
     }
 
     // Commit any remaining Firestore operations
     if (firestoreOpsCount > 0) {
       await firestoreBatch.commit();
-      logger.info("Committed final batch of vault item soft-deletes.");
+      logger.info("Committed final batch of vault item soft-deletes", createLogContext({
+        batchSize: firestoreOpsCount,
+        userId: uid,
+      }));
     }
 
     // Wait for all GCS deletions to complete (or fail individually)
     await Promise.all(gcsDeletePromises);
-    logger.info(`Attempted GCS deletions for ${gcsDeletePromises.length} files associated with vault item ${itemId} and its descendants.`);
+    logger.info("Attempted storage deletions", createLogContext({
+      fileCount: gcsDeletePromises.length,
+      itemId,
+      userId: uid,
+    }));
 
     return {success: true};
-  }, "deleteVaultItem")
+  }, "deleteVaultItem", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
+  })
 );
 
 /**
@@ -674,7 +1052,11 @@ export const getDeletedVaultItems = onCall(
             });
           downloadURL = signedUrl;
         } catch (error) {
-          logger.warn(`Failed to generate download URL for deleted file ${doc.id}:`, error);
+          const {message, context} = formatErrorForLogging(error, {
+            itemId: doc.id,
+            userId: uid,
+          });
+          logger.warn("Failed to generate download URL for deleted file", {message, ...context});
         }
       }
 
@@ -698,16 +1080,17 @@ export const restoreVaultItem = onCall(
     memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
-    }
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
 
-    const {itemId} = request.data;
-    if (!itemId) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "itemId is required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.restoreVaultItem,
+      uid
+    );
+
+    const {itemId} = validatedData;
 
     const db = getFirestore();
     const itemRef = db.collection("vaultItems").doc(itemId);
@@ -774,9 +1157,16 @@ export const restoreVaultItem = onCall(
       await batch.commit();
     }
 
-    logger.info(`Restored ${itemsToRestore.length} vault items for user ${uid}`);
+    logger.info("Restored vault items", createLogContext({
+      restoredCount: itemsToRestore.length,
+      userId: uid,
+    }));
     return {success: true, restoredCount: itemsToRestore.length};
-  }, "restoreVaultItem")
+  }, "restoreVaultItem", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  })
 );
 
 /**
@@ -789,11 +1179,8 @@ export const cleanupDeletedVaultItems = onCall(
     memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.LONG,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
-    }
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
 
     const db = getFirestore();
     const bucket = getStorage().bucket();
@@ -820,19 +1207,61 @@ export const cleanupDeletedVaultItems = onCall(
       deletePromises.push(doc.ref.delete());
 
       // Delete from Storage if it's a file
-      if (data.type === "file" && data.storagePath) {
-        deletePromises.push(
-          bucket.file(data.storagePath).delete()
-            .catch((error) => logger.warn(`Failed to delete file ${data.storagePath}:`, error))
-        );
+      if (data.type === "file") {
+        if (data.storageProvider === "r2" && data.r2Bucket && data.r2Key) {
+          // Delete from R2
+          const r2Key = data.r2Key;
+          const r2Bucket = data.r2Bucket;
+          deletePromises.push(
+            (async () => {
+              try {
+                const storageAdapter = new StorageAdapter();
+                await storageAdapter.deleteFile({
+                  path: r2Key,
+                  bucket: r2Bucket,
+                  provider: "r2",
+                });
+                logger.info("Permanently deleted R2 file", createLogContext({
+                  r2Key,
+                  userId: uid,
+                }));
+              } catch (error) {
+                const {message, context} = formatErrorForLogging(error, {
+                  r2Key,
+                  userId: uid,
+                });
+                logger.warn("Failed to delete R2 file", {message, ...context});
+              }
+            })()
+          );
+        } else if (data.storagePath) {
+          // Delete from Firebase Storage
+          deletePromises.push(
+            bucket.file(data.storagePath).delete()
+              .catch((error) => {
+                const {message, context} = formatErrorForLogging(error, {
+                  storagePath: data.storagePath,
+                  userId: uid,
+                });
+                logger.warn("Failed to delete file", {message, ...context});
+              })
+          );
+        }
       }
     }
 
     await Promise.all(deletePromises);
 
-    logger.info(`Permanently deleted ${itemIds.length} old vault items for user ${uid}`);
+    logger.info("Permanently deleted old vault items", createLogContext({
+      deletedCount: itemIds.length,
+      userId: uid,
+    }));
     return {success: true, deletedCount: itemIds.length};
-  }, "cleanupDeletedVaultItems")
+  }, "cleanupDeletedVaultItems", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
+  })
 );
 
 /**
@@ -850,6 +1279,13 @@ export const searchVaultItems = onCall(
       throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
     }
 
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.searchVaultItems,
+      uid
+    );
+
     const {
       query = "",
       fileTypes = [],
@@ -858,7 +1294,7 @@ export const searchVaultItems = onCall(
       sortBy = "name",
       sortOrder = "asc",
       limit = 50,
-    } = request.data;
+    } = validatedData;
 
     const db = getFirestore();
     let firestoreQuery = db.collection("vaultItems").where("userId", "==", uid);
@@ -906,7 +1342,11 @@ export const searchVaultItems = onCall(
               });
             downloadURL = signedUrl;
           } catch (error) {
-            logger.warn(`Failed to generate download URL for file ${doc.id}:`, error);
+            const {message, context} = formatErrorForLogging(error, {
+              itemId: doc.id,
+              userId: uid,
+            });
+            logger.warn("Failed to generate download URL for file", {message, ...context});
           }
         }
 
@@ -949,7 +1389,12 @@ export const searchVaultItems = onCall(
     // Apply limit after filtering and sorting
     items = items.slice(0, limit);
 
-    logger.info(`Search returned ${items.length} vault items for user ${uid}`);
+    logger.info("Search returned vault items", createLogContext({
+      resultCount: items.length,
+      userId: uid,
+      query: query || "no query",
+      fileTypes: fileTypes.length > 0 ? fileTypes.join(",") : "all",
+    }));
     return {items};
   }, "searchVaultItems")
 );
@@ -963,20 +1408,17 @@ export const shareVaultItem = onCall(
     memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
-    }
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
 
-    const {itemId, userIds, permissions = "read"} = request.data;
-    if (!itemId || !userIds || !Array.isArray(userIds) || userIds.length === 0) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "itemId and userIds are required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.shareVaultItem,
+      uid
+    );
 
-    if (!["read", "write"].includes(permissions)) {
-      throw createError(ErrorCode.INVALID_REQUEST, "Permissions must be 'read' or 'write'");
-    }
+    const {itemId, userIds, permissions = "read"} = validatedData;
 
     const db = getFirestore();
     const itemRef = db.collection("vaultItems").doc(itemId);
@@ -1045,9 +1487,18 @@ export const shareVaultItem = onCall(
     }
     await batch.commit();
 
-    logger.info(`Shared vault item ${itemId} with ${userIds.length} users with ${permissions} permissions`);
+    logger.info("Shared vault item", createLogContext({
+      itemId,
+      sharedWithCount: userIds.length,
+      permissions,
+      userId: uid,
+    }));
     return {success: true};
-  }, "shareVaultItem")
+  }, "shareVaultItem", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  })
 );
 
 /**
@@ -1059,16 +1510,17 @@ export const revokeVaultItemAccess = onCall(
     memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
-    }
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
 
-    const {itemId, userIds} = request.data;
-    if (!itemId || !userIds || !Array.isArray(userIds) || userIds.length === 0) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "itemId and userIds are required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.revokeVaultItemAccess,
+      uid
+    );
+
+    const {itemId, userIds} = validatedData;
 
     const db = getFirestore();
     const itemRef = db.collection("vaultItems").doc(itemId);
@@ -1117,9 +1569,17 @@ export const revokeVaultItemAccess = onCall(
     }
     await batch.commit();
 
-    logger.info(`Revoked vault item ${itemId} access for ${userIds.length} users`);
+    logger.info("Revoked vault item access", createLogContext({
+      itemId,
+      revokedCount: userIds.length,
+      userId: uid,
+    }));
     return {success: true};
-  }, "revokeVaultItemAccess")
+  }, "revokeVaultItemAccess", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  })
 );
 
 /**
@@ -1131,23 +1591,17 @@ export const updateVaultItemPermissions = onCall(
     memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
-    }
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
 
-    const {itemId, userPermissions} = request.data;
-    if (!itemId || !userPermissions || !Array.isArray(userPermissions) || userPermissions.length === 0) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "itemId and userPermissions array are required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.updateVaultItemPermissions,
+      uid
+    );
 
-    // Validate userPermissions format: [{ userId: string, permission: "read" | "write" }]
-    for (const userPerm of userPermissions) {
-      if (!userPerm.userId || !["read", "write"].includes(userPerm.permission)) {
-        throw createError(ErrorCode.INVALID_REQUEST, "Each userPermissions entry must have userId and permission ('read' or 'write')");
-      }
-    }
+    const {itemId, userPermissions} = validatedData;
 
     const db = getFirestore();
     const itemRef = db.collection("vaultItems").doc(itemId);
@@ -1163,7 +1617,7 @@ export const updateVaultItemPermissions = onCall(
     }
 
     // Verify all user IDs exist
-    const userIds = userPermissions.map((up) => up.userId);
+    const userIds = userPermissions.map((up: any) => up.userId);
     const usersSnapshot = await db.collection("users")
       .where(FieldPath.documentId(), "in", userIds)
       .get();
@@ -1221,9 +1675,17 @@ export const updateVaultItemPermissions = onCall(
     }
     await batch.commit();
 
-    logger.info(`Updated vault item ${itemId} permissions for ${userPermissions.length} users`);
+    logger.info("Updated vault item permissions", createLogContext({
+      itemId,
+      updatedCount: userPermissions.length,
+      userId: uid,
+    }));
     return {success: true};
-  }, "updateVaultItemPermissions")
+  }, "updateVaultItemPermissions", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  })
 );
 
 /**
@@ -1241,10 +1703,14 @@ export const getVaultItemSharingInfo = onCall(
       throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
     }
 
-    const {itemId} = request.data;
-    if (!itemId) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "itemId is required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getVaultItemSharingInfo,
+      uid
+    );
+
+    const {itemId} = validatedData;
 
     const db = getFirestore();
 
@@ -1312,6 +1778,7 @@ export const getVaultDownloadUrl = onCall(
     region: DEFAULT_REGION,
     memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+    secrets: [R2_CONFIG],
   },
   withErrorHandling(async (request) => {
     const uid = request.auth?.uid;
@@ -1319,7 +1786,14 @@ export const getVaultDownloadUrl = onCall(
       throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
     }
 
-    const {itemId, storagePath} = request.data;
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getVaultDownloadUrl,
+      uid
+    );
+
+    const {itemId, storagePath} = validatedData;
     if (!itemId && !storagePath) {
       throw createError(ErrorCode.MISSING_PARAMETERS, "Either itemId or storagePath is required");
     }
@@ -1338,7 +1812,7 @@ export const getVaultDownloadUrl = onCall(
       }
       vaultItem = accessResult.item;
 
-      if (!vaultItem?.storagePath) {
+      if (!vaultItem?.storagePath && !vaultItem?.r2Key) {
         throw createError(ErrorCode.INVALID_REQUEST, "Vault item does not have an associated storage path");
       }
     } else {
@@ -1364,24 +1838,58 @@ export const getVaultDownloadUrl = onCall(
       vaultItem = accessResult.item;
     }
 
-    const finalStoragePath = vaultItem?.storagePath || storagePath;
+    // Check if we have a cached download URL that's still valid
+    if (vaultItem?.cachedDownloadUrl && vaultItem?.cachedDownloadUrlExpiry) {
+      const expiry = vaultItem.cachedDownloadUrlExpiry.toMillis();
+      if (expiry > Date.now() + 300000) { // Still valid for at least 5 minutes
+        logger.info("Using cached download URL", createLogContext({
+          fileName: vaultItem.name,
+          userId: uid,
+        }));
+        return {downloadUrl: vaultItem.cachedDownloadUrl};
+      }
+    }
+
+    let signedUrl: string;
     const expiresInMinutes = 60; // 1 hour
     const expires = Date.now() + expiresInMinutes * 60 * 1000;
 
     try {
-      const [signedUrl] = await getStorage()
-        .bucket()
-        .file(finalStoragePath)
-        .getSignedUrl({
-          version: "v4",
-          action: "read",
-          expires,
+      // Generate new URL based on storage provider
+      if (vaultItem?.storageProvider === "r2" && vaultItem?.r2Bucket && vaultItem?.r2Key) {
+        // Use R2 for download
+        const storageAdapter = new StorageAdapter();
+        const result = await storageAdapter.generateDownloadUrl(
+          vaultItem.r2Key,
+          3600 // 1 hour
+        );
+        signedUrl = result.signedUrl;
+      } else {
+        // Use Firebase Storage
+        const finalStoragePath = vaultItem?.storagePath || storagePath;
+        const [url] = await getStorage()
+          .bucket()
+          .file(finalStoragePath)
+          .getSignedUrl({
+            version: "v4",
+            action: "read",
+            expires,
+          });
+        signedUrl = url;
+      }
+
+      // Update cached URL in Firestore (without triggering updatedAt)
+      if (vaultItem?.id) {
+        await db.collection("vaultItems").doc(vaultItem.id).update({
+          cachedDownloadUrl: signedUrl,
+          cachedDownloadUrlExpiry: Timestamp.fromMillis(expires),
         });
+      }
 
       // Create detailed audit log for file access
       await db.collection("vaultAuditLogs").add({
         itemId: vaultItem?.id,
-        storagePath: finalStoragePath,
+        storagePath: vaultItem?.storagePath || vaultItem?.r2Key,
         userId: uid,
         action: "download",
         timestamp: FieldValue.serverTimestamp(),
@@ -1391,13 +1899,23 @@ export const getVaultDownloadUrl = onCall(
           fileType: vaultItem?.fileType,
           accessLevel: vaultItem?.userId === uid ? "owner" : "shared",
           isEncrypted: vaultItem?.isEncrypted || false,
+          storageProvider: vaultItem?.storageProvider || "firebase",
         },
       });
 
-      logger.info(`Generated download URL for ${vaultItem?.name || "unknown"} for user ${uid}`);
+      logger.info("Generated download URL", createLogContext({
+        fileName: vaultItem?.name || "unknown",
+        userId: uid,
+        storageProvider: vaultItem?.storageProvider || "firebase",
+      }));
       return {downloadUrl: signedUrl};
     } catch (error) {
-      logger.error(`Error generating signed URL for storage path ${finalStoragePath}:`, error);
+      const {message, context} = formatErrorForLogging(error, {
+        fileName: vaultItem?.name,
+        userId: uid,
+        storageProvider: vaultItem?.storageProvider,
+      });
+      logger.error("Error generating signed URL", {message, ...context});
       throw createError(ErrorCode.INTERNAL, "Failed to generate download URL");
     }
   }, "getVaultDownloadUrl")
@@ -1418,7 +1936,14 @@ export const getVaultAuditLogs = onCall(
       throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
     }
 
-    const {limit = 100, startAfter = null} = request.data;
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getVaultAuditLogs,
+      uid
+    );
+
+    const {limit = 100, startAfter = null} = validatedData;
 
     const db = getFirestore();
     let query = db.collection("vaultAuditLogs")
@@ -1436,7 +1961,10 @@ export const getVaultAuditLogs = onCall(
       ...doc.data(),
     }));
 
-    logger.info(`Retrieved ${logs.length} audit logs for user ${uid}`);
+    logger.info("Retrieved audit logs", createLogContext({
+      logCount: logs.length,
+      userId: uid,
+    }));
     return {logs};
   }, "getVaultAuditLogs")
 );
@@ -1496,7 +2024,13 @@ export const getVaultStorageInfo = onCall(
     // Get user's storage quota (default 5GB for now)
     const quota = 5 * 1024 * 1024 * 1024; // 5GB in bytes
 
-    logger.info(`Retrieved storage info for user ${uid}: ${totalUsed} bytes used`);
+    logger.info("Retrieved storage info", createLogContext({
+      userId: uid,
+      totalUsed,
+      percentUsed: Math.round((totalUsed / quota) * 100),
+      fileCount,
+      folderCount,
+    }));
 
     return {
       totalUsed,

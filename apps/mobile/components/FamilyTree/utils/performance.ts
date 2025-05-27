@@ -65,7 +65,7 @@ class PerformanceMonitor {
   generateReport(): any {
     const report: any = {
       timestamp: Date.now(),
-      metrics: {},
+      metrics: Record<string, never>,
     };
 
     const grouped = this.metrics.reduce((acc, metric) => {

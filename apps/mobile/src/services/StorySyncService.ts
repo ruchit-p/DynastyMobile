@@ -1,6 +1,7 @@
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import { getErrorMessage } from '../lib/errorUtils';
 import { getFirebaseDb } from '../lib/firebase';
+import { logger } from './LoggingService';
 
 // Types
 export interface StoryBlock {
@@ -64,7 +65,7 @@ export class StorySyncService implements IStorySyncService {
   private mediaQueue: Map<string, MediaUploadItem> = new Map();
 
   private constructor() {
-    console.log('[StorySyncService] Initialized');
+    logger.debug('[StorySyncService] Initialized');
   }
 
   static getInstance(): StorySyncService {
@@ -75,7 +76,7 @@ export class StorySyncService implements IStorySyncService {
   }
 
   async syncStory(storyId: string): Promise<void> {
-    console.log(`[StorySyncService] Syncing story: ${storyId}`);
+    logger.debug(`[StorySyncService] Syncing story: ${storyId}`);
     
     try {
       // TODO: Implement story sync
@@ -91,7 +92,7 @@ export class StorySyncService implements IStorySyncService {
       
       if (storyDoc.exists) {
         const remoteStory = storyDoc.data() as Story;
-        console.log(`[StorySyncService] Remote story found:`, remoteStory);
+        logger.debug(`[StorySyncService] Remote story found:`, remoteStory);
         
         // TODO: Compare with local version
         // Check each block for changes
@@ -99,19 +100,19 @@ export class StorySyncService implements IStorySyncService {
         
         for (const block of remoteStory.blocks) {
           if (block.type !== 'text' && block.mediaUrl) {
-            console.log(`[StorySyncService] Found media block: ${block.id}`);
+            logger.debug(`[StorySyncService] Found media block: ${block.id}`);
             // TODO: Check if media is cached locally
           }
         }
       }
     } catch (error) {
-      console.error('[StorySyncService] Error syncing story:', getErrorMessage(error));
+      logger.error('[StorySyncService] Error syncing story:', getErrorMessage(error));
       throw error;
     }
   }
 
   async syncStoryMedia(storyId: string): Promise<void> {
-    console.log(`[StorySyncService] Syncing media for story: ${storyId}`);
+    logger.debug(`[StorySyncService] Syncing media for story: ${storyId}`);
     
     try {
       // TODO: Implement media sync
@@ -124,11 +125,11 @@ export class StorySyncService implements IStorySyncService {
       const pendingUploads = Array.from(this.mediaQueue.values())
         .filter(item => item.storyId === storyId && item.status === 'pending');
       
-      console.log(`[StorySyncService] Found ${pendingUploads.length} pending uploads`);
+      logger.debug(`[StorySyncService] Found ${pendingUploads.length} pending uploads`);
       
       for (const upload of pendingUploads) {
         // TODO: Process upload
-        console.log(`[StorySyncService] Would upload: ${upload.localUri}`);
+        logger.debug(`[StorySyncService] Would upload: ${upload.localUri}`);
         upload.status = 'uploading';
         upload.progress = 0;
         
@@ -136,14 +137,14 @@ export class StorySyncService implements IStorySyncService {
         // TODO: Replace with actual upload logic
       }
     } catch (error) {
-      console.error('[StorySyncService] Error syncing story media:', getErrorMessage(error));
+      logger.error('[StorySyncService] Error syncing story media:', getErrorMessage(error));
       throw error;
     }
   }
 
   async queueStoryCreation(story: Omit<Story, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     const storyId = `story_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.log(`[StorySyncService] Queueing story creation: ${storyId}`);
+    logger.debug(`[StorySyncService] Queueing story creation: ${storyId}`);
     
     try {
       // TODO: Implement story creation queue
@@ -184,13 +185,13 @@ export class StorySyncService implements IStorySyncService {
       
       return storyId;
     } catch (error) {
-      console.error('[StorySyncService] Error queueing story creation:', getErrorMessage(error));
+      logger.error('[StorySyncService] Error queueing story creation:', getErrorMessage(error));
       throw error;
     }
   }
 
   async queueStoryUpdate(storyId: string, updates: Partial<Story>): Promise<void> {
-    console.log(`[StorySyncService] Queueing story update: ${storyId}`, updates);
+    logger.debug(`[StorySyncService] Queueing story update: ${storyId}`, updates);
     
     try {
       // TODO: Implement update queue
@@ -214,13 +215,13 @@ export class StorySyncService implements IStorySyncService {
         });
       }
     } catch (error) {
-      console.error('[StorySyncService] Error queueing story update:', getErrorMessage(error));
+      logger.error('[StorySyncService] Error queueing story update:', getErrorMessage(error));
       throw error;
     }
   }
 
   async resolveStoryConflicts(conflict: StoryConflict): Promise<Story> {
-    console.log('[StorySyncService] Resolving story conflict:', conflict);
+    logger.debug('[StorySyncService] Resolving story conflict:', conflict);
     
     try {
       // TODO: Implement conflict resolution
@@ -235,13 +236,13 @@ export class StorySyncService implements IStorySyncService {
       switch (conflictType) {
         case 'content':
           // TODO: Implement block-level merging
-          console.log('[StorySyncService] Resolving content conflict');
+          logger.debug('[StorySyncService] Resolving content conflict');
           // For now, prefer remote version
           return remoteVersion;
           
         case 'media':
           // TODO: Check which media is actually available
-          console.log('[StorySyncService] Resolving media conflict');
+          logger.debug('[StorySyncService] Resolving media conflict');
           // Prefer remote URLs over local URIs
           return {
             ...localVersion,
@@ -256,7 +257,7 @@ export class StorySyncService implements IStorySyncService {
           
         case 'metadata':
           // TODO: Merge metadata fields
-          console.log('[StorySyncService] Resolving metadata conflict');
+          logger.debug('[StorySyncService] Resolving metadata conflict');
           return {
             ...remoteVersion,
             ...localVersion,
@@ -267,7 +268,7 @@ export class StorySyncService implements IStorySyncService {
           return remoteVersion;
       }
     } catch (error) {
-      console.error('[StorySyncService] Error resolving conflicts:', getErrorMessage(error));
+      logger.error('[StorySyncService] Error resolving conflicts:', getErrorMessage(error));
       throw error;
     }
   }
@@ -277,28 +278,28 @@ export class StorySyncService implements IStorySyncService {
   }
 
   async retryFailedMedia(storyId: string): Promise<void> {
-    console.log(`[StorySyncService] Retrying failed media for story: ${storyId}`);
+    logger.debug(`[StorySyncService] Retrying failed media for story: ${storyId}`);
     
     try {
       const failedItems = Array.from(this.mediaQueue.values())
         .filter(item => item.storyId === storyId && item.status === 'failed');
       
-      console.log(`[StorySyncService] Found ${failedItems.length} failed uploads`);
+      logger.debug(`[StorySyncService] Found ${failedItems.length} failed uploads`);
       
       for (const item of failedItems) {
         if (item.retryCount < 3) {
           item.status = 'pending';
           item.retryCount++;
-          console.log(`[StorySyncService] Retrying upload: ${item.id} (attempt ${item.retryCount})`);
+          logger.debug(`[StorySyncService] Retrying upload: ${item.id} (attempt ${item.retryCount})`);
         } else {
-          console.error(`[StorySyncService] Upload ${item.id} failed after 3 attempts`);
+          logger.error(`[StorySyncService] Upload ${item.id} failed after 3 attempts`);
           // TODO: Move to dead letter queue or notify user
         }
       }
       
       // TODO: Trigger media sync
     } catch (error) {
-      console.error('[StorySyncService] Error retrying failed media:', getErrorMessage(error));
+      logger.error('[StorySyncService] Error retrying failed media:', getErrorMessage(error));
       throw error;
     }
   }

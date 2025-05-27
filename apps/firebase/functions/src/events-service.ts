@@ -9,6 +9,11 @@ import {
   withErrorHandling,
   ErrorCode,
 } from "./utils/errors";
+import {withAuth} from "./middleware";
+import {SECURITY_CONFIG} from "./config/security-config";
+import {validateRequest} from "./utils/request-validator";
+import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
+import {validateLocation as validateLocationCoords} from "./utils/validation-extended";
 
 // Initialize Firebase Admin SDK if not already initialized
 if (admin.apps.length === 0) {
@@ -147,21 +152,6 @@ function validateTimezone(timezone: string): boolean {
   }
 }
 
-/**
- * Validates location coordinates.
- */
-function validateLocation(location: EventLocation): boolean {
-  return (
-    typeof location.lat === 'number' &&
-    typeof location.lng === 'number' &&
-    location.lat >= -90 &&
-    location.lat <= 90 &&
-    location.lng >= -180 &&
-    location.lng <= 180 &&
-    typeof location.address === "string" &&
-    location.address.trim().length > 0
-  );
-}
 
 /**
  * Optimized function to enrich events with user data using batch fetching.
@@ -189,7 +179,7 @@ async function enrichEventListOptimized(
       const hostSnapshot = await db.collection("users")
         .where(admin.firestore.FieldPath.documentId(), "in", batch)
         .get();
-      
+
       hostSnapshot.forEach((doc) => {
         const userData = doc.data();
         hostDataMap.set(doc.id, {
@@ -267,7 +257,7 @@ function organizeCommentsIntoThreads(comments: EventComment[]): ThreadedComment[
   const rootComments: ThreadedComment[] = [];
 
   // First pass: create ThreadedComment objects
-  comments.forEach(comment => {
+  comments.forEach((comment) => {
     const threadedComment: ThreadedComment = {
       ...comment,
       replies: [],
@@ -277,9 +267,9 @@ function organizeCommentsIntoThreads(comments: EventComment[]): ThreadedComment[
   });
 
   // Second pass: organize into threads
-  comments.forEach(comment => {
+  comments.forEach((comment) => {
     const threadedComment = commentMap.get(comment.id!)!;
-    
+
     if (comment.parentId) {
       const parent = commentMap.get(comment.parentId);
       if (parent) {
@@ -296,7 +286,7 @@ function organizeCommentsIntoThreads(comments: EventComment[]): ThreadedComment[
 
   // Sort replies by creation time
   const sortReplies = (comments: ThreadedComment[]) => {
-    comments.forEach(comment => {
+    comments.forEach((comment) => {
       if (comment.replies && comment.replies.length > 0) {
         comment.replies.sort((a, b) => {
           const aTime = a.createdAt?.toMillis() || 0;
@@ -474,25 +464,21 @@ export const createEvent = onCall(
     memory: DEFAULT_MEMORY.MEDIUM,
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
-    }
+  withAuth(async (request) => {
+    const uid = request.auth?.uid!;
 
-    const eventData = request.data as Omit<EventData, "id" | "createdAt" | "updatedAt" | "coverPhotoUrls" | "hostId">;
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.createEvent,
+      uid
+    );
 
-    // Enhanced validation
-    if (!eventData.title || !eventData.eventDate || !eventData.privacy) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "Title, event date, and privacy are required.");
-    }
+    const eventData = validatedData as Omit<EventData, "id" | "createdAt" | "updatedAt" | "coverPhotoUrls" | "hostId">;
 
-    // Validate title length
-    if (eventData.title.trim().length < 3 || eventData.title.trim().length > 100) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Event title must be between 3 and 100 characters.");
-    }
+    // Additional custom validations not covered by the schema
 
-    // Validate date format
+    // Validate date format (already validated as string in schema)
     if (!validateDateFormat(eventData.eventDate)) {
       throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid event date format. Use YYYY-MM-DD.");
     }
@@ -521,19 +507,17 @@ export const createEvent = onCall(
       throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid timezone format.");
     }
 
-    // Validate location
-    if (eventData.location && !validateLocation(eventData.location)) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid location data. Coordinates must be valid and address must not be empty.");
+    // Validate location using the extended validation
+    if (eventData.location) {
+      validateLocationCoords(eventData.location);
+      if (!eventData.location.address || eventData.location.address.trim().length === 0) {
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Location address must not be empty.");
+      }
     }
 
     // Validate virtual event requirements
     if (eventData.isVirtual && !eventData.virtualLink) {
       throw createError(ErrorCode.INVALID_ARGUMENT, "Virtual link is required for virtual events.");
-    }
-
-    // Validate privacy settings
-    if (!["public", "family_tree", "invite_only"].includes(eventData.privacy)) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid privacy setting.");
     }
 
     // Validate RSVP deadline
@@ -589,8 +573,63 @@ export const createEvent = onCall(
       updatedAt: Timestamp.now(),
     } as EventInvitation);
 
+    // Send SMS notifications to invited members
+    if (eventData.invitedMemberIds && eventData.invitedMemberIds.length > 0) {
+      try {
+        const {getTwilioService} = await import("./services/twilioService");
+        const twilioService = getTwilioService();
+        
+        // Get invited users' details
+        const invitedUsersSnapshot = await db.collection("users")
+          .where("__name__", "in", eventData.invitedMemberIds)
+          .get();
+        
+        // Get host details
+        const hostDoc = await db.collection("users").doc(uid).get();
+        const hostData = hostDoc.data();
+        const hostName = hostData?.displayName || `${hostData?.firstName} ${hostData?.lastName}` || "Someone";
+        
+        // Send SMS to each invited user who has SMS enabled
+        const smsPromises = invitedUsersSnapshot.docs.map(async (userDoc) => {
+          const userData = userDoc.data();
+          if (userData.phoneNumber && userData.smsPreferences?.enabled && userData.smsPreferences?.eventInvites) {
+            try {
+              const eventDate = new Date(eventData.eventDate);
+              const dateString = eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              const eventLink = `https://mydynastyapp.com/events/${newEventId}`;
+              
+              await twilioService.sendSms(
+                {
+                  to: userData.phoneNumber,
+                  body: `${hostName} invited you to "${eventData.title}" on ${dateString}. RSVP here: ${eventLink}`
+                },
+                uid,
+                'event_invite',
+                {
+                  eventId: newEventId,
+                  inviteeId: userDoc.id
+                }
+              );
+              logger.info(`Sent event invitation SMS to user ${userDoc.id}`);
+            } catch (smsError) {
+              logger.error(`Failed to send SMS to user ${userDoc.id}:`, smsError);
+            }
+          }
+        });
+        
+        await Promise.allSettled(smsPromises);
+      } catch (error) {
+        // Log error but don't fail the event creation
+        logger.error("Failed to send event invitation SMS notifications:", error);
+      }
+    }
+
     return {eventId: newEventId, eventData: finalEventData};
-  }, "createEvent"),
+  }, "createEvent", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  }),
 );
 
 export const getEventDetails = onCall(
@@ -661,21 +700,54 @@ export const updateEvent = onCall(
     memory: DEFAULT_MEMORY.MEDIUM,
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
-    }
+  withAuth(async (request) => {
+    const uid = request.auth?.uid!;
 
-    const {eventId, ...updates} = request.data as Partial<EventData> & {eventId: string};
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.updateEvent,
+      uid
+    );
 
-    if (!eventId) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, "Event ID is required for updates.");
-    }
+    const {eventId, ...updates} = validatedData as Partial<EventData> & {eventId: string};
 
     await ensureEventAccess(eventId, uid, "edit"); // Ensures user is host
 
+    // Additional custom validations for updates
+    if (updates.eventDate && !validateDateFormat(updates.eventDate)) {
+      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid event date format. Use YYYY-MM-DD.");
+    }
+
+    if (updates.endDate && !validateDateFormat(updates.endDate)) {
+      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid end date format. Use YYYY-MM-DD.");
+    }
+
+    if (updates.startTime && !validateTimeFormat(updates.startTime)) {
+      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid start time format. Use HH:mm.");
+    }
+
+    if (updates.endTime && !validateTimeFormat(updates.endTime)) {
+      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid end time format. Use HH:mm.");
+    }
+
+    if (updates.timezone && !validateTimezone(updates.timezone)) {
+      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid timezone format.");
+    }
+
+    if (updates.location) {
+      validateLocationCoords(updates.location);
+      if (!updates.location.address || updates.location.address.trim().length === 0) {
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Location address must not be empty.");
+      }
+    }
+
     const eventRef = db.collection("events").doc(eventId);
+    
+    // Get current event data to compare changes
+    const currentEventDoc = await eventRef.get();
+    const currentEventData = currentEventDoc.data() as EventData;
+    
     const updatePayload: Partial<EventData> = {
       ...updates,
       updatedAt: Timestamp.now(),
@@ -686,8 +758,92 @@ export const updateEvent = onCall(
 
     await eventRef.update(updatePayload);
     logger.info(`Event ${eventId} updated by ${uid}.`, {updates: Object.keys(updates)});
+    
+    // Send SMS notifications for significant changes
+    const significantChanges = ['eventDate', 'startTime', 'location', 'isVirtual'];
+    const hasSignificantChange = significantChanges.some(field => 
+      updates[field as keyof EventData] !== undefined && 
+      updates[field as keyof EventData] !== currentEventData[field as keyof EventData]
+    );
+    
+    if (hasSignificantChange) {
+      try {
+        const {getTwilioService} = await import("./services/twilioService");
+        const twilioService = getTwilioService();
+        
+        // Get all RSVPed users
+        const rsvpsSnapshot = await db.collection("events").doc(eventId)
+          .collection("rsvps")
+          .where("status", "in", ["accepted", "maybe"])
+          .get();
+        
+        if (!rsvpsSnapshot.empty) {
+          const userIds = rsvpsSnapshot.docs.map(doc => doc.data().userId);
+          
+          // Get users with SMS enabled
+          const usersSnapshot = await db.collection("users")
+            .where("__name__", "in", userIds)
+            .get();
+          
+          // Build change summary
+          let changeText = "Event updated: ";
+          const changes: string[] = [];
+          
+          if (updates.eventDate && updates.eventDate !== currentEventData.eventDate) {
+            const newDate = new Date(updates.eventDate);
+            changes.push(`new date ${newDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`);
+          }
+          if (updates.startTime && updates.startTime !== currentEventData.startTime) {
+            changes.push(`new time ${updates.startTime}`);
+          }
+          if (updates.location && updates.location.address !== currentEventData.location?.address) {
+            changes.push("location changed");
+          }
+          if (updates.isVirtual !== undefined && updates.isVirtual !== currentEventData.isVirtual) {
+            changes.push(updates.isVirtual ? "now virtual" : "now in-person");
+          }
+          
+          changeText += changes.join(", ");
+          const eventLink = `https://mydynastyapp.com/events/${eventId}`;
+          
+          // Send SMS to each user with SMS enabled
+          const smsPromises = usersSnapshot.docs.map(async (userDoc) => {
+            const userData = userDoc.data();
+            if (userData.phoneNumber && userData.smsPreferences?.enabled && userData.smsPreferences?.eventUpdates) {
+              try {
+                await twilioService.sendSms(
+                  {
+                    to: userData.phoneNumber,
+                    body: `"${currentEventData.title}" - ${changeText}. Details: ${eventLink}`
+                  },
+                  uid,
+                  'event_update',
+                  {
+                    eventId: eventId,
+                    recipientId: userDoc.id
+                  }
+                );
+                logger.info(`Sent event update SMS to user ${userDoc.id}`);
+              } catch (smsError) {
+                logger.error(`Failed to send SMS to user ${userDoc.id}:`, smsError);
+              }
+            }
+          });
+          
+          await Promise.allSettled(smsPromises);
+        }
+      } catch (error) {
+        // Log error but don't fail the update
+        logger.error("Failed to send event update SMS notifications:", error);
+      }
+    }
+    
     return {success: true, eventId};
-  }, "updateEvent"),
+  }, "updateEvent", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  }),
 );
 
 export const deleteEvent = onCall(
@@ -696,11 +852,8 @@ export const deleteEvent = onCall(
     memory: DEFAULT_MEMORY.MEDIUM,
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
-    }
+  withAuth(async (request) => {
+    const uid = request.auth?.uid!;
     const {eventId} = request.data;
     if (!eventId || typeof eventId !== "string") {
       throw createError(ErrorCode.MISSING_PARAMETERS, "Event ID is required.");
@@ -740,7 +893,11 @@ export const deleteEvent = onCall(
     logger.info(`Event document ${eventId} successfully deleted by ${uid}.`);
 
     return {success: true, eventId};
-  }, "deleteEvent"),
+  }, "deleteEvent", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
+  }),
 );
 
 // MARK: - RSVP and Attendance Functions
@@ -751,11 +908,8 @@ export const rsvpToEvent = onCall(
     memory: DEFAULT_MEMORY.SHORT,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
-    }
+  withAuth(async (request) => {
+    const uid = request.auth?.uid!;
 
     const {eventId, status, plusOne, plusOneName} = request.data as {
       eventId: string;
@@ -817,8 +971,59 @@ export const rsvpToEvent = onCall(
     await rsvpRef.set(rsvpData, {merge: true});
     logger.info(`User ${uid} RSVPed to event ${eventId} with status: ${status}. Plus one: ${rsvpData.plusOne}`);
 
+    // Send SMS confirmation if user has SMS enabled
+    if (status === "accepted" || status === "declined") {
+      try {
+        const userDoc = await db.collection("users").doc(uid).get();
+        const userData = userDoc.data();
+        
+        if (userData?.phoneNumber && userData?.smsPreferences?.enabled && userData?.smsPreferences?.rsvpConfirmations) {
+          const {getTwilioService} = await import("./services/twilioService");
+          const twilioService = getTwilioService();
+          
+          const eventDate = new Date(eventData.eventDate);
+          const dateString = eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          
+          let smsBody = "";
+          if (status === "accepted") {
+            smsBody = `You're confirmed for "${eventData.title}" on ${dateString}`;
+            if (eventData.startTime) {
+              smsBody += ` at ${eventData.startTime}`;
+            }
+            if (plusOne) {
+              smsBody += ` (+1 guest)`;
+            }
+            smsBody += ". See you there!";
+          } else {
+            smsBody = `You've declined "${eventData.title}" on ${dateString}. We'll miss you!`;
+          }
+          
+          await twilioService.sendSms(
+            {
+              to: userData.phoneNumber,
+              body: smsBody
+            },
+            uid,
+            'rsvp_confirmation',
+            {
+              eventId: eventId,
+              rsvpStatus: status
+            }
+          );
+          logger.info(`Sent RSVP confirmation SMS to user ${uid}`);
+        }
+      } catch (smsError) {
+        // Log error but don't fail the RSVP
+        logger.error(`Failed to send RSVP confirmation SMS to user ${uid}:`, smsError);
+      }
+    }
+
     return {success: true, eventId, rsvpStatus: status, plusOne: rsvpData.plusOne};
-  }, "rsvpToEvent"),
+  }, "rsvpToEvent", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  }),
 );
 
 export const getEventAttendees = onCall(
@@ -885,11 +1090,8 @@ export const addCommentToEvent = onCall(
     memory: DEFAULT_MEMORY.SHORT,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
-    }
+  withAuth(async (request) => {
+    const uid = request.auth?.uid!;
 
     const {eventId, text, parentId} = request.data as {
       eventId: string;
@@ -928,7 +1130,11 @@ export const addCommentToEvent = onCall(
     // Optionally, could update a commentsCount on the event document itself using a transaction or FieldValue.increment(1)
 
     return {success: true, commentId, comment: newComment};
-  }, "addCommentToEvent"),
+  }, "addCommentToEvent", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  }),
 );
 
 export const getEventComments = onCall(
@@ -942,7 +1148,7 @@ export const getEventComments = onCall(
     if (!uid) {
       throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
-    
+
     const {
       eventId,
       limit = 50,
@@ -1021,11 +1227,8 @@ export const deleteEventComment = onCall(
     memory: DEFAULT_MEMORY.SHORT,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
-    }
+  withAuth(async (request) => {
+    const uid = request.auth?.uid!;
     const {eventId, commentId} = request.data;
     if (!eventId || typeof eventId !== "string" || !commentId || typeof commentId !== "string") {
       throw createError(ErrorCode.MISSING_PARAMETERS, "Event ID and Comment ID are required.");
@@ -1063,62 +1266,19 @@ export const deleteEventComment = onCall(
     // You may want to implement this based on your event comment counting strategy
 
     return {success: true, eventId, commentId, totalDeleted};
-  }, "deleteEventComment"),
+  }, "deleteEventComment", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
+  }),
 );
 
 // MARK: - Event Listing Functions
 
 const PAGINATION_LIMIT = 20;
 
-/**
- * Enriches a list of EventData objects with additional details.
- */
-async function enrichEventList(
-  events: EventData[],
-  uid: string,
-): Promise<EnrichedEventData[]> {
-  const enrichedEvents: EnrichedEventData[] = [];
-
-  for (const event of events) {
-    // Ensure event.id is present, as it's crucial for some enrichment steps
-    if (!event.id) {
-      logger.warn("enrichEventList: Skipping event due to missing ID", event);
-      continue;
-    }
-    const enrichedEvent: EnrichedEventData = {...event, isHost: event.hostId === uid};
-
-    // Generate cover photo URLs
-    if (event.coverPhotoStoragePaths && event.coverPhotoStoragePaths.length > 0) {
-      enrichedEvent.coverPhotoUrls = await generateSignedUrlsForPaths(event.coverPhotoStoragePaths);
-    }
-
-    // Get host details
-    try {
-      const hostDoc = await db.collection("users").doc(event.hostId).get();
-      if (hostDoc.exists) {
-        const hostUserData = hostDoc.data();
-        enrichedEvent.hostName = hostUserData?.displayName || `${hostUserData?.firstName} ${hostUserData?.lastName}`.trim() || "Unknown Host";
-        enrichedEvent.hostProfilePicture = hostUserData?.profilePictureUrl;
-      }
-    } catch (err) {
-      logger.warn("Could not fetch host details for event", event.id);
-    }
-
-    // Get user's RSVP status
-    try {
-      const rsvpDoc = await db.collection("events").doc(event.id).collection("rsvps").doc(uid).get();
-      if (rsvpDoc.exists) {
-        const rsvpData = rsvpDoc.data() as EventInvitation;
-        enrichedEvent.userRsvpStatus = rsvpData.status;
-        enrichedEvent.userHasPlusOne = rsvpData.plusOne;
-      }
-    } catch (err) {
-      logger.warn("Could not fetch RSVP status for user on event", event.id);
-    }
-    enrichedEvents.push(enrichedEvent);
-  }
-  return enrichedEvents;
-}
+// Note: enrichEventList function has been removed in favor of enrichEventListOptimized
+// which provides better performance through batch fetching
 
 /**
  * Fetches raw event documents based on a query, limit, and optional cursor values.
@@ -1437,9 +1597,9 @@ export const getHostedEvents = onCall(
       lastEventId,
       includeUpcoming = true,
       includePast = true,
-    } = request.data as { 
-      limit?: number; 
-      lastEventDate?: string; 
+    } = request.data as {
+      limit?: number;
+      lastEventDate?: string;
       lastEventId?: string;
       includeUpcoming?: boolean;
       includePast?: boolean;
@@ -1633,7 +1793,7 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   const R = 6371; // Earth's radius in kilometers
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = 
+  const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
     Math.sin(dLng / 2) * Math.sin(dLng / 2);
@@ -1649,11 +1809,8 @@ export const sendEventInvitations = onCall(
     memory: DEFAULT_MEMORY.MEDIUM,
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
-    }
+  withAuth(async (request) => {
+    const uid = request.auth?.uid!;
 
     const {eventId, userIds, message} = request.data as {
       eventId: string;
@@ -1750,7 +1907,11 @@ export const sendEventInvitations = onCall(
       alreadyInvited: existingInvitations.size,
       message: message || `You've been invited to ${eventData.title}`,
     };
-  }, "sendEventInvitations"),
+  }, "sendEventInvitations", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  }),
 );
 
 export const getEventInvitations = onCall(
@@ -1887,11 +2048,8 @@ export const respondToInvitation = onCall(
     memory: DEFAULT_MEMORY.SHORT,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
-    }
+  withAuth(async (request) => {
+    const uid = request.auth?.uid!;
 
     const {eventId, status, plusOne, plusOneName} = request.data as {
       eventId: string;
@@ -1955,7 +2113,11 @@ export const respondToInvitation = onCall(
       plusOne: updateData.plusOne,
       plusOneName: updateData.plusOneName,
     };
-  }, "respondToInvitation"),
+  }, "respondToInvitation", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  }),
 );
 
 // MARK: - Web API Functions
@@ -1976,7 +2138,7 @@ export const getEventsApi = onCall(
       throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
 
-    const { limit = 100 } = request.data as { limit?: number };
+    const {limit = 100} = request.data as { limit?: number };
 
     const userDoc = await db.collection("users").doc(uid).get();
     const userData = userDoc.data();
@@ -2009,7 +2171,7 @@ export const getEventsApi = onCall(
         const snapshot = await baseQuery.limit(limit).get();
         const events = snapshot.docs.map((doc) => ({
           id: doc.id,
-          ...doc.data()
+          ...doc.data(),
         } as EventData));
         allRawEvents.push(...events);
       } catch (queryError) {
@@ -2027,20 +2189,20 @@ export const getEventsApi = onCall(
     });
 
     const uniqueEvents = Array.from(uniqueEventsMap.values());
-    
+
     // Sort by event date (upcoming first, then past)
     uniqueEvents.sort((a, b) => {
       const dateA = new Date(a.eventDate).getTime();
       const dateB = new Date(b.eventDate).getTime();
       return dateB - dateA; // Most recent first
     });
-    
+
     // Enrich events with host details and RSVP status
     const enrichedEvents = await enrichEventListOptimized(uniqueEvents, uid);
 
     logger.info(`Returning ${enrichedEvents.length} events for user ${uid}`);
 
-    return { events: enrichedEvents };
+    return {events: enrichedEvents};
   }, "getEventsApi"),
 );
 
@@ -2060,15 +2222,12 @@ export const updateEventRsvpApi = onCall(
     memory: DEFAULT_MEMORY.SHORT,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
-    }
+  withAuth(async (request) => {
+    const uid = request.auth?.uid!;
 
-    const { eventId, status } = request.data as {
+    const {eventId, status} = request.data as {
       eventId: string;
-      status: 'yes' | 'maybe' | 'no';
+      status: "yes" | "maybe" | "no";
     };
 
     if (!eventId || !status) {
@@ -2076,7 +2235,7 @@ export const updateEventRsvpApi = onCall(
     }
 
     // Map web status to internal status
-    const mappedStatus = status === 'yes' ? 'accepted' : status === 'no' ? 'declined' : 'maybe';
+    const mappedStatus = status === "yes" ? "accepted" : status === "no" ? "declined" : "maybe";
 
     // Reuse the logic from rsvpToEvent
     const eventData = await ensureEventAccess(eventId, uid, "view");
@@ -2118,8 +2277,12 @@ export const updateEventRsvpApi = onCall(
     await rsvpRef.set(rsvpData, {merge: true});
     logger.info(`User ${uid} RSVPed to event ${eventId} with status: ${mappedStatus}`);
 
-    return { success: true };
-  }, "updateEventRsvpApi"),
+    return {success: true};
+  }, "updateEventRsvpApi", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  }),
 );
 
 /**
@@ -2144,7 +2307,7 @@ export const getEventsForFeedApi = onCall(
       throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
 
-    const { userId, familyTreeId } = request.data as { userId: string; familyTreeId: string };
+    const {userId, familyTreeId} = request.data as { userId: string; familyTreeId: string };
 
     if (!userId || !familyTreeId) {
       throw createError(ErrorCode.MISSING_PARAMETERS, "User ID and family tree ID are required.");
@@ -2178,7 +2341,7 @@ export const getEventsForFeedApi = onCall(
         const snapshot = await baseQuery.limit(fetchLimit).get();
         const events = snapshot.docs.map((doc) => ({
           id: doc.id,
-          ...doc.data()
+          ...doc.data(),
         } as EventData));
         allRawEvents.push(...events);
       } catch (queryError) {
@@ -2195,23 +2358,23 @@ export const getEventsForFeedApi = onCall(
     });
 
     const uniqueEvents = Array.from(uniqueEventsMap.values());
-    
+
     // Sort by event date (soonest first)
     uniqueEvents.sort((a, b) => {
       const dateA = new Date(a.eventDate).getTime();
       const dateB = new Date(b.eventDate).getTime();
       return dateA - dateB; // Soonest first for feed
     });
-    
+
     // Take only the first 10 events for the feed
     const feedEvents = uniqueEvents.slice(0, 10);
-    
+
     // Enrich events with host details and RSVP status
     const enrichedEvents = await enrichEventListOptimized(feedEvents, userId);
 
     logger.info(`Returning ${enrichedEvents.length} events for feed`);
 
-    return { events: enrichedEvents };
+    return {events: enrichedEvents};
   }, "getEventsForFeedApi"),
 );
 
@@ -2269,11 +2432,8 @@ export const completeEventCoverPhotoUpload = onCall(
     memory: DEFAULT_MEMORY.SHORT,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
-    }
+  withAuth(async (request) => {
+    const uid = request.auth?.uid!;
 
     const {eventId, storagePath} = request.data as {
       eventId: string;
@@ -2296,5 +2456,9 @@ export const completeEventCoverPhotoUpload = onCall(
 
     logger.info(`Cover photo ${storagePath} added to event ${eventId} by user ${uid}.`);
     return {success: true, eventId, storagePath};
-  }, "completeEventCoverPhotoUpload"),
+  }, "completeEventCoverPhotoUpload", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  }),
 );

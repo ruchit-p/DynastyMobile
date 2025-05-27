@@ -1,11 +1,11 @@
 import { randomBytes, createCipheriv, createDecipheriv, createHash } from 'react-native-quick-crypto';
 import { Buffer } from '@craftzdog/react-native-buffer';
-import { getFirebaseDb, getFirebaseStorage } from '../../lib/firebase';
+import { getFirebaseDb } from '../../lib/firebase';
 import { callFirebaseFunction } from '../../lib/errorUtils';
-import MediaEncryptionService from './MediaEncryptionService';
-import E2EEService from './E2EEService';
-import AuditLogService from './AuditLogService';
+import { getFirebaseAuth } from '../../lib/firebase';
+import { AuditLogService } from './AuditLogService';
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import { logger } from '../LoggingService';
 
 interface ShareLink {
   id: string;
@@ -106,10 +106,12 @@ export class SecureFileSharingService {
       );
 
       // Get current user
-      const currentUser = await E2EEService.getCurrentUserId();
-      if (!currentUser) {
+      const auth = getFirebaseAuth();
+      const user = auth.currentUser;
+      if (!user) {
         throw new Error('User not authenticated');
       }
+      const currentUser = user.uid;
 
       // Create share link document
       const shareLink: ShareLink = {
@@ -150,7 +152,7 @@ export class SecureFileSharingService {
 
       return { shareId, shareUrl, password: sharePassword };
     } catch (error) {
-      console.error('Failed to create share link:', error);
+      logger.error('Failed to create share link:', error);
       throw error;
     }
   }
@@ -209,7 +211,7 @@ export class SecureFileSharingService {
         metadata: shareLink.metadata
       };
     } catch (error) {
-      console.error('Failed to access shared file:', error);
+      logger.error('Failed to access shared file:', error);
       
       // Log failed access attempt
       await this.logShareEvent(shareId, 'access_failed', {
@@ -298,7 +300,7 @@ export class SecureFileSharingService {
         revokedBy: userId
       });
     } catch (error) {
-      console.error('Failed to revoke share link:', error);
+      logger.error('Failed to revoke share link:', error);
       throw error;
     }
   }
@@ -325,7 +327,7 @@ export class SecureFileSharingService {
       const now = Date.now();
       return shareLinks.filter(link => link.expiresAt > now);
     } catch (error) {
-      console.error('Failed to get user share links:', error);
+      logger.error('Failed to get user share links:', error);
       throw error;
     }
   }
@@ -383,7 +385,7 @@ export class SecureFileSharingService {
       // Log update
       await this.logShareEvent(shareId, 'updated', updates);
     } catch (error) {
-      console.error('Failed to update share link:', error);
+      logger.error('Failed to update share link:', error);
       throw error;
     }
   }
@@ -416,7 +418,7 @@ export class SecureFileSharingService {
    */
   private async hashPassword(password: string): Promise<string> {
     const salt = randomBytes(16);
-    const iterations = 100000;
+    const iterations = 210000; // Updated to OWASP 2024 recommendation
     const keyLength = 32;
     
     // Use PBKDF2 for password hashing
@@ -508,7 +510,7 @@ export class SecureFileSharingService {
       }
       return null;
     } catch (error) {
-      console.error('Failed to get user email:', error);
+      logger.error('Failed to get user email:', error);
       return null;
     }
   }
@@ -568,7 +570,7 @@ export class SecureFileSharingService {
         }
       );
     } catch (error) {
-      console.error('Failed to log share event:', error);
+      logger.error('Failed to log share event:', error);
     }
   }
 
@@ -597,9 +599,9 @@ export class SecureFileSharingService {
 
       await batch.commit();
       
-      console.log(`Cleaned up ${snapshot.size} expired share links`);
+      logger.debug(`Cleaned up ${snapshot.size} expired share links`);
     } catch (error) {
-      console.error('Failed to cleanup expired shares:', error);
+      logger.error('Failed to cleanup expired shares:', error);
     }
   }
 
@@ -648,7 +650,7 @@ export class SecureFileSharingService {
         expiringToday
       };
     } catch (error) {
-      console.error('Failed to get share statistics:', error);
+      logger.error('Failed to get share statistics:', error);
       throw error;
     }
   }

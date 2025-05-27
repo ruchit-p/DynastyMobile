@@ -13,6 +13,11 @@
       "bundleIdentifier": "com.mydynastyapp.dynasty",
       "googleServicesFile": "./GoogleService-Info.plist",
       "useFrameworks": "static",
+      "buildNumber": "1",
+      "associatedDomains": [
+        "applinks:mydynastyapp.com",
+        "applinks:www.mydynastyapp.com"
+      ],
       "infoPlist": {
         "NSCameraUsageDescription": "Dynasty needs access to your camera to capture photos and videos for your family stories and events.",
         "NSPhotoLibraryUsageDescription": "Dynasty needs access to your photo library to select photos and videos for your family stories and events.",
@@ -21,7 +26,10 @@
         "NSContactsUsageDescription": "Dynasty needs access to your contacts to help you find and invite family members to join your family tree.",
         "NSFaceIDUsageDescription": "Dynasty uses Face ID to securely authenticate you and protect your family's private content.",
         "NSLocationWhenInUseUsageDescription": "Dynasty needs your location to tag where family events and stories took place.",
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": [
+          "remote-notification",
+          "audio"
+        ]
       }
     },
     "android": {
@@ -30,7 +38,38 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.mydynastyapp.dynasty",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "versionCode": 1,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "mydynastyapp.com",
+              "pathPrefix": "/"
+            },
+            {
+              "scheme": "https",
+              "host": "www.mydynastyapp.com",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -49,8 +88,15 @@
       ],
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
-      "@react-native-firebase/messaging",
+      "@react-native-firebase/crashlytics",
+      "@react-native-google-signin/google-signin",
       "./plugins/withFirebaseAuthFix.js",
+      [
+        "expo-video",
+        {
+          "supportsPictureInPicture": true
+        }
+      ],
       [
         "expo-location",
         {
@@ -81,14 +127,18 @@
           }
         }
       ],
-      "expo-background-task"
+      "expo-background-task",
+      [
+        "react-native-libsodium",
+        {}
+      ]
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "2a7efbb3-1b39-40e0-ae26-393387816d0e"
       }
     }
   }

@@ -1,6 +1,7 @@
 import { getFirebaseDb, getFirebaseAuth } from '../lib/firebase';
 import { callFirebaseFunction } from '../lib/errorUtils';
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import { logger } from './LoggingService';
 
 interface TypingUser {
   userId: string;
@@ -50,7 +51,7 @@ export class TypingService {
 
       this.typingTimeouts.set(chatId, timeout);
     } catch (error) {
-      console.error('Failed to start typing:', error);
+      logger.error('Failed to start typing:', error);
     }
   }
 
@@ -75,7 +76,7 @@ export class TypingService {
         isTyping: false,
       });
     } catch (error) {
-      console.error('Failed to stop typing:', error);
+      logger.error('Failed to stop typing:', error);
     }
   }
 
@@ -120,7 +121,7 @@ export class TypingService {
           onTypingUsersChange(typingUsers);
         },
         (error) => {
-          console.error('Error subscribing to typing indicators:', error);
+          logger.error('Error subscribing to typing indicators:', error);
         }
       );
 
@@ -131,7 +132,7 @@ export class TypingService {
         this.activeListeners.delete(chatId);
       };
     } catch (error) {
-      console.error('Failed to subscribe to typing indicators:', error);
+      logger.error('Failed to subscribe to typing indicators:', error);
       return () => {};
     }
   }
@@ -165,7 +166,7 @@ export class TypingService {
 
       return await Promise.all(userPromises);
     } catch (error) {
-      console.error('Failed to get typing user names:', error);
+      logger.error('Failed to get typing user names:', error);
       return userIds.map(() => 'Someone');
     }
   }

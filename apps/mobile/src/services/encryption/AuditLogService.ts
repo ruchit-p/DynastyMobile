@@ -1,10 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirebaseDb, getFirebaseAuth } from '../../lib/firebase';
 import { callFirebaseFunction } from '../../lib/errorUtils';
-import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+// import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import { createHash } from 'react-native-quick-crypto';
-import { Buffer } from '@craftzdog/react-native-buffer';
+// import { Buffer } from '@craftzdog/react-native-buffer';
 import NetInfo from '@react-native-community/netinfo';
+import { logger } from '../LoggingService';
 
 export enum AuditEventType {
   // Authentication Events
@@ -210,7 +211,7 @@ export class AuditLogService {
         await this.notifyCriticalEvent(event);
       }
     } catch (error) {
-      console.error('Failed to log audit event:', error);
+      logger.error('Failed to log audit event:', error);
       // Don't throw - audit logging should not break app functionality
     }
   }
@@ -281,13 +282,13 @@ export class AuditLogService {
         if (this.verifyEventIntegrity(event)) {
           events.push(event);
         } else {
-          console.warn('Audit event integrity check failed:', event.id);
+          logger.warn('Audit event integrity check failed:', event.id);
         }
       });
 
       return events;
     } catch (error) {
-      console.error('Failed to query audit logs:', error);
+      logger.error('Failed to query audit logs:', error);
       throw error;
     }
   }
@@ -311,8 +312,8 @@ export class AuditLogService {
       
       const stats: AuditStatistics = {
         totalEvents: 0,
-        eventsByType: {},
-        eventsBySeverity: {},
+        eventsByType: Record<string, never>,
+        eventsBySeverity: Record<string, never>,
         failedAttempts: 0,
         suspiciousActivities: 0,
         recentAlerts: []
@@ -354,7 +355,7 @@ export class AuditLogService {
 
       return stats;
     } catch (error) {
-      console.error('Failed to get audit statistics:', error);
+      logger.error('Failed to get audit statistics:', error);
       throw error;
     }
   }
@@ -396,7 +397,7 @@ export class AuditLogService {
         return csv;
       }
     } catch (error) {
-      console.error('Failed to export audit logs:', error);
+      logger.error('Failed to export audit logs:', error);
       throw error;
     }
   }
@@ -465,7 +466,7 @@ export class AuditLogService {
         this.localQueue = JSON.parse(queueData);
       }
     } catch (error) {
-      console.error('Failed to load queued audit events:', error);
+      logger.error('Failed to load queued audit events:', error);
     }
   }
 
@@ -479,7 +480,7 @@ export class AuditLogService {
         JSON.stringify(this.localQueue)
       );
     } catch (error) {
-      console.error('Failed to save queued audit events:', error);
+      logger.error('Failed to save queued audit events:', error);
     }
   }
 
@@ -508,7 +509,7 @@ export class AuditLogService {
         
         await firestoreBatch.commit();
       } catch (error) {
-        console.error('Failed to flush audit events batch:', error);
+        logger.error('Failed to flush audit events batch:', error);
         // Re-queue failed events
         this.localQueue.push(...batch);
         await this.saveQueuedEvents();
@@ -526,7 +527,7 @@ export class AuditLogService {
         timestamp: Date.now()
       });
     } catch (error) {
-      console.error('Failed to notify critical event:', error);
+      logger.error('Failed to notify critical event:', error);
     }
   }
 
@@ -544,7 +545,7 @@ export class AuditLogService {
       
       return deviceId;
     } catch (error) {
-      console.error('Failed to get device ID:', error);
+      logger.error('Failed to get device ID:', error);
       return 'unknown';
     }
   }
@@ -608,7 +609,7 @@ export class AuditLogService {
 
       return { isSuspicious, reasons };
     } catch (error) {
-      console.error('Failed to monitor suspicious activity:', error);
+      logger.error('Failed to monitor suspicious activity:', error);
       return { isSuspicious: false, reasons: [] };
     }
   }
@@ -634,9 +635,9 @@ export class AuditLogService {
 
       await batch.commit();
       
-      console.log(`Cleaned up ${snapshot.size} old audit logs`);
+      logger.debug(`Cleaned up ${snapshot.size} old audit logs`);
     } catch (error) {
-      console.error('Failed to cleanup old logs:', error);
+      logger.error('Failed to cleanup old logs:', error);
     }
   }
 }

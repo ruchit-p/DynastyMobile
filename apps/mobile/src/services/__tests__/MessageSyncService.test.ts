@@ -1,7 +1,7 @@
-import MessageSyncService from '../MessageSyncService';
-import SyncDatabase from '../../database/SyncDatabase';
+import { MessageSyncService } from '../MessageSyncService';
+import { SyncDatabase } from '../../database/SyncDatabase';
 import { getFirebaseDb, getFirebaseAuth } from '../../lib/firebase';
-import ChatEncryptionService from '../encryption/ChatEncryptionService';
+import { ChatEncryptionService } from '../encryption/ChatEncryptionService';
 import NetInfo from '@react-native-community/netinfo';
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 

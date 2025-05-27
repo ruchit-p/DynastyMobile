@@ -3,29 +3,33 @@ import {
   StyleSheet,
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   SafeAreaView,
   Platform,
   Image,
-  Alert,
   ActivityIndicator
 } from 'react-native';
 import { useRouter, Link, Stack } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons'; // For Google icon
+import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { useAuth } from '../../src/contexts/AuthContext'; // Updated path
-import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- Add this import
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { useAuth } from '../../src/contexts/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { z } from 'zod';
+import { loginFormSchema, formatValidationErrors } from '../../src/lib/validation';
+import { ValidatedInput } from '../../components/ui/ValidatedInput';
+import { useSanitizedInput } from '../../src/hooks/useSanitizedInput';
+import { AppleSignInButton, useAppleSignInAvailable } from '../../components/ui/AppleSignInButton';
+import { logger } from '../../src/services/LoggingService';
 
 // Import design system constants
 import { Colors } from '../../constants/Colors';
-import Typography from '../../constants/Typography';
+import { Typography } from '../../constants/Typography';
 import { Spacing, BorderRadius } from '../../constants/Spacing';
 
-const dynastyLogo = require('../../assets/images/dynasty.png'); // Adjust path if logo moves
+const dynastyLogo = require('../../assets/images/dynasty.png');
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -35,11 +39,16 @@ export default function SignInScreen() {
     title: 'Sign In Error',
     trackCurrentScreen: true
   });
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  
+  // Use sanitized input hooks
+  const emailInput = useSanitizedInput('', 'email');
+  const passwordInput = useSanitizedInput('', 'password');
+  
   const [error, setError] = useState<string | null>(null);
-  const [googleLoading, setGoogleLoading] = useState(false); // Separate loading for Google
-  const insets = useSafeAreaInsets(); // <-- Get safe area insets
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const insets = useSafeAreaInsets();
+  const isAppleSignInAvailable = useAppleSignInAvailable();
 
   useEffect(() => {
     if (!isError) {
@@ -47,15 +56,53 @@ export default function SignInScreen() {
     }
   }, [isError]);
 
+  // Monitor XSS detection
+  useEffect(() => {
+    const xssErrors = [
+      emailInput.xssDetected && 'Email contains potentially harmful content',
+      passwordInput.xssDetected && 'Password contains potentially harmful content'
+    ].filter(Boolean);
+    
+    if (xssErrors.length > 0) {
+      setError(xssErrors[0]);
+    } else if (error?.includes('potentially harmful content')) {
+      setError(null);
+    }
+  }, [emailInput.xssDetected, passwordInput.xssDetected, error]);
+
+  // Clear field error when user types
+  const handleFieldChange = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
   const handleSignIn = withErrorHandling(async () => {
     reset();
     setError(null);
-    if (!email || !password) {
-      setError("Please enter both email and password.");
+    setFieldErrors({});
+
+    // Check for XSS patterns before submission
+    if (emailInput.xssDetected || passwordInput.xssDetected) {
+      setError('Please remove any special characters and try again');
       return;
     }
-    await signIn(email, password);
-    // Navigation is handled by AuthProvider
+
+    try {
+      // Validate form data using sanitized values
+      const validatedData = loginFormSchema.parse({
+        email: emailInput.sanitizedValue,
+        password: passwordInput.value, // Use raw value for password
+      });
+      
+      await signIn(validatedData.email, validatedData.password);
+    } catch (e) {
+      if (e instanceof z.ZodError) {
+        setFieldErrors(formatValidationErrors(e.errors));
+      } else {
+        throw e; // Let withErrorHandling handle other errors
+      }
+    }
   });
 
   const handleGoogleSignIn = async () => {
@@ -75,7 +122,7 @@ export default function SignInScreen() {
       } else {
         handleError(e, { 
           action: 'googleSignIn',
-          metadata: { email: email || 'unknown' }
+          metadata: { email: emailInput.sanitizedValue || 'unknown' }
         });
         setError(e.message || "Google Sign-In failed.");
       }
@@ -115,22 +162,31 @@ export default function SignInScreen() {
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>Sign in to continue your story</Text>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Email Address"
-            placeholderTextColor="#888"
-            value={email}
-            onChangeText={setEmail}
+          <ValidatedInput
+            label="Email Address"
+            placeholder="Enter your email"
+            value={emailInput.value}
+            onChangeText={(value) => {
+              emailInput.setValue(value);
+              handleFieldChange('email');
+            }}
             keyboardType="email-address"
             autoCapitalize="none"
+            error={fieldErrors.email || (emailInput.xssDetected ? 'Invalid characters detected' : undefined)}
+            required
           />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#888"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
+          
+          <ValidatedInput
+            label="Password"
+            placeholder="Enter your password"
+            value={passwordInput.value}
+            onChangeText={(value) => {
+              passwordInput.setValue(value);
+              handleFieldChange('password');
+            }}
+            isPassword
+            error={fieldErrors.password || (passwordInput.xssDetected ? 'Invalid characters detected' : undefined)}
+            required
           />
 
           {error && <Text style={styles.errorText}>{error}</Text>}
@@ -163,6 +219,22 @@ export default function SignInScreen() {
               </>
             )}
           </TouchableOpacity>
+
+          {isAppleSignInAvailable && (
+            <AppleSignInButton 
+              style={styles.appleButton}
+              onSuccess={() => {
+                logger.debug('Apple sign in successful');
+                router.replace('/(tabs)/feed');
+              }}
+              onError={(error) => {
+                handleError(error, {
+                  context: 'Apple sign in failed',
+                  showToUser: true
+                });
+              }}
+            />
+          )}
 
           <TouchableOpacity style={[styles.socialButton, styles.phoneButton]} onPress={handlePhoneSignIn}>
             <Ionicons name="call-outline" size={20} color="#1A4B44" style={styles.socialIcon} />
@@ -276,6 +348,10 @@ const styles = StyleSheet.create({
   },
   phoneButtonText: {
     color: Colors.dynastyGreen,
+  },
+  appleButton: {
+    width: '100%',
+    marginBottom: Spacing.md,
   },
   footer: {
     flexDirection: 'row',

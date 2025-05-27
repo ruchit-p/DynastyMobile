@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import OfflineFileCacheService from '../src/services/encryption/OfflineFileCacheService';
+import { OfflineFileCacheService } from '../src/services/encryption/OfflineFileCacheService';
 import NetInfo from '@react-native-community/netinfo';
+import { logger } from '../src/services/LoggingService';
 
 interface UseOfflineFileOptions {
   autoCache?: boolean;

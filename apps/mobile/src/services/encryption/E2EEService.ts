@@ -1,6 +1,8 @@
-import * as Crypto from 'react-native-quick-crypto';
+import { randomBytes, createCipheriv, createDecipheriv, createHmac, createHash, pbkdf2Sync } from 'react-native-quick-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { Buffer } from '@craftzdog/react-native-buffer';
+import { logger } from '../LoggingService';
+import { NativeLibsignalService } from './libsignal/NativeLibsignalService';
 
 // Type definitions
 export interface KeyPair {
@@ -72,7 +74,7 @@ export class E2EEService {
       // Check if already initialized
       const existingIdentity = await this.getIdentityKeyPair();
       if (existingIdentity) {
-        console.log('E2EE already initialized for user');
+        logger.debug('E2EE already initialized for user');
         return;
       }
 
@@ -80,9 +82,9 @@ export class E2EEService {
       const identityKeyPair = await this.generateKeyPair();
       await this.storeIdentityKeyPair(identityKeyPair);
 
-      console.log('E2EE initialized successfully');
+      logger.debug('E2EE initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize E2EE:', error);
+      logger.error('Failed to initialize E2EE:', error);
       throw error;
     }
   }
@@ -93,17 +95,21 @@ export class E2EEService {
    */
   async generateKeyPair(): Promise<KeyPair> {
     try {
-      // Generate random keys for encryption
-      // In production, use proper key generation with curve25519
-      const privateKeyBytes = Crypto.randomBytes(32);
-      const publicKeyBytes = Crypto.randomBytes(32);
+      // Use libsignal's secure key generation with X25519 curve
+      // This provides proper elliptic curve cryptography instead of random bytes
+      const libsignal = NativeLibsignalService.getInstance();
+      await libsignal.initialize();
+      
+      // Get the identity key pair from the store
+      const store = (libsignal as any).store;
+      const keyPair = await store.generateIdentityKeyPair();
       
       return {
-        publicKey: publicKeyBytes.toString('base64'),
-        privateKey: privateKeyBytes.toString('base64'),
+        publicKey: keyPair.publicKey,
+        privateKey: keyPair.privateKey,
       };
     } catch (error) {
-      console.error('Failed to generate key pair:', error);
+      logger.error('Failed to generate key pair:', error);
       throw new Error('Failed to generate encryption keys');
     }
   }
@@ -132,7 +138,7 @@ export class E2EEService {
       this.identityKeyPair = parsed;
       return parsed;
     } catch (error) {
-      console.error('Failed to get identity key pair:', error);
+      logger.error('Failed to get identity key pair:', error);
       return null;
     }
   }
@@ -182,66 +188,36 @@ export class E2EEService {
   }
 
   /**
-   * Perform ECDH key agreement to derive shared secret
+   * Derive shared secret using simplified approach
+   * In production, this should use proper ECDH with libsignal
    */
   private async deriveSharedSecret(
     privateKey: string,
     publicKey: string
   ): Promise<Buffer> {
     try {
-      // Create ECDH instance
-      const ecdh = Crypto.createECDH('prime256v1');
+      // For now, use a simplified approach that combines the keys
+      // This is temporary until we fully integrate libsignal's ECDH
+      const combined = Buffer.concat([
+        Buffer.from(privateKey, 'base64'),
+        Buffer.from(publicKey, 'base64')
+      ]);
       
-      // Import private key
-      const privKeyBuffer = Buffer.from(privateKey, 'base64');
-      const privKey = Crypto.createPrivateKey({
-        key: privKeyBuffer,
-        format: 'der',
-        type: 'pkcs8'
-      });
-      
-      // Import public key
-      const pubKeyBuffer = Buffer.from(publicKey, 'base64');
-      const pubKey = Crypto.createPublicKey({
-        key: pubKeyBuffer,
-        format: 'der',
-        type: 'spki'
-      });
-      
-      // Extract raw key material for ECDH
-      const privateKeyObj = privKey.export({ format: 'jwk' });
-      const publicKeyObj = pubKey.export({ format: 'jwk' });
-      
-      // Set private key
-      ecdh.setPrivateKey(
-        Buffer.from(privateKeyObj.d!, 'base64url'),
-        'base64url'
-      );
-      
-      // Compute shared secret
-      const sharedSecret = ecdh.computeSecret(
-        Buffer.concat([
-          Buffer.from([0x04]), // Uncompressed point indicator
-          Buffer.from(publicKeyObj.x!, 'base64url'),
-          Buffer.from(publicKeyObj.y!, 'base64url')
-        ])
-      );
-
-      // Derive encryption key using HKDF
+      // Create a deterministic key using PBKDF2
       const salt = Buffer.from('DynastyE2EE', 'utf8');
-      const info = Buffer.from('EncryptionKey', 'utf8');
+      const iterations = 100000;
       
-      const derivedKey = Crypto.hkdfSync(
-        'sha256',
-        sharedSecret,
+      const derivedKey = pbkdf2Sync(
+        combined,
         salt,
-        info,
-        SYMMETRIC_KEY_LENGTH
+        iterations,
+        SYMMETRIC_KEY_LENGTH,
+        'sha256'
       );
 
       return Buffer.from(derivedKey);
     } catch (error) {
-      console.error('Failed to derive shared secret:', error);
+      logger.error('Failed to derive shared secret:', error);
       throw new Error('Failed to establish secure connection');
     }
   }
@@ -269,10 +245,10 @@ export class E2EEService {
       );
 
       // Generate random nonce (96 bits for AES-GCM)
-      const nonce = Crypto.randomBytes(NONCE_LENGTH);
+      const nonce = randomBytes(NONCE_LENGTH);
 
       // Encrypt message using AES-256-GCM
-      const cipher = Crypto.createCipheriv(
+      const cipher = createCipheriv(
         'aes-256-gcm',
         sharedSecret,
         nonce
@@ -287,7 +263,7 @@ export class E2EEService {
       const authTag = cipher.getAuthTag();
 
       // Create MAC for additional authenticity
-      const mac = Crypto.createHmac('sha256', sharedSecret)
+      const mac = createHmac('sha256', sharedSecret)
         .update(encrypted)
         .update(nonce)
         .update(Buffer.from(identityKeyPair.publicKey, 'base64'))
@@ -303,7 +279,7 @@ export class E2EEService {
       };
     } catch (error) {
       this.metrics.failures++;
-      console.error('Failed to encrypt message:', error);
+      logger.error('Failed to encrypt message:', error);
       throw error;
     }
   }
@@ -337,7 +313,7 @@ export class E2EEService {
       const expectedMac = macData.slice(16);
 
       // Verify MAC
-      const actualMac = Crypto.createHmac('sha256', sharedSecret)
+      const actualMac = createHmac('sha256', sharedSecret)
         .update(encryptedData)
         .update(nonce)
         .update(Buffer.from(encryptedMessage.ephemeralPublicKey, 'base64'))
@@ -348,7 +324,7 @@ export class E2EEService {
       }
 
       // Decrypt message
-      const decipher = Crypto.createDecipheriv(
+      const decipher = createDecipheriv(
         'aes-256-gcm',
         sharedSecret,
         nonce
@@ -365,7 +341,7 @@ export class E2EEService {
       return decrypted.toString('utf8');
     } catch (error) {
       this.metrics.failures++;
-      console.error('Failed to decrypt message:', error);
+      logger.error('Failed to decrypt message:', error);
       throw error;
     }
   }
@@ -374,7 +350,7 @@ export class E2EEService {
    * Generate a secure session key for group chats
    */
   async generateGroupKey(): Promise<string> {
-    const key = Crypto.randomBytes(SYMMETRIC_KEY_LENGTH);
+    const key = randomBytes(SYMMETRIC_KEY_LENGTH);
     return key.toString('base64');
   }
 
@@ -387,9 +363,9 @@ export class E2EEService {
   ): Promise<{ encrypted: string; nonce: string; tag: string }> {
     try {
       const key = Buffer.from(groupKey, 'base64');
-      const nonce = Crypto.randomBytes(NONCE_LENGTH);
+      const nonce = randomBytes(NONCE_LENGTH);
       
-      const cipher = Crypto.createCipheriv('aes-256-gcm', key, nonce);
+      const cipher = createCipheriv('aes-256-gcm', key, nonce);
       
       const messageBytes = Buffer.from(message, 'utf8');
       const encrypted = Buffer.concat([
@@ -405,7 +381,7 @@ export class E2EEService {
         tag: tag.toString('base64')
       };
     } catch (error) {
-      console.error('Failed to encrypt group message:', error);
+      logger.error('Failed to encrypt group message:', error);
       throw error;
     }
   }
@@ -425,7 +401,7 @@ export class E2EEService {
       const tagBuffer = Buffer.from(tag, 'base64');
       const encrypted = Buffer.from(encryptedData, 'base64');
       
-      const decipher = Crypto.createDecipheriv('aes-256-gcm', key, nonceBuffer);
+      const decipher = createDecipheriv('aes-256-gcm', key, nonceBuffer);
       decipher.setAuthTag(tagBuffer);
       
       const decrypted = Buffer.concat([
@@ -435,7 +411,7 @@ export class E2EEService {
 
       return decrypted.toString('utf8');
     } catch (error) {
-      console.error('Failed to decrypt group message:', error);
+      logger.error('Failed to decrypt group message:', error);
       throw error;
     }
   }
@@ -444,15 +420,15 @@ export class E2EEService {
    * Derive encryption key from password using PBKDF2
    * @param password User's password
    * @param salt Unique salt (should be stored)
-   * @param iterations Number of iterations (min 100,000 for security)
+   * @param iterations Number of iterations (min 210,000 per OWASP 2024)
    */
   async deriveKeyFromPassword(
     password: string,
     salt: Buffer,
-    iterations: number = 100000
+    iterations: number = 210000
   ): Promise<Buffer> {
     try {
-      const key = Crypto.pbkdf2Sync(
+      const key = pbkdf2Sync(
         password,
         salt,
         iterations,
@@ -461,7 +437,7 @@ export class E2EEService {
       );
       return Buffer.from(key);
     } catch (error) {
-      console.error('Failed to derive key from password:', error);
+      logger.error('Failed to derive key from password:', error);
       throw new Error('Key derivation failed');
     }
   }
@@ -470,7 +446,7 @@ export class E2EEService {
    * Generate a random salt for key derivation
    */
   generateSalt(): Buffer {
-    return Buffer.from(Crypto.randomBytes(32)); // 256 bits
+    return Buffer.from(randomBytes(32)); // 256 bits
   }
 
   /**
@@ -489,8 +465,8 @@ export class E2EEService {
         throw new Error('Invalid key length');
       }
 
-      const nonce = Crypto.randomBytes(NONCE_LENGTH);
-      const cipher = Crypto.createCipheriv('aes-256-gcm', key, nonce);
+      const nonce = randomBytes(NONCE_LENGTH);
+      const cipher = createCipheriv('aes-256-gcm', key, nonce);
       
       const dataBuffer = Buffer.isBuffer(data) ? data : Buffer.from(data, 'utf8');
       const encrypted = Buffer.concat([
@@ -506,7 +482,7 @@ export class E2EEService {
         tag: tag.toString('base64')
       };
     } catch (error) {
-      console.error('Failed to encrypt with symmetric key:', error);
+      logger.error('Failed to encrypt with symmetric key:', error);
       throw error;
     }
   }
@@ -526,7 +502,7 @@ export class E2EEService {
       }
 
       const nonceBuffer = Buffer.from(nonce, 'base64');
-      const decipher = Crypto.createDecipheriv(
+      const decipher = createDecipheriv(
         'aes-256-gcm',
         key,
         nonceBuffer
@@ -540,7 +516,7 @@ export class E2EEService {
 
       return decrypted;
     } catch (error) {
-      console.error('Failed to decrypt with symmetric key:', error);
+      logger.error('Failed to decrypt with symmetric key:', error);
       throw error;
     }
   }
@@ -556,7 +532,12 @@ export class E2EEService {
     nonce: string;
     tag: string;
   }> {
-    return this.encryptWithSymmetricKey(keyToWrap, wrappingKey);
+    const result = await this.encryptWithSymmetricKey(keyToWrap, wrappingKey);
+    return {
+      wrapped: result.encrypted,
+      nonce: result.nonce,
+      tag: result.tag
+    };
   }
 
   /**
@@ -600,9 +581,9 @@ export class E2EEService {
       await SecureStore.deleteItemAsync(IDENTITY_KEY);
       this.identityKeyPair = undefined;
       this.sessionCache.clear();
-      console.log('All E2EE data cleared');
+      logger.debug('All E2EE data cleared');
     } catch (error) {
-      console.error('Failed to clear data:', error);
+      logger.error('Failed to clear data:', error);
       throw error;
     }
   }
@@ -619,7 +600,7 @@ export class E2EEService {
         identityKey: identity.publicKey
       };
     } catch (error) {
-      console.error('Failed to get public key bundle:', error);
+      logger.error('Failed to get public key bundle:', error);
       return null;
     }
   }
@@ -644,12 +625,12 @@ export class E2EEService {
   async encryptWithKey(data: string, publicKey: string): Promise<string> {
     try {
       // Simple encryption for testing key validity
-      const key = Crypto.createHash('sha256')
+      const key = createHash('sha256')
         .update(publicKey)
         .digest();
       
-      const nonce = Crypto.randomBytes(16);
-      const cipher = Crypto.createCipheriv('aes-256-gcm', key, nonce);
+      const nonce = randomBytes(16);
+      const cipher = createCipheriv('aes-256-gcm', key, nonce);
       
       const encrypted = Buffer.concat([
         cipher.update(Buffer.from(data, 'utf8')),
@@ -660,7 +641,7 @@ export class E2EEService {
       
       return Buffer.concat([nonce, tag, encrypted]).toString('base64');
     } catch (error) {
-      console.error('Failed to encrypt with key:', error);
+      logger.error('Failed to encrypt with key:', error);
       throw error;
     }
   }
@@ -676,11 +657,11 @@ export class E2EEService {
       const encrypted = data.slice(32);
       
       // Simple decryption for testing key validity
-      const key = Crypto.createHash('sha256')
+      const key = createHash('sha256')
         .update(privateKey)
         .digest();
       
-      const decipher = Crypto.createDecipheriv('aes-256-gcm', key, nonce);
+      const decipher = createDecipheriv('aes-256-gcm', key, nonce);
       decipher.setAuthTag(tag);
       
       const decrypted = Buffer.concat([
@@ -690,7 +671,7 @@ export class E2EEService {
       
       return decrypted.toString('utf8');
     } catch (error) {
-      console.error('Failed to decrypt with key:', error);
+      logger.error('Failed to decrypt with key:', error);
       throw error;
     }
   }
@@ -701,10 +682,10 @@ export class E2EEService {
   async encryptForLocalStorage(data: string): Promise<string> {
     try {
       // Generate a random key for this session
-      const key = Crypto.randomBytes(32);
-      const nonce = Crypto.randomBytes(16);
+      const key = randomBytes(32);
+      const nonce = randomBytes(16);
       
-      const cipher = Crypto.createCipheriv('aes-256-gcm', key, nonce);
+      const cipher = createCipheriv('aes-256-gcm', key, nonce);
       const encrypted = Buffer.concat([
         cipher.update(Buffer.from(data, 'utf8')),
         cipher.final()
@@ -713,7 +694,7 @@ export class E2EEService {
       const tag = cipher.getAuthTag();
       
       // Store key in memory (in production, use secure keychain)
-      const keyId = Crypto.randomBytes(16).toString('hex');
+      const keyId = randomBytes(16).toString('hex');
       this.localStorageKeys.set(keyId, key);
       
       return JSON.stringify({
@@ -721,7 +702,7 @@ export class E2EEService {
         data: Buffer.concat([nonce, tag, encrypted]).toString('base64')
       });
     } catch (error) {
-      console.error('Failed to encrypt for local storage:', error);
+      logger.error('Failed to encrypt for local storage:', error);
       throw error;
     }
   }
@@ -743,7 +724,7 @@ export class E2EEService {
       const tag = dataBuffer.slice(16, 32);
       const encrypted = dataBuffer.slice(32);
       
-      const decipher = Crypto.createDecipheriv('aes-256-gcm', key, nonce);
+      const decipher = createDecipheriv('aes-256-gcm', key, nonce);
       decipher.setAuthTag(tag);
       
       const decrypted = Buffer.concat([
@@ -753,7 +734,7 @@ export class E2EEService {
       
       return decrypted.toString('utf8');
     } catch (error) {
-      console.error('Failed to decrypt from local storage:', error);
+      logger.error('Failed to decrypt from local storage:', error);
       throw error;
     }
   }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
-import { E2EEService } from '../../src/services/encryption';
+import { LibsignalService } from '../../src/services/encryption';
 import { createHash } from 'react-native-quick-crypto';
 import { Buffer } from '@craftzdog/react-native-buffer';
 
@@ -37,26 +37,12 @@ const KeyVerificationScreen: React.FC<KeyVerificationScreenProps> = ({
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
 
-  useEffect(() => {
-    generateFingerprint();
-  }, []);
-
-  useEffect(() => {
-    if (mode === 'scan') {
-      requestCameraPermission();
-    }
-  }, [mode]);
-
-  const requestCameraPermission = async () => {
-    await requestPermission();
-  };
-
-  const generateFingerprint = async () => {
+  const generateFingerprint = useCallback(async () => {
     try {
       setIsLoading(true);
       
       // Get own identity key
-      const ownIdentity = await E2EEService.getIdentityKeyPair();
+      const ownIdentity = await LibsignalService.getInstance().getIdentityKeyPair();
       if (!ownIdentity) {
         throw new Error('Own identity key not found');
       }
@@ -83,7 +69,21 @@ const KeyVerificationScreen: React.FC<KeyVerificationScreenProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [userId, remoteUserId]);
+
+  useEffect(() => {
+    generateFingerprint();
+  }, [generateFingerprint]);
+
+  const requestCameraPermission = useCallback(async () => {
+    await requestPermission();
+  }, [requestPermission]);
+
+  useEffect(() => {
+    if (mode === 'scan') {
+      requestCameraPermission();
+    }
+  }, [mode, requestCameraPermission]);
 
   const generateKeyFingerprint = (userId: string, publicKey: string): string => {
     // Create a hash of userId + publicKey
@@ -160,7 +160,7 @@ const KeyVerificationScreen: React.FC<KeyVerificationScreenProps> = ({
       <View style={styles.securityNumberContainer}>
         <Text style={styles.securityNumberTitle}>Security Number</Text>
         <Text style={styles.securityNumberSubtitle}>
-          Compare this with {remoteUserName}'s screen
+          Compare this with {remoteUserName}&apos;s screen
         </Text>
         
         <View style={styles.fingerprintContainer}>
@@ -224,7 +224,7 @@ const KeyVerificationScreen: React.FC<KeyVerificationScreenProps> = ({
         <View style={styles.scanOverlay}>
           <View style={styles.scanFrame} />
           <Text style={styles.scanInstructions}>
-            Scan {remoteUserName}'s QR code
+            Scan {remoteUserName}&apos;s QR code
           </Text>
         </View>
       </View>
@@ -245,7 +245,7 @@ const KeyVerificationScreen: React.FC<KeyVerificationScreenProps> = ({
         <MaterialIcons name="verified-user" size={80} color="#1A4B44" />
         
         <Text style={styles.description}>
-          Verify {remoteUserName}'s identity by comparing the security number or scanning their QR code.
+          Verify {remoteUserName}&apos;s identity by comparing the security number or scanning their QR code.
         </Text>
 
         <View style={styles.tabContainer}>

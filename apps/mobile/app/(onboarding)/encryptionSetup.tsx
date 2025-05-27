@@ -13,13 +13,14 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import { Spacing, BorderRadius, Shadows } from '../../constants/Spacing';
-import Typography from '../../constants/Typography';
+import { Spacing, BorderRadius } from '../../constants/Spacing';
+import { Typography } from '../../constants/Typography';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useEncryption } from '../../src/contexts/EncryptionContext';
-import { E2EEService, KeyBackupService } from '../../src/services/encryption';
-import { Button } from '../../components/ui/Button';
+import { KeyBackupService } from '../../src/services/encryption';
+import Button from '../../components/ui/Button';
 import { showErrorAlert } from '../../src/lib/errorUtils';
+import { logger } from '../../src/services/LoggingService';
 
 interface OnboardingStep {
   icon: keyof typeof Ionicons.glyphMap;
@@ -47,8 +48,8 @@ const steps: OnboardingStep[] = [
 
 export default function EncryptionSetupScreen() {
   const router = useRouter();
-  const { user, firestoreUser } = useAuth();
-  const { initializeEncryption, isInitialized } = useEncryption();
+  const { user } = useAuth();
+  const { initializeEncryption } = useEncryption();
   const [currentStep, setCurrentStep] = useState(0);
   const [isSettingUp, setIsSettingUp] = useState(false);
   const [setupComplete, setSetupComplete] = useState(false);
@@ -100,7 +101,7 @@ export default function EncryptionSetupScreen() {
       
       // Create backup
       const backupService = KeyBackupService.getInstance();
-      const backup = await backupService.createBackup(backupPassword);
+      const backup = await backupService.createKeyBackup(backupPassword);
       
       if (backup.recoveryCode) {
         // Show recovery code to user
@@ -122,7 +123,7 @@ export default function EncryptionSetupScreen() {
         );
       }
     } catch (error) {
-      console.error('Encryption setup error:', error);
+      logger.error('Encryption setup error:', error);
       showErrorAlert(error, 'Setup Failed');
     } finally {
       setIsSettingUp(false);

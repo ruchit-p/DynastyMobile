@@ -5,12 +5,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthProvider, useAuth } from '../../src/contexts/AuthContext';
 
 // Import mocked Firebase modules
-const auth = jest.requireMock('@react-native-firebase/auth').default;
-const firestore = jest.requireMock('@react-native-firebase/firestore').default;
-const functions = jest.requireMock('@react-native-firebase/functions').default;
+import authMock from '@react-native-firebase/auth';
+import firestoreMock from '@react-native-firebase/firestore';
+import functionsMock from '@react-native-firebase/functions';
+import { GoogleSignin as GoogleSigninMock } from '@react-native-google-signin/google-signin';
 
-// Import mocked GoogleSignin
-const { GoogleSignin } = jest.requireMock('@react-native-google-signin/google-signin');
+const auth = authMock as jest.Mocked<typeof authMock>;
+const firestore = firestoreMock as jest.Mocked<typeof firestoreMock>;
+const functions = functionsMock as jest.Mocked<typeof functionsMock>;
+const GoogleSignin = GoogleSigninMock as jest.Mocked<typeof GoogleSigninMock>;
 
 // Mock expo-router
 const mockPush = jest.fn();
@@ -28,14 +31,14 @@ jest.mock('expo-router', () => ({
 // Mock firebase modules
 jest.mock('../../src/lib/firebase', () => ({
   getFirebaseApp: jest.fn(() => ({})),
-  getFirebaseAuth: jest.fn(() => jest.requireMock('@react-native-firebase/auth').default()),
-  getFirebaseFunctions: jest.fn(() => jest.requireMock('@react-native-firebase/functions').default()),
-  getFirebaseDb: jest.fn(() => jest.requireMock('@react-native-firebase/firestore').default()),
+  getFirebaseAuth: jest.fn(() => authMock),
+  getFirebaseFunctions: jest.fn(() => functionsMock),
+  getFirebaseDb: jest.fn(() => firestoreMock),
   connectToEmulators: jest.fn(),
 }));
 
-// Import errorHandler to manually mock it
-const { errorHandler } = jest.requireMock('../../src/lib/ErrorHandlingService');
+// Mock ErrorHandlingService
+jest.mock('../../src/lib/ErrorHandlingService');
 
 // Google Sign-In is already mocked in jest.setup.js
 
@@ -349,7 +352,7 @@ describe('AuthContext', () => {
     });
 
     it('triggers custom verification email', async () => {
-      const mockTriggerEmail = jest.fn().mockResolvedValue({ data: {} });
+      const mockTriggerEmail = jest.fn().mockResolvedValue({ data: Record<string, never> });
       (functions().httpsCallable as jest.Mock).mockReturnValue(mockTriggerEmail);
 
       const { result } = renderAuthHook();
@@ -372,7 +375,6 @@ describe('AuthContext', () => {
 
   describe('Session Management', () => {
     it('signs out user', async () => {
-      const mockUnsubscribe = jest.fn();
       (auth().signOut as jest.Mock).mockResolvedValue(undefined);
       (GoogleSignin.signOut as jest.Mock).mockResolvedValue(undefined);
 
@@ -398,8 +400,8 @@ describe('AuthContext', () => {
         JSON.stringify(cachedUserData)
       );
       
-      const { networkService } = require('../../src/services/NetworkService');
-      networkService.isOnline.mockReturnValue(false);
+      const NetworkService = await import('../../src/services/NetworkService');
+      (NetworkService.networkService.isOnline as jest.Mock).mockReturnValue(false);
 
       const mockUser = createMockFirebaseUser({
         uid: 'cached-user-uid',

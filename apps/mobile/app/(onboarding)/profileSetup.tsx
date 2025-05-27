@@ -3,25 +3,30 @@ import {
   StyleSheet,
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   SafeAreaView,
-  Platform,
-  Alert,
   ScrollView,
   ActivityIndicator,
   Image
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useAuth } from '../../src/contexts/AuthContext'; // Adjust path as needed
-import { getFirebaseFunctions } from '../../src/lib/firebase'; // Corrected import for functions
+import { useAuth } from '../../src/contexts/AuthContext';
+import { getFirebaseFunctions } from '../../src/lib/firebase';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import Fonts from '../../constants/Fonts';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
-// You might want a gender picker component (e.g., dropdown)
+import { z } from 'zod';
+import { profileSetupSchema, formatValidationErrors } from '../../src/lib/validation';
+import { ValidatedInput } from '../../components/ui/ValidatedInput';
+import { useSanitizedInput } from '../../src/hooks/useSanitizedInput';
+
+// Import design system constants
+// import { Colors } from '../../constants/Colors';
+// import { Typography } from '../../constants/Typography';
+// import { Spacing, BorderRadius } from '../../constants/Spacing';
 
 // Define the expected structure of data from the completeOnboarding Firebase function
 interface CompleteOnboardingResultData {
@@ -34,75 +39,95 @@ const GENDER_OPTIONS = ['Male', 'Female', 'Other', 'Prefer not to say'];
 export default function ProfileSetupScreen() {
   const router = useRouter();
   const { user, refreshUser } = useAuth();
-  const [firstName, setFirstName] = useState(user?.displayName?.split(' ')[0] || '');
-  const [lastName, setLastName] = useState(user?.displayName?.split(' ').slice(1).join(' ') || '');
+  
+  // Use sanitized input hooks
+  const firstNameInput = useSanitizedInput(user?.displayName?.split(' ')[0] || '', 'text', { maxLength: 50 });
+  const lastNameInput = useSanitizedInput(user?.displayName?.split(' ').slice(1).join(' ') || '', 'text', { maxLength: 50 });
+  
   const [dateOfBirth, setDateOfBirth] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [gender, setGender] = useState(''); // 'male', 'female', 'other', 'unspecified'
   const [showGenderPicker, setShowGenderPicker] = useState(false); // Added for gender picker
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Initialize our error handler
   const { handleError, withErrorHandling } = useErrorHandler({
     title: 'Profile Setup Error',
   });
 
+  // Monitor XSS detection
+  React.useEffect(() => {
+    const xssErrors = [
+      firstNameInput.xssDetected && 'First name contains potentially harmful content',
+      lastNameInput.xssDetected && 'Last name contains potentially harmful content'
+    ].filter(Boolean);
+    
+    if (xssErrors.length > 0) {
+      setError(xssErrors[0]);
+    } else if (error?.includes('potentially harmful content')) {
+      setError(null);
+    }
+  }, [firstNameInput.xssDetected, lastNameInput.xssDetected, error]);
+
+  // Clear field error when user types
+  const handleFieldChange = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
   const onChangeDate = withErrorHandling((event: DateTimePickerEvent, selectedDate?: Date) => {
     if (Platform.OS === 'android') {
-      setShowDatePicker(false); // Modal picker on Android, close after interaction
+      setShowDatePicker(false);
     }
 
     if (event.type === 'set') {
       if (selectedDate) {
-        // Basic validation for future dates, though maximumDate should handle age.
-        const today = new Date();
-        if (selectedDate > today) {
-          setError('Date of birth cannot be in the future.');
-          // Optionally revert to previous date or null
-          // setDateOfBirth(dateOfBirth); // Keep previous valid date if any
-          return;
-        }
         setDateOfBirth(selectedDate);
-        setError(null); // Clear previous date-related errors
-
-        // Optional: hide iOS spinner after selection
-        // if (Platform.OS === 'ios') {
-        //   setShowDatePicker(false);
-        // }
+        setError(null);
+        if (fieldErrors.dateOfBirth) {
+          setFieldErrors(prev => ({ ...prev, dateOfBirth: '' }));
+        }
       }
-    } else if (event.type === 'dismissed') {
-      // User cancelled. For Android, picker is already closed.
-      // For iOS, if it's a modal, it would be handled. Spinner remains.
     }
   });
 
   const handleSelectGender = withErrorHandling((selectedGender: string) => {
     setGender(selectedGender);
     setShowGenderPicker(false);
+    if (fieldErrors.gender) {
+      setFieldErrors(prev => ({ ...prev, gender: '' }));
+    }
   });
 
   const handleSubmit = withErrorHandling(async () => {
-    if (!firstName || !lastName) {
-      setError('First and last name are required.');
+    setError(null);
+    setFieldErrors({});
+
+    // Check for XSS patterns before submission
+    if (firstNameInput.xssDetected || lastNameInput.xssDetected) {
+      setError('Please remove any special characters and try again');
       return;
     }
-    // Basic DOB validation (more robust validation needed for production)
-    let dateOfBirthISO: string | null = null;
-    if (dateOfBirth) {
-      const yearNum = dateOfBirth.getFullYear();
-      // The DateTimePicker's minimumDate and maximumDate props should enforce this range.
-      // This is an additional safeguard or if dateOfBirth could be set by other means.
-      if (yearNum <= 1900 || yearNum > new Date().getFullYear() - 13) { // Ensure they are at least 13
-        setError('Please select a valid date of birth (you must be at least 13 years old).');
-        return;
-      }
-      dateOfBirthISO = dateOfBirth.toISOString();
-    }
 
-    setIsLoading(true);
-    setError(null);
     try {
+      // Use sanitized values for validation
+      const validatedData = profileSetupSchema.parse({
+        firstName: firstNameInput.sanitizedValue,
+        lastName: lastNameInput.sanitizedValue,
+        dateOfBirth: dateOfBirth || undefined,
+        gender: gender || undefined,
+      });
+      
+      // Convert date for API if provided
+      let dateOfBirthISO: string | null = null;
+      if (validatedData.dateOfBirth) {
+        dateOfBirthISO = validatedData.dateOfBirth.toISOString();
+      }
+
+      setIsLoading(true);
       if (!user) {
         throw new Error('User not authenticated.');
       }
@@ -111,13 +136,12 @@ export default function ProfileSetupScreen() {
       const completeOnboardingFn = firebaseFunctions.httpsCallable('completeOnboarding');
       const result = await completeOnboardingFn({
         userId: user.uid,
-        firstName,
-        lastName,
-        // Ensure dateOfBirth is sent in a format your backend expects (e.g., ISO string or Timestamp)
+        firstName: validatedData.firstName,
+        lastName: validatedData.lastName,
         dateOfBirth: dateOfBirthISO,
-        gender: gender || 'Prefer not to say', // Updated to use selected gender, default if empty
-        displayName: `${firstName} ${lastName}`.trim(), // Added displayName
-      }) as { data: CompleteOnboardingResultData }; // Added type assertion for the result
+        gender: validatedData.gender || 'Prefer not to say',
+        displayName: `${validatedData.firstName} ${validatedData.lastName}`.trim(),
+      }) as { data: CompleteOnboardingResultData };
 
       if (result.data.success) {
         // Navigate to encryption setup
@@ -127,16 +151,20 @@ export default function ProfileSetupScreen() {
         throw new Error(result.data.message || 'Failed to complete onboarding.');
       }
     } catch (e: any) {
-      handleError(e, {
-        severity: ErrorSeverity.ERROR,
-        metadata: {
-          action: 'completeOnboarding',
-          userId: user?.uid,
-          firstName,
-          lastName
-        }
-      });
-      setError(e.message || 'An error occurred.');
+      if (e instanceof z.ZodError) {
+        setFieldErrors(formatValidationErrors(e.errors));
+      } else {
+        handleError(e, {
+          severity: ErrorSeverity.ERROR,
+          metadata: {
+            action: 'completeOnboarding',
+            userId: user?.uid,
+            firstName,
+            lastName
+          }
+        });
+        setError(e.message || 'An error occurred.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -158,17 +186,28 @@ export default function ProfileSetupScreen() {
             <Text style={styles.title}>Welcome to Dynasty!</Text>
             <Text style={styles.subtitle}>Let&apos;s set up your profile to get started.</Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="First Name"
-              value={firstName}
-              onChangeText={setFirstName}
+            <ValidatedInput
+              label="First Name"
+              placeholder="Enter your first name"
+              value={firstNameInput.value}
+              onChangeText={(value) => {
+                firstNameInput.setValue(value);
+                handleFieldChange('firstName');
+              }}
+              error={fieldErrors.firstName || (firstNameInput.xssDetected ? 'Invalid characters detected' : undefined)}
+              required
             />
-            <TextInput
-              style={styles.input}
-              placeholder="Last Name"
-              value={lastName}
-              onChangeText={setLastName}
+            
+            <ValidatedInput
+              label="Last Name"
+              placeholder="Enter your last name"
+              value={lastNameInput.value}
+              onChangeText={(value) => {
+                lastNameInput.setValue(value);
+                handleFieldChange('lastName');
+              }}
+              error={fieldErrors.lastName || (lastNameInput.xssDetected ? 'Invalid characters detected' : undefined)}
+              required
             />
             
             <Text style={styles.label}>Date of Birth (Optional)</Text>

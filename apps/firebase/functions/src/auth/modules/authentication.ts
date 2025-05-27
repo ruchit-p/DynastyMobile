@@ -1,21 +1,18 @@
 import {onCall, HttpsError} from "firebase-functions/v2/https";
-import {getFirestore, Timestamp, FieldValue} from "firebase-admin/firestore";
+import {getFirestore} from "firebase-admin/firestore";
 import {logger} from "firebase-functions/v2";
 import {getAuth} from "firebase-admin/auth";
-import {MailDataRequired} from "@sendgrid/mail";
-import * as sgMail from "@sendgrid/mail";
-import {
-  isValidEmail,
-  isValidPassword,
-} from "../../utils/validation";
 import {FUNCTION_TIMEOUT} from "../../common";
 import type {SignupData} from "../../utils/validation";
 import {createError, withErrorHandling, ErrorCode} from "../../utils/errors";
-import {withAuth} from "../../middleware/auth";
+import {createLogContext} from "../../utils";
 import {UserDocument} from "../types/user";
 import {initSendGrid} from "../config/sendgrid";
-import {SENDGRID_APIKEY, SENDGRID_FROMEMAIL, SENDGRID_TEMPLATES_VERIFICATION, FRONTEND_URL} from "../config/secrets";
+import {SENDGRID_CONFIG, FRONTEND_URL} from "../config/secrets";
 import {generateSecureToken, hashToken} from "../utils/tokens";
+import {validateRequest} from "../../utils/request-validator";
+import {VALIDATION_SCHEMAS} from "../../config/validation-schemas";
+import {checkRateLimitByIP, RateLimitType} from "../../middleware/auth";
 
 /**
  * Handles the signup process, which now only:
@@ -27,24 +24,30 @@ import {generateSecureToken, hashToken} from "../utils/tokens";
 export const handleSignUp = onCall({
   memory: "512MiB",
   timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
-  secrets: [SENDGRID_APIKEY, SENDGRID_FROMEMAIL, SENDGRID_TEMPLATES_VERIFICATION, FRONTEND_URL],
+  secrets: [SENDGRID_CONFIG, FRONTEND_URL],
 }, async (request) => {
-  const signupData: SignupData = request.data;
-  logger.info(`Starting simplified signup process for email: ${signupData.email}`);
+  // Apply rate limiting for signup attempts
+  await checkRateLimitByIP(request, {
+    type: RateLimitType.AUTH,
+    maxRequests: 5, // Max 5 signup attempts per IP
+    windowSeconds: 900, // 15 minutes
+  });
+
+  // Validate and sanitize input using centralized validator
+  const validatedData = validateRequest(
+    request.data,
+    VALIDATION_SCHEMAS.signup,
+    undefined // No userId yet since it's signup
+  );
+
+  const signupData: SignupData = validatedData;
+  logger.info("Starting simplified signup process", createLogContext({
+    email: signupData.email,
+  }));
 
   try {
     // Initialize SendGrid
     initSendGrid();
-
-    // Validate email and password
-    if (!isValidEmail(signupData.email)) {
-      throw new Error("Invalid email address");
-    }
-
-    const passwordValidation = isValidPassword(signupData.password);
-    if (!passwordValidation.isValid) {
-      throw new Error(passwordValidation.message);
-    }
 
     const auth = getAuth();
     const db = getFirestore();
@@ -78,19 +81,55 @@ export const handleSignUp = onCall({
 
     const userId = userRecord.uid;
 
-    // Create a minimal user document in Firestore
-    // This is needed so that we can later update it with onboarding data
+    // Create a complete user document with all required fields initialized
     const userRef = db.collection("users").doc(userId);
-    await userRef.set({
+    const newUserDoc: Partial<UserDocument> = {
+      // Identity fields
       id: userId,
       email: signupData.email,
+
+      // Profile fields (undefined until onboarding)
+      displayName: undefined,
+      firstName: undefined,
+      lastName: undefined,
+      phoneNumber: undefined,
+      phoneNumberVerified: false,
+      profilePicture: undefined,
+
+      // Relationship fields (empty arrays)
+      parentIds: [],
+      childrenIds: [],
+      spouseIds: [],
+
+      // Organization fields (undefined until onboarding)
+      familyTreeId: undefined,
+      historyBookId: undefined,
+
+      // Personal fields
+      gender: undefined,
+      dateOfBirth: undefined,
+
+      // Permission fields (defaults)
+      isAdmin: false,
+      canAddMembers: false,
+      canEdit: false,
+
+      // Status fields
+      emailVerified: false,
+      isPendingSignUp: false,
+      onboardingCompleted: false,
+
+      // System fields
       createdAt: new Date(),
       updatedAt: new Date(),
-      emailVerified: false,
-      onboardingCompleted: false,
       dataRetentionPeriod: "forever",
       dataRetentionLastUpdated: new Date(),
-    });
+
+      // Optional fields
+      invitationId: undefined,
+    };
+
+    await userRef.set(newUserDoc);
 
     // Generate verification token and send verification email
     const verificationToken = generateSecureToken();
@@ -104,20 +143,20 @@ export const handleSignUp = onCall({
       emailVerificationExpires: expiryTime,
     });
 
-    // Send verification email
+    // Send verification email using helper
     const verificationLink = `${FRONTEND_URL.value()}/verify-email/confirm?uid=${userId}&token=${verificationToken}`;
-    const msg: MailDataRequired = {
+    const {sendEmail} = await import("../utils/sendgridHelper");
+    await sendEmail({
       to: signupData.email,
-      from: SENDGRID_FROMEMAIL.value(),
-      templateId: SENDGRID_TEMPLATES_VERIFICATION.value(),
+      templateType: "verification",
       dynamicTemplateData: {
         username: signupData.email.split("@")[0], // Use email username as fallback since we don't have names yet
         verificationLink: verificationLink,
       },
-    };
-
-    await sgMail.send(msg);
-    logger.info(`Successfully completed simplified signup process for user ${userId}`);
+    });
+    logger.info("Successfully completed simplified signup process", createLogContext({
+      userId: userId,
+    }));
 
     return {
       success: true,
@@ -146,9 +185,30 @@ export const completeOnboarding = onCall({
   memory: "512MiB",
   timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
 }, async (request) => {
-  const {userId, firstName, lastName, dateOfBirth, gender, phoneNumber, displayName} = request.data;
+  const userId = request.data.userId;
 
-  logger.info(`Starting onboarding process for user: ${userId}`);
+  if (!userId) {
+    throw createError(ErrorCode.INVALID_ARGUMENT, "User ID is required");
+  }
+
+  // Validate and sanitize input using centralized validator
+  const validatedData = validateRequest(
+    request.data,
+    VALIDATION_SCHEMAS.completeOnboarding,
+    userId
+  );
+
+  const {phone, dateOfBirth, gender} = validatedData;
+
+  // Extract firstName and lastName from the data for compatibility
+  const firstName = request.data.firstName;
+  const lastName = request.data.lastName;
+  const phoneNumber = phone;
+  const displayName = request.data.displayName || `${firstName} ${lastName}`.trim();
+
+  logger.info("Starting onboarding process", createLogContext({
+    userId: userId,
+  }));
 
   try {
     const db = getFirestore();
@@ -164,7 +224,10 @@ export const completeOnboarding = onCall({
     try {
       authUser = await auth.getUser(userId);
     } catch (error) {
-      logger.error(`Auth user not found for ID: ${userId}`, error);
+      logger.error("Auth user not found", createLogContext({
+        userId: userId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
       throw new Error("Auth user not found. Please sign up first.");
     }
 
@@ -183,13 +246,18 @@ export const completeOnboarding = onCall({
         displayName: finalDisplayName,
       });
     } catch (error) {
-      logger.warn(`Could not update Auth displayName for user ${userId}`, error);
+      logger.warn("Could not update Auth displayName", createLogContext({
+        userId: userId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
       // Continue with the process even if Auth update fails
     }
 
     // If user exists in Auth but not in Firestore, create the Firestore document
     if (!userDoc.exists && authUser) {
-      logger.info(`Creating Firestore document for user ${userId}`);
+      logger.info("Creating Firestore document", createLogContext({
+        userId: userId,
+      }));
 
       // Create a new family tree for the user
       const familyTreeRef = db.collection("familyTrees").doc();
@@ -258,7 +326,9 @@ export const completeOnboarding = onCall({
       // Commit the batch and return success
       await batch.commit();
 
-      logger.info(`Successfully created Firestore documents for user ${userId}`);
+      logger.info("Successfully created Firestore documents", createLogContext({
+        userId: userId,
+      }));
 
       return {
         success: true,
@@ -283,7 +353,9 @@ export const completeOnboarding = onCall({
       let oldUserSpouseIds: string[] = [];
 
       if (invitationId) {
-        logger.info(`Processing invited user onboarding for invitation: ${invitationId}`);
+        logger.info("Processing invited user onboarding", createLogContext({
+          invitationId: invitationId,
+        }));
         const invitationDoc = await db.collection("invitations").doc(invitationId).get();
 
         if (invitationDoc.exists) {
@@ -293,19 +365,29 @@ export const completeOnboarding = onCall({
             familyTreeId = invitation.familyTreeId;
             prefillData = invitation.prefillData;
 
-            logger.info(`Found invitation with prefill data: ${JSON.stringify(prefillData || {})}`);
+            logger.info("Found invitation with prefill data", createLogContext({
+              invitationId: invitationId,
+              hasPrefillData: !!prefillData,
+            }));
 
             // Get the old user document if it exists
             if (oldUserId) {
               const oldUserDoc = await db.collection("users").doc(oldUserId).get();
               if (oldUserDoc.exists) {
-                logger.info(`Found old user document for ${oldUserId}, will migrate relationships`);
+                logger.info("Found old user document, will migrate relationships", createLogContext({
+                  oldUserId: oldUserId,
+                }));
                 // Extract relationship data from old user document
                 const oldUserData = oldUserDoc.data();
                 oldUserParentIds = oldUserData?.parentIds || [];
                 oldUserChildrenIds = oldUserData?.childrenIds || [];
                 oldUserSpouseIds = oldUserData?.spouseIds || [];
-                logger.info(`Retrieved relationship data from old user: parentIds(${oldUserParentIds.length}), childrenIds(${oldUserChildrenIds.length}), spouseIds(${oldUserSpouseIds.length})`);
+                logger.info("Retrieved relationship data from old user", createLogContext({
+                  oldUserId: oldUserId,
+                  parentCount: oldUserParentIds.length,
+                  childrenCount: oldUserChildrenIds.length,
+                  spouseCount: oldUserSpouseIds.length,
+                }));
               }
             }
           }
@@ -393,7 +475,10 @@ export const completeOnboarding = onCall({
 
       // If this is an invited user, handle relationship migrations
       if (oldUserId && invitation) {
-        logger.info(`Migrating relationships for invited user from ${oldUserId} to ${userId}`);
+        logger.info("Migrating relationships for invited user", createLogContext({
+          oldUserId: oldUserId,
+          newUserId: userId,
+        }));
 
         // Update all family trees where the old user is a member
         const familyTreesQuery = await db.collection("familyTrees")
@@ -487,7 +572,9 @@ export const completeOnboarding = onCall({
       // Commit all Firestore operations
       await batch.commit();
 
-      logger.info(`Successfully completed onboarding process for user ${userId}`);
+      logger.info("Successfully completed onboarding process", createLogContext({
+        userId: userId,
+      }));
 
       return {
         success: true,
@@ -504,186 +591,6 @@ export const completeOnboarding = onCall({
   }
 });
 
-/**
- * Signs up a new user with email and password.
- */
-export const signUpWithEmail = onCall(
-  {
-    memory: "512MiB",
-    timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM, // Increased for Auth + DB operations
-    secrets: [SENDGRID_APIKEY, SENDGRID_FROMEMAIL, SENDGRID_TEMPLATES_VERIFICATION, FRONTEND_URL],
-  },
-  withErrorHandling(async (request) => {
-    const {email, password, displayName, firstName, lastName, invitationId, familyTreeId: initialFamilyTreeId, gender, dateOfBirth, phoneNumber} = request.data as SignupData;
-
-    if (!email || !isValidEmail(email)) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "A valid invitee email address is required.");
-    }
-
-    const passwordValidation = isValidPassword(password);
-    if (!password || !passwordValidation.isValid) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, passwordValidation.message || "Password is required.");
-    }
-
-    const auth = getAuth();
-    let newUserRecord;
-    try {
-      newUserRecord = await auth.createUser({
-        email,
-        password,
-        displayName: displayName || `${firstName || ""} ${lastName || ""}`.trim(),
-        emailVerified: false, // Email will be verified via separate step
-        phoneNumber: phoneNumber || undefined,
-      });
-      logger.info(`User created in Firebase Auth with UID: ${newUserRecord.uid}`);
-    } catch (error: any) {
-      logger.error("Error creating user in Firebase Auth:", error);
-      if (error.code === "auth/email-already-exists") {
-        throw createError(ErrorCode.ALREADY_EXISTS, "An account with this email already exists.");
-      }
-      throw createError(ErrorCode.INTERNAL, "Failed to create user account.", {originalError: error.message});
-    }
-
-    // Create user document in Firestore
-    try {
-      // Construct the request object as expected by a callable function
-      const createUserDocumentRequest = {
-        data: {
-          uid: newUserRecord.uid,
-          email,
-          displayName: newUserRecord.displayName,
-          phoneNumber: newUserRecord.phoneNumber,
-          photoURL: newUserRecord.photoURL,
-          invitationId,
-          familyTreeId: initialFamilyTreeId,
-          firstName,
-          lastName,
-          gender,
-          dateOfBirth,
-        },
-        auth: {uid: newUserRecord.uid, token: {} as any}, // Mock auth context
-      };
-      await (createUserDocument as any)(createUserDocumentRequest as any);
-    } catch (dbError: any) {
-      logger.error(`Error creating Firestore document for user ${newUserRecord.uid} after signup:`, dbError);
-      // Potentially try to delete the Auth user if DB creation fails critically, or mark for cleanup
-      // For now, log and let admin handle inconsistencies if they arise.
-      // Throwing an error here will roll back the createUserDocument if it also uses withErrorHandling effectively.
-      throw createError(ErrorCode.INTERNAL, "Failed to finalize user setup. Please contact support.", {originalError: dbError.message});
-    }
-
-    // Note: Verification email should be sent by the client after successful signup
-    // to avoid circular dependencies between modules
-
-    return {
-      success: true,
-      userId: newUserRecord.uid,
-      message: "Signup successful. Please check your email to verify your account.",
-    };
-  }, "signUpWithEmail")
-);
-
-/**
- * Creates a user document in Firestore.
- * This is typically called after a user is created in Firebase Auth.
- */
-export const createUserDocument = onCall(
-  {
-    memory: "512MiB",
-    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-    secrets: [], // Accesses Firestore
-  },
-  withAuth(
-    async (request) => {
-      const {uid, email, displayName, phoneNumber, photoURL, invitationId, familyTreeId: initialFamilyTreeId, firstName, lastName, gender, dateOfBirth} = request.data;
-
-      if (!uid || !email) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, "User ID and email are required.");
-      }
-
-      const db = getFirestore();
-      const userRef = db.collection("users").doc(uid);
-      const userDoc = await userRef.get();
-
-      if (userDoc.exists) {
-        logger.info(`User document for ${uid} already exists.`);
-        // Optionally update if it exists but is missing some info from Auth, or return error/success
-        return {success: true, message: "User document already exists.", userId: uid};
-      }
-
-      const now = Timestamp.now();
-      // Fetch Auth user record to get the latest emailVerified status
-      let authUserRecord;
-      try {
-        authUserRecord = await getAuth().getUser(uid);
-      } catch (e) {
-        logger.error(`Failed to fetch auth record for user ${uid} during document creation:`, e);
-        throw createError(ErrorCode.INTERNAL, "Failed to verify user auth status for document creation.");
-      }
-
-      const newUser: UserDocument = {
-        id: uid,
-        email: email,
-        firstName: firstName || displayName?.split(" ")[0] || "",
-        lastName: lastName || displayName?.split(" ").slice(1).join(" ") || "",
-        displayName: displayName || `${firstName || ""} ${lastName || ""}`.trim(),
-        phoneNumber: phoneNumber || null,
-        phoneNumberVerified: false, // Assuming phone not verified at this stage
-        profilePicture: photoURL ? {url: photoURL, path: ""} : undefined, // Store as profilePicture if structure matches
-        parentIds: [],
-        childrenIds: [],
-        spouseIds: [],
-        familyTreeId: initialFamilyTreeId || undefined, // Set if provided during signup (e.g. from invite)
-        historyBookId: undefined, // Or generate one
-        gender: gender || "unspecified",
-        isAdmin: false, // Default to not admin
-        canAddMembers: true, // Default permissions
-        canEdit: true,
-        createdAt: now.toDate(), // Store as Date
-        updatedAt: now.toDate(), // Store as Date
-        emailVerified: authUserRecord.emailVerified, // Get from Auth record
-        isPendingSignUp: false, // User creation implies signup is no longer pending
-        dataRetentionPeriod: "forever",
-        dataRetentionLastUpdated: now.toDate(),
-        onboardingCompleted: false,
-        invitationId: invitationId || undefined,
-      };
-      if (dateOfBirth) {
-        try {
-          (newUser as any).dateOfBirth = Timestamp.fromDate(new Date(dateOfBirth));
-        } catch (e) {
-          logger.warn(`Invalid dateOfBirth format for user ${uid}: ${dateOfBirth}`);
-        }
-      }
-
-      await userRef.set(newUser);
-      logger.info(`User document created for ${uid}`);
-
-      // If an invitationId is present, mark the invitation as accepted/used
-      if (invitationId) {
-        try {
-          const invitationRef = db.collection("familyInvitations").doc(invitationId);
-          const invitationDoc = await invitationRef.get();
-          if (invitationDoc.exists) {
-            await invitationRef.update({
-              status: "accepted",
-              acceptedAt: now,
-              acceptedByUserId: uid,
-            });
-            logger.info(`Invitation ${invitationId} marked as accepted by user ${uid}.`);
-          }
-        } catch (invError) {
-          logger.error(`Error updating invitation ${invitationId} after user creation:`, invError);
-        }
-      }
-
-      return {success: true, userId: uid, message: "User document created successfully."};
-    },
-    "createUserDocument",
-    "auth"
-  )
-);
-
 // Placeholder for signInWithPhoneNumber - Requires more complex setup with Recaptcha or other verification
 export const signInWithPhoneNumber = onCall(
   {
@@ -691,7 +598,14 @@ export const signInWithPhoneNumber = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
     // secrets: [RECAPTCHA_SECRET_KEY] // If using reCAPTCHA Enterprise
   },
-  withErrorHandling(async (/* request */) => { // request is unused
+  withErrorHandling(async (request) => {
+    // Apply rate limiting for phone sign-in attempts
+    await checkRateLimitByIP(request, {
+      type: RateLimitType.AUTH,
+      maxRequests: 5, // Max 5 attempts per IP
+      windowSeconds: 900, // 15 minutes
+    });
+    
     // const {phoneNumber, recaptchaToken} = request.data;
     // Implementation depends on chosen verification method (e.g., reCAPTCHA, custom OTP service)
     // This is a complex flow involving client-side steps as well.
@@ -739,47 +653,100 @@ export const handlePhoneSignIn = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   async (request) => {
-    // For v2 onCall, data is in request.data
-    // Auth context (if user is authenticated when calling) is in request.auth
-    const {uid, phoneNumber} = request.data;
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.handlePhoneSignIn,
+      undefined // No auth context required for this function
+    );
 
-    if (!uid) {
-      logger.error("handlePhoneSignIn: UID is missing in the request data.");
-      throw createError(ErrorCode.INVALID_ARGUMENT, "The function must be called with a 'uid' argument.");
-    }
-    if (!phoneNumber) {
-      logger.error("handlePhoneSignIn: phoneNumber is missing in the request data.");
-      throw createError(ErrorCode.INVALID_ARGUMENT, "The function must be called with a 'phoneNumber' argument.");
-    }
+    const {uid, phoneNumber} = validatedData;
 
-    logger.info(`handlePhoneSignIn: Processing request for UID: ${uid}, Phone: ${phoneNumber}`);
+    logger.info("handlePhoneSignIn: Processing request", createLogContext({
+      uid: uid,
+      phoneNumber: phoneNumber,
+    }));
 
     try {
       const userRecord = await getAuth().getUser(uid); // Use getAuth() from firebase-admin/auth
-      logger.info(`handlePhoneSignIn: Successfully fetched user record for UID: ${uid}`, userRecord.toJSON());
+      logger.info("handlePhoneSignIn: Successfully fetched user record", createLogContext({
+        uid: uid,
+        email: userRecord.email,
+        phoneNumber: userRecord.phoneNumber,
+      }));
 
       const db = getFirestore(); // Use getFirestore() from firebase-admin/firestore
       const userDocRef = db.collection("users").doc(uid);
       const userDoc = await userDocRef.get();
 
       if (!userDoc.exists) {
-        logger.info(`handlePhoneSignIn: User document does not exist for UID: ${uid}. Creating new document.`);
-        await userDocRef.set({
+        logger.info("handlePhoneSignIn: User document does not exist. Creating new document", createLogContext({
           uid: uid,
+        }));
+
+        // Create a complete user document with all required fields (same as handleSignUp)
+        const newUserDoc: Partial<UserDocument> = {
+          // Identity fields
+          id: uid, // Use 'id' not 'uid' for consistency
+          email: userRecord.email || "",
+
+          // Profile fields
+          displayName: userRecord.displayName || undefined,
+          firstName: undefined,
+          lastName: undefined,
           phoneNumber: phoneNumber,
-          email: userRecord.email,
-          displayName: userRecord.displayName,
-          photoURL: userRecord.photoURL,
-          createdAt: FieldValue.serverTimestamp(), // Use FieldValue from firebase-admin/firestore
+          phoneNumberVerified: true, // Phone is verified if they got this far
+          profilePicture: userRecord.photoURL ? {url: userRecord.photoURL, path: ""} : undefined,
+
+          // Relationship fields (empty arrays)
+          parentIds: [],
+          childrenIds: [],
+          spouseIds: [],
+
+          // Organization fields (undefined until onboarding)
+          familyTreeId: undefined,
+          historyBookId: undefined,
+
+          // Personal fields
+          gender: undefined,
+          dateOfBirth: undefined,
+
+          // Permission fields (defaults)
+          isAdmin: false,
+          canAddMembers: false,
+          canEdit: false,
+
+          // Status fields
+          emailVerified: userRecord.emailVerified || false,
+          isPendingSignUp: false,
           onboardingCompleted: false,
-        }, {merge: true});
-        logger.info(`handlePhoneSignIn: Successfully created user document for UID: ${uid}`);
+
+          // System fields
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          dataRetentionPeriod: "forever",
+          dataRetentionLastUpdated: new Date(),
+
+          // Optional fields
+          invitationId: undefined,
+        };
+
+        await userDocRef.set(newUserDoc);
+        logger.info("handlePhoneSignIn: Successfully created user document", createLogContext({
+          uid: uid,
+        }));
       } else {
-        logger.info(`handlePhoneSignIn: User document already exists for UID: ${uid}. Updating phone number.`);
+        logger.info("handlePhoneSignIn: User document already exists. Updating phone number", createLogContext({
+          uid: uid,
+        }));
         await userDocRef.update({
           phoneNumber: phoneNumber,
+          phoneNumberVerified: true, // Mark as verified since they completed phone auth
+          updatedAt: new Date(),
         });
-        logger.info(`handlePhoneSignIn: Successfully updated user document for UID: ${uid}`);
+        logger.info("handlePhoneSignIn: Successfully updated user document", createLogContext({
+          uid: uid,
+        }));
       }
 
       return {
@@ -788,7 +755,10 @@ export const handlePhoneSignIn = onCall(
         userId: uid,
       };
     } catch (error: any) {
-      logger.error(`handlePhoneSignIn: Error processing UID: ${uid}`, error);
+      logger.error("handlePhoneSignIn: Error processing request", createLogContext({
+        uid: uid,
+        error: error.message,
+      }));
       if (error.code && error.message) {
         throw error; // Re-throw if it's already a properly formatted error
       }

@@ -1,11 +1,11 @@
 import React, { useState, useLayoutEffect, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, RefreshControl, ActivityIndicator } from 'react-native';
-import FlashList from '../../components/ui/FlashList';
+import { FlashList } from '../../components/ui/FlashList';
 import { useRouter, useNavigation } from 'expo-router';
 import AppHeader from '../../components/ui/AppHeader';
 import IconButton, { IconSet } from '../../components/ui/IconButton';
 import { Ionicons } from '@expo/vector-icons'; // For placeholder icons
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -35,6 +35,7 @@ const getNotificationIcon = (type: NotificationType) => {
   switch (type) {
     case 'story:new':
     case 'story:liked':
+    case 'story:tagged':
       return 'book-outline';
     case 'comment:new':
     case 'comment:reply':
@@ -42,6 +43,7 @@ const getNotificationIcon = (type: NotificationType) => {
     case 'event:invitation':
     case 'event:updated':
     case 'event:reminder':
+    case 'event:rsvp':
       return 'calendar-outline';
     case 'family:invitation':
       return 'people-outline';
@@ -122,7 +124,7 @@ const NotificationsScreen = () => {
         unsubscribeFn();
       }
     };
-  }, [user?.uid]);
+  }, [user?.uid, loadNotifications, notificationService]);
 
   // Set up notification press listener
   useEffect(() => {
@@ -135,7 +137,7 @@ const NotificationsScreen = () => {
           pathname: '/(screens)/chatDetail',
           params: { chatId: notification.relatedItemId }
         });
-      } else if (notification.type === 'event:invitation' && notification.relatedItemId) {
+      } else if ((notification.type === 'event:invitation' || notification.type === 'event:updated' || notification.type === 'event:rsvp') && notification.relatedItemId) {
         router.push({
           pathname: '/(screens)/eventDetail',
           params: { eventId: notification.relatedItemId }
@@ -214,7 +216,7 @@ const NotificationsScreen = () => {
           pathname: '/(screens)/chatDetail',
           params: { chatId: item.relatedItemId }
         });
-      } else if (item.type === 'event:invitation' && item.relatedItemId) {
+      } else if ((item.type === 'event:invitation' || item.type === 'event:updated' || item.type === 'event:rsvp') && item.relatedItemId) {
         router.push({
           pathname: '/(screens)/eventDetail',
           params: { eventId: item.relatedItemId }

@@ -1,0 +1,688 @@
+
+> mobile@1.0.0 lint
+> expo lint
+
+env: load .env
+env: export EXPO_PUBLIC_FIREBASE_API_KEY EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN EXPO_PUBLIC_FIREBASE_PROJECT_ID EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID EXPO_PUBLIC_FIREBASE_APP_ID EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID EXPO_PUBLIC_FINGERPRINT_API_KEY EXPO_PUBLIC_FINGERPRINT_ENDPOINT EXPO_PUBLIC_FINGERPRINT_REGION EXPO_PUBLIC_SENTRY_DSN SENTRY_AUTH_TOKEN SENTRY_ORG SENTRY_PROJECT EXPO_PUBLIC_ENABLE_SENTRY_DEV EXPO_PUBLIC_ENABLE_CRASHLYTICS_DEV EXPO_PUBLIC_APP_ENV
+yarn run v1.22.22
+$ /Users/ruchitpatel/Documents/DynastyMobile/node_modules/.bin/eslint /Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src /Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app /Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components --fix=false --cache=true --cache-location=/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/.expo/cache/eslint/
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(auth)/verifyEmail.tsx
+  13:10  warning  'Ionicons' is defined but never used          @typescript-eslint/no-unused-vars
+  39:9   warning  '_insets' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(auth)/verifyOtp.tsx
+   15:43  warning  'Link' is defined but never used                                                                                                                                @typescript-eslint/no-unused-vars
+  103:9   warning  'inputRefs' is assigned a value but never used                                                                                                                  @typescript-eslint/no-unused-vars
+  112:6   warning  React Hook useEffect has missing dependencies: 'isLoading', 'phoneAuthConfirmation', and 'phoneNumberSent'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(onboarding)/encryptionSetup.tsx
+  16:33  warning  'Shadows' is defined but never used                 @typescript-eslint/no-unused-vars
+  20:10  warning  'E2EEService' is defined but never used             @typescript-eslint/no-unused-vars
+  51:17  warning  'firestoreUser' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  52:33  warning  'isInitialized' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(onboarding)/profileSetup.tsx
+   9:3   warning  'Alert' is defined but never used         @typescript-eslint/no-unused-vars
+  29:10  warning  'Colors' is defined but never used        @typescript-eslint/no-unused-vars
+  30:10  warning  'Typography' is defined but never used    @typescript-eslint/no-unused-vars
+  31:10  warning  'Spacing' is defined but never used       @typescript-eslint/no-unused-vars
+  31:19  warning  'BorderRadius' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/CalendarScreen.tsx
+    2:46  warning  'Platform' is defined but never used                                                                        @typescript-eslint/no-unused-vars
+    3:62  warning  'CalendarUtils' is defined but never used                                                                   @typescript-eslint/no-unused-vars
+   54:9   warning  'iconColor' is assigned a value but never used                                                              @typescript-eslint/no-unused-vars
+  129:6   warning  React Hook useEffect has a missing dependency: 'params'. Either include it or remove the dependency array   react-hooks/exhaustive-deps
+  132:23  warning  React Hook useCallback received a function whose dependencies are unknown. Pass an inline function instead  react-hooks/exhaustive-deps
+  317:9   warning  'currentDate' is assigned a value but never used                                                            @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/EventListScreen.tsx
+   10:3   warning  'Image' is defined but never used                                                                                       @typescript-eslint/no-unused-vars
+   11:3   warning  'Alert' is defined but never used                                                                                       @typescript-eslint/no-unused-vars
+   21:10  warning  'getFirebaseAuth' is defined but never used                                                                             @typescript-eslint/no-unused-vars
+   22:35  warning  'formatEventDate' is defined but never used                                                                             @typescript-eslint/no-unused-vars
+  147:9   warning  'db' is assigned a value but never used                                                                                 @typescript-eslint/no-unused-vars
+  156:52  warning  'reset' is assigned a value but never used                                                                              @typescript-eslint/no-unused-vars
+  283:16  warning  'cacheError' is defined but never used                                                                                  @typescript-eslint/no-unused-vars
+  290:9   warning  React Hook useCallback has a missing dependency: 'withErrorHandling'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  334:8   warning  React Hook useCallback has an unnecessary dependency: 'handleError'. Either exclude it or remove the dependency array   react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/StyleGuide.tsx
+  9:3  warning  'Platform' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/ViewProfileScreen.tsx
+   3:10  warning  'Stack' is defined but never used                                                                           @typescript-eslint/no-unused-vars
+  37:27  warning  React Hook useCallback received a function whose dependencies are unknown. Pass an inline function instead  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/aboutDynasty.tsx
+  5:8  warning  'Constants' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/accountSettings.tsx
+   2:48  warning  'TouchableOpacity' is defined but never used                      @typescript-eslint/no-unused-vars
+   2:66  warning  'Alert' is defined but never used                                 @typescript-eslint/no-unused-vars
+   4:10  warning  'Ionicons' is defined but never used                              @typescript-eslint/no-unused-vars
+  12:8   warning  Using exported name 'FlashList' as identifier for default import  import/no-named-as-default
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/addFamilyMember.tsx
+    2:10  warning  'View' is defined but never used                       @typescript-eslint/no-unused-vars
+    2:33  warning  'Button' is defined but never used                     @typescript-eslint/no-unused-vars
+    2:72  warning  'Platform' is defined but never used                   @typescript-eslint/no-unused-vars
+    7:10  warning  'showErrorAlert' is defined but never used             @typescript-eslint/no-unused-vars
+   19:8   warning  'DateTimePicker' is defined but never used             @typescript-eslint/no-unused-vars
+   20:10  warning  'Picker' is defined but never used                     @typescript-eslint/no-unused-vars
+  212:9   warning  'contentAreaTitle' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/auditLogs.tsx
+   8:10  warning  'AuditLogService' is defined but never used                       @typescript-eslint/no-unused-vars
+  15:8   warning  Using exported name 'FlashList' as identifier for default import  import/no-named-as-default
+  33:9   warning  'router' is assigned a value but never used                       @typescript-eslint/no-unused-vars
+  35:9   warning  'isDark' is assigned a value but never used                       @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/blockedUsers.tsx
+  8:8  warning  Using exported name 'FlashList' as identifier for default import  import/no-named-as-default
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/chat.tsx
+   18:8   warning  Using exported name 'FlashList' as identifier for default import                                            import/no-named-as-default
+   74:10  warning  'unsubscribe' is assigned a value but never used                                                            @typescript-eslint/no-unused-vars
+   83:22  warning  React Hook useCallback received a function whose dependencies are unknown. Pass an inline function instead  react-hooks/exhaustive-deps
+  212:16  warning  'cacheError' is defined but never used                                                                      @typescript-eslint/no-unused-vars
+  262:21  warning  React Hook useCallback received a function whose dependencies are unknown. Pass an inline function instead  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/chatDetail.tsx
+  19:8  warning  Using exported name 'FlashList' as identifier for default import      import/no-named-as-default
+  29:8  warning  'IconButton' is defined but never used                                @typescript-eslint/no-unused-vars
+  36:8  warning  Using exported name 'TypingService' as identifier for default import  import/no-named-as-default
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/chatInfo.tsx
+  20:8  warning  Using exported name 'ChatNotificationService' as identifier for default import  import/no-named-as-default
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/chatSearch.tsx
+  18:8  warning  Using exported name 'FlashList' as identifier for default import              import/no-named-as-default
+  19:8  warning  Using exported name 'ChatEncryptionService' as identifier for default import  import/no-named-as-default
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/conflictResolution.tsx
+  1:40  warning  'useEffect' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/contactSupport.tsx
+  2:89  warning  'Alert' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/createEvent.tsx
+  144:10  warning  '_isCreatingEvent' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  181:10  warning  '_pickerMode' is assigned a value but never used       @typescript-eslint/no-unused-vars
+  181:23  warning  '_setPickerMode' is assigned a value but never used    @typescript-eslint/no-unused-vars
+  649:10  warning  'isUploading' is assigned a value but never used       @typescript-eslint/no-unused-vars
+  650:10  warning  'overallProgress' is assigned a value but never used   @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/createStory.tsx
+   455:9  warning  React Hook useCallback has missing dependencies: 'uploadAllMedia' and 'withErrorHandling'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+   545:9  warning  React Hook useCallback has missing dependencies: 'uploadAllMedia' and 'withErrorHandling'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  1142:9  warning  '_renderAddDetailsModal' is assigned a value but never used                                                                                    @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/editProfile.tsx
+  89:11  warning  'emailChanged' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/eventDetail.tsx
+   1:38   warning  'useMemo' is defined but never used                                @typescript-eslint/no-unused-vars
+   2:28   warning  'Image' is defined but never used                                  @typescript-eslint/no-unused-vars
+   2:138  warning  'Modal' is defined but never used                                  @typescript-eslint/no-unused-vars
+   5:8    warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+   6:8    warning  Using exported name 'ThemedView' as identifier for default import  import/no-named-as-default
+  16:120  warning  'EventComment' is defined but never used                           @typescript-eslint/no-unused-vars
+  20:24   warning  'MediaItem' is defined but never used                              @typescript-eslint/no-unused-vars
+  26:31   warning  'RSVPProgressBar' is defined but never used                        @typescript-eslint/no-unused-vars
+  27:23   warning  'RSVPSummaryData' is defined but never used                        @typescript-eslint/no-unused-vars
+  62:10   warning  'showRSVPSummary' is assigned a value but never used               @typescript-eslint/no-unused-vars
+  62:27   warning  'setShowRSVPSummary' is assigned a value but never used            @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/eventSettings.tsx
+  36:9  warning  'handleSettingsUpdate' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  41:9  warning  'loadUserSettings' is assigned a value but never used      @typescript-eslint/no-unused-vars
+  46:9  warning  'saveSettings' is assigned a value but never used          @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/familyManagement.tsx
+  14:25  warning  'router' is defined but never used                                                                          @typescript-eslint/no-unused-vars
+  19:8   warning  'firestore' is defined but never used                                                                       @typescript-eslint/no-unused-vars
+  59:52  warning  'reset' is assigned a value but never used                                                                  @typescript-eslint/no-unused-vars
+  86:26  warning  React Hook useCallback received a function whose dependencies are unknown. Pass an inline function instead  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/filePreview.tsx
+   16:8  warning  'Screen' is defined but never used                                 @typescript-eslint/no-unused-vars
+   18:8  warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+  188:9  warning  'handleVideoLoad' is assigned a value but never used               @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/globalChatSearch.tsx
+   18:8   warning  Using exported name 'FlashList' as identifier for default import              import/no-named-as-default
+   19:8   warning  Using exported name 'ChatEncryptionService' as identifier for default import  import/no-named-as-default
+  160:22  warning  'error' is defined but never used                                             @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/memberProfile.tsx
+  13:10  warning  'Ionicons' is defined but never used                                                                        @typescript-eslint/no-unused-vars
+  23:10  warning  'fetchAccessibleStoriesMobile' is defined but never used                                                    @typescript-eslint/no-unused-vars
+  97:27  warning  React Hook useCallback received a function whose dependencies are unknown. Pass an inline function instead  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/newChat.tsx
+  10:3   warning  'Platform' is defined but never used                              @typescript-eslint/no-unused-vars
+  19:8   warning  Using exported name 'FlashList' as identifier for default import  import/no-named-as-default
+  56:11  warning  'handleError' is assigned a value but never used                  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/notificationPreferences.tsx
+   5:19  warning  'BorderRadius' is defined but never used                                                                    @typescript-eslint/no-unused-vars
+  97:27  warning  React Hook useCallback received a function whose dependencies are unknown. Pass an inline function instead  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/notifications.tsx
+    2:52  warning  'Image' is defined but never used                                                                                             @typescript-eslint/no-unused-vars
+    3:8   warning  Using exported name 'FlashList' as identifier for default import                                                              import/no-named-as-default
+   28:12  warning  'error' is defined but never used                                                                                             @typescript-eslint/no-unused-vars
+   66:10  warning  'unsubscribe' is assigned a value but never used                                                                              @typescript-eslint/no-unused-vars
+   69:59  warning  'reset' is assigned a value but never used                                                                                    @typescript-eslint/no-unused-vars
+   85:29  warning  React Hook useCallback received a function whose dependencies are unknown. Pass an inline function instead                    react-hooks/exhaustive-deps
+  152:6   warning  React Hook useEffect has a missing dependency: 'notificationService'. Either include it or remove the dependency array        react-hooks/exhaustive-deps
+  199:6   warning  React Hook useLayoutEffect has a missing dependency: 'handleMarkAllAsRead'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/privacyPolicy.tsx
+  12:24  warning  'withErrorHandling' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/privacySettings.tsx
+    6:10  warning  'FirebaseFirestoreTypes' is defined but never used                                                                                                                                                         @typescript-eslint/no-unused-vars
+  166:8   warning  React Hook React.useCallback has missing dependencies: 'handleError', 'initialSettings', 'reset', 'saveSettings', 'settings', and 'withErrorHandling'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/recordAudio.tsx
+  32:24  warning  'withErrorHandling' is assigned a value but never used                                                                                           @typescript-eslint/no-unused-vars
+  32:52  warning  'reset' is assigned a value but never used                                                                                                       @typescript-eslint/no-unused-vars
+  74:6   warning  React Hook useEffect has missing dependencies: 'audioRecorder', 'isRecording', and 'player'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/selectCapacity.tsx
+   2:77  warning  'Alert' is defined but never used                                                                          @typescript-eslint/no-unused-vars
+   9:8   warning  Using exported name 'FlashList' as identifier for default import                                           import/no-named-as-default
+  32:6   warning  React Hook useEffect has a missing dependency: 'reset'. Either include it or remove the dependency array   react-hooks/exhaustive-deps
+  59:6   warning  React Hook useEffect has a missing dependency: 'params'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/selectLocation.tsx
+    2:135  warning  'StatusBar' is defined but never used                                                                                                                                                                         @typescript-eslint/no-unused-vars
+   12:8    warning  Using exported name 'FlashList' as identifier for default import                                                                                                                                              import/no-named-as-default
+   62:16   warning  'e' is defined but never used                                                                                                                                                                                 @typescript-eslint/no-unused-vars
+   80:16   warning  'e' is defined but never used                                                                                                                                                                                 @typescript-eslint/no-unused-vars
+  240:6    warning  React Hook useEffect has missing dependencies: 'handleError', 'handleReverseGeocode', 'params.currentLocation', 'selectedPlace', and 'withErrorHandling'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/selectMembersScreen.tsx
+  16:8  warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+  23:8  warning  Using exported name 'FlashList' as identifier for default import   import/no-named-as-default
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/selectProfileVisibility.tsx
+  9:8  warning  Using exported name 'FlashList' as identifier for default import  import/no-named-as-default
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/selectStoryVisibility.tsx
+  9:8  warning  Using exported name 'FlashList' as identifier for default import  import/no-named-as-default
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/selectVisibility.tsx
+  8:8  warning  Using exported name 'FlashList' as identifier for default import  import/no-named-as-default
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/storyDetail.tsx
+   10:3   warning  'Image' is defined but never used                                                                                                                   @typescript-eslint/no-unused-vars
+   36:34  warning  'UserProfile' is defined but never used                                                                                                             @typescript-eslint/no-unused-vars
+  240:6   warning  React Hook useEffect has missing dependencies: 'handleError', 'reset', and 'withErrorHandling'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/termsOfService.tsx
+  12:24  warning  'withErrorHandling' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/testLogging.tsx
+  7:26  warning  'LogLevel' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/trustedDevices.tsx
+    2:48  warning  'ScrollView' is defined but never used                                                                      @typescript-eslint/no-unused-vars
+    5:27  warning  'getFirebaseDb' is defined but never used                                                                   @typescript-eslint/no-unused-vars
+   11:8   warning  Using exported name 'FlashList' as identifier for default import                                            import/no-named-as-default
+   50:30  warning  React Hook useCallback received a function whose dependencies are unknown. Pass an inline function instead  react-hooks/exhaustive-deps
+   70:20  warning  Array type using 'Array<T>' is forbidden. Use 'T[]' instead                                                 @typescript-eslint/array-type
+  119:9   warning  'getCurrentDeviceInfo' is assigned a value but never used                                                   @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/vaultAuditLogs.tsx
+   7:8   warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+  10:8   warning  Using exported name 'FlashList' as identifier for default import   import/no-named-as-default
+  35:9   warning  'router' is assigned a value but never used                        @typescript-eslint/no-unused-vars
+  39:24  warning  'withErrorHandling' is assigned a value but never used             @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/vaultStorage.tsx
+   7:8   warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+  32:24  warning  'withErrorHandling' is assigned a value but never used             @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(screens)/vaultTrash.tsx
+   1:40  warning  'useEffect' is defined but never used                              @typescript-eslint/no-unused-vars
+   6:8   warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+  10:8   warning  Using exported name 'FlashList' as identifier for default import   import/no-named-as-default
+  14:27  warning  'VaultItem' is defined but never used                              @typescript-eslint/no-unused-vars
+  32:9   warning  'router' is assigned a value but never used                        @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(tabs)/_layout.tsx
+   4:32  warning  'Alert' is defined but never used                             @typescript-eslint/no-unused-vars
+  37:11  warning  'handleError' is assigned a value but never used              @typescript-eslint/no-unused-vars
+  44:9   warning  'navigateToNotifications' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(tabs)/feed.tsx
+    9:8   warning  'AsyncStorage' is defined but never used                                                                      @typescript-eslint/no-unused-vars
+   24:10  warning  'showErrorAlert' is defined but never used                                                                    @typescript-eslint/no-unused-vars
+   29:10  warning  'SyncStatus' is defined but never used                                                                        @typescript-eslint/no-unused-vars
+   58:9   warning  'auth' is assigned a value but never used                                                                     @typescript-eslint/no-unused-vars
+   67:10  warning  'isLoadingFromCache' is assigned a value but never used                                                       @typescript-eslint/no-unused-vars
+   87:24  warning  'withErrorHandling' is assigned a value but never used                                                        @typescript-eslint/no-unused-vars
+  115:6   warning  React Hook useEffect has a missing dependency: 'feedCache'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(tabs)/history.tsx
+    1:27  warning  'useEffect' is defined but never used                                                                                   @typescript-eslint/no-unused-vars
+    6:3   warning  'Platform' is defined but never used                                                                                    @typescript-eslint/no-unused-vars
+   27:10  warning  'showErrorAlert' is defined but never used                                                                              @typescript-eslint/no-unused-vars
+  100:22  warning  'cacheError' is defined but never used                                                                                  @typescript-eslint/no-unused-vars
+  110:8   warning  React Hook React.useCallback has a missing dependency: 'handleError'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  212:9   warning  'handleCreateStory' is assigned a value but never used                                                                  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(tabs)/profile.tsx
+   13:8  warning  Using exported name 'ThemedText' as identifier for default import                                               import/no-named-as-default
+   59:9  warning  'secondaryTextColor' is assigned a value but never used                                                         @typescript-eslint/no-unused-vars
+   60:9  warning  'tertiaryTextColor' is assigned a value but never used                                                          @typescript-eslint/no-unused-vars
+  157:6  warning  React Hook useEffect has a missing dependency: 'handleError'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/(tabs)/vault.tsx
+    3:10  warning  'Ionicons' is defined but never used                               @typescript-eslint/no-unused-vars
+    8:8   warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+   11:8   warning  'FileListItem' is defined but never used                           @typescript-eslint/no-unused-vars
+   14:8   warning  Using exported name 'FlashList' as identifier for default import   import/no-named-as-default
+   16:8   warning  'Fonts' is defined but never used                                  @typescript-eslint/no-unused-vars
+   17:19  warning  'BorderRadius' is defined but never used                           @typescript-eslint/no-unused-vars
+   17:33  warning  'Shadows' is defined but never used                                @typescript-eslint/no-unused-vars
+   22:8   warning  'auth' is defined but never used                                   @typescript-eslint/no-unused-vars
+   24:3   warning  'getVaultItemsMobile' is defined but never used                    @typescript-eslint/no-unused-vars
+   26:3   warning  'addVaultFileMobile' is defined but never used                     @typescript-eslint/no-unused-vars
+   29:3   warning  'getUploadSignedUrlMobile' is defined but never used               @typescript-eslint/no-unused-vars
+   31:8   warning  'firebase' is defined but never used                               @typescript-eslint/no-unused-vars
+   35:31  warning  'MediaContext' is defined but never used                           @typescript-eslint/no-unused-vars
+   50:7   warning  'getVaultFileType' is assigned a value but never used              @typescript-eslint/no-unused-vars
+   65:6   warning  'VaultFolder' is defined but never used                            @typescript-eslint/no-unused-vars
+  336:17  warning  'folderUri' is assigned a value but never used                     @typescript-eslint/no-unused-vars
+  398:9   warning  'getItemIcon' is assigned a value but never used                   @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/app/_layout.tsx
+   3:18  warning  'Linking' is defined but never used                                       @typescript-eslint/no-unused-vars
+   4:24  warning  'ErrorSeverity' is defined but never used                                 @typescript-eslint/no-unused-vars
+   6:10  warning  'useErrorHandler' is defined but never used                               @typescript-eslint/no-unused-vars
+  21:8   warning  Using exported name 'KeyRotationPrompt' as identifier for default import  import/no-named-as-default
+  23:13  warning  'ExpoLinking' is defined but never used                                   @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/FamilyTree/__tests__/FamilyTree.test.tsx
+   7:44  warning  A `require()` style import is forbidden           @typescript-eslint/no-require-imports
+  67:13  warning  'getByTestId' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/FamilyTree/index.tsx
+   7:3   warning  'Platform' is defined but never used                                                                            @typescript-eslint/no-unused-vars
+  21:8   warning  'calcTree' is defined but never used                                                                            @typescript-eslint/no-unused-vars
+  22:15  warning  'Node' is defined but never used                                                                                @typescript-eslint/no-unused-vars
+  22:21  warning  'ExtNode' is defined but never used                                                                             @typescript-eslint/no-unused-vars
+  22:30  warning  'Options' is defined but never used                                                                             @typescript-eslint/no-unused-vars
+  31:32  warning  'ViewportBounds' is defined but never used                                                                      @typescript-eslint/no-unused-vars
+  85:6   warning  React Hook useMemo has an unnecessary dependency: 'treeData'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ListItem.tsx
+   6:8  warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+  42:9  warning  'textColor' is assigned a value but never used                     @typescript-eslint/no-unused-vars
+  43:9  warning  'secondaryTextColor' is assigned a value but never used            @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ThemedText.tsx
+  2:16  warning  'StyleSheet' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ThemedView.tsx
+  2:27  warning  'StyleSheet' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/encryption/DeviceManagementScreen.tsx
+   4:10  warning  'ListItem' is defined but never used  @typescript-eslint/no-unused-vars
+  82:22  warning  'error' is defined but never used     @typescript-eslint/no-unused-vars
+  96:14  warning  'error' is defined but never used     @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/encryption/EncryptionSettingsScreen.tsx
+  49:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  89:22  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/encryption/KeyBackupScreen.tsx
+   2:53  warning  'ActivityIndicator' is defined but never used  @typescript-eslint/no-unused-vars
+  53:14  warning  'error' is defined but never used              @typescript-eslint/no-unused-vars
+  71:14  warning  'error' is defined but never used              @typescript-eslint/no-unused-vars
+  89:14  warning  'error' is defined but never used              @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/encryption/KeyRotationPrompt.tsx
+  20:7  warning  'KEY_ROTATION_INTERVAL' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/encryption/KeyVerificationScreen.tsx
+   13:22  warning  'CameraType' is defined but never used             @typescript-eslint/no-unused-vars
+  114:14  warning  'scannedOwnFp' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  141:14  warning  'error' is defined but never used                  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/AnimatedActionSheet.tsx
+  17:8  warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+  61:9  warning  'theme' is assigned a value but never used                         @typescript-eslint/no-unused-vars
+  65:9  warning  'textColor' is assigned a value but never used                     @typescript-eslint/no-unused-vars
+  66:9  warning  'secondaryTextColor' is assigned a value but never used            @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/AppHeader.tsx
+  6:8  warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/Avatar.tsx
+  13:10  warning  'Spacing' is defined but never used         @typescript-eslint/no-unused-vars
+  13:19  warning  'BorderRadius' is defined but never used    @typescript-eslint/no-unused-vars
+  16:10  warning  'Colors' is defined but never used          @typescript-eslint/no-unused-vars
+  59:9   warning  'theme' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/Button.tsx
+  20:8  warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/Card.tsx
+   3:10  warning  'Colors' is defined but never used                @typescript-eslint/no-unused-vars
+  54:9   warning  'colorScheme' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/Checkbox.tsx
+  5:10  warning  'Spacing' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/ConflictResolver.tsx
+   2:52  warning  'ScrollView' is defined but never used                @typescript-eslint/no-unused-vars
+  47:9   warning  'backgroundColor' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/DayScheduleView.tsx
+    8:3  warning  'Dimensions' is defined but never used                             @typescript-eslint/no-unused-vars
+    9:3  warning  'GestureResponderEvent' is defined but never used                  @typescript-eslint/no-unused-vars
+   18:8  warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+   52:9  warning  'textColor' is assigned a value but never used                     @typescript-eslint/no-unused-vars
+  118:9  warning  'router' is assigned a value but never used                        @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/Divider.tsx
+  2:16  warning  'StyleSheet' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/EmptyState.tsx
+   8:8  warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+  50:9  warning  'theme' is assigned a value but never used                         @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/FileListItem.tsx
+  2:52  warning  'Platform' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/FloatingActionMenu.tsx
+  12:8  warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+  60:9  warning  'secondaryBackground' is assigned a value but never used           @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/GuestListManagement.tsx
+   4:8   warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+   5:8   warning  Using exported name 'ThemedView' as identifier for default import  import/no-named-as-default
+   7:8   warning  'Button' is defined but never used                                 @typescript-eslint/no-unused-vars
+  13:35  warning  'EventDetails' is defined but never used                           @typescript-eslint/no-unused-vars
+  43:11  warning  'handleError' is assigned a value but never used                   @typescript-eslint/no-unused-vars
+  60:14  warning  'error' is defined but never used                                  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/MediaGallery.tsx
+    1:27  warning  'useEffect' is defined but never used                                                                          @typescript-eslint/no-unused-vars
+   10:3   warning  'Platform' is defined but never used                                                                           @typescript-eslint/no-unused-vars
+   99:6   warning  React Hook React.useEffect has a missing dependency: 'item'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  113:9   warning  'togglePlay' is assigned a value but never used                                                                @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/MessageReactions.tsx
+  10:3  warning  'PanResponder' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/MfaSignInModal.tsx
+   4:8   warning  Using exported name 'Colors' as identifier for default import  import/no-named-as-default
+  39:14  warning  'error' is defined but never used                              @typescript-eslint/no-unused-vars
+  49:14  warning  'error' is defined but never used                              @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/NotificationBell.tsx
+  18:10  warning  'unsubscribe' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/OptimizedMessageList.tsx
+  1:30  warning  'useEffect' is defined but never used                             @typescript-eslint/no-unused-vars
+  3:8   warning  Using exported name 'FlashList' as identifier for default import  import/no-named-as-default
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/ProfilePicture.tsx
+  2:10  warning  'View' is defined but never used        @typescript-eslint/no-unused-vars
+  2:16  warning  'Text' is defined but never used        @typescript-eslint/no-unused-vars
+  2:22  warning  'StyleSheet' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/RSVPStatusIndicator.tsx
+  4:8  warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/RSVPSummary.tsx
+  4:8  warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/Screen.tsx
+  14:18  warning  'Spacing' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/ShareLinkManager.tsx
+  41:11  warning  'handleError' is assigned a value but never used                                                            @typescript-eslint/no-unused-vars
+  47:26  warning  React Hook useCallback received a function whose dependencies are unknown. Pass an inline function instead  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/StoryPost.tsx
+   2:28  warning  'Image' is defined but never used                                  @typescript-eslint/no-unused-vars
+   5:8   warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+  14:34  warning  'UserProfile' is defined but never used                            @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/SyncStatus.tsx
+   1:17  warning  'useState' is defined but never used                  @typescript-eslint/no-unused-vars
+   1:27  warning  'useCallback' is defined but never used               @typescript-eslint/no-unused-vars
+   6:33  warning  'Shadows' is defined but never used                   @typescript-eslint/no-unused-vars
+  29:9   warning  'backgroundColor' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/TaggedPeopleBadges.tsx
+  4:8  warning  'Fonts' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/UploadProgressBar.tsx
+   2:28  warning  'Text' is defined but never used                                                                              @typescript-eslint/no-unused-vars
+   4:8   warning  Using exported name 'ThemedText' as identifier for default import                                             import/no-named-as-default
+   7:8   warning  'Fonts' is defined but never used                                                                             @typescript-eslint/no-unused-vars
+  60:6   warning  React Hook useEffect has a missing dependency: 'slideAnim'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/VaultSearchBar.tsx
+  4:8  warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/__tests__/MessageActionsSheet.test.tsx
+   5:10  warning  'getFirebaseAuth' is defined but never used  @typescript-eslint/no-unused-vars
+  28:17  warning  A `require()` style import is forbidden      @typescript-eslint/no-require-imports
+  48:14  warning  Unknown property 'testId' found              react/no-unknown-property
+  61:12  warning  Unknown property 'testId' found              react/no-unknown-property
+  61:30  warning  Unknown property 'onPress' found             react/no-unknown-property
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/__tests__/TypingIndicator.test.tsx
+  88:13  warning  'container' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/__tests__/VoiceMessagePlayer.test.tsx
+  250:13  warning  'getByTestId' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/__tests__/VoiceMessageRecorder.test.tsx
+    6:13  warning  'FileSystem' is defined but never used          @typescript-eslint/no-unused-vars
+  208:26  warning  'getByText' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/components/ui/feed/FeedCard.tsx
+  14:8  warning  Using exported name 'ThemedText' as identifier for default import  import/no-named-as-default
+  55:9  warning  'secondaryTextColor' is assigned a value but never used            @typescript-eslint/no-unused-vars
+  56:9  warning  'tertiaryTextColor' is assigned a value but never used             @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/contexts/AuthContext.tsx
+    10:43  warning  '/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/node_modules/@react-native-firebase/auth/lib/index.js' imported multiple times                                                                                                                             import/no-duplicates
+    13:83  warning  'HasPlayServicesParams' is defined but never used                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+    31:8   warning  '/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/node_modules/@react-native-firebase/auth/lib/index.js' imported multiple times                                                                                                                             import/no-duplicates
+   105:6   warning  'RNGoogleSignInUser' is defined but never used                                                                                                                                                                                                                     @typescript-eslint/no-unused-vars
+   344:9   warning  The 'refreshUser' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'refreshUser' in its own useCallback() Hook                                    react-hooks/exhaustive-deps
+   446:6   warning  React Hook useEffect has a missing dependency: 'fetchFirestoreUserData'. Either include it or remove the dependency array                                                                                                                                          react-hooks/exhaustive-deps
+   574:6   warning  React Hook useEffect has a missing dependency: 'phoneNumberInProgress'. Either include it or remove the dependency array                                                                                                                                           react-hooks/exhaustive-deps
+   578:9   warning  The 'clearPhoneAuth' function makes the dependencies of useMemo Hook (at line 1371) change on every render. To fix this, wrap the definition of 'clearPhoneAuth' in its own useCallback() Hook                                                                     react-hooks/exhaustive-deps
+   620:9   warning  The 'signIn' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'signIn' in its own useCallback() Hook                                              react-hooks/exhaustive-deps
+   665:9   warning  The 'triggerSendVerificationEmail' function makes the dependencies of useMemo Hook (at line 1371) change on every render. To fix this, wrap the definition of 'triggerSendVerificationEmail' in its own useCallback() Hook                                         react-hooks/exhaustive-deps
+   682:9   warning  The 'signUp' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'signUp' in its own useCallback() Hook                                              react-hooks/exhaustive-deps
+   737:9   warning  The 'resendVerificationEmail' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'resendVerificationEmail' in its own useCallback() Hook            react-hooks/exhaustive-deps
+   751:9   warning  The 'confirmEmailVerificationLink' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'confirmEmailVerificationLink' in its own useCallback() Hook  react-hooks/exhaustive-deps
+   778:9   warning  The 'signOut' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'signOut' in its own useCallback() Hook                                            react-hooks/exhaustive-deps
+   841:9   warning  The 'signInWithGoogle' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'signInWithGoogle' in its own useCallback() Hook                          react-hooks/exhaustive-deps
+   976:9   warning  The 'signInWithPhoneNumber' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'signInWithPhoneNumber' in its own useCallback() Hook                react-hooks/exhaustive-deps
+  1008:9   warning  The 'confirmPhoneCode' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'confirmPhoneCode' in its own useCallback() Hook                          react-hooks/exhaustive-deps
+  1056:9   warning  The 'signInWithApple' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'signInWithApple' in its own useCallback() Hook                            react-hooks/exhaustive-deps
+  1069:9   warning  The 'sendPasswordReset' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'sendPasswordReset' in its own useCallback() Hook                        react-hooks/exhaustive-deps
+  1089:9   warning  The 'getEnrolledMfaFactors' function makes the dependencies of useMemo Hook (at line 1371) change on every render. To fix this, wrap the definition of 'getEnrolledMfaFactors' in its own useCallback() Hook                                                       react-hooks/exhaustive-deps
+  1119:9   warning  The 'startPhoneMfaEnrollment' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'startPhoneMfaEnrollment' in its own useCallback() Hook            react-hooks/exhaustive-deps
+  1160:9   warning  The 'confirmPhoneMfaEnrollment' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'confirmPhoneMfaEnrollment' in its own useCallback() Hook        react-hooks/exhaustive-deps
+  1196:9   warning  The 'unenrollMfaFactor' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'unenrollMfaFactor' in its own useCallback() Hook                        react-hooks/exhaustive-deps
+  1227:9   warning  The 'sendMfaSignInOtp' function makes the dependencies of useMemo Hook (at line 1371) change on every render. To fix this, wrap the definition of 'sendMfaSignInOtp' in its own useCallback() Hook                                                                 react-hooks/exhaustive-deps
+  1271:9   warning  The 'confirmMfaSignIn' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'confirmMfaSignIn' in its own useCallback() Hook                          react-hooks/exhaustive-deps
+  1308:9   warning  The 'cancelMfaProcess' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'cancelMfaProcess' in its own useCallback() Hook                          react-hooks/exhaustive-deps
+  1318:9   warning  The 'clearMfaError' function makes the dependencies of useMemo Hook (at line 1371) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'clearMfaError' in its own useCallback() Hook                                react-hooks/exhaustive-deps
+  1329:6   warning  React Hook useEffect has a missing dependency: 'getEnrolledMfaFactors'. Either include it or remove the dependency array                                                                                                                                           react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/contexts/EncryptionContext.tsx
+  42:10  warning  'currentUser' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/contexts/OfflineContext.tsx
+  74:6  warning  React Hook useCallback has an unnecessary dependency: 'syncService'. Either exclude it or remove the dependency array. Outer scope values like 'syncService' aren't valid dependencies because mutating them doesn't re-render the component  react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/database/CacheManager.ts
+   8:13  warning  'Device' is defined but never used                                   @typescript-eslint/no-unused-vars
+   9:8   warning  Using exported name 'SyncDatabase' as identifier for default import  import/no-named-as-default
+  10:10  warning  'CacheMetadata' is defined but never used                            @typescript-eslint/no-unused-vars
+  10:25  warning  'MediaCache' is defined but never used                               @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/database/SyncDatabase.ts
+  12:3  warning  'LocalFamilyTree' is defined but never used  @typescript-eslint/no-unused-vars
+  17:3  warning  'CacheMetadata' is defined but never used    @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/database/migrations.ts
+  85:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/hooks/useLoggedEffect.ts
+  56:31  warning  The ref value 'runCountRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'runCountRef.current' to a variable inside the effect, and use that variable in the cleanup function  react-hooks/exhaustive-deps
+  67:6   warning  React Hook useEffect was passed a dependency list that is not an array literal. This means we can't statically verify whether you've passed the correct dependencies                                                                                                   react-hooks/exhaustive-deps
+  67:6   warning  React Hook useEffect has missing dependencies: 'deps', 'effect', and 'name'. Either include them or remove the dependency array. If 'effect' changes too often, find the parent component that defines it and wrap that definition in useCallback                      react-hooks/exhaustive-deps
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/hooks/useSanitizedInput.ts
+  13:3  warning  'sanitizeUserId' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/lib/ErrorHandlingService.ts
+  2:18  warning  'LogLevel' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/lib/eventUtils.ts
+  4:10  warning  'FirebaseFirestoreTypes' is defined but never used  @typescript-eslint/no-unused-vars
+  5:30  warning  'formatTimeAgo' is defined but never used           @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/lib/firebase.ts
+  1:8  warning  'firebase' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/lib/firebaseUtils.ts
+  491:18  warning  An interface declaring no members is equivalent to its supertype  @typescript-eslint/no-empty-object-type
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/lib/syncService.ts
+  4:10  warning  'getFirebaseDb' is defined but never used           @typescript-eslint/no-unused-vars
+  4:25  warning  'getFirebaseFunctions' is defined but never used    @typescript-eslint/no-unused-vars
+  6:10  warning  'FirebaseFirestoreTypes' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/lib/xssSanitization.ts
+  29:7  warning  'DANGEROUS_TAGS' is assigned a value but never used        @typescript-eslint/no-unused-vars
+  57:7  warning  'DANGEROUS_ATTRIBUTES' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/FeedCacheService.ts
+  308:13  warning  'now' is assigned a value but never used       @typescript-eslint/no-unused-vars
+  442:15  warning  'metadata' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/MessageOptimizationService.ts
+  4:10  warning  'getFirebaseStorage' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/NotificationService.ts
+  8:8  warning  'NetInfo' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/R2UploadService.ts
+  1:38  warning  '/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/lib/errorUtils.ts' imported multiple times  import/no-duplicates
+  2:33  warning  '/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/lib/errorUtils.ts' imported multiple times  import/no-duplicates
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/VaultService.ts
+   22:7   warning  'RETRY_DELAY' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  317:13  warning  'downloadResult' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/__tests__/MessageSyncService.test.ts
+  1:8   warning  Using exported name 'MessageSyncService' as identifier for default import  import/no-named-as-default
+  2:8   warning  Using exported name 'SyncDatabase' as identifier for default import        import/no-named-as-default
+  6:10  warning  'FirebaseFirestoreTypes' is defined but never used                         @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/AuditLogService.ts
+  4:10  warning  'FirebaseFirestoreTypes' is defined but never used  @typescript-eslint/no-unused-vars
+  6:10  warning  'Buffer' is defined but never used                  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/ChatEncryptionService.ts
+    1:8   warning  Using exported name 'E2EEService' as identifier for default import             import/no-named-as-default
+    2:8   warning  Using exported name 'MediaEncryptionService' as identifier for default import  import/no-named-as-default
+    6:8   warning  Using exported name 'EncryptedSearchService' as identifier for default import  import/no-named-as-default
+  136:11  warning  'SyncOperation' is defined but never used                                      @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/DoubleRatchetService.ts
+  5:10  warning  'getFirebaseDb' is defined but never used    @typescript-eslint/no-unused-vars
+  5:25  warning  'getFirebaseAuth' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/EncryptedSearchService.ts
+  1:22  warning  'randomBytes' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/FilePreviewService.ts
+  3:10  warning  'createHash' is defined but never used          @typescript-eslint/no-unused-vars
+  7:10  warning  'getFirebaseStorage' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/GroupE2EEService.ts
+  2:10  warning  'NativeModules' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/KeyBackupService.ts
+   6:42  warning  'getFirebaseStorage' is defined but never used  @typescript-eslint/no-unused-vars
+  26:11  warning  'RecoveryCode' is defined but never used        @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/KeyRotationService.ts
+    2:10  warning  'Buffer' is defined but never used                                  @typescript-eslint/no-unused-vars
+    4:8   warning  Using exported name 'E2EEService' as identifier for default import  import/no-named-as-default
+  354:16  warning  'error' is defined but never used                                   @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/MediaEncryptionService.ts
+  13:7  warning  'TAG_LENGTH' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/MultiDeviceService.ts
+    7:8   warning  Using exported name 'E2EEService' as identifier for default import  import/no-named-as-default
+  173:15  warning  'session' is assigned a value but never used                        @typescript-eslint/no-unused-vars
+  369:14  warning  'error' is defined but never used                                   @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/OfflineFileCacheService.ts
+  6:10  warning  'getFirebaseStorage' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/SecureFileSharingService.ts
+    3:25  warning  'getFirebaseStorage' is defined but never used      @typescript-eslint/no-unused-vars
+    5:10  warning  'MediaEncryptionService' is defined but never used  @typescript-eslint/no-unused-vars
+  420:11  warning  'iterations' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  421:11  warning  'keyLength' is assigned a value but never used      @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/__tests__/ChatEncryptionService.test.ts
+  8:8  warning  Using exported name 'OfflineQueueService' as identifier for default import     import/no-named-as-default
+  9:8  warning  Using exported name 'EncryptedSearchService' as identifier for default import  import/no-named-as-default
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/libsignal/LibsignalCompatibilityService.ts
+    1:44  warning  'DeviceMessage' is defined but never used                    @typescript-eslint/no-unused-vars
+  238:21  warning  Unreachable code                                             no-unreachable
+  252:76  warning  Array type using 'Array<T>' is forbidden. Use 'T[]' instead  @typescript-eslint/array-type
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/libsignal/LibsignalService.ts
+    3:34  warning  'PreKeyBundle' is defined but never used                     @typescript-eslint/no-unused-vars
+    7:10  warning  'Platform' is defined but never used                         @typescript-eslint/no-unused-vars
+  385:59  warning  Array type using 'Array<T>' is forbidden. Use 'T[]' instead  @typescript-eslint/array-type
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/libsignal/services/KeyDistributionService.ts
+    8:10  warning  'Buffer' is defined but never used                               @typescript-eslint/no-unused-vars
+   22:12  warning  Array type using 'Array<T>' is forbidden. Use 'T[]' instead      @typescript-eslint/array-type
+  213:54  warning  Array type using 'Array<T>' is forbidden. Use 'T[]' instead      @typescript-eslint/array-type
+  412:45  warning  Array type using 'Array<any>' is forbidden. Use 'any[]' instead  @typescript-eslint/array-type
+  424:51  warning  Array type using 'Array<any>' is forbidden. Use 'any[]' instead  @typescript-eslint/array-type
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/libsignal/services/KeyGenerationService.ts
+  3:3  warning  'PublicKey' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/libsignal/services/SessionService.ts
+  186:38  warning  Array type using 'Array<T>' is forbidden. Use 'T[]' instead  @typescript-eslint/array-type
+  193:29  warning  Array type using 'Array<T>' is forbidden. Use 'T[]' instead  @typescript-eslint/array-type
+  199:31  warning  '_session' is assigned a value but never used                @typescript-eslint/no-unused-vars
+
+/Users/ruchitpatel/Documents/DynastyMobile/apps/mobile/src/services/encryption/libsignal/stores/SignalProtocolStore.ts
+    8:3   warning  'PrivateKey' is defined but never used        @typescript-eslint/no-unused-vars
+  464:31  warning  'session' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+✖ 405 problems (0 errors, 405 warnings)
+  0 errors and 10 warnings potentially fixable with the `--fix` option.
+
+Done in 1.90s.

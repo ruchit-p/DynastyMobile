@@ -80,4 +80,11 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# Firebase service files
+GoogleService-Info.plist
+google-services.json
+
+# Google Play service account
+google-play-service-account.json
+
 # @end expo-cli

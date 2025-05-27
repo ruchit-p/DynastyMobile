@@ -4,7 +4,8 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirebaseDb, getFirebaseAuth } from '../lib/firebase';
 import { callFirebaseFunction } from '../lib/errorUtils';
-import ChatEncryptionService from './encryption/ChatEncryptionService';
+import { ChatEncryptionService } from './encryption/ChatEncryptionService';
+import { logger } from './LoggingService';
 
 const NOTIFICATION_SETTINGS_KEY = '@dynasty_notification_settings';
 const NOTIFICATION_CHANNEL_ID = 'dynasty_messages';
@@ -65,7 +66,7 @@ export class ChatNotificationService {
       // Register FCM token
       await this.registerFCMToken();
     } catch (error) {
-      console.error('Failed to initialize chat notifications:', error);
+      logger.error('Failed to initialize chat notifications:', error);
     }
   }
 
@@ -76,7 +77,7 @@ export class ChatNotificationService {
         this.settings = JSON.parse(saved);
       }
     } catch (error) {
-      console.error('Failed to load notification settings:', error);
+      logger.error('Failed to load notification settings:', error);
     }
   }
 
@@ -84,7 +85,7 @@ export class ChatNotificationService {
     try {
       await AsyncStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(this.settings));
     } catch (error) {
-      console.error('Failed to save notification settings:', error);
+      logger.error('Failed to save notification settings:', error);
     }
   }
 
@@ -96,12 +97,12 @@ export class ChatNotificationService {
         authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
       if (enabled) {
-        console.log('Notification permissions granted');
+        logger.debug('Notification permissions granted');
       }
 
       return enabled;
     } catch (error) {
-      console.error('Failed to request notification permissions:', error);
+      logger.error('Failed to request notification permissions:', error);
       return false;
     }
   }
@@ -121,17 +122,17 @@ export class ChatNotificationService {
             lastTokenUpdate: getFirebaseDb().FieldValue.serverTimestamp(),
           });
 
-        console.log('FCM token registered');
+        logger.debug('FCM token registered');
       }
     } catch (error) {
-      console.error('Failed to register FCM token:', error);
+      logger.error('Failed to register FCM token:', error);
     }
   }
 
   private setupMessageHandlers() {
     // Handle foreground messages
     messaging().onMessage(async (remoteMessage) => {
-      console.log('Foreground message received:', remoteMessage);
+      logger.debug('Foreground message received:', remoteMessage);
       
       if (this.settings.enabled && remoteMessage.data) {
         await this.showNotification(remoteMessage);
@@ -140,7 +141,7 @@ export class ChatNotificationService {
 
     // Handle background message
     messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-      console.log('Background message received:', remoteMessage);
+      logger.debug('Background message received:', remoteMessage);
       
       if (this.settings.enabled && remoteMessage.data) {
         await this.showNotification(remoteMessage);
@@ -151,7 +152,7 @@ export class ChatNotificationService {
     notifee.onForegroundEvent(({ type, detail }) => {
       switch (type) {
         case EventType.PRESS:
-          console.log('Notification pressed:', detail.notification);
+          logger.debug('Notification pressed:', detail.notification);
           if (detail.notification?.data?.chatId) {
             this.handleNotificationPress(detail.notification.data.chatId as string);
           }
@@ -216,7 +217,7 @@ export class ChatNotificationService {
             body = '📎 File';
           }
         } catch (error) {
-          console.error('Failed to decrypt message for notification:', error);
+          logger.error('Failed to decrypt message for notification:', error);
         }
       }
 
@@ -258,21 +259,21 @@ export class ChatNotificationService {
         },
       });
     } catch (error) {
-      console.error('Failed to show notification:', error);
+      logger.error('Failed to show notification:', error);
     }
   }
 
   private async handleNotificationPress(chatId: string) {
     // Navigation will be handled by the app
-    console.log('Navigate to chat:', chatId);
+    logger.debug('Navigate to chat:', chatId);
   }
 
   private async handleQuickReply(chatId: string, message: string) {
     try {
       await ChatEncryptionService.sendTextMessage(chatId, message);
-      console.log('Quick reply sent');
+      logger.debug('Quick reply sent');
     } catch (error) {
-      console.error('Failed to send quick reply:', error);
+      logger.error('Failed to send quick reply:', error);
     }
   }
 
@@ -310,7 +311,7 @@ export class ChatNotificationService {
         messageId,
       });
     } catch (error) {
-      console.error('Failed to send message notification:', error);
+      logger.error('Failed to send message notification:', error);
     }
   }
 
@@ -324,7 +325,7 @@ export class ChatNotificationService {
         }
       }
     } catch (error) {
-      console.error('Failed to clear chat notifications:', error);
+      logger.error('Failed to clear chat notifications:', error);
     }
   }
 
@@ -349,7 +350,7 @@ export class ChatNotificationService {
         notifee.setBadgeCount(unreadCount);
       }
     } catch (error) {
-      console.error('Failed to update badge count:', error);
+      logger.error('Failed to update badge count:', error);
     }
   }
 }

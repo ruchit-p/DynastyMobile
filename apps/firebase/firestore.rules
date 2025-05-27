@@ -44,7 +44,11 @@ service cloud.firestore {
 
     // User profiles
     match /users/{userId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        isOwner(userId) ||
+        // Allow family members to read each other's profiles
+        exists(/databases/$(database)/documents/families/$(resource.data.familyTreeId)/members/$(request.auth.uid))
+      );
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
       allow delete: if false; // Don't allow users to delete their profile through client
@@ -224,6 +228,51 @@ service cloud.firestore {
                       request.resource.data.senderId == request.auth.uid;
       allow update: if false; // Messages are immutable
       allow delete: if false; // Messages cannot be deleted
+    }
+    
+    // Signal Protocol Identity Keys
+    match /signalKeys/{userId} {
+      allow read: if isSignedIn(); // Anyone can read public identity keys
+      allow create: if isSignedIn() && userId == request.auth.uid;
+      allow update: if isSignedIn() && userId == request.auth.uid;
+      allow delete: if false; // Never allow deletion of identity keys
+      
+      // Device-specific keys
+      match /devices/{deviceId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && 
+                       get(/databases/$(database)/documents/signalKeys/$(userId)).data.userId == request.auth.uid;
+      }
+    }
+    
+    // Signal Protocol PreKeys
+    match /users/{userId}/prekeys/{prekeyId} {
+      allow read: if isSignedIn(); // Anyone can fetch prekeys for key exchange
+      allow create: if isSignedIn() && userId == request.auth.uid;
+      allow update: if false; // PreKeys are immutable
+      allow delete: if isSignedIn() && userId == request.auth.uid; // Allow deletion after use
+    }
+    
+    // Signal Protocol Signed PreKeys
+    match /users/{userId}/signedPrekeys/{signedPrekeyId} {
+      allow read: if isSignedIn(); // Anyone can fetch signed prekeys
+      allow create: if isSignedIn() && userId == request.auth.uid;
+      allow update: if false; // Signed PreKeys are immutable
+      allow delete: if isSignedIn() && userId == request.auth.uid; // Allow cleanup of old keys
+    }
+    
+    // Key Change Notifications
+    match /keyChangeNotifications/{notificationId} {
+      allow read: if isSignedIn() && 
+                    (resource.data.affectedUserId == request.auth.uid || 
+                     resource.data.participants.hasAny([request.auth.uid]));
+      allow write: if false; // Only through Cloud Functions
+    }
+    
+    // Session Records (for debugging/audit)
+    match /users/{userId}/sessions/{sessionId} {
+      allow read: if isSignedIn() && userId == request.auth.uid;
+      allow write: if false; // Only through Cloud Functions
     }
   }
 }

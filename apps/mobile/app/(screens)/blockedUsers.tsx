@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
-import FlashList from '../../components/ui/FlashList';
+import { FlashList } from '../../components/ui/FlashList';
+import { logger } from '../../src/services/LoggingService';
 
 // Mock data for blocked users - replace with actual data source
 const MOCK_BLOCKED_USERS: { id: string; name: string; avatarUrl: null }[] = [];
@@ -76,7 +77,7 @@ const BlockedUsersScreen = () => {
 
   const handleUnblockUser = withErrorHandling(async (userId: string) => {
     try {
-      console.log('Unblock user:', userId);
+      logger.debug('Unblock user:', userId);
       // TODO: Implement unblock logic (remove from Firestore list, update UI)
       alert(`User ${userId} unblocked (mock).`);
     } catch (error) {

@@ -194,9 +194,7 @@ class NotificationService {
         }
         break;
       case 'message':
-        if (notification.data.chatId) {
-          window.location.href = `/chat/${notification.data.chatId}`;
-        }
+        // Messaging is only available in the mobile app
         break;
       case 'family':
         window.location.href = '/family-tree';

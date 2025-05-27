@@ -12,7 +12,7 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext'; // Updated path
 import { StatusBar } from 'expo-status-bar';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
@@ -62,7 +62,7 @@ export default function ConfirmEmailVerificationScreen() {
     };
 
     verify();
-  }, [uid, token, confirmEmailVerificationLink, router]);
+  }, [uid, token, confirmEmailVerificationLink, router, handleError]);
 
   return (
     <ErrorBoundary screenName="ConfirmEmailVerificationScreen">

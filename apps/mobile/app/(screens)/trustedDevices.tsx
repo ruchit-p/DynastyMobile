@@ -1,23 +1,31 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getFirebaseAuth, getFirebaseDb } from '../../src/lib/firebase';
 import { commonHeaderOptions } from '../../constants/headerConfig';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 import * as Device from 'expo-device';
-import FlashList from '../../components/ui/FlashList';
+import { FlashList } from '../../components/ui/FlashList';
+import { fingerprintService } from '../../src/services/FingerprintService';
+import { callFirebaseFunction } from '../../src/lib/errorUtils';
 
 interface TrustedDevice {
   id: string;
+  visitorId: string;
   deviceName: string;
   deviceType: string;
   platform: string;
   lastUsed: Date;
   addedAt: Date;
+  trustScore: number;
   isCurrentDevice: boolean;
+  lastLocation?: {
+    city?: string;
+    country?: string;
+  };
 }
 
 const TrustedDevicesScreen = () => {
@@ -39,9 +47,74 @@ const TrustedDevicesScreen = () => {
     });
   }, [navigation]);
 
+  const loadTrustedDevices = useCallback(
+    withErrorHandling(async () => {
+      reset();
+      setIsLoading(true);
+      
+      try {
+        const auth = getFirebaseAuth();
+        
+        if (!auth.currentUser) {
+          setIsLoading(false);
+          return;
+        }
+
+        // Get current device fingerprint
+        const currentFingerprint = await fingerprintService.getFingerprint();
+        const currentVisitorId = currentFingerprint?.visitorId;
+        
+        // Get trusted devices from Firebase using FingerprintJS
+        const result = await callFirebaseFunction<{
+          success: boolean;
+          devices: {
+            id: string;
+            visitorId: string;
+            deviceName: string;
+            deviceType: string;
+            platform: string;
+            lastUsed: number;
+            addedAt: number;
+            trustScore: number;
+            isCurrentDevice: boolean;
+            lastLocation?: {
+              city?: string;
+              country?: string;
+            };
+          }[];
+        }>('getTrustedDevices', {
+          currentVisitorId
+        });
+
+        if (result.success && result.devices) {
+          const trustedDevices: TrustedDevice[] = result.devices.map(device => ({
+            ...device,
+            lastUsed: new Date(device.lastUsed),
+            addedAt: new Date(device.addedAt),
+            isCurrentDevice: device.visitorId === currentVisitorId
+          }));
+          
+          // Sort devices: current device first, then by last used
+          trustedDevices.sort((a, b) => {
+            if (a.isCurrentDevice) return -1;
+            if (b.isCurrentDevice) return 1;
+            return b.lastUsed.getTime() - a.lastUsed.getTime();
+          });
+          
+          setDevices(trustedDevices);
+        }
+      } catch (error) {
+        handleError(error, { action: 'loadTrustedDevices' });
+      } finally {
+        setIsLoading(false);
+      }
+    }),
+    [handleError, reset, withErrorHandling]
+  );
+
   useEffect(() => {
     loadTrustedDevices();
-  }, []);
+  }, [loadTrustedDevices]);
 
   const getCurrentDeviceInfo = async () => {
     // Create a unique device ID based on available device properties
@@ -55,72 +128,8 @@ const TrustedDevicesScreen = () => {
     };
   };
 
-  const loadTrustedDevices = withErrorHandling(async () => {
-    reset();
-    setIsLoading(true);
-    
-    try {
-      const auth = getFirebaseAuth();
-      const db = getFirebaseDb();
-      
-      if (!auth.currentUser) {
-        setIsLoading(false);
-        return;
-      }
-
-      const currentDevice = await getCurrentDeviceInfo();
-      
-      // Get user's trusted devices from Firestore
-      const userDoc = await db.collection('users').doc(auth.currentUser.uid).get();
-      const userData = userDoc.data();
-      
-      let trustedDevices: TrustedDevice[] = userData?.trustedDevices || [];
-      
-      // Check if current device is in the list
-      const currentDeviceExists = trustedDevices.some(d => d.id === currentDevice.id);
-      
-      if (!currentDeviceExists) {
-        // Add current device to trusted devices
-        const newDevice: TrustedDevice = {
-          ...currentDevice,
-          lastUsed: new Date(),
-          addedAt: new Date(),
-          isCurrentDevice: true,
-        };
-        
-        trustedDevices = [newDevice, ...trustedDevices];
-        
-        // Save to Firestore
-        await db.collection('users').doc(auth.currentUser.uid).update({
-          trustedDevices: trustedDevices.map(d => ({
-            ...d,
-            lastUsed: d.lastUsed instanceof Date ? d.lastUsed.toISOString() : d.lastUsed,
-            addedAt: d.addedAt instanceof Date ? d.addedAt.toISOString() : d.addedAt,
-          }))
-        });
-      }
-      
-      // Mark current device and convert dates
-      const processedDevices = trustedDevices.map(device => ({
-        ...device,
-        isCurrentDevice: device.id === currentDevice.id,
-        lastUsed: device.lastUsed instanceof Date ? device.lastUsed : new Date(device.lastUsed),
-        addedAt: device.addedAt instanceof Date ? device.addedAt : new Date(device.addedAt),
-      }));
-      
-      setDevices(processedDevices);
-    } catch (error) {
-      handleError(error, {
-        action: 'loadTrustedDevices',
-        metadata: { screenName: 'TrustedDevices' }
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  });
-
-  const removeDevice = withErrorHandling(async (deviceId: string) => {
-    if (deviceId === currentDeviceId) {
+  const removeDevice = withErrorHandling(async (visitorId: string) => {
+    if (visitorId === currentDeviceId) {
       Alert.alert('Cannot Remove', 'You cannot remove the device you are currently using.');
       return;
     }
@@ -135,27 +144,22 @@ const TrustedDevicesScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              const auth = getFirebaseAuth();
-              const db = getFirebaseDb();
+              const success = await fingerprintService.removeTrustedDevice(
+                visitorId,
+                currentDeviceId
+              );
               
-              if (!auth.currentUser) return;
-              
-              const updatedDevices = devices.filter(d => d.id !== deviceId);
-              
-              await db.collection('users').doc(auth.currentUser.uid).update({
-                trustedDevices: updatedDevices.map(d => ({
-                  ...d,
-                  lastUsed: d.lastUsed.toISOString(),
-                  addedAt: d.addedAt.toISOString(),
-                }))
-              });
-              
-              setDevices(updatedDevices);
-              Alert.alert('Success', 'Device removed successfully.');
+              if (success) {
+                const updatedDevices = devices.filter(d => d.visitorId !== visitorId);
+                setDevices(updatedDevices);
+                Alert.alert('Success', 'Device removed successfully.');
+              } else {
+                Alert.alert('Error', 'Failed to remove device. Please try again.');
+              }
             } catch (error) {
               handleError(error, {
                 action: 'removeDevice',
-                metadata: { deviceId, screenName: 'TrustedDevices' }
+                metadata: { visitorId, screenName: 'TrustedDevices' }
               });
               Alert.alert('Error', 'Failed to remove device. Please try again.');
             }
@@ -195,11 +199,34 @@ const TrustedDevicesScreen = () => {
           <Text style={styles.deviceDate}>
             Last used: {item.lastUsed.toLocaleDateString()}
           </Text>
+          
+          {item.lastLocation && (
+            <Text style={styles.deviceLocation}>
+              📍 {item.lastLocation.city ? `${item.lastLocation.city}, ` : ''}{item.lastLocation.country || 'Unknown location'}
+            </Text>
+          )}
+          
+          <View style={styles.trustScoreContainer}>
+            <Text style={styles.trustScoreLabel}>Trust Score:</Text>
+            <View style={styles.trustScoreBar}>
+              <View 
+                style={[
+                  styles.trustScoreFill,
+                  { 
+                    width: `${item.trustScore}%`,
+                    backgroundColor: item.trustScore >= 70 ? '#4CAF50' : 
+                                   item.trustScore >= 40 ? '#FF9800' : '#F44336'
+                  }
+                ]}
+              />
+            </View>
+            <Text style={styles.trustScoreValue}>{item.trustScore}%</Text>
+          </View>
         </View>
         
         {!item.isCurrentDevice && (
           <TouchableOpacity
-            onPress={() => removeDevice(item.id)}
+            onPress={() => removeDevice(item.visitorId)}
             style={styles.removeButton}
           >
             <Ionicons name="trash-outline" size={20} color="#FF3B30" />
@@ -234,14 +261,14 @@ const TrustedDevicesScreen = () => {
           <FlashList
             data={devices}
             renderItem={renderDevice}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item.visitorId || item.id}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
             ListEmptyComponent={() => (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No trusted devices found</Text>
               </View>
             )}
-            estimatedItemSize={80}
+            estimatedItemSize={120}
           />
         </View>
       </SafeAreaView>
@@ -344,6 +371,40 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#999',
+  },
+  deviceLocation: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+  },
+  trustScoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  trustScoreLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginRight: 8,
+  },
+  trustScoreBar: {
+    flex: 1,
+    height: 4,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginRight: 8,
+  },
+  trustScoreFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  trustScoreValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+    minWidth: 35,
+    textAlign: 'right',
   },
 });
 

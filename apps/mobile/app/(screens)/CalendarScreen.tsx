@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { StyleSheet, View, TouchableOpacity, Platform, ActivityIndicator, Text } from 'react-native';
-import { CalendarProvider, ExpandableCalendar, TimelineList, CalendarUtils } from 'react-native-calendars';
+import { StyleSheet, View, TouchableOpacity, ActivityIndicator, Text } from 'react-native';
+import { CalendarProvider, ExpandableCalendar, TimelineList } from 'react-native-calendars';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import moment from 'moment';
 
 // Import error handling components
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
@@ -18,10 +18,11 @@ import { getUpcomingEventsMobile } from '../../src/lib/eventUtils';
 
 // Import design tokens
 import { Colors } from '../../constants/Colors';
-import { useBackgroundColor, useTextColor, useIconColor } from '../../hooks/useThemeColor';
+import { useBackgroundColor, useTextColor } from '../../hooks/useThemeColor';
 
 // Import AuthContext
 import { useAuth } from '../../src/contexts/AuthContext';
+import { logger } from '../../src/services/LoggingService';
 
 // Types
 interface Event {
@@ -50,7 +51,7 @@ const CalendarScreen = () => {
   // Get theme colors
   const backgroundColor = useBackgroundColor('primary');
   const textColor = useTextColor('primary');
-  const iconColor = useIconColor('primary');
+  // const iconColor = useIconColor('primary'); // eslint-disable-line @typescript-eslint/no-unused-vars
   const primaryColor = Colors.palette.dynastyGreen.dark;
 
   // Calendar states
@@ -117,7 +118,7 @@ const CalendarScreen = () => {
     try {
       if (params.scrollToToday) {
         setSelectedDate(moment().format('YYYY-MM-DD'));
-        console.log('Navigating to today from params');
+        logger.debug('Navigating to today from params');
       }
     } catch (error) {
       handleError(error, {
@@ -125,10 +126,10 @@ const CalendarScreen = () => {
         params
       });
     }
-  }, [params.scrollToToday, handleError]);
+  }, [params.scrollToToday, params, handleError]);
 
   // Fetch events from Firebase
-  const fetchEvents = useCallback(withErrorHandling(async () => {
+  const fetchEvents = useCallback(() => withErrorHandling(async () => {
     try {
       setIsLoading(true);
       
@@ -189,12 +190,12 @@ const CalendarScreen = () => {
       
       setEvents(formattedEvents);
     } catch (error) {
-      console.error("Error fetching events: ", error);
+      logger.error("Error fetching events: ", error);
       handleError(error, { action: 'fetchEvents' });
     } finally {
       setIsLoading(false);
     }
-  }), [handleError]);
+  })(), [handleError, withErrorHandling]);
 
   // Initial fetch on component mount
   useEffect(() => {
@@ -210,7 +211,7 @@ const CalendarScreen = () => {
   // Handle date change
   const onDateChanged = (date: string) => {
     try {
-      console.log('Date changed:', date);
+      logger.debug('Date changed:', date);
       setSelectedDate(date);
     } catch (error) {
       handleError(error, {
@@ -223,7 +224,7 @@ const CalendarScreen = () => {
   // Handle event press
   const handleEventPress = withErrorHandling((event: Event) => {
     try {
-      console.log('Event pressed:', event);
+      logger.debug('Event pressed:', event);
       router.push({ 
         pathname: '/(screens)/eventDetail', 
         params: { eventId: event.id } 

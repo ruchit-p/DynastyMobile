@@ -1,7 +1,7 @@
 import { Message } from './encryption/ChatEncryptionService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'react-native';
-import { getFirebaseStorage } from '../lib/firebase';
+import { logger } from './LoggingService';
 
 interface CachedMessage extends Message {
   cachedAt: number;
@@ -51,7 +51,7 @@ class MessageOptimizationService {
         });
       }
     } catch (error) {
-      console.error('Failed to load message cache:', error);
+      logger.error('Failed to load message cache:', error);
     }
   }
 
@@ -70,7 +70,7 @@ class MessageOptimizationService {
         this.limitCacheSize();
         await AsyncStorage.setItem('@message_cache', JSON.stringify(this.messageCache));
       } catch (error) {
-        console.error('Failed to save message cache:', error);
+        logger.error('Failed to save message cache:', error);
       }
     }, 5000); // Save after 5 seconds of inactivity
   }
@@ -177,7 +177,7 @@ class MessageOptimizationService {
           this.mediaCache.set(messageId, message.media.encryptedUrl);
         }
       } catch (error) {
-        console.error(`Failed to preload media for message ${messageId}:`, error);
+        logger.error(`Failed to preload media for message ${messageId}:`, error);
       }
 
       // Small delay to avoid blocking
@@ -230,7 +230,7 @@ class MessageOptimizationService {
           this.cacheMessage(decrypted);
           results.push(decrypted);
         } catch (error) {
-          console.error(`Failed to decrypt message ${encMsg.id}:`, error);
+          logger.error(`Failed to decrypt message ${encMsg.id}:`, error);
         }
       })
     );

@@ -1,12 +1,15 @@
-import ChatEncryptionService from '../ChatEncryptionService';
-import E2EEService from '../E2EEService';
-import MediaEncryptionService from '../MediaEncryptionService';
+import { ChatEncryptionService } from '../ChatEncryptionService';
+import { LibsignalService } from '../libsignal/LibsignalService';
+import { MediaEncryptionService } from '../MediaEncryptionService';
 import { getFirebaseDb, getFirebaseAuth } from '../../../lib/firebase';
 import { callFirebaseFunction } from '../../../lib/errorUtils';
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import NetInfo from '@react-native-community/netinfo';
+import { OfflineQueueService } from '../OfflineQueueService';
+import { EncryptedSearchService } from '../EncryptedSearchService';
 
 // Mock dependencies
-jest.mock('../E2EEService');
+jest.mock('../libsignal/LibsignalService');
 jest.mock('../MediaEncryptionService');
 jest.mock('../../../lib/firebase');
 jest.mock('../../../lib/errorUtils');
@@ -14,6 +17,11 @@ jest.mock('../OfflineQueueService');
 jest.mock('../MetadataEncryptionService');
 jest.mock('../EncryptedSearchService');
 jest.mock('../AuditLogService');
+jest.mock('@react-native-community/netinfo', () => ({
+  default: {
+    fetch: jest.fn(() => Promise.resolve({ isConnected: true }))
+  }
+}));
 
 describe('ChatEncryptionService', () => {
   const mockUserId = 'test-user-id';
@@ -96,20 +104,20 @@ describe('ChatEncryptionService', () => {
     });
 
     // Mock E2EE Service
-    (E2EEService.initialize as jest.Mock).mockResolvedValue(undefined);
-    (E2EEService.getInstance as jest.Mock).mockReturnValue({
+    (LibsignalService.initialize as jest.Mock).mockResolvedValue(undefined);
+    (LibsignalService.getInstance as jest.Mock).mockReturnValue({
       getPublicKeyBundle: jest.fn(() => Promise.resolve({
         identityKey: 'test-identity-key',
       })),
     });
-    (E2EEService.encryptMessage as jest.Mock).mockResolvedValue({
+    (LibsignalService.encryptMessage as jest.Mock).mockResolvedValue({
       content: 'encrypted-content',
       ephemeralPublicKey: 'ephemeral-key',
       nonce: 'nonce',
       mac: 'mac',
     });
-    (E2EEService.decryptMessage as jest.Mock).mockResolvedValue('Decrypted message');
-    (E2EEService.getIdentityKeyPair as jest.Mock).mockResolvedValue({
+    (LibsignalService.decryptMessage as jest.Mock).mockResolvedValue('Decrypted message');
+    (LibsignalService.getIdentityKeyPair as jest.Mock).mockResolvedValue({
       publicKey: 'public-key',
       privateKey: 'private-key',
     });
@@ -119,12 +127,12 @@ describe('ChatEncryptionService', () => {
     it('should initialize all encryption services', async () => {
       await ChatEncryptionService.initializeEncryption();
 
-      expect(E2EEService.initialize).toHaveBeenCalledWith(mockUserId);
+      expect(LibsignalService.initialize).toHaveBeenCalledWith(mockUserId);
       expect(getFirebaseDb().collection).toHaveBeenCalledWith('users');
     });
 
     it('should handle initialization errors', async () => {
-      (E2EEService.initialize as jest.Mock).mockRejectedValue(new Error('Init failed'));
+      (LibsignalService.initialize as jest.Mock).mockRejectedValue(new Error('Init failed'));
 
       await expect(ChatEncryptionService.initializeEncryption()).rejects.toThrow('Init failed');
     });
@@ -187,7 +195,7 @@ describe('ChatEncryptionService', () => {
     it('should encrypt and send text message', async () => {
       await ChatEncryptionService.sendTextMessage(mockChatId, 'Hello World');
 
-      expect(E2EEService.encryptMessage).toHaveBeenCalledWith(
+      expect(LibsignalService.encryptMessage).toHaveBeenCalledWith(
         'Hello World',
         expect.any(String)
       );
@@ -202,11 +210,8 @@ describe('ChatEncryptionService', () => {
     });
 
     it('should handle offline scenario', async () => {
-      const NetInfo = require('@react-native-community/netinfo').default;
-      NetInfo.fetch = jest.fn(() => Promise.resolve({ isConnected: false }));
-
-      const OfflineQueueService = require('../OfflineQueueService').default;
-      OfflineQueueService.queueMessage = jest.fn();
+      (NetInfo.fetch as jest.Mock).mockResolvedValueOnce({ isConnected: false });
+      (OfflineQueueService.queueMessage as jest.Mock).mockResolvedValueOnce(undefined);
 
       await ChatEncryptionService.sendTextMessage(mockChatId, 'Offline message');
 
@@ -349,7 +354,7 @@ describe('ChatEncryptionService', () => {
         text: 'Decrypted message',
         encrypted: true,
       });
-      expect(E2EEService.decryptMessage).toHaveBeenCalled();
+      expect(LibsignalService.decryptMessage).toHaveBeenCalled();
     });
 
     it('should handle media messages', async () => {
@@ -381,7 +386,7 @@ describe('ChatEncryptionService', () => {
         read: [],
       };
 
-      (E2EEService.decryptMessage as jest.Mock).mockResolvedValue('decrypted-key');
+      (LibsignalService.decryptMessage as jest.Mock).mockResolvedValue('decrypted-key');
 
       const decrypted = await ChatEncryptionService.decryptMessage(encryptedMessage as any);
 
@@ -401,7 +406,7 @@ describe('ChatEncryptionService', () => {
         senderId: mockUserId, // Own message
         timestamp: mockTimestamp,
         type: 'text',
-        encryptedPayloads: {},
+        encryptedPayloads: Record<string, never>,
         delivered: ['user-2', 'user-3'],
         read: ['user-2'],
       };
@@ -482,10 +487,9 @@ describe('ChatEncryptionService', () => {
 
   describe('searchMessages', () => {
     it('should search encrypted messages', async () => {
-      const EncryptedSearchService = require('../EncryptedSearchService').default;
-      EncryptedSearchService.searchMessages = jest.fn(() => Promise.resolve([
+      (EncryptedSearchService.searchMessages as jest.Mock).mockResolvedValueOnce([
         { messageId: 'msg-1', chatId: mockChatId, score: 0.9 },
-      ]));
+      ]);
 
       const mockMessage = {
         id: 'msg-1',
@@ -509,7 +513,7 @@ describe('ChatEncryptionService', () => {
     });
 
     it('should filter by chatId if provided', async () => {
-      const EncryptedSearchService = require('../EncryptedSearchService').default;
+      (EncryptedSearchService.searchMessages as jest.Mock).mockResolvedValueOnce([]);
       
       await ChatEncryptionService.searchMessages('test', mockChatId);
 
@@ -591,7 +595,7 @@ describe('ChatEncryptionService', () => {
 
   describe('isEncryptionReady', () => {
     it('should return true if encryption is initialized', async () => {
-      (E2EEService.getIdentityKeyPair as jest.Mock).mockResolvedValue({
+      (LibsignalService.getIdentityKeyPair as jest.Mock).mockResolvedValue({
         publicKey: 'key',
         privateKey: 'key',
       });
@@ -602,7 +606,7 @@ describe('ChatEncryptionService', () => {
     });
 
     it('should return false if encryption not initialized', async () => {
-      (E2EEService.getIdentityKeyPair as jest.Mock).mockResolvedValue(null);
+      (LibsignalService.getIdentityKeyPair as jest.Mock).mockResolvedValue(null);
 
       const ready = await ChatEncryptionService.isEncryptionReady();
 

@@ -20,3 +20,15 @@ node_modules/
 npm-debug.log*
 firebase-debug.log*
 ui-debug.log*
+firestore-debug.log*
+pubsub-debug.log*
+
+# Test files in root
+test-*.js
+test-*.html
+
+# Backup files
+*.bak
+
+# Firebase export data
+firebase-export-*

@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
-import FlashList from '../../components/ui/FlashList';
+import { FlashList } from '../../components/ui/FlashList';
+import { logger } from '../../src/services/LoggingService';
 
 type VisibilityOption = 'Public' | 'Private' | 'Friends Only';
 const VISIBILITY_OPTIONS: VisibilityOption[] = ['Public', 'Private', 'Friends Only'];
@@ -67,7 +68,7 @@ const SelectVisibilityScreenContent = () => {
         });
       } else {
         const warning = "Cannot go back from SelectVisibilityScreen or previousPath not set";
-        console.warn(warning);
+        logger.warn(warning);
         handleError(new Error(warning), {
           action: 'navigation',
           option,

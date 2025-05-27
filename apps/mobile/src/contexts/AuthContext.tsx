@@ -19,6 +19,34 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { syncService } from '../lib/syncService';
 import { networkService } from '../services/NetworkService';
 import { getNotificationService } from '../services/NotificationService';
+import { fingerprintService } from '../services/FingerprintService';
+import * as Device from 'expo-device';
+import { logger } from '../services/LoggingService';
+// Add MFA specific imports
+import {
+  PhoneAuthProvider,
+  PhoneMultiFactorGenerator,
+  multiFactor,
+  getMultiFactorResolver,
+} from '@react-native-firebase/auth';
+
+// Simple sanitization functions for sensitive data
+const sanitizeEmail = (email: string): string => {
+  if (!email || !email.includes('@')) return 'invalid-email';
+  const [localPart, domain] = email.split('@');
+  return `${localPart.charAt(0)}****@${domain}`;
+};
+
+const sanitizeUserId = (userId: string): string => {
+  if (!userId) return 'no-id';
+  return userId.length > 8 ? `${userId.substring(0, 8)}...` : userId;
+};
+
+const sanitizePhoneNumber = (phoneNumber: string): string => {
+  if (!phoneNumber) return 'no-phone';
+  // Show last 4 digits only
+  return phoneNumber.length > 4 ? `****${phoneNumber.slice(-4)}` : '****';
+};
 
 // Cache keys for offline support
 const CACHE_KEYS = {
@@ -76,6 +104,7 @@ export type GoogleSignInUser = LibGoogleSignInUser;
 // For now, let's assume RNGoogleSignInUser was meant to be the user object within SignInSuccessResponse
 type RNGoogleSignInUser = LibGoogleSignInUser; // This type is for the 'user' field within SignInSuccessResponse
 
+// Add MFA related types to AuthContextType
 interface AuthContextType {
   user: FirebaseUser | null;
   isLoading: boolean;
@@ -100,6 +129,23 @@ interface AuthContextType {
   signInWithApple: () => Promise<void>; // Added for completeness
   sendPasswordReset: (email: string) => Promise<void>;
   triggerSendVerificationEmail: (userId: string, email: string, displayName: string) => Promise<void>;
+
+  // MFA States and Functions
+  enrolledMfaFactors: FirebaseAuthTypes.MultiFactorInfo[];
+  isMfaPromptVisible: boolean;
+  mfaResolver: FirebaseAuthTypes.MultiFactorResolver | null;
+  mfaVerificationId: string | null;
+  isMfaSetupInProgress: boolean;
+  mfaError: string | null;
+
+  getEnrolledMfaFactors: () => Promise<void>;
+  startPhoneMfaEnrollment: (phoneNumber: string) => Promise<void>;
+  confirmPhoneMfaEnrollment: (verificationCode: string, displayName?: string) => Promise<void>;
+  unenrollMfaFactor: (factorUid: string) => Promise<void>;
+  sendMfaSignInOtp: () => Promise<void>;
+  confirmMfaSignIn: (verificationCode: string) => Promise<void>;
+  cancelMfaProcess: () => void;
+  clearMfaError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -143,8 +189,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const db = getFirebaseDb();
         setFirebaseServices({ app, auth, functions, db });
         setFirebaseInitialized(true);
-      } catch (error) {
-        console.error('Failed to initialize Firebase services:', error);
+      } catch (error: any) {
+        logger.error('Failed to initialize Firebase services: ' + (error instanceof Error ? error.message : String(error)));
         errorHandler.handleError(error, {
           severity: ErrorSeverity.FATAL,
           title: 'Firebase Initialization Failed',
@@ -167,6 +213,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [phoneAuthConfirmation, setPhoneAuthConfirmation] = useState<FirebaseAuthTypes.ConfirmationResult | null>(null);
   const [phoneNumberInProgress, setPhoneNumberInProgress] = useState<string | null>(null);
 
+  // MFA State Variables
+  const [enrolledMfaFactors, setEnrolledMfaFactors] = useState<FirebaseAuthTypes.MultiFactorInfo[]>([]);
+  const [isMfaPromptVisible, setIsMfaPromptVisible] = useState(false);
+  const [mfaResolver, setMfaResolver] = useState<FirebaseAuthTypes.MultiFactorResolver | null>(null);
+  const [mfaVerificationId, setMfaVerificationId] = useState<string | null>(null);
+  const [isMfaSetupInProgress, setIsMfaSetupInProgress] = useState(false);
+  const [mfaError, setMfaError] = useState<string | null>(null);
+
   // Load persisted phone auth state on initialization
   useEffect(() => {
     const loadPersistedPhoneAuth = async () => {
@@ -177,20 +231,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         ]);
         
         if (confirmationData) {
-          // Note: We can't fully restore the ConfirmationResult object since it contains methods
-          // But we can restore the phone number to allow resending OTP
-          console.log('AuthContext: Found persisted phone auth data, restoring phone number');
+          // TODO: Potentially re-hydrate phoneAuthConfirmation if needed and valid
+          // For now, we primarily rely on phoneNumberInProgress to resume OTP entry UI
         }
-        
         if (phoneNumber) {
           setPhoneNumberInProgress(phoneNumber);
-          console.log(`AuthContext: Restored phone number in progress: ${phoneNumber}`);
         }
-      } catch (error) {
-        console.error('AuthContext: Failed to load persisted phone auth state:', error);
+      } catch (error: any) {
+        logger.warn('AuthContext: Failed to load persisted phone auth state: ' + (error instanceof Error ? error.message : String(error)));
       }
     };
-    
     loadPersistedPhoneAuth();
   }, []);
 
@@ -201,7 +251,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       // Initialize network service
       networkService.initialize().catch(error => {
-        console.error('AuthContext: Failed to initialize network service:', error);
+        logger.error('AuthContext: Failed to initialize network service: ' + (error instanceof Error ? error.message : String(error)));
       });
     }
   }, [app, auth, functions, db]); // Run when Firebase services are ready
@@ -222,47 +272,68 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           
           if (docSnap.exists()) {
             const userData = docSnap.data() as FirestoreUserType;
-            console.log("AuthContext: Fetched Firestore user data:", userData);
+            logger.debug("AuthContext: Fetched Firestore user data:", userData);
+            
+            // Transform data for backwards compatibility
+            const transformedUserData = {
+              ...userData,
+              // Handle new profilePicture object structure
+              profilePictureUrl: userData.profilePicture?.url || userData.profilePictureUrl || userData.photoURL,
+              // Ensure arrays exist
+              parentIds: userData.parentIds || [],
+              childrenIds: userData.childrenIds || [],
+              spouseIds: userData.spouseIds || []
+            };
             
             // Cache the user data for offline access
             await AsyncStorage.setItem(
               `${CACHE_KEYS.USER_DATA}${uid}`,
               JSON.stringify({
-                data: userData,
+                data: transformedUserData,
                 timestamp: Date.now()
               })
             );
             
-            setFirestoreUser(userData);
-            return userData;
+            setFirestoreUser(transformedUserData);
+            return transformedUserData;
           } else {
-            console.log("AuthContext: No Firestore user document found for UID:", uid);
+            logger.debug("AuthContext: No Firestore user document found for UID:", sanitizeUserId(uid));
             setFirestoreUser(null);
             return null;
           }
         } catch (networkError) {
-          console.log("AuthContext: Network error, falling back to cache:", networkError);
+          logger.debug("AuthContext: Network error, falling back to cache:", networkError);
           // Fall through to cache logic
         }
       }
       
       // If offline or network error, try to load from cache
-      console.log("AuthContext: Loading user data from cache...");
+      logger.debug("AuthContext: Loading user data from cache...");
       const cachedData = await AsyncStorage.getItem(`${CACHE_KEYS.USER_DATA}${uid}`);
       
       if (cachedData) {
         const parsed = JSON.parse(cachedData);
         const userData = parsed.data as FirestoreUserType;
-        console.log("AuthContext: Loaded user data from cache, age:", Date.now() - parsed.timestamp, "ms");
-        setFirestoreUser(userData);
-        return userData;
+        logger.debug("AuthContext: Loaded user data from cache, age: " + (Date.now() - parsed.timestamp) + "ms");
+        
+        // Transform cached data for backwards compatibility (in case it's old format)
+        const transformedUserData = {
+          ...userData,
+          profilePictureUrl: userData.profilePicture?.url || userData.profilePictureUrl || userData.photoURL,
+          parentIds: userData.parentIds || [],
+          childrenIds: userData.childrenIds || [],
+          spouseIds: userData.spouseIds || []
+        };
+        
+        setFirestoreUser(transformedUserData);
+        return transformedUserData;
       } else {
-        console.log("AuthContext: No cached user data found");
+        logger.debug("AuthContext: No cached user data found");
         setFirestoreUser(null);
         return null;
       }
-    } catch (error) {
-      console.error("AuthContext: Error fetching Firestore user data:", error);
+    } catch (error: any) {
+      logger.error("AuthContext: Error fetching Firestore user data: " + (error instanceof Error ? error.message : String(error)));
       setFirestoreUser(null);
       return null;
     } finally {
@@ -298,12 +369,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     // Only set up auth listener when auth is initialized
     if (!auth) {
-      console.log('Auth not initialized yet, skipping auth state listener');
+      logger.debug('Auth not initialized yet, skipping auth state listener');
       return;
     }
     
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser: FirebaseUser | null) => { 
-      console.log('Auth state changed. User UID:', firebaseUser?.uid, 'Email Verified:', firebaseUser?.emailVerified);
+      logger.debug('Auth state changed. User UID: ' + (firebaseUser?.uid ? sanitizeUserId(firebaseUser.uid) : 'null') + ', Email Verified: ' + (firebaseUser?.emailVerified));
       if (firebaseUser) {
         await firebaseUser.reload();
         const freshUser = auth.currentUser;
@@ -315,14 +386,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           try {
             // Initialize sync service
             await syncService.initialize(freshUser.uid);
-            console.log('AuthContext: Sync service initialized for user:', freshUser.uid);
+            logger.debug('AuthContext: Sync service initialized for user:', sanitizeUserId(freshUser.uid));
             
             // Initialize notification service
             const notificationService = getNotificationService();
             await notificationService.initialize(freshUser.uid);
-            console.log('AuthContext: Notification service initialized for user:', freshUser.uid);
-          } catch (error) {
-            console.error('AuthContext: Failed to initialize services:', error);
+            logger.debug('AuthContext: Notification service initialized for user:', sanitizeUserId(freshUser.uid));
+            
+            // Initialize fingerprint service and verify device
+            await fingerprintService.initialize();
+            const deviceInfo = {
+              deviceName: Device.deviceName || `${Device.brand} ${Device.modelName}`,
+              deviceType: Device.deviceType === Device.DeviceType.PHONE ? 'Phone' : 'Tablet',
+              platform: Device.osName || 'Unknown'
+            };
+            
+            const trustResult = await fingerprintService.verifyDevice(freshUser.uid, deviceInfo);
+            logger.debug('AuthContext: Device verification completed:', {
+              trustScore: trustResult.device?.trustScore,
+              isNewDevice: trustResult.device?.isNewDevice,
+              requiresAdditionalAuth: trustResult.requiresAdditionalAuth
+            });
+            
+            // Store device trust status for use in navigation
+            if (trustResult.requiresAdditionalAuth) {
+              // You can store this in state or handle additional auth here
+              logger.debug('AuthContext: Device requires additional authentication');
+            }
+          } catch (error: any) {
+            logger.error('AuthContext: Failed to initialize services: ' + (error instanceof Error ? error.message : String(error)));
           }
         } else {
           setFirestoreUser(null);
@@ -334,14 +426,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Cleanup services when user signs out
         try {
           await syncService.cleanup();
-          console.log('AuthContext: Sync service cleaned up');
+          logger.debug('AuthContext: Sync service cleaned up');
           
           // Cleanup notification service
           const notificationService = getNotificationService();
           notificationService.cleanup();
-          console.log('AuthContext: Notification service cleaned up');
-        } catch (error) {
-          console.error('AuthContext: Failed to cleanup services:', error);
+          logger.debug('AuthContext: Notification service cleaned up');
+          
+          // Cleanup fingerprint service
+          await fingerprintService.clearAllData();
+          logger.debug('AuthContext: Fingerprint service cleaned up');
+        } catch (error: any) {
+          logger.error('AuthContext: Failed to cleanup services: ' + (error instanceof Error ? error.message : String(error)));
         }
       }
       setIsLoading(false);
@@ -362,11 +458,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       onboardingCompleted: firestoreUser?.onboardingCompleted,
       phoneAuthConfirmationExists: !!phoneAuthConfirmation,
     };
-    console.log('[AuthNavEffect START]', JSON.stringify(routeInfo, null, 2));
+    logger.debug('[AuthNavEffect START]', JSON.stringify(routeInfo, null, 2));
 
     // GUARD 1: Skip navigation logic while auth state is loading
     if (isLoading) {
-      console.log('[AuthNavEffect] isLoading is TRUE. Returning early.');
+      logger.debug('[AuthNavEffect] isLoading is TRUE. Returning early.');
       return;
     }
 
@@ -382,13 +478,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // When phoneAuthConfirmation exists and user is on phone auth screens,
     // allow them to stay there to complete the flow
     if (phoneAuthConfirmation && (isPhoneSignInScreen || isVerifyOtpScreen)) {
-      console.log('[AuthNavEffect] Active phone auth flow detected. Staying on current phone auth screen.');
+      logger.debug('[AuthNavEffect] Active phone auth flow detected. Staying on current phone auth screen.');
       return;
     }
 
     // GUARD 3: Skip if still fetching Firestore user data
     if (isFetchingFirestoreUser) {
-      console.log('[AuthNavEffect] isFetchingFirestoreUser is TRUE. Returning early.');
+      logger.debug('[AuthNavEffect] isFetchingFirestoreUser is TRUE. Returning early.');
       return;
     }
 
@@ -396,12 +492,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (segments.length < 1) isLandingPageEquivalent = true;
     if (segments.length === 1 && segments[0] && ['', 'index'].includes(segments[0])) isLandingPageEquivalent = true;
 
-    console.log(
-      '[AuthNavEffect Decision Logic] User:', user?.uid,
-      'Email:', user?.email, 'Verified:', user?.emailVerified,
-      'OnboardingComplete:', firestoreUser?.onboardingCompleted,
-      'CurrentRoute:', currentRoute, 'inAuthGroup:', inAuthGroup, 'inOnboardingGroup:', inOnboardingGroup,
-      'isLandingPageEquivalent:', isLandingPageEquivalent
+    logger.debug(
+      '[AuthNavEffect Decision Logic] User: ' + (user?.uid ? sanitizeUserId(user.uid) : 'null') +
+      ', Email: ' + (user?.email ? sanitizeEmail(user.email) : 'null') + ', Verified: ' + user?.emailVerified +
+      ', OnboardingComplete: ' + firestoreUser?.onboardingCompleted +
+      ', CurrentRoute: ' + currentRoute + ', inAuthGroup: ' + inAuthGroup + ', inOnboardingGroup: ' + inOnboardingGroup +
+      ', isLandingPageEquivalent: ' + isLandingPageEquivalent
     );
 
     // ========== UNAUTHENTICATED USER LOGIC ==========
@@ -411,11 +507,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (isVerifyOtpScreen && !phoneAuthConfirmation) {
         // Only redirect if they don't have a phone number at all
         if (!phoneNumberInProgress) {
-          console.log('[AuthNavEffect] User on verifyOtp without confirmation or phone number. Redirecting to phoneSignIn.');
+          logger.debug('[AuthNavEffect] User on verifyOtp without confirmation or phone number. Redirecting to phoneSignIn.');
           router.replace('/(auth)/phoneSignIn');
           return;
         } else {
-          console.log('[AuthNavEffect] User on verifyOtp without confirmation but has phone number. Allowing to stay for resend OTP.');
+          logger.debug('[AuthNavEffect] User on verifyOtp without confirmation but has phone number. Allowing to stay for resend OTP.');
           return;
         }
       }
@@ -423,7 +519,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Allow access to auth screens and landing page without authentication
       const canBeOnPageWithoutAuth = inAuthGroup || isLandingPageEquivalent || isConfirmEmailScreen;
       if (!canBeOnPageWithoutAuth) {
-        console.log(`[AuthNavEffect !user] Redirecting to / (landing page). Current route: ${currentRoute}`);
+        logger.debug(`[AuthNavEffect !user] Redirecting to / (landing page). Current route: ${currentRoute}`);
         router.replace('/');
       }
       return;
@@ -435,11 +531,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (user.email && !user.emailVerified) {
       // User has email but it's not verified - must verify before proceeding
       if (!isVerifyEmailScreen && !isConfirmEmailScreen && currentRoute !== '(auth)/verifyEmail' && !inAuthGroup) {
-        console.log(`[AuthNavEffect] User email ${user.email} NOT VERIFIED. Redirecting to /(auth)/verifyEmail. Current route: ${currentRoute}`);
+        logger.debug(`[AuthNavEffect] User email ${sanitizeEmail(user.email)} NOT VERIFIED. Redirecting to /(auth)/verifyEmail. Current route: ${currentRoute}`);
         router.replace({ pathname: '/(auth)/verifyEmail', params: { email: user.email } });
         return;
       } else if (isVerifyEmailScreen || isConfirmEmailScreen || inAuthGroup) {
-        console.log(`[AuthNavEffect] User email ${user.email} NOT VERIFIED, but staying on current auth-related page: ${currentRoute}`);
+        logger.debug(`[AuthNavEffect] User email ${sanitizeEmail(user.email)} NOT VERIFIED, but staying on current auth-related page: ${currentRoute}`);
         return; 
       }
     }
@@ -450,7 +546,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (firestoreUser && firestoreUser.onboardingCompleted === false) { 
       // User needs to complete onboarding
       if (!inOnboardingGroup && !inAuthGroup) { 
-        console.log('[AuthNavEffect] User authenticated, Onboarding INCOMPLETE. Redirecting to /onboarding/profileSetup. Current route:', currentRoute);
+        logger.debug('[AuthNavEffect] User authenticated, Onboarding INCOMPLETE. Redirecting to /onboarding/profileSetup. Current route:', currentRoute);
         router.replace('/(onboarding)/profileSetup');
         return;
       }
@@ -459,18 +555,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (inAuthGroup || inOnboardingGroup || isLandingPageEquivalent) {
         // Special case: landing page with back history might be a transient state
         if (isLandingPageEquivalent && router.canGoBack()) {
-          console.log('[AuthNavEffect] User ONBOARDED. On landing page with back history. Skipping redirect.');
+          logger.debug('[AuthNavEffect] User ONBOARDED. On landing page with back history. Skipping redirect.');
         } else {
-          console.log('[AuthNavEffect] User ONBOARDED. Redirecting to /(tabs)/feed. Current route:', currentRoute);
+          logger.debug('[AuthNavEffect] User ONBOARDED. Redirecting to /(tabs)/feed. Current route:', currentRoute);
           router.replace('/(tabs)/feed');
           return;
         }
       }
     } else if (!firestoreUser && !isFetchingFirestoreUser) {
       // Edge case: Authenticated but no Firestore data (might be new user or data issue)
-      console.log("[AuthNavEffect] User authenticated but firestoreUser is null. Possible new user or data sync issue.");
+      logger.debug("[AuthNavEffect] User authenticated but firestoreUser is null. Possible new user or data sync issue.");
       if (inAuthGroup || isLandingPageEquivalent) {
-        console.log('[AuthNavEffect] Redirecting to onboarding as a safe default for authenticated user without profile data.');
+        logger.debug('[AuthNavEffect] Redirecting to onboarding as a safe default for authenticated user without profile data.');
         router.replace('/(onboarding)/profileSetup');
         return;
       }
@@ -488,10 +584,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       CACHE_KEYS.PHONE_AUTH_CONFIRMATION,
       CACHE_KEYS.PHONE_NUMBER_IN_PROGRESS
     ]).catch(error => {
-      console.error('AuthContext: Failed to clear persisted phone auth data:', error);
+      logger.error('AuthContext: Failed to clear persisted phone auth data: ' + (error instanceof Error ? error.message : String(error)));
     });
     
-    console.log('AuthContext: Phone auth state cleared');
+    logger.debug('AuthContext: Phone auth state cleared');
   };
 
   useEffect(() => {
@@ -512,7 +608,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const isFinalPhoneAuthRoute = finalRoute === '(auth)/phoneSignIn' || finalRoute === '(auth)/verifyOtp';
         
         if (!isFinalPhoneAuthRoute && finalRoute !== 'index' && finalRoute !== '') {
-          console.log('[PhoneAuthCleanup] User navigated away from phone auth flow. Clearing phone auth state.');
+          logger.debug('[PhoneAuthCleanup] User navigated away from phone auth flow. Clearing phone auth state.');
           clearPhoneAuth();
         }
       }, 100); // 100ms delay to handle navigation transitions
@@ -522,23 +618,45 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [segments, phoneAuthConfirmation]);
 
   const signIn = async (email: string, pass: string) => {
+    if (!auth) {
+      logger.error('AuthContext:signIn - Firebase auth service not initialized.');
+      throw new Error('Authentication service not ready.');
+    }
     setIsLoading(true);
+    setMfaError(null); // Clear previous MFA errors
     try {
-      await auth.signInWithEmailAndPassword(email, pass); // auth from useMemo
-      // User state will be updated by onAuthStateChanged
+      logger.debug('AuthContext:signIn - Attempting sign in for: ' + sanitizeEmail(email));
+      if (!auth) throw new Error("Auth service not initialized for setPersistence");
+      await (auth as FirebaseAuthTypes.Module).setPersistence(RNAuth.auth.Persistence.LOCAL);
+      await auth.signInWithEmailAndPassword(email, pass);
+      // onAuthStateChanged will handle setting user and fetching Firestore data
+      logger.info('AuthContext:signIn - Sign in successful (or MFA not required) for: ' + sanitizeEmail(email));
     } catch (error: any) {
-      // Use the error handler for Firebase auth errors
-      errorHandler.handleFirebaseError(error, {
-        severity: ErrorSeverity.ERROR,
-        title: 'Sign In Error',
-        metadata: { action: 'signIn', email },
-        showAlert: false // Don't show alert here, we'll handle UI feedback in the component
-      });
-      
-      // Still throw the error for the UI component to handle
-      if (error.code && error.message) { throw new Error(error.message); }
-      else if (error.message) { throw new Error(error.message); }
-      else { throw new Error('An unknown error occurred during sign in.'); }
+      const firebaseError = error as FirebaseAuthTypes.NativeFirebaseAuthError;
+      logger.error('AuthContext:signIn - Error during sign in. Email: ' + sanitizeEmail(email) + ', Code: ' + firebaseError.code + ', Message: ' + firebaseError.message);
+      if (firebaseError.code === 'auth/multi-factor-auth-required' && auth) {
+        logger.info('AuthContext:signIn - MFA is required for user: ' + sanitizeEmail(email));
+        const resolver = getMultiFactorResolver(auth, firebaseError as FirebaseAuthTypes.NativeFirebaseAuthError);
+        
+        if (resolver.hints && resolver.hints.length > 0 && resolver.hints[0].factorId === PhoneMultiFactorGenerator.FACTOR_ID) {
+          setIsMfaPromptVisible(true); // Show prompt
+          await sendMfaSignInOtp(); // Automatically try to send OTP for the first hint if it's phone
+        } else {
+          // Handle cases where the first hint is not phone or no hints (though resolver.hints should exist)
+           logger.warn('AuthContext:signIn - MFA required, but no suitable phone hint found or no hints. Resolver hints: ' + JSON.stringify(resolver.hints));
+           setMfaError('Multi-factor authentication is required, but a suitable phone method was not found. Please check your MFA setup.');
+           // Don't show prompt if we can't proceed
+        }
+      } else {
+        // Handle other auth errors (e.g., wrong password, user not found)
+        errorHandler.handleError(firebaseError, {
+            severity: ErrorSeverity.ERROR,
+            title: 'Sign-In Failed',
+            // Pass message in metadata if not a direct property of ErrorHandlerConfig
+            metadata: { context: 'signIn', email: sanitizeEmail(email), errorCode: firebaseError.code, errorMessage: firebaseError.message || 'An unexpected error occurred during sign-in.' },
+        });
+      }
+      throw error; // Re-throw for the calling component to handle if needed
     } finally {
       setIsLoading(false);
     }
@@ -546,16 +664,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const triggerSendVerificationEmail = async (userId: string, email: string, displayName: string) => {
     if (!functions) {
-      console.error("AuthContext: Firebase functions not initialized for triggerSendVerificationEmail.");
+      logger.error("AuthContext: Firebase functions not initialized for triggerSendVerificationEmail.");
       throw new Error("Functions service not available.");
     }
     try {
-      console.log(`AuthContext: Calling 'sendVerificationEmail' cloud function. UserID: '${userId}', Email: '${email}', DisplayName: '${displayName}'`);
+      logger.debug(`AuthContext: Calling 'sendVerificationEmail' cloud function. UserID: '${sanitizeUserId(userId)}', Email: '${sanitizeEmail(email)}', DisplayName: '${displayName}'`);
       const sendEmailFunction = functions.httpsCallable('sendVerificationEmail');
       const result = await sendEmailFunction({ userId, email, displayName });
-      console.log("AuthContext: 'sendVerificationEmail' cloud function result:", result.data);
+      logger.debug("AuthContext: 'sendVerificationEmail' cloud function result:", result.data);
     } catch (error: any) {
-      console.error("AuthContext: Error calling 'sendVerificationEmail' cloud function:", error);
+      logger.error("AuthContext: Error calling 'sendVerificationEmail' cloud function:", error?.message || 'Unknown error');
       // Don't throw an error that stops the signup flow, but log it.
       // Alert.alert("Verification Email", "Could not send verification email. Please try resending from the verify email page.");
     }
@@ -563,19 +681,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signUp = async (newEmail: string, newPass: string) => {
     setIsLoading(true);
+    if (!functions) { // Add guard for functions
+      logger.error('AuthContext:signUp - Firebase functions service not initialized.');
+      setIsLoading(false);
+      throw new Error('Functions service not ready.');
+    }
     try {
-      console.log("AuthContext: Attempting sign-up via 'handleSignUp' cloud function for:", newEmail);
+      logger.debug("AuthContext: Attempting sign-up via 'handleSignUp' cloud function for: " + sanitizeEmail(newEmail));
       const handleSignUpFunction = functions.httpsCallable('handleSignUp');
       // Cast the result to the expected type
       const result = await handleSignUpFunction({ email: newEmail, password: newPass }) as { data: HandleSignUpResultData };
 
       if (result.data.success && result.data.userId) {
-        console.log('AuthContext: Cloud function handleSignUp successful, User UID:', result.data.userId);
+        logger.debug('AuthContext: Cloud function handleSignUp successful, User UID: ' + sanitizeUserId(result.data.userId));
         // ... other comments ...
-        console.log("AuthContext: SignUp successful. User state will be updated by onAuthStateChanged.");
+        logger.debug("AuthContext: SignUp successful. User state will be updated by onAuthStateChanged.");
       } else {
         const errorMessage = result.data?.message || 'Signup failed due to an unknown server error.';
-        console.error("AuthContext: handleSignUp cloud function returned an error or unsuccessful result:", result.data);
+        logger.error("AuthContext: handleSignUp cloud function returned an error or unsuccessful result:", result.data);
         
         errorHandler.handleError(
           new Error(errorMessage),
@@ -612,8 +735,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const resendVerificationEmail = async () => {
-    if (!auth.currentUser) { // auth from useMemo
-      console.error("Resend Verification: No user found");
+    if (!auth || !auth.currentUser) { // Add guard for auth
+      logger.error("Resend Verification: No user found");
       alert("No user found. Please sign in again.");
     } else {
       // Assuming user is available from state or auth.currentUser
@@ -636,7 +759,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const confirmEmailFunction = functions.httpsCallable('confirmEmailVerification'); // functions from firebaseServices
       const result = await confirmEmailFunction({ uid, token });
-      console.log("AuthContext: Custom email verification result:", result.data);
+      logger.debug("AuthContext: Custom email verification result:", result.data);
       
       // Reload the user to get the latest emailVerified status
       if (auth.currentUser) { // auth from firebaseServices
@@ -645,7 +768,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       alert("Email verified successfully! You can now sign in.");
     } catch (error: any) {
-      console.error("Error confirming email verification:", error);
+      logger.error("Error confirming email verification:", error?.message || 'Unknown error');
       throw new Error(error.data?.message || error.message || 'Failed to confirm email verification.');
     } finally {
       setIsLoading(false);
@@ -664,16 +787,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Clear cached user data
       if (user?.uid) {
         await AsyncStorage.removeItem(`${CACHE_KEYS.USER_DATA}${user.uid}`);
-        console.log("AuthContext: Cleared cached user data");
+        logger.debug("AuthContext: Cleared cached user data");
       }
       
       // Clear sync data
       try {
         await syncService.clearSyncData();
         await syncService.cleanup();
-        console.log("AuthContext: Cleared sync data");
+        logger.debug("AuthContext: Cleared sync data");
       } catch (error) {
-        console.error("AuthContext: Error clearing sync data:", error);
+        logger.error("AuthContext: Error clearing sync data:", error?.message || 'Unknown error');
       }
       
       // Check if Google Sign-In was used
@@ -681,34 +804,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (GoogleSignin) { // Ensure GoogleSignin module is available
         const currentGoogleUser = await GoogleSignin.getCurrentUser();
         if (currentGoogleUser) {
-          console.log("AuthContext: Google user is signed in, attempting full Google sign out.");
+          logger.debug("AuthContext: Google user is signed in, attempting full Google sign out.");
           if (typeof GoogleSignin.revokeAccess === 'function') {
             await GoogleSignin.revokeAccess();
-            console.log("AuthContext: Google access revoked.");
+            logger.debug("AuthContext: Google access revoked.");
           } else {
-            console.warn("AuthContext: GoogleSignin.revokeAccess function is not available.");
+            logger.warn("AuthContext: GoogleSignin.revokeAccess function is not available.");
           }
           if (typeof GoogleSignin.signOut === 'function') {
             await GoogleSignin.signOut();
-            console.log("AuthContext: Google user signed out from Google.");
+            logger.debug("AuthContext: Google user signed out from Google.");
           } else {
-            console.warn("AuthContext: GoogleSignin.signOut function is not available.");
+            logger.warn("AuthContext: GoogleSignin.signOut function is not available.");
           }
         } else {
-          console.log("AuthContext: No current Google user found via getCurrentUser(). Skipping Google-specific sign out steps.");
+          logger.debug("AuthContext: No current Google user found via getCurrentUser(). Skipping Google-specific sign out steps.");
         }
       } else {
-        console.warn("AuthContext: GoogleSignin module is not available. Skipping Google sign out check.");
+        logger.warn("AuthContext: GoogleSignin module is not available. Skipping Google sign out check.");
       }
       
       await auth.signOut(); // auth from firebaseServices
       setUser(null);
       setFirestoreUser(null);
       setPhoneAuthConfirmation(null); // Clear phone auth state on sign out
-      console.log('AuthContext: User signed out, all auth state cleared');
+      logger.debug('AuthContext: User signed out, all auth state cleared');
       // Navigation will be handled by useEffect hook
     } catch (error: any) {
-      console.error("Sign out error", error);
+      logger.error("Sign out error", error?.message || 'Unknown error');
       throw new Error(error.message || 'Failed to sign out.');
     } finally {
       setIsLoading(false);
@@ -747,7 +870,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Scenario 1: User cancelled (detected from response object structure)
       // Based on logs, cancellation can result in: { "data": null, "type": "cancelled" }
       if (signInResponse && (signInResponse as any).type === 'cancelled') {
-        console.log("AuthContext: Google Sign-In cancelled by user (detected from response.type).");
+        logger.debug("AuthContext: Google Sign-In cancelled by user (detected from response.type).");
         Alert.alert("Google Sign-In", "Sign in was cancelled.");
         // No error needs to be thrown, allow to proceed to finally block.
         return; // Gracefully exit the function.
@@ -758,10 +881,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const idToken: string = (signInResponse as any).idToken; 
         const userDetails: LibGoogleSignInUser = (signInResponse as any).user;
 
-        console.log("AuthContext: Google User ID Token acquired.");
-        console.log("AuthContext: Google User Details Email:", (userDetails as any).email);
-        console.log("AuthContext: Google User Details Name:", (userDetails as any).name);
-        console.log("AuthContext: Google User Details Photo:", (userDetails as any).photo);
+        logger.debug("AuthContext: Google User ID Token acquired.");
+        logger.debug("AuthContext: Google User Details Email:", sanitizeEmail((userDetails as any).email || ''));
+        logger.debug("AuthContext: Google User Details Name:", (userDetails as any).name);
+        logger.debug("AuthContext: Google User Details Photo:", (userDetails as any).photo ? '[photo-url]' : 'no-photo');
 
         const googleCredential = RNAuth.GoogleAuthProvider.credential(idToken);
         const userCredential = await auth!.signInWithCredential(googleCredential);
@@ -792,18 +915,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         // Check if this returned code is specifically SIGN_IN_CANCELLED
         if (errorCode === statusCodes.SIGN_IN_CANCELLED || String(errorCode) === String(statusCodes.SIGN_IN_CANCELLED)) {
-            console.log("AuthContext: Google Sign-In was cancelled by the user (detected from signInResponse.code).");
+            logger.debug("AuthContext: Google Sign-In was cancelled by the user (detected from signInResponse.code).");
             Alert.alert("Google Sign-In", "Sign in was cancelled.");
             return; // Gracefully exit
         } else {
-            console.error("AuthContext: " + errorMessage, signInResponse);
+            logger.error("AuthContext: " + errorMessage, signInResponse);
             Alert.alert("Google Sign-In Error", errorMessage);
             throw new Error(errorMessage); // This is an actual error from Google's side.
         }
       } 
       // Scenario 4: signInResponse is neither success, nor known cancellation, nor known error code structure
       else {
-        console.error("AuthContext: Google Sign-In cancelled or failed with unexpected response structure.", signInResponse);
+        logger.error("AuthContext: Google Sign-In cancelled or failed with unexpected response structure.", signInResponse);
         Alert.alert("Google Sign-In Error", "Google Sign-In cancelled or failed with an unexpected response.");
         // Avoid throwing a new generic error if signInResponse is null or undefined after cancellation
         // as this might be the state after a cancellation that didn't fit other checks.
@@ -821,27 +944,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         showAlert: false
       });
       
-      console.error("Google sign in error caught in outer catch block:", error); // Log the original error
+      logger.error("Google sign in error caught in outer catch block:", error?.message || 'Unknown error'); // Log the error message only
       
       const errorCode = error.code; // error.code can be a number or string
       const errorCodeString = String(errorCode);
 
       if (errorCode === statusCodes.SIGN_IN_CANCELLED || errorCodeString === String(statusCodes.SIGN_IN_CANCELLED)) {
-        console.log("AuthContext: Google Sign-In was cancelled by the user (detected from thrown error.code).");
+        logger.debug("AuthContext: Google Sign-In was cancelled by the user (detected from thrown error.code).");
         Alert.alert("Google Sign-In", "Sign in was cancelled.");
         // No re-throw for cancellation.
       } else if (errorCode === statusCodes.IN_PROGRESS || errorCodeString === String(statusCodes.IN_PROGRESS)) {
-        console.log("AuthContext: Google Sign-In operation already in progress.");
+        logger.debug("AuthContext: Google Sign-In operation already in progress.");
         Alert.alert("Google Sign-In", "Sign in is already in progress.");
         // No re-throw.
       } else if (errorCode === statusCodes.PLAY_SERVICES_NOT_AVAILABLE || errorCodeString === String(statusCodes.PLAY_SERVICES_NOT_AVAILABLE)) {
-        console.log("AuthContext: Google Play Services not available or outdated.");
+        logger.debug("AuthContext: Google Play Services not available or outdated.");
         Alert.alert("Google Sign-In Error", "Play services not available or outdated. Please update Google Play Services.");
         // No re-throw, user is alerted.
       } else {
         // For other errors (network errors, unexpected issues from the library, or our own re-thrown errors)
         const displayMessage = error.message || 'An unknown error occurred during Google sign in.';
-        console.error("AuthContext: Unhandled Google Sign-In error in catch block:", displayMessage, error);
+        logger.error("AuthContext: Unhandled Google Sign-In error in catch block:", displayMessage);
         Alert.alert("Google Sign-In Error", displayMessage);
         // To prevent crashing the app, we will not re-throw here. The error is logged and user is alerted.
       }
@@ -863,18 +986,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Persist phone number to survive app reloads
       await AsyncStorage.setItem(CACHE_KEYS.PHONE_NUMBER_IN_PROGRESS, phoneNumber);
       
-      console.log("AuthContext: Phone number verification code sent, confirmation object set in context.");
+      logger.debug("AuthContext: Phone number verification code sent, confirmation object set in context.");
       
       // Navigate to OTP verification screen
       router.replace({ 
         pathname: '/(auth)/verifyOtp',
         params: { phoneNumberSent: phoneNumber }
       });
-      console.log(`AuthContext: Navigating to verifyOtp for ${phoneNumber}`);
+      logger.debug(`AuthContext: Navigating to verifyOtp for ${sanitizePhoneNumber(phoneNumber)}`);
       
       return confirmation;
     } catch (error: any) {
-      console.error(`Phone sign in error: ${error.message}`);
+      logger.error(`Phone sign in error: ${error?.message || 'Unknown error'}`);
       Alert.alert("OTP Send Error", error.message || 'Failed to send OTP. Please try again.');
       throw new Error(error.message || 'Failed to send OTP.');
     } finally {
@@ -884,7 +1007,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const confirmPhoneCode = async (phoneNumber: string, code: string) => {
     if (!phoneAuthConfirmation) {
-      console.error("AuthContext: phoneAuthConfirmation is null. Cannot confirm code.");
+      logger.error("AuthContext: phoneAuthConfirmation is null. Cannot confirm code.");
       throw new Error("Verification session expired or not found. Please request a new OTP.");
     }
     
@@ -895,16 +1018,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
     try {
       const userCredential = await phoneAuthConfirmation.confirm(code);
-      console.log(`AuthContext: Phone OTP confirmed. Firebase User UID: ${userCredential?.user?.uid}`);
+      logger.debug(`AuthContext: Phone OTP confirmed. Firebase User UID: ${userCredential?.user?.uid ? sanitizeUserId(userCredential.user.uid) : 'no-uid'}`);
       
       if (userCredential && userCredential.user) {
         const firebaseUser = userCredential.user;
-        console.log(`AuthContext: Calling handlePhoneSignIn cloud function for UID: ${firebaseUser.uid}`);
+        logger.debug(`AuthContext: Calling handlePhoneSignIn cloud function for UID: ${sanitizeUserId(firebaseUser.uid)}`);
         
         const handlePhoneSignInFn = functions.httpsCallable('handlePhoneSignIn');
         const result = await handlePhoneSignInFn({ uid: firebaseUser.uid, phoneNumber: phoneNumber });
         
-        console.log('AuthContext: handlePhoneSignIn cloud function result:', result.data);
+        logger.debug('AuthContext: handlePhoneSignIn cloud function result:', result.data);
         await fetchFirestoreUserData(firebaseUser.uid);
       } else {
         throw new Error("Failed to confirm OTP: No user credential received.");
@@ -920,9 +1043,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         CACHE_KEYS.PHONE_NUMBER_IN_PROGRESS
       ]);
       
-      console.log('AuthContext: Phone auth state cleared after successful verification');
+      logger.debug('AuthContext: Phone auth state cleared after successful verification');
     } catch (error: any) {
-      console.error("AuthContext: Error during confirmPhoneCode", error);
+      const nativeError = error as FirebaseAuthTypes.NativeFirebaseAuthError; // Cast to specific error type
+      logger.error("AuthContext: Error during confirmPhoneCode: " + nativeError.message, { code: nativeError.code });
       throw error;
     } finally {
       setIsLoading(false);
@@ -931,7 +1055,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signInWithApple = async () => {
     setIsLoading(true);
-    console.log("AuthContext: Apple Sign-In initiated (placeholder).");
+    logger.debug("AuthContext: Apple Sign-In initiated (placeholder).");
     // Placeholder for Apple Sign-In logic
     // See https://rnfirebase.io/auth/social-auth#apple
     // const appleAuthRequestResponse = await appleAuth.performRequest({...});
@@ -948,50 +1072,324 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
     setIsLoading(true);
     try {
-      console.log("AuthContext: Attempting to send password reset email to:", email);
+      logger.debug("AuthContext: Attempting to send password reset email to:", email);
       await auth.sendPasswordResetEmail(email);
-      console.log("AuthContext: Password reset email sent successfully to:", email);
+      logger.debug("AuthContext: Password reset email sent successfully to:", sanitizeEmail(email));
       Alert.alert("Password Reset", "Password reset email sent. Please check your inbox.");
       router.back(); // Navigate back after sending email
     } catch (error: any) {
-      console.error("AuthContext: Password reset error for:", email, error);
-      Alert.alert("Password Reset Failed", error.message || "Could not send password reset email.");
+      logger.error("AuthContext: Password reset error for: " + sanitizeEmail(email) + (error instanceof Error ? error.message : String(error)));
+      Alert.alert("Password Reset Failed", (error instanceof Error ? error.message : String(error)) || "Could not send password reset email.");
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Ensure firebase services are initialized before using them
+  const getEnrolledMfaFactors = async () => {
+    if (!auth || !auth.currentUser) {
+      logger.warn('AuthContext:getEnrolledMfaFactors - Auth or currentUser not available');
+      setEnrolledMfaFactors([]);
+      return;
+    }
+    try {
+      // It's possible user object needs a refresh to get latest MFA info
+      await auth.currentUser.reload(); 
+      const currentUser = auth.currentUser; // get the fresh user instance
+      if (currentUser && currentUser.multiFactor) {
+        const factors = currentUser.multiFactor.enrolledFactors || [];
+        logger.debug('AuthContext:getEnrolledMfaFactors - Fetched factors: ' + factors.length);
+        setEnrolledMfaFactors(factors);
+      } else {
+        setEnrolledMfaFactors([]);
+      }
+    } catch (error: any) {
+      const firebaseError = error as FirebaseAuthTypes.NativeFirebaseAuthError;
+      logger.error('AuthContext:getEnrolledMfaFactors - Error fetching MFA factors. Code: ' + firebaseError.code + ', Message: ' + firebaseError.message);
+      errorHandler.handleError(firebaseError, {
+        severity: ErrorSeverity.ERROR,
+        title: 'MFA Setup Error',
+        metadata: { context: 'getEnrolledMfaFactors', errorCode: firebaseError.code, errorMessage: 'Could not retrieve your current MFA settings. Please try again.' },
+      });
+      setEnrolledMfaFactors([]);
+      setMfaError('Could not retrieve your current MFA settings.');
+    }
+  };
+
+  const startPhoneMfaEnrollment = async (phoneNumber: string) => {
+    if (!auth || !auth.currentUser) {
+      logger.error('AuthContext:startPhoneMfaEnrollment - Auth or currentUser not available.');
+      setMfaError('User not authenticated. Cannot start MFA enrollment.');
+      throw new Error('User not authenticated.');
+    }
+    setMfaError(null);
+    setIsLoading(true);
+    try {
+      logger.debug('AuthContext:startPhoneMfaEnrollment - Starting enrollment for phone: ' + sanitizePhoneNumber(phoneNumber));
+      const currentUser = auth.currentUser;
+      // multiFactor is available on the User object from @react-native-firebase/auth
+      const multiFactorUser = multiFactor(currentUser);
+      const session = await multiFactorUser.getSession();
+      
+      const phoneOptions = {
+        phoneNumber,
+        session,
+      };
+      
+      const phoneAuthProvider = new PhoneAuthProvider(auth); // Pass auth instance
+      const verificationId = await phoneAuthProvider.verifyPhoneNumber(phoneOptions);
+      
+      setMfaVerificationId(verificationId);
+      setIsMfaSetupInProgress(true);
+      logger.info('AuthContext:startPhoneMfaEnrollment - Verification code sent to: ' + sanitizePhoneNumber(phoneNumber));
+    } catch (error: any) {
+      const firebaseError = error as FirebaseAuthTypes.NativeFirebaseAuthError;
+      logger.error('AuthContext:startPhoneMfaEnrollment - Error. Code: ' + firebaseError.code + ', Message: ' + firebaseError.message);
+      setMfaError(firebaseError.message || 'Failed to send verification code.');
+      errorHandler.handleError(firebaseError, {
+        severity: ErrorSeverity.ERROR,
+        title: 'MFA Enrollment Failed',
+        metadata: { context: 'startPhoneMfaEnrollment', phoneNumber: sanitizePhoneNumber(phoneNumber), errorCode: firebaseError.code, errorMessage: firebaseError.message || 'Could not start phone verification for MFA.' },
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const confirmPhoneMfaEnrollment = async (verificationCode: string, displayName?: string) => {
+    if (!auth || !auth.currentUser || !mfaVerificationId) {
+      logger.error('AuthContext:confirmPhoneMfaEnrollment - Auth, currentUser, or mfaVerificationId not available.');
+      setMfaError('Verification session expired or user not authenticated.');
+      throw new Error('Verification session expired or user not authenticated.');
+    }
+    setMfaError(null);
+    setIsLoading(true);
+    try {
+      logger.debug('AuthContext:confirmPhoneMfaEnrollment - Confirming enrollment with code.');
+      const credential = PhoneAuthProvider.credential(mfaVerificationId, verificationCode);
+      const multiFactorAssertion = PhoneMultiFactorGenerator.assertion(credential);
+      
+      const currentUser = auth.currentUser;
+      const multiFactorUser = multiFactor(currentUser);
+      await multiFactorUser.enroll(multiFactorAssertion, displayName || 'My Phone');
+      
+      logger.info('AuthContext:confirmPhoneMfaEnrollment - Phone MFA enrolled successfully.');
+      setMfaVerificationId(null);
+      setIsMfaSetupInProgress(false);
+      await getEnrolledMfaFactors(); // Refresh factors
+    } catch (error: any) {
+      const firebaseError = error as FirebaseAuthTypes.NativeFirebaseAuthError;
+      logger.error('AuthContext:confirmPhoneMfaEnrollment - Error. Code: ' + firebaseError.code + ', Message: ' + firebaseError.message);
+      setMfaError(firebaseError.message || 'Failed to enroll phone MFA.');
+      errorHandler.handleError(firebaseError, {
+        severity: ErrorSeverity.ERROR,
+        title: 'MFA Enrollment Failed',
+        metadata: { context: 'confirmPhoneMfaEnrollment', errorCode: firebaseError.code, errorMessage: firebaseError.message || 'Could not verify code for MFA enrollment.' },
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const unenrollMfaFactor = async (factorUid: string) => {
+    if (!auth || !auth.currentUser) {
+      logger.error('AuthContext:unenrollMfaFactor - Auth or currentUser not available.');
+      setMfaError('User not authenticated. Cannot unenroll MFA factor.');
+      throw new Error('User not authenticated.');
+    }
+    setMfaError(null);
+    setIsLoading(true);
+    try {
+      logger.debug('AuthContext:unenrollMfaFactor - Unenrolling factor: ' + factorUid);
+      const currentUser = auth.currentUser;
+      const multiFactorUser = multiFactor(currentUser);
+      await multiFactorUser.unenroll(factorUid);
+      
+      logger.info('AuthContext:unenrollMfaFactor - MFA factor unenrolled successfully.');
+      await getEnrolledMfaFactors(); // Refresh factors
+    } catch (error: any) {
+      const firebaseError = error as FirebaseAuthTypes.NativeFirebaseAuthError;
+      logger.error('AuthContext:unenrollMfaFactor - Error. Code: ' + firebaseError.code + ', Message: ' + firebaseError.message);
+      setMfaError(firebaseError.message || 'Failed to unenroll MFA factor.');
+      errorHandler.handleError(firebaseError, {
+        severity: ErrorSeverity.ERROR,
+        title: 'MFA Unenroll Failed',
+        metadata: { context: 'unenrollMfaFactor', factorUid, errorCode: firebaseError.code, errorMessage: firebaseError.message || 'Could not unenroll MFA factor.' },
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const sendMfaSignInOtp = async () => {
+    if (!auth || !mfaResolver) {
+      logger.error('AuthContext:sendMfaSignInOtp - Auth or mfaResolver not available.');
+      setMfaError('MFA session expired or not found.');
+      throw new Error('MFA session expired or not found.');
+    }
+    // Check if there are hints and if the first hint is a phone factor
+    if (!mfaResolver.hints || mfaResolver.hints.length === 0 || mfaResolver.hints[0].factorId !== PhoneMultiFactorGenerator.FACTOR_ID) {
+      logger.error('AuthContext:sendMfaSignInOtp - No suitable phone factor hint found.');
+      setMfaError('No phone MFA method available for sign-in.');
+      setIsMfaPromptVisible(false); // Hide prompt if no usable factor
+      setMfaResolver(null);
+      throw new Error('No phone MFA method available for sign-in.');
+    }
+    setMfaError(null);
+    setIsLoading(true);
+    try {
+      const phoneFactorHint = mfaResolver.hints[0]; // Assuming first hint is phone
+      logger.debug('AuthContext:sendMfaSignInOtp - Sending OTP for MFA sign-in using hint: ' + phoneFactorHint.uid);
+      const phoneAuthProvider = new PhoneAuthProvider(auth);
+      const verificationId = await phoneAuthProvider.verifyPhoneNumber(
+        phoneFactorHint, // This is MultiFactorInfo
+        mfaResolver.session
+      );
+      setMfaVerificationId(verificationId);
+      logger.info('AuthContext:sendMfaSignInOtp - MFA sign-in OTP sent.');
+    } catch (error: any) {
+      const firebaseError = error as FirebaseAuthTypes.NativeFirebaseAuthError;
+      logger.error('AuthContext:sendMfaSignInOtp - Error. Code: ' + firebaseError.code + ', Message: ' + firebaseError.message);
+      setMfaError(firebaseError.message || 'Failed to send MFA sign-in OTP.');
+      errorHandler.handleError(firebaseError, {
+        severity: ErrorSeverity.ERROR,
+        title: 'MFA Sign-In Failed',
+        metadata: { context: 'sendMfaSignInOtp', errorCode: firebaseError.code, errorMessage: firebaseError.message || 'Could not send OTP for MFA sign-in.' },
+      });
+      // Optionally hide prompt or allow retry
+      // setIsMfaPromptVisible(false); 
+      // setMfaResolver(null);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const confirmMfaSignIn = async (verificationCode: string) => {
+    if (!mfaResolver || !mfaVerificationId) {
+      logger.error('AuthContext:confirmMfaSignIn - mfaResolver or mfaVerificationId not available.');
+      setMfaError('MFA verification session expired or not found.');
+      throw new Error('MFA verification session expired or not found.');
+    }
+    setMfaError(null);
+    setIsLoading(true);
+    try {
+      logger.debug('AuthContext:confirmMfaSignIn - Confirming MFA sign-in with code.');
+      const credential = PhoneAuthProvider.credential(mfaVerificationId, verificationCode);
+      const multiFactorAssertion = PhoneMultiFactorGenerator.assertion(credential);
+      
+      await mfaResolver.resolveSignIn(multiFactorAssertion);
+      logger.info('AuthContext:confirmMfaSignIn - MFA sign-in successful.');
+      
+      // Clear MFA state
+      setMfaResolver(null);
+      setMfaVerificationId(null);
+      setIsMfaPromptVisible(false);
+      // User state will be updated by onAuthStateChanged
+    } catch (error: any) {
+      const firebaseError = error as FirebaseAuthTypes.NativeFirebaseAuthError;
+      logger.error('AuthContext:confirmMfaSignIn - Error. Code: ' + firebaseError.code + ', Message: ' + firebaseError.message);
+      setMfaError(firebaseError.message || 'Failed to confirm MFA sign-in.');
+       errorHandler.handleError(firebaseError, {
+        severity: ErrorSeverity.ERROR,
+        title: 'MFA Sign-In Failed',
+        metadata: { context: 'confirmMfaSignIn', errorCode: firebaseError.code, errorMessage: firebaseError.message || 'Could not verify OTP for MFA sign-in.' },
+      });
+      // Do not hide prompt on error, allow user to retry or cancel
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const cancelMfaProcess = () => {
+    logger.debug('AuthContext:cancelMfaProcess - Cancelling MFA process.');
+    setMfaResolver(null);
+    setMfaVerificationId(null);
+    setIsMfaPromptVisible(false);
+    setIsMfaSetupInProgress(false);
+    setMfaError(null);
+    setIsLoading(false); // Ensure loading is stopped
+  };
+
+  const clearMfaError = () => {
+    setMfaError(null);
+  };
+  
+  // Effect to fetch enrolled MFA factors when user logs in or auth state changes
+  useEffect(() => {
+    if (auth && auth.currentUser && firebaseInitialized) {
+      getEnrolledMfaFactors();
+    } else {
+      setEnrolledMfaFactors([]); // Clear if no user
+    }
+  }, [auth, auth?.currentUser, firebaseInitialized]);
+
+  // Moved the early return for firebaseInitialized to be AFTER all hooks
+  const contextValue = useMemo(() => ({
+    user,
+    isLoading,
+    firestoreUser,
+    app: app!, 
+    auth: auth!, 
+    functions: functions!, 
+    db: db!, 
+    signIn,
+    signUp,
+    signOut,
+    signInWithGoogle,
+    signInWithPhoneNumber,
+    confirmPhoneCode,
+    phoneAuthConfirmation,
+    setPhoneAuthConfirmation,
+    phoneNumberInProgress,
+    clearPhoneAuth,
+    resendVerificationEmail,
+    confirmEmailVerificationLink,
+    refreshUser,
+    signInWithApple,
+    sendPasswordReset,
+    triggerSendVerificationEmail,
+    // MFA related values
+    enrolledMfaFactors,
+    isMfaPromptVisible,
+    mfaResolver,
+    mfaVerificationId,
+    isMfaSetupInProgress,
+    mfaError,
+    getEnrolledMfaFactors,
+    startPhoneMfaEnrollment,
+    confirmPhoneMfaEnrollment,
+    unenrollMfaFactor,
+    sendMfaSignInOtp,
+    confirmMfaSignIn,
+    cancelMfaProcess,
+    clearMfaError,
+  }), [
+    user, 
+    isLoading, 
+    firestoreUser, 
+    app, auth, functions, db, 
+    signIn, signUp, signOut, signInWithGoogle, signInWithPhoneNumber, confirmPhoneCode, 
+    phoneAuthConfirmation, phoneNumberInProgress, clearPhoneAuth, 
+    resendVerificationEmail, confirmEmailVerificationLink, refreshUser, signInWithApple, 
+    sendPasswordReset, triggerSendVerificationEmail,
+    enrolledMfaFactors, isMfaPromptVisible, mfaResolver, mfaVerificationId, isMfaSetupInProgress, mfaError,
+    getEnrolledMfaFactors, startPhoneMfaEnrollment, confirmPhoneMfaEnrollment, unenrollMfaFactor,
+    sendMfaSignInOtp, confirmMfaSignIn, cancelMfaProcess, clearMfaError
+  ]);
+  
   // Don't render children until Firebase is initialized
+  // This check is now after all hooks
   if (!firebaseInitialized) {
     return null; // Or a loading spinner
   }
   
   return (
-    <AuthContext.Provider value={{
-      user,
-      isLoading,
-      firestoreUser,
-      app: app!, // We know these are initialized after firebaseInitialized check
-      auth: auth!,
-      functions: functions!,
-      db: db!,
-      signIn,
-      signUp,
-      signOut,
-      signInWithGoogle,
-      signInWithPhoneNumber,
-      confirmPhoneCode,
-      phoneAuthConfirmation,
-      phoneNumberInProgress,
-      setPhoneAuthConfirmation,
-      clearPhoneAuth,
-      resendVerificationEmail,
-      confirmEmailVerificationLink,
-      refreshUser,
-      signInWithApple,
-      sendPasswordReset,
-      triggerSendVerificationEmail
-    }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

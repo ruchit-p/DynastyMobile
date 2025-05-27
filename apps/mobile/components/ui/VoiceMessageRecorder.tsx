@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   TouchableOpacity,
@@ -38,6 +38,57 @@ export default function VoiceMessageRecorder({
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
+  const checkPermissions = useCallback(async () => {
+    try {
+      const { status } = await AudioModule.getRecordingPermissionsAsync();
+      if (status === 'granted') {
+        setHasPermission(true);
+      } else {
+        const { status: newStatus } = await AudioModule.requestRecordingPermissionsAsync();
+        setHasPermission(newStatus === 'granted');
+        
+        if (newStatus !== 'granted') {
+          Alert.alert(
+            'Permission Required',
+            'Please allow microphone access to send voice messages.',
+            [{ text: 'OK', onPress: onCancel }]
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error checking permissions:', error);
+    }
+  }, [onCancel]);
+
+  const stopRecording = useCallback(async () => {
+    if (!isRecording) return;
+
+    try {
+      // Stop timer
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+
+      // Stop recording
+      const uri = await audioRecorder.stop();
+      audioRecorder.release();
+      
+      setIsRecording(false);
+
+      if (uri && recordingDuration >= 1) {
+        onRecordingComplete(uri, recordingDuration);
+      } else if (recordingDuration < 1) {
+        Alert.alert('Too Short', 'Voice message must be at least 1 second long.');
+        onCancel();
+      }
+    } catch (error) {
+      console.error('Failed to stop recording:', error);
+      Alert.alert('Recording Error', 'Failed to save recording. Please try again.');
+      onCancel();
+    }
+  }, [audioRecorder, isRecording, recordingDuration, onRecordingComplete, onCancel]);
+
   useEffect(() => {
     if (isVisible) {
       checkPermissions();
@@ -49,7 +100,7 @@ export default function VoiceMessageRecorder({
         stopRecording();
       }
     };
-  }, [isVisible]);
+  }, [isVisible, isRecording, checkPermissions, stopRecording]);
 
   useEffect(() => {
     if (isRecording) {
@@ -72,29 +123,7 @@ export default function VoiceMessageRecorder({
       pulseAnim.stopAnimation();
       pulseAnim.setValue(1);
     }
-  }, [isRecording]);
-
-  const checkPermissions = async () => {
-    try {
-      const { status } = await AudioModule.getRecordingPermissionsAsync();
-      if (status === 'granted') {
-        setHasPermission(true);
-      } else {
-        const { status: newStatus } = await AudioModule.requestRecordingPermissionsAsync();
-        setHasPermission(newStatus === 'granted');
-        
-        if (newStatus !== 'granted') {
-          Alert.alert(
-            'Permission Required',
-            'Please allow microphone access to send voice messages.',
-            [{ text: 'OK', onPress: onCancel }]
-          );
-        }
-      }
-    } catch (error) {
-      console.error('Error checking permissions:', error);
-    }
-  };
+  }, [isRecording, pulseAnim]);
 
   const startRecording = async () => {
     if (!hasPermission) {
@@ -126,34 +155,6 @@ export default function VoiceMessageRecorder({
     }
   };
 
-  const stopRecording = async () => {
-    if (!isRecording) return;
-
-    try {
-      // Stop timer
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-
-      // Stop recording
-      const uri = await audioRecorder.stop();
-      audioRecorder.release();
-      
-      setIsRecording(false);
-
-      if (uri && recordingDuration >= 1) {
-        onRecordingComplete(uri, recordingDuration);
-      } else if (recordingDuration < 1) {
-        Alert.alert('Too Short', 'Voice message must be at least 1 second long.');
-        onCancel();
-      }
-    } catch (error) {
-      console.error('Failed to stop recording:', error);
-      Alert.alert('Recording Error', 'Failed to save recording. Please try again.');
-      onCancel();
-    }
-  };
 
   const cancelRecording = async () => {
     if (isRecording) {

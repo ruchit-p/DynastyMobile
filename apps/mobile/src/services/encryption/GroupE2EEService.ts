@@ -1,11 +1,11 @@
 import 'react-native-get-random-values';
-import { NativeModules } from 'react-native';
 import { Buffer } from 'buffer';
 import * as QuickCrypto from 'react-native-quick-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import E2EEService from './E2EEService';
+import { E2EEService } from './E2EEService';
 import { getFirebaseDb, getFirebaseAuth } from '../../lib/firebase';
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import { logger } from '../LoggingService';
 
 type Timestamp = FirebaseFirestoreTypes.Timestamp;
 
@@ -84,7 +84,7 @@ export default class GroupE2EEService {
         await this.loadGroupSession(groupId);
       }
     } catch (error) {
-      console.error('Failed to initialize group session:', error);
+      logger.error('Failed to initialize group session:', error);
       throw error;
     }
   }
@@ -544,7 +544,7 @@ export default class GroupE2EEService {
       );
       await AsyncStorage.setItem(key, encryptedData);
     } catch (error) {
-      console.error('Failed to store sender key locally:', error);
+      logger.error('Failed to store sender key locally:', error);
       throw error;
     }
   }
@@ -561,7 +561,7 @@ export default class GroupE2EEService {
       const decryptedData = await E2EEService.getInstance().decryptFromLocalStorage(encryptedData);
       return JSON.parse(decryptedData) as SenderKey;
     } catch (error) {
-      console.error('Failed to load sender key locally:', error);
+      logger.error('Failed to load sender key locally:', error);
       return null;
     }
   }
@@ -595,7 +595,7 @@ export default class GroupE2EEService {
         .digest('base64');
       return signature === expectedSignature;
     } catch (error) {
-      console.error('Failed to verify signature:', error);
+      logger.error('Failed to verify signature:', error);
       return false;
     }
   }

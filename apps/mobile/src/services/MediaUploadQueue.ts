@@ -2,6 +2,7 @@ import { FirebaseStorageTypes } from '@react-native-firebase/storage';
 import { getErrorMessage } from '../lib/errorUtils';
 import { getFirebaseStorage } from '../lib/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from './LoggingService';
 
 // Types
 export interface UploadItem {
@@ -73,7 +74,7 @@ export class MediaUploadQueue implements IMediaUploadQueue {
   private readonly STORAGE_KEY = '@dynasty_media_upload_queue';
 
   private constructor() {
-    console.log('[MediaUploadQueue] Initialized');
+    logger.debug('[MediaUploadQueue] Initialized');
     this.loadQueueFromStorage();
   }
 
@@ -88,7 +89,7 @@ export class MediaUploadQueue implements IMediaUploadQueue {
     item: Omit<UploadItem, 'id' | 'status' | 'progress' | 'retryCount' | 'createdAt' | 'updatedAt'>
   ): Promise<string> {
     const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.log(`[MediaUploadQueue] Enqueuing upload: ${uploadId}`);
+    logger.debug(`[MediaUploadQueue] Enqueuing upload: ${uploadId}`);
     
     try {
       const uploadItem: UploadItem = {
@@ -113,19 +114,19 @@ export class MediaUploadQueue implements IMediaUploadQueue {
       
       return uploadId;
     } catch (error) {
-      console.error('[MediaUploadQueue] Error enqueuing upload:', getErrorMessage(error));
+      logger.error('[MediaUploadQueue] Error enqueuing upload:', getErrorMessage(error));
       throw error;
     }
   }
 
   async processQueue(): Promise<void> {
     if (this.isProcessing) {
-      console.log('[MediaUploadQueue] Queue processing already in progress');
+      logger.debug('[MediaUploadQueue] Queue processing already in progress');
       return;
     }
     
     this.isProcessing = true;
-    console.log('[MediaUploadQueue] Starting queue processing');
+    logger.debug('[MediaUploadQueue] Starting queue processing');
     
     try {
       while (true) {
@@ -133,14 +134,14 @@ export class MediaUploadQueue implements IMediaUploadQueue {
         const pendingUploads = this.getPendingUploads();
         
         if (pendingUploads.length === 0) {
-          console.log('[MediaUploadQueue] No pending uploads');
+          logger.debug('[MediaUploadQueue] No pending uploads');
           break;
         }
         
         // Check current active uploads
         const activeCount = this.activeUploads.size;
         if (activeCount >= this.config.maxConcurrentUploads) {
-          console.log(`[MediaUploadQueue] Max concurrent uploads reached (${activeCount}/${this.config.maxConcurrentUploads})`);
+          logger.debug(`[MediaUploadQueue] Max concurrent uploads reached (${activeCount}/${this.config.maxConcurrentUploads})`);
           await new Promise(resolve => setTimeout(resolve, 1000));
           continue;
         }
@@ -151,18 +152,18 @@ export class MediaUploadQueue implements IMediaUploadQueue {
       }
     } finally {
       this.isProcessing = false;
-      console.log('[MediaUploadQueue] Queue processing completed');
+      logger.debug('[MediaUploadQueue] Queue processing completed');
     }
   }
 
   async retryFailed(): Promise<void> {
-    console.log('[MediaUploadQueue] Retrying failed uploads');
+    logger.debug('[MediaUploadQueue] Retrying failed uploads');
     
     try {
       const failedUploads = Array.from(this.queue.values())
         .filter(item => item.status === 'failed' && item.retryCount < item.maxRetries);
       
-      console.log(`[MediaUploadQueue] Found ${failedUploads.length} failed uploads to retry`);
+      logger.debug(`[MediaUploadQueue] Found ${failedUploads.length} failed uploads to retry`);
       
       for (const upload of failedUploads) {
         upload.status = 'pending';
@@ -170,7 +171,7 @@ export class MediaUploadQueue implements IMediaUploadQueue {
         upload.updatedAt = new Date();
         delete upload.error;
         
-        console.log(`[MediaUploadQueue] Retrying upload ${upload.id} (attempt ${upload.retryCount}/${upload.maxRetries})`);
+        logger.debug(`[MediaUploadQueue] Retrying upload ${upload.id} (attempt ${upload.retryCount}/${upload.maxRetries})`);
       }
       
       await this.saveQueueToStorage();
@@ -179,7 +180,7 @@ export class MediaUploadQueue implements IMediaUploadQueue {
         this.processQueue();
       }
     } catch (error) {
-      console.error('[MediaUploadQueue] Error retrying failed uploads:', getErrorMessage(error));
+      logger.error('[MediaUploadQueue] Error retrying failed uploads:', getErrorMessage(error));
       throw error;
     }
   }
@@ -205,7 +206,7 @@ export class MediaUploadQueue implements IMediaUploadQueue {
   }
 
   async pauseUpload(uploadId: string): Promise<void> {
-    console.log(`[MediaUploadQueue] Pausing upload: ${uploadId}`);
+    logger.debug(`[MediaUploadQueue] Pausing upload: ${uploadId}`);
     
     try {
       const uploadTask = this.activeUploads.get(uploadId);
@@ -220,13 +221,13 @@ export class MediaUploadQueue implements IMediaUploadQueue {
         }
       }
     } catch (error) {
-      console.error('[MediaUploadQueue] Error pausing upload:', getErrorMessage(error));
+      logger.error('[MediaUploadQueue] Error pausing upload:', getErrorMessage(error));
       throw error;
     }
   }
 
   async resumeUpload(uploadId: string): Promise<void> {
-    console.log(`[MediaUploadQueue] Resuming upload: ${uploadId}`);
+    logger.debug(`[MediaUploadQueue] Resuming upload: ${uploadId}`);
     
     try {
       const uploadTask = this.activeUploads.get(uploadId);
@@ -253,13 +254,13 @@ export class MediaUploadQueue implements IMediaUploadQueue {
         }
       }
     } catch (error) {
-      console.error('[MediaUploadQueue] Error resuming upload:', getErrorMessage(error));
+      logger.error('[MediaUploadQueue] Error resuming upload:', getErrorMessage(error));
       throw error;
     }
   }
 
   async cancelUpload(uploadId: string): Promise<void> {
-    console.log(`[MediaUploadQueue] Canceling upload: ${uploadId}`);
+    logger.debug(`[MediaUploadQueue] Canceling upload: ${uploadId}`);
     
     try {
       const uploadTask = this.activeUploads.get(uploadId);
@@ -271,13 +272,13 @@ export class MediaUploadQueue implements IMediaUploadQueue {
       this.queue.delete(uploadId);
       await this.saveQueueToStorage();
     } catch (error) {
-      console.error('[MediaUploadQueue] Error canceling upload:', getErrorMessage(error));
+      logger.error('[MediaUploadQueue] Error canceling upload:', getErrorMessage(error));
       throw error;
     }
   }
 
   async clearCompleted(): Promise<void> {
-    console.log('[MediaUploadQueue] Clearing completed uploads');
+    logger.debug('[MediaUploadQueue] Clearing completed uploads');
     
     try {
       const completedIds = Array.from(this.queue.entries())
@@ -286,10 +287,10 @@ export class MediaUploadQueue implements IMediaUploadQueue {
       
       completedIds.forEach(id => this.queue.delete(id));
       
-      console.log(`[MediaUploadQueue] Cleared ${completedIds.length} completed uploads`);
+      logger.debug(`[MediaUploadQueue] Cleared ${completedIds.length} completed uploads`);
       await this.saveQueueToStorage();
     } catch (error) {
-      console.error('[MediaUploadQueue] Error clearing completed uploads:', getErrorMessage(error));
+      logger.error('[MediaUploadQueue] Error clearing completed uploads:', getErrorMessage(error));
       throw error;
     }
   }
@@ -300,7 +301,7 @@ export class MediaUploadQueue implements IMediaUploadQueue {
   }
 
   async setUploadPriority(uploadId: string, priority: UploadItem['priority']): Promise<void> {
-    console.log(`[MediaUploadQueue] Setting upload ${uploadId} priority to ${priority}`);
+    logger.debug(`[MediaUploadQueue] Setting upload ${uploadId} priority to ${priority}`);
     
     try {
       const upload = this.queue.get(uploadId);
@@ -310,13 +311,13 @@ export class MediaUploadQueue implements IMediaUploadQueue {
         await this.saveQueueToStorage();
       }
     } catch (error) {
-      console.error('[MediaUploadQueue] Error setting upload priority:', getErrorMessage(error));
+      logger.error('[MediaUploadQueue] Error setting upload priority:', getErrorMessage(error));
       throw error;
     }
   }
 
   private async startUpload(upload: UploadItem): Promise<void> {
-    console.log(`[MediaUploadQueue] Starting upload: ${upload.id}`);
+    logger.debug(`[MediaUploadQueue] Starting upload: ${upload.id}`);
     
     try {
       upload.status = 'uploading';
@@ -342,12 +343,12 @@ export class MediaUploadQueue implements IMediaUploadQueue {
           upload.progress = Math.round(progress);
           upload.updatedAt = new Date();
           
-          console.log(`[MediaUploadQueue] Upload ${upload.id} progress: ${progress}%`);
+          logger.debug(`[MediaUploadQueue] Upload ${upload.id} progress: ${progress}%`);
           
           // TODO: Emit progress event
         },
         (error) => {
-          console.error(`[MediaUploadQueue] Upload ${upload.id} failed:`, error);
+          logger.error(`[MediaUploadQueue] Upload ${upload.id} failed:`, error);
           upload.status = 'failed';
           upload.error = getErrorMessage(error);
           upload.updatedAt = new Date();
@@ -370,7 +371,7 @@ export class MediaUploadQueue implements IMediaUploadQueue {
           upload.uploadCompletedAt = new Date();
           upload.updatedAt = new Date();
           
-          console.log(`[MediaUploadQueue] Upload ${upload.id} completed: ${downloadUrl}`);
+          logger.debug(`[MediaUploadQueue] Upload ${upload.id} completed: ${downloadUrl}`);
           
           this.activeUploads.delete(upload.id);
           await this.saveQueueToStorage();
@@ -384,7 +385,7 @@ export class MediaUploadQueue implements IMediaUploadQueue {
         }
       );
     } catch (error) {
-      console.error('[MediaUploadQueue] Error starting upload:', getErrorMessage(error));
+      logger.error('[MediaUploadQueue] Error starting upload:', getErrorMessage(error));
       upload.status = 'failed';
       upload.error = getErrorMessage(error);
       upload.updatedAt = new Date();
@@ -428,10 +429,10 @@ export class MediaUploadQueue implements IMediaUploadQueue {
           this.queue.set(item.id, item);
         });
         
-        console.log(`[MediaUploadQueue] Loaded ${items.length} items from storage`);
+        logger.debug(`[MediaUploadQueue] Loaded ${items.length} items from storage`);
       }
     } catch (error) {
-      console.error('[MediaUploadQueue] Error loading queue from storage:', getErrorMessage(error));
+      logger.error('[MediaUploadQueue] Error loading queue from storage:', getErrorMessage(error));
     }
   }
 
@@ -440,7 +441,7 @@ export class MediaUploadQueue implements IMediaUploadQueue {
       const items = Array.from(this.queue.values());
       await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(items));
     } catch (error) {
-      console.error('[MediaUploadQueue] Error saving queue to storage:', getErrorMessage(error));
+      logger.error('[MediaUploadQueue] Error saving queue to storage:', getErrorMessage(error));
     }
   }
 }

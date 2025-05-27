@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useThemeColor } from '@/hooks/useThemeColor';
 import { Colors } from '@/constants/Colors';
 import { Spacing, BorderRadius, Shadows } from '@/constants/Spacing';
-import Typography from '@/constants/Typography';
+import { Typography } from '@/constants/Typography';
 import Card from './Card';
 
 interface SyncStatusProps {

@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Platform,
-  Alert,
   ActivityIndicator,
   Image,
   Animated
@@ -17,18 +16,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import RNPhoneInput from 'react-native-phone-number-input';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 import { 
   PHONE_AUTH_CONFIG, 
   isTestPhoneNumber, 
-  TEST_PHONE_NUMBERS,
   PHONE_AUTH_ERROR_MESSAGES 
 } from '../../src/config/phoneAuth';
 import { Colors } from '../../constants/Colors';
 import { Typography } from '../../constants/Typography';
-import { Spacing, BorderRadius, Shadows } from '../../constants/Spacing';
+import { Spacing, BorderRadius } from '../../constants/Spacing';
+import { logger } from '../../src/services/LoggingService';
 
 const dynastyLogo = require('../../assets/images/dynasty.png');
 
@@ -114,7 +113,7 @@ export default function PhoneSignInScreen() {
         }),
       ]).start();
     }
-  }, [error]);
+  }, [error, errorAnimation]);
 
   // Retry with exponential backoff
   const calculateRetryDelay = () => {
@@ -141,9 +140,9 @@ export default function PhoneSignInScreen() {
     try {
       // Development helper: Show if using test number
       if (PHONE_AUTH_CONFIG.enableDebugLogging) {
-        console.log('Attempting to send OTP to:', formattedValue);
+        logger.debug('Attempting to send OTP to:', formattedValue);
         if (isTestPhoneNumber(formattedValue)) {
-          console.log('📱 Using test phone number');
+          logger.debug('📱 Using test phone number');
         }
       }
       
@@ -161,7 +160,7 @@ export default function PhoneSignInScreen() {
         }).start();
       }
     } catch (e: any) {
-      console.error('Phone auth error:', e);
+      logger.error('Phone auth error:', e);
       
       const errorCode = e.code || (e.message?.includes('TOO_SHORT') ? 'TOO_SHORT' : 'default');
       const errorInfo = getErrorMessageAndAction(errorCode);

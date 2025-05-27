@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TextInput, TouchableOpacity, Alert, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TextInput, TouchableOpacity, Linking, Platform } from 'react-native';
 import { useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { showErrorAlert } from '../../src/lib/errorUtils';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { logger } from '../../src/services/LoggingService';
 
 const SUPPORT_EMAIL = "support@dynastyapp.example.com";
 
@@ -66,7 +67,7 @@ const ContactSupportScreen = () => {
         await Linking.openURL(mailtoUrl);
       }
     } catch (err) {
-      console.error('An error occurred opening mail client', err);
+      logger.error('An error occurred opening mail client', err);
       handleError(err, {
         action: 'send_message',
         subject: subject.substring(0, 50), // Limit length for logging

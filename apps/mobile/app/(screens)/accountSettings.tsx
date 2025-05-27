@@ -1,15 +1,15 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+// import { Ionicons } from '@expo/vector-icons';
 import { getFirebaseAuth } from '../../src/lib/firebase';
 import ListItem, { ListItemProps } from '../../components/ListItem'; // Import shared ListItem
 import { commonHeaderOptions } from '../../constants/headerConfig'; // Import common header options
 import { showErrorAlert } from '../../src/lib/errorUtils'; // Added import
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
-import FlashList from '../../components/ui/FlashList';
+import { FlashList } from '../../components/ui/FlashList';
 
 // Reusable ListItem component - REMOVED
 // interface ListItemProps { ... }

@@ -5,9 +5,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { getFirebaseAuth, getFirebaseDb } from '../../src/lib/firebase';
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import { commonHeaderOptions } from '../../constants/headerConfig'; // Import common header options
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { logger } from '../../src/services/LoggingService';
 
 interface SettingToggleProps {
     label: string;
@@ -102,7 +103,7 @@ const PrivacySettingsScreen = () => {
         
         if (!auth.currentUser) {
           if (isActive) setIsLoading(false);
-          console.warn("No user logged in, cannot load privacy settings.");
+          logger.warn("No user logged in, cannot load privacy settings.");
           return;
         }
         if (isActive) setIsLoading(true);
@@ -190,7 +191,7 @@ const PrivacySettingsScreen = () => {
     try {
       const userDocRef = db.collection('users').doc(auth.currentUser.uid);
       await userDocRef.set({ privacySettings: updatedSettings }, { merge: true });
-      // if (showAlert) console.log("Privacy settings saved."); // Or a success toast
+      // if (showAlert) logger.debug("Privacy settings saved."); // Or a success toast
       return true;
     } catch (error) {
       handleError(error, {
@@ -277,7 +278,7 @@ const PrivacySettingsScreen = () => {
     reset();
     try {
       router.push('/(screens)/blockedUsers'); // Ensure this screen is created
-      console.log('Navigate to Blocked Users Screen');
+      logger.debug('Navigate to Blocked Users Screen');
     } catch (error) {
       handleError(error, {
         action: 'navigation',

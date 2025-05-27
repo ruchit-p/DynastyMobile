@@ -5,11 +5,11 @@ import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 import { Colors } from '../../constants/Colors';
-import Typography from '../../constants/Typography';
+import { Typography } from '../../constants/Typography';
 
 const TermsOfServiceScreen = () => {
   const navigation = useNavigation();
-  const { handleError, withErrorHandling, reset } = useErrorHandler({
+  const { handleError, withErrorHandling: _withErrorHandling, reset } = useErrorHandler({
     severity: ErrorSeverity.INFO,
     title: 'Terms of Service Error',
     trackCurrentScreen: true,
@@ -93,7 +93,7 @@ const TermsOfServiceScreen = () => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>6. PROHIBITED USES</Text>
             <Text style={styles.bodyText}>
-              You may not violate laws, impersonate others, interfere with the app's functionality, or engage in unauthorized commercial activities.
+              You may not violate laws, impersonate others, interfere with the app&apos;s functionality, or engage in unauthorized commercial activities.
             </Text>
           </View>
 

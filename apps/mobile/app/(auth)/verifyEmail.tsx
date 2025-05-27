@@ -7,17 +7,17 @@ import {
   SafeAreaView,
   Platform,
   Image,
-  Alert,
   ActivityIndicator
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Link, Stack } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+// import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../src/contexts/AuthContext'; // Updated path
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { logger } from '../../src/services/LoggingService';
 
 const dynastyLogo = require('../../assets/images/dynasty.png');
 
@@ -36,7 +36,7 @@ export default function VerifyEmailScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false); // New state for manual refresh
-  const insets = useSafeAreaInsets();
+  const _insets = useSafeAreaInsets(); // eslint-disable-line @typescript-eslint/no-unused-vars
 
   useEffect(() => {
     if (!isError) {
@@ -48,12 +48,12 @@ export default function VerifyEmailScreen() {
     if (user && user.emailVerified) {
       // If somehow user lands here but is already verified, navigate away
       // This navigation should ideally be handled by a central auth state listener in AuthContext
-      router.replace('/(tabs)/home'); // Or to onboarding if not completed
+      router.replace('/(tabs)/feed'); // Or to onboarding if not completed
     }
   }, [user, router]);
 
   const handleResendEmail = withErrorHandling(async () => {
-    console.log("VerifyEmailScreen: handleResendEmail TRIGGERED");
+    logger.debug("VerifyEmailScreen: handleResendEmail TRIGGERED");
     if (!user) {
       setError("You need to be signed in to resend a verification email.");
       return;
@@ -87,7 +87,7 @@ export default function VerifyEmailScreen() {
     setError(null);
     setMessage(null);
     setIsCheckingStatus(true);
-    console.log("VerifyEmailScreen: Manually checking verification status...");
+    logger.debug("VerifyEmailScreen: Manually checking verification status...");
     try {
       await refreshUser(); // Call refreshUser from AuthContext
       // No explicit navigation here; AuthContext's useEffect should handle it if status changed.

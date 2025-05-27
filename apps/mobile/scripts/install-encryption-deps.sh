@@ -4,13 +4,12 @@
 
 cd /Users/ruchitpatel/Documents/DynastyMobile/apps/mobile
 
-echo "Installing QR code and barcode scanner dependencies..."
+echo "Installing QR code dependencies..."
 
 # Install QR code generator
 yarn add react-native-qrcode-svg react-native-svg
 
-# Install barcode scanner
-yarn add expo-barcode-scanner
+# Note: Barcode scanning is now built into expo-camera (already installed)
 
 echo "Dependencies installed successfully!"
 echo ""

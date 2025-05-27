@@ -19,12 +19,14 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { getFirebaseAuth } from '../../src/lib/firebase';
 import Fonts from '../../constants/Fonts';
 import { showErrorAlert, callFirebaseFunction } from '../../src/lib/errorUtils';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 import { useImageUpload } from '../../hooks/useImageUpload';
 import FullScreenDatePicker from '../../components/ui/FullScreenDatePicker';
 import GenderPicker from '../../components/ui/GenderPicker';
+import { logger } from '../../src/services/LoggingService';
+import { sanitizeUserInput, sanitizeEmail, sanitizePhoneNumber } from '../../src/lib/xssSanitization';
 
 const EditProfileScreen = () => {
   const navigation = useNavigation();
@@ -43,7 +45,7 @@ const EditProfileScreen = () => {
 
   const [name, setName] = useState(firestoreUser?.displayName || user?.displayName || '');
   const [editableEmail, setEditableEmail] = useState(user?.email || '');
-  const [avatarUri, setAvatarUri] = useState<string | null>(firestoreUser?.profilePicture || user?.photoURL || null);
+  const [avatarUri, setAvatarUri] = useState<string | null>(firestoreUser?.profilePictureUrl || firestoreUser?.profilePicture?.url || user?.photoURL || null);
   const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
   const [profileImageFirebaseUrl, setProfileImageFirebaseUrl] = useState<string | null>(null);
   const [dateOfBirth, setDateOfBirth] = useState(firestoreUser?.dateOfBirth || '');
@@ -77,7 +79,13 @@ const EditProfileScreen = () => {
       let emailChanged = false;
       if (editableEmail && editableEmail !== user?.email) {
         try {
-          await auth.currentUser!.updateEmail(editableEmail);
+          const sanitizedEmail = sanitizeEmail(editableEmail);
+          if (!sanitizedEmail) {
+            showErrorAlert({ message: "Invalid email format", code: "invalid-email" }, "Email Update Failed");
+            setIsSavingProfile(false);
+            return;
+          }
+          await auth.currentUser!.updateEmail(sanitizedEmail);
           emailChanged = true;
           Alert.alert("Email Updated", "Your email has been updated. You might need to re-verify it.");
         } catch (error: any) {
@@ -91,7 +99,7 @@ const EditProfileScreen = () => {
         }
       }
 
-      // Prepare profile update data
+      // Prepare profile update data with sanitization
       const profileDataToUpdate: { 
         uid: string;
         displayName?: string;
@@ -101,10 +109,10 @@ const EditProfileScreen = () => {
         phoneNumber?: string;
       } = {
         uid: auth.currentUser!.uid,
-        displayName: name,
+        displayName: sanitizeUserInput(name, { maxLength: 100, trim: true }),
         dateOfBirth: dateOfBirth,
-        gender: gender,
-        phoneNumber: phoneNumber,
+        gender: sanitizeUserInput(gender, { maxLength: 50, trim: true }),
+        phoneNumber: sanitizePhoneNumber(phoneNumber),
       };
 
       // Handle profile picture upload
@@ -164,7 +172,7 @@ const EditProfileScreen = () => {
         metadata: { 
           nameChanged: name !== (firestoreUser?.displayName || user?.displayName),
           emailChanged: editableEmail !== user?.email,
-          avatarChanged: avatarUri !== (firestoreUser?.profilePicture || user?.photoURL)
+          avatarChanged: avatarUri !== (firestoreUser?.profilePictureUrl || firestoreUser?.profilePicture?.url || user?.photoURL)
         }
       });
       showErrorAlert(error, "Save Failed");
@@ -189,7 +197,7 @@ const EditProfileScreen = () => {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, name, editableEmail, avatarUri, isSavingProfile, isUploadingImage, refreshUser]);
+  }, [navigation, name, editableEmail, avatarUri, isSavingProfile, isUploadingImage, refreshUser, handleSaveChanges]);
 
   const handlePickProfileImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -212,7 +220,7 @@ const EditProfileScreen = () => {
       try {
         const firebaseUrl = await uploadImage(localUri, 'profileImages');
         if (firebaseUrl) {
-          console.log("Uploaded to Firebase:", firebaseUrl);
+          logger.debug("Uploaded to Firebase:", firebaseUrl);
           setProfileImageFirebaseUrl(firebaseUrl);
           // Update the avatar URI to the Firebase URL for immediate display
           setAvatarUri(firebaseUrl);
@@ -222,7 +230,7 @@ const EditProfileScreen = () => {
           Alert.alert("Upload Failed", "Failed to upload profile picture. Please try again.");
         }
       } catch (err: any) {
-        console.error("Upload failed:", err);
+        logger.error("Upload failed:", err);
         // Revert to previous avatar
         setAvatarUri(firestoreUser?.profilePicture || user?.photoURL || null);
         Alert.alert("Upload Failed", "Failed to upload profile picture. Please try again.");

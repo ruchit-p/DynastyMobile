@@ -2,6 +2,7 @@
 // Implements WebCrypto API for secure communication
 
 import { errorHandler, ErrorSeverity } from '../ErrorHandlingService';
+import { getKeyCacheService } from './KeyCacheService';
 
 export interface KeyPair {
   publicKey: CryptoKey;
@@ -364,38 +365,46 @@ class E2EEService {
     salt: Uint8Array;
   }> {
     try {
-      const encoder = new TextEncoder();
-      const passwordData = encoder.encode(password);
-      
       // Generate salt if not provided
       if (!salt) {
         salt = crypto.getRandomValues(new Uint8Array(16));
       }
 
-      // Import password as key
-      const passwordKey = await crypto.subtle.importKey(
-        'raw',
-        passwordData,
-        'PBKDF2',
-        false,
-        ['deriveKey']
-      );
+      // Use cache service for performance
+      const keyCache = getKeyCacheService();
+      const derivedKey = await keyCache.getOrDeriveKey(
+        password,
+        salt,
+        async () => {
+          const encoder = new TextEncoder();
+          const passwordData = encoder.encode(password);
 
-      // Derive key
-      const derivedKey = await crypto.subtle.deriveKey(
-        {
-          name: 'PBKDF2',
-          salt,
-          iterations: 100000,
-          hash: 'SHA-256',
-        },
-        passwordKey,
-        {
-          name: 'AES-GCM',
-          length: 256,
-        },
-        true,
-        ['encrypt', 'decrypt']
+          // Import password as key
+          const passwordKey = await crypto.subtle.importKey(
+            'raw',
+            passwordData,
+            'PBKDF2',
+            false,
+            ['deriveKey']
+          );
+
+          // Derive key
+          return await crypto.subtle.deriveKey(
+            {
+              name: 'PBKDF2',
+              salt,
+              iterations: 210000, // Updated to OWASP 2024 recommendation
+              hash: 'SHA-256',
+            },
+            passwordKey,
+            {
+              name: 'AES-GCM',
+              length: 256,
+            },
+            true,
+            ['encrypt', 'decrypt']
+          );
+        }
       );
 
       return { key: derivedKey, salt };

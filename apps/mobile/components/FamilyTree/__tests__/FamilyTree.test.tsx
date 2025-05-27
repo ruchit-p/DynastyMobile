@@ -4,7 +4,10 @@ import { FamilyTree } from '../index';
 import type { Node } from 'relatives-tree/lib/types';
 
 // Mock dependencies
-jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
+jest.mock('react-native-reanimated', () => {
+  const reanimatedMock = jest.requireActual('react-native-reanimated/mock');
+  return reanimatedMock;
+});
 jest.mock('react-native-gesture-handler', () => ({
   GestureHandlerRootView: ({ children }: any) => children,
   GestureDetector: ({ children }: any) => children,

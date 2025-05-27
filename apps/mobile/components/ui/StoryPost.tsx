@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Image, TouchableOpacity, StyleProp, ViewStyle, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from './Card';
-import ThemedText from '../ThemedText';
+import { ThemedText } from '../ThemedText';
 import ProfilePicture from './ProfilePicture';
 import MediaGallery from './MediaGallery';
 import TaggedPeopleBadges, { PersonInfo as BadgePersonInfo } from './TaggedPeopleBadges';
@@ -12,6 +12,7 @@ import type { Story } from '../../src/lib/storyUtils';
 import { formatDate, formatTimeAgo } from '../../src/lib/dateUtils';
 import * as ImagePicker from 'expo-image-picker';
 import { fetchUserProfilesByIds, UserProfile } from '../../src/lib/userUtils';
+import { sanitizeForDisplay } from '../../src/lib/xssSanitization';
 
 // Define a local interface for props if needed, or use BadgePersonInfo directly
 // interface PersonInfoForPost {
@@ -30,8 +31,8 @@ export interface StoryPostProps {
 const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, style }) => {
   const dateLabel = formatDate(story.createdAt);
   const timeAgoLabel = formatTimeAgo(story.createdAt);
-  const storyTitle = (story as any).title || (story.blocks.find(b => b.type === 'text')?.data as string || '');
-  const storySubtitle = (story as any).subtitle;
+  const storyTitle = sanitizeForDisplay((story as any).title || (story.blocks.find(b => b.type === 'text')?.data as string || ''), 200);
+  const storySubtitle = (story as any).subtitle ? sanitizeForDisplay((story as any).subtitle, 300) : undefined;
   const mediaCount = story.blocks.filter(b => b.type === 'image' || b.type === 'video').length;
 
   const [taggedPeopleDetails, setTaggedPeopleDetails] = useState<BadgePersonInfo[]>([]);
@@ -58,7 +59,7 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
     } else {
       setTaggedPeopleDetails([]); // Clear if no people involved
     }
-  }, [story]); // Depend on the whole story object or story.id if peopleInvolved can change independently
+  }, [story]);
 
   const galleryMediaItems = React.useMemo(() => {
     if (!story || !story.blocks) return [];
@@ -112,7 +113,7 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
                 />
                 <View style={styles.userNameAndTimestamp}>
                   <ThemedText variant="bodyMedium" style={styles.authorName}>
-                    {story.author?.displayName || story.authorID}
+                    {sanitizeForDisplay(story.author?.displayName || story.authorID, 100)}
                   </ThemedText>
                   <View style={styles.timestampContainer}>
                     <Text style={styles.datePill}>{dateLabel}</Text>
@@ -172,7 +173,7 @@ const StoryPost: React.FC<StoryPostProps> = ({ story, onPress, onMorePress, styl
           <View style={styles.locationContainer}>
             <Ionicons name="location-sharp" size={16} color="#555" />
             <ThemedText variant="caption" color="secondary" style={styles.locationText} numberOfLines={1}>
-              {story.location.address}
+              {sanitizeForDisplay(story.location.address, 500)}
             </ThemedText>
           </View>
         )}
@@ -226,7 +227,7 @@ const styles = StyleSheet.create({
     flexShrink: 1, 
     marginRight: Spacing.sm, 
   },
-  avatar: {},
+  avatar: Record<string, never>,
   userNameAndTimestamp: {
     flexDirection: 'column',
     justifyContent: 'flex-start',

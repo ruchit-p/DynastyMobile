@@ -1,0 +1,37 @@
+[
+  {
+    "AllowedOrigins": [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://localhost:8081",
+      "http://localhost:8082",
+      "http://localhost:19000",
+      "http://localhost:19006",
+      "http://localhost",
+      "https://localhost",
+      "capacitor://localhost",
+      "ionic://localhost",
+      "https://mydynastyapp.com",
+      "https://*.mydynastyapp.com",
+      "https://app.mydynastyapp.com",
+      "https://www.mydynastyapp.com"
+    ],
+    "AllowedMethods": [
+      "GET",
+      "PUT",
+      "POST",
+      "DELETE",
+      "HEAD"
+    ],
+    "AllowedHeaders": [
+      "*"
+    ],
+    "ExposeHeaders": [
+      "ETag",
+      "Content-Length",
+      "Content-Type",
+      "x-amz-meta-*"
+    ],
+    "MaxAgeSeconds": 3600
+  }
+]

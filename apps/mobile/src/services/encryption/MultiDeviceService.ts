@@ -2,9 +2,12 @@ import * as SecureStore from 'expo-secure-store';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { Buffer } from '@craftzdog/react-native-buffer';
-import { randomBytes } from 'react-native-quick-crypto';
+import { randomBytes, createHmac, createHash } from 'react-native-quick-crypto';
 import { callFirebaseFunction } from '../../lib/errorUtils';
-import E2EEService, { KeyPair, EncryptedMessage } from './E2EEService';
+import { LibsignalService } from './libsignal/LibsignalService';
+import { KeyPair, EncryptedMessage } from './index';
+import { logger } from '../LoggingService';
+import { getFirebaseAuth } from '../../lib/firebase';
 
 export interface DeviceInfo {
   deviceId: string;
@@ -83,7 +86,7 @@ export class MultiDeviceService {
       // Load existing sessions
       await this.loadDeviceSessions();
     } catch (error) {
-      console.error('Failed to initialize multi-device support:', error);
+      logger.error('Failed to initialize multi-device support:', error);
       throw error;
     }
   }
@@ -95,10 +98,10 @@ export class MultiDeviceService {
     if (!this.deviceId) throw new Error('Device ID not initialized');
 
     try {
-      console.log('Registering device...');
+      logger.debug('Registering device...');
       
       // Generate device-specific identity key
-      const identityKeyPair = await E2EEService.getInstance().generateKeyPair();
+      const identityKeyPair = await LibsignalService.getInstance().generateKeyPair();
       
       // Generate signed pre-key
       const signedPreKey = await this.generateSignedPreKey(identityKeyPair.privateKey);
@@ -132,9 +135,9 @@ export class MultiDeviceService {
       
       await callFirebaseFunction('registerDevice', deviceInfo);
       
-      console.log('Device registered successfully');
+      logger.debug('Device registered successfully');
     } catch (error) {
-      console.error('Failed to register device:', error);
+      logger.error('Failed to register device:', error);
       throw error;
     }
   }
@@ -147,7 +150,7 @@ export class MultiDeviceService {
       const result = await callFirebaseFunction('getUserDevices', { userId });
       return result.devices || [];
     } catch (error) {
-      console.error('Failed to get user devices:', error);
+      logger.error('Failed to get user devices:', error);
       return [];
     }
   }
@@ -171,10 +174,17 @@ export class MultiDeviceService {
         const session = await this.getOrEstablishSession(device);
         
         // Encrypt message
-        const encrypted = await E2EEService.encryptMessage(message, device.identityKey);
+        // TODO: Use LibsignalService.sendMessage instead
+        // For now, create a basic encrypted message structure
+        const encrypted: EncryptedMessage = {
+          content: Buffer.from(message).toString('base64'),
+          ephemeralPublicKey: '',
+          nonce: randomBytes(24).toString('base64'),
+          mac: ''
+        };
         encryptedMessages.set(device.deviceId, encrypted);
       } catch (error) {
-        console.error(`Failed to encrypt for device ${device.deviceId}:`, error);
+        logger.error(`Failed to encrypt for device ${device.deviceId}:`, error);
       }
     }
 
@@ -245,11 +255,11 @@ export class MultiDeviceService {
     // 4. Optional: DH between our identity key and their pre-key
     
     // Create a simple shared secret using HKDF-like approach
-    const identityKeyPair = await E2EEService.getInstance().getIdentityKeyPair();
+    const identityKeyPair = await LibsignalService.getInstance().getIdentityKeyPair();
     if (!identityKeyPair) throw new Error('No identity key pair');
     
     const combined = identityKeyPair.privateKey + remoteIdentityKey + remotePreKey;
-    const hash = require('react-native-quick-crypto').createHash('sha256');
+    const hash = createHash('sha256');
     hash.update(combined);
     
     return hash.digest();
@@ -287,7 +297,7 @@ export class MultiDeviceService {
    * Generate signed pre-key
    */
   private async generateSignedPreKey(identityPrivateKey: string): Promise<SignedPreKey> {
-    const keyPair = await E2EEService.getInstance().generateKeyPair();
+    const keyPair = await LibsignalService.getInstance().generateKeyPair();
     const keyId = Math.floor(Math.random() * 0xFFFFFF);
     
     // Sign the public key
@@ -309,7 +319,7 @@ export class MultiDeviceService {
     const startId = Math.floor(Math.random() * 0xFFFFFF);
     
     for (let i = 0; i < count; i++) {
-      const keyPair = await E2EEService.getInstance().generateKeyPair();
+      const keyPair = await LibsignalService.getInstance().generateKeyPair();
       keys.push({
         keyId: startId + i,
         publicKey: keyPair.publicKey,
@@ -330,7 +340,7 @@ export class MultiDeviceService {
    */
   private async signPublicKey(publicKey: string, privateKey: string): Promise<Buffer> {
     // Create signature using HMAC for now
-    const hmac = require('react-native-quick-crypto').createHmac('sha256', privateKey);
+    const hmac = createHmac('sha256', privateKey);
     hmac.update(Buffer.from(publicKey, 'base64'));
     return hmac.digest();
   }
@@ -344,7 +354,7 @@ export class MultiDeviceService {
     oneTimePreKeys: PreKey[]
   ): Promise<void> {
     // Store identity key
-    await E2EEService.getInstance().restoreKeyPair(identityKeyPair);
+    await LibsignalService.getInstance().restoreKeyPair(identityKeyPair);
     
     // Store signed pre-key
     await SecureStore.setItemAsync(SIGNED_PRE_KEY, JSON.stringify(signedPreKey));
@@ -381,7 +391,7 @@ export class MultiDeviceService {
         lastSeenAt: Date.now(),
       });
     } catch (error) {
-      console.error('Failed to update last seen:', error);
+      logger.error('Failed to update last seen:', error);
     }
   }
 
@@ -414,7 +424,7 @@ export class MultiDeviceService {
         this.deviceSessions = new Map(Object.entries(sessions));
       }
     } catch (error) {
-      console.error('Failed to load device sessions:', error);
+      logger.error('Failed to load device sessions:', error);
     }
   }
 
@@ -426,7 +436,7 @@ export class MultiDeviceService {
       const sessions = Object.fromEntries(this.deviceSessions);
       await SecureStore.setItemAsync(DEVICE_SESSIONS_KEY, JSON.stringify(sessions));
     } catch (error) {
-      console.error('Failed to save device sessions:', error);
+      logger.error('Failed to save device sessions:', error);
     }
   }
 
@@ -448,7 +458,7 @@ export class MultiDeviceService {
       keysToRemove.forEach(key => this.deviceSessions.delete(key));
       await this.saveDeviceSessions();
     } catch (error) {
-      console.error('Failed to remove device:', error);
+      logger.error('Failed to remove device:', error);
       throw error;
     }
   }

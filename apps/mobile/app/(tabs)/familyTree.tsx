@@ -14,15 +14,16 @@ import type { Node, ExtNode } from 'relatives-tree/lib/types';
 import { FamilyTree } from '../../components/FamilyTree';
 import AnimatedActionSheet from '../../components/ui/AnimatedActionSheet';
 import IconButton, { IconSet } from '../../components/ui/IconButton';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { Colors } from '../../constants/Colors';
-import Typography from '../../constants/Typography';
+import { Typography } from '../../constants/Typography';
 import { Spacing, BorderRadius } from '../../constants/Spacing';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { getFamilyTreeDataMobile } from '../../src/lib/firebaseUtils';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 import { transformFirebaseToRelativesTree } from '../../utils/familyTreeTransform';
+import { logger } from '../../src/services/LoggingService';
 
 const FamilyTreeScreen = () => {
   const router = useRouter();
@@ -74,7 +75,7 @@ const FamilyTreeScreen = () => {
         setFirebaseNodeMap(nodeMap);
 
         const loadTime = performance.now() - startTime;
-        console.log(`[FamilyTree] Loaded ${transformedNodes.length} nodes in ${loadTime.toFixed(2)}ms`);
+        logger.debug(`[FamilyTree] Loaded ${transformedNodes.length} nodes in ${loadTime.toFixed(2)}ms`);
 
         if (transformedNodes.length > 1000) {
           setPerformanceMode('performance');
@@ -196,7 +197,7 @@ const FamilyTreeScreen = () => {
           selectedNodeId={selectedNode?.id}
           performanceMode={performanceMode}
           onTreeReady={() => {
-            console.log(`[FamilyTree] Tree rendered with ${nodes.length} nodes`);
+            logger.debug(`[FamilyTree] Tree rendered with ${nodes.length} nodes`);
           }}
         />
 

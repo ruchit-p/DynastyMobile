@@ -12,16 +12,17 @@ import {
 import { useLocalSearchParams, useNavigation, Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '../../components/ui/AppHeader';
-import Colors from '../../constants/Colors';
+import { Colors } from '../../constants/Colors';
 import Fonts from '../../constants/Fonts';
 import Layout from '../../constants/Layout';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 import { getFirebaseDb } from '../../src/lib/firebase';
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import { fetchAccessibleStoriesMobile } from '../../src/lib/storyUtils';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { logger } from '../../src/services/LoggingService';
 
 interface MemberProfile {
   id: string;
@@ -150,7 +151,7 @@ function MemberProfileScreenContent() {
           
           setStories(fetchedStories);
         } catch (storyError) {
-          console.error('Error fetching stories:', storyError);
+          logger.error('Error fetching stories:', storyError);
           // Continue without stories rather than failing entirely
         }
       }
@@ -189,13 +190,13 @@ function MemberProfileScreenContent() {
           
           setEvents(uniqueEvents);
         } catch (eventError) {
-          console.error('Error fetching events:', eventError);
+          logger.error('Error fetching events:', eventError);
           // Continue without events rather than failing entirely
         }
       }
       
     } catch (fetchError) {
-      console.error('Error fetching member data:', fetchError);
+      logger.error('Error fetching member data:', fetchError);
       const errorMsg = 'Failed to load profile data';
       setError(errorMsg);
       handleError(fetchError, {

@@ -2,10 +2,11 @@ import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import { getErrorMessage } from '../lib/errorUtils';
 import { getFirebaseDb } from '../lib/firebase';
 import { SyncDatabase } from '../database/SyncDatabase';
-import { LocalMessage, SyncQueueItem, ConflictLog } from '../database/schema';
+import { LocalMessage, SyncQueueItem } from '../database/schema';
 import { ChatEncryptionService } from './encryption/ChatEncryptionService';
 import NetInfo from '@react-native-community/netinfo';
 import DeviceInfo from 'react-native-device-info';
+import { logger } from './LoggingService';
 
 // Types
 export interface Message {
@@ -83,7 +84,7 @@ export class MessageSyncService implements IMessageSyncService {
   private syncInProgress: Set<string> = new Set();
 
   private constructor() {
-    console.log('[MessageSyncService] Initialized');
+    logger.debug('[MessageSyncService] Initialized');
   }
 
   static getInstance(): MessageSyncService {
@@ -94,10 +95,10 @@ export class MessageSyncService implements IMessageSyncService {
   }
 
   async syncMessages(conversationId: string, since?: Date): Promise<void> {
-    console.log(`[MessageSyncService] Syncing messages for conversation: ${conversationId}`);
+    logger.debug(`[MessageSyncService] Syncing messages for conversation: ${conversationId}`);
     
     if (this.syncInProgress.has(conversationId)) {
-      console.log(`[MessageSyncService] Sync already in progress for: ${conversationId}`);
+      logger.debug(`[MessageSyncService] Sync already in progress for: ${conversationId}`);
       return;
     }
     
@@ -132,10 +133,9 @@ export class MessageSyncService implements IMessageSyncService {
         remoteMessages.push({ id: doc.id, ...doc.data() } as Message);
       });
       
-      console.log(`[MessageSyncService] Found ${remoteMessages.length} remote messages, ${localMessages.length} local messages`);
+      logger.debug(`[MessageSyncService] Found ${remoteMessages.length} remote messages, ${localMessages.length} local messages`);
       
       // 3. Process and decrypt messages
-      const encryptionService = ChatEncryptionService.getInstance();
       const messagesToStore: LocalMessage[] = [];
       const conflicts: MessageConflict[] = [];
       
@@ -164,7 +164,7 @@ export class MessageSyncService implements IMessageSyncService {
             // The ChatEncryptionService will handle decryption on read
             decryptedContent = remoteMsg.encryptedContent;
           } catch (error) {
-            console.error(`[MessageSyncService] Failed to process encrypted message ${remoteMsg.id}:`, error);
+            logger.error(`[MessageSyncService] Failed to process encrypted message ${remoteMsg.id}:`, error);
             continue;
           }
         }
@@ -218,7 +218,7 @@ export class MessageSyncService implements IMessageSyncService {
       }
       
     } catch (error) {
-      console.error('[MessageSyncService] Error syncing messages:', getErrorMessage(error));
+      logger.error('[MessageSyncService] Error syncing messages:', getErrorMessage(error));
       throw error;
     } finally {
       this.syncInProgress.delete(conversationId);
@@ -227,7 +227,7 @@ export class MessageSyncService implements IMessageSyncService {
 
   async queueMessage(message: Omit<Message, 'id' | 'timestamp' | 'deliveryStatus'>): Promise<string> {
     const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.log(`[MessageSyncService] Queueing message: ${messageId}`);
+    logger.debug(`[MessageSyncService] Queueing message: ${messageId}`);
     
     try {
       const deviceId = DeviceInfo.getUniqueId();
@@ -245,7 +245,7 @@ export class MessageSyncService implements IMessageSyncService {
       // 2. Check if encryption is enabled
       const conversation = this.conversationCache.get(message.conversationId);
       if (conversation?.encryptionEnabled) {
-        console.log('[MessageSyncService] Message will be encrypted by ChatEncryptionService');
+        logger.debug('[MessageSyncService] Message will be encrypted by ChatEncryptionService');
         fullMessage.isEncrypted = true;
       }
       
@@ -307,18 +307,18 @@ export class MessageSyncService implements IMessageSyncService {
         // Process immediately if online
         setImmediate(() => this.processMessageQueue());
       } else {
-        console.log('[MessageSyncService] Offline - message queued for later');
+        logger.debug('[MessageSyncService] Offline - message queued for later');
       }
       
       return messageId;
     } catch (error) {
-      console.error('[MessageSyncService] Error queueing message:', getErrorMessage(error));
+      logger.error('[MessageSyncService] Error queueing message:', getErrorMessage(error));
       throw error;
     }
   }
 
   async syncEncryptionKeys(userId: string): Promise<void> {
-    console.log(`[MessageSyncService] Syncing encryption keys for user: ${userId}`);
+    logger.debug(`[MessageSyncService] Syncing encryption keys for user: ${userId}`);
     
     try {
       const encryptionService = ChatEncryptionService.getInstance();
@@ -326,14 +326,14 @@ export class MessageSyncService implements IMessageSyncService {
       // 1. Ensure local device has keys
       const isReady = await encryptionService.isEncryptionReady();
       if (!isReady) {
-        console.log('[MessageSyncService] Initializing encryption for local device');
+        logger.debug('[MessageSyncService] Initializing encryption for local device');
         await encryptionService.initializeEncryption();
       }
       
       // 2. Get user's public keys from Firebase
       const userKeys = await encryptionService.getUserPublicKeys(userId);
       if (!userKeys) {
-        console.log(`[MessageSyncService] No encryption keys found for user: ${userId}`);
+        logger.debug(`[MessageSyncService] No encryption keys found for user: ${userId}`);
         return;
       }
       
@@ -355,7 +355,7 @@ export class MessageSyncService implements IMessageSyncService {
       const thirtyDays = 30 * 24 * 60 * 60 * 1000;
       
       if (keyAge > thirtyDays) {
-        console.log('[MessageSyncService] Key rotation recommended for user:', userId);
+        logger.debug('[MessageSyncService] Key rotation recommended for user:', userId);
         // Store rotation recommendation in metadata
         const sqliteDb = SyncDatabase.getInstance();
         await sqliteDb.upsert('cacheMetadata', {
@@ -372,13 +372,13 @@ export class MessageSyncService implements IMessageSyncService {
       }
       
     } catch (error) {
-      console.error('[MessageSyncService] Error syncing encryption keys:', getErrorMessage(error));
+      logger.error('[MessageSyncService] Error syncing encryption keys:', getErrorMessage(error));
       throw error;
     }
   }
 
   async updateDeliveryStatus(messageId: string, status: Message['deliveryStatus']): Promise<void> {
-    console.log(`[MessageSyncService] Updating delivery status for ${messageId} to ${status}`);
+    logger.debug(`[MessageSyncService] Updating delivery status for ${messageId} to ${status}`);
     
     try {
       // 1. Update in-memory queue if present
@@ -427,13 +427,13 @@ export class MessageSyncService implements IMessageSyncService {
       // For now, the UI will pick up changes through SQLite observers
       
     } catch (error) {
-      console.error('[MessageSyncService] Error updating delivery status:', getErrorMessage(error));
+      logger.error('[MessageSyncService] Error updating delivery status:', getErrorMessage(error));
       throw error;
     }
   }
 
   async resolveMessageConflicts(conflict: MessageConflict): Promise<Message> {
-    console.log('[MessageSyncService] Resolving message conflict:', conflict);
+    logger.debug('[MessageSyncService] Resolving message conflict:', conflict);
     
     try {
       // TODO: Implement conflict resolution
@@ -468,7 +468,7 @@ export class MessageSyncService implements IMessageSyncService {
           
         case 'encryption':
           // Re-encrypt if keys don't match
-          console.log('[MessageSyncService] Re-encrypting message due to key mismatch');
+          logger.debug('[MessageSyncService] Re-encrypting message due to key mismatch');
           // TODO: Re-encrypt with current keys
           return remoteMessage;
           
@@ -476,13 +476,13 @@ export class MessageSyncService implements IMessageSyncService {
           return remoteMessage;
       }
     } catch (error) {
-      console.error('[MessageSyncService] Error resolving conflicts:', getErrorMessage(error));
+      logger.error('[MessageSyncService] Error resolving conflicts:', getErrorMessage(error));
       throw error;
     }
   }
 
   async retryFailedMessages(conversationId?: string): Promise<void> {
-    console.log('[MessageSyncService] Retrying failed messages');
+    logger.debug('[MessageSyncService] Retrying failed messages');
     
     try {
       // 1. Get failed messages from SQLite
@@ -506,7 +506,7 @@ export class MessageSyncService implements IMessageSyncService {
       const result = await sqliteDb.executeSql(query, params);
       const failedMessages = this.parseResultSet(result);
       
-      console.log(`[MessageSyncService] Found ${failedMessages.length} failed messages in database`);
+      logger.debug(`[MessageSyncService] Found ${failedMessages.length} failed messages in database`);
       
       // 2. Also check in-memory queue
       const queuedFailedMessages = Array.from(this.messageQueue.values())
@@ -519,7 +519,7 @@ export class MessageSyncService implements IMessageSyncService {
                  (!item.nextRetryAt || item.nextRetryAt <= new Date());
         });
       
-      console.log(`[MessageSyncService] Found ${queuedFailedMessages.length} failed messages in queue`);
+      logger.debug(`[MessageSyncService] Found ${queuedFailedMessages.length} failed messages in queue`);
       
       // 3. Retry messages from database
       for (const localMsg of failedMessages) {
@@ -543,20 +543,20 @@ export class MessageSyncService implements IMessageSyncService {
         delete item.error;
         delete item.nextRetryAt;
         
-        console.log(`[MessageSyncService] Retrying message ${item.id} (attempt ${item.retryCount})`);
+        logger.debug(`[MessageSyncService] Retrying message ${item.id} (attempt ${item.retryCount})`);
       }
       
       // 5. Process the queue
       await this.processMessageQueue();
       
     } catch (error) {
-      console.error('[MessageSyncService] Error retrying failed messages:', getErrorMessage(error));
+      logger.error('[MessageSyncService] Error retrying failed messages:', getErrorMessage(error));
       throw error;
     }
   }
 
   async syncConversations(userId: string): Promise<void> {
-    console.log(`[MessageSyncService] Syncing conversations for user: ${userId}`);
+    logger.debug(`[MessageSyncService] Syncing conversations for user: ${userId}`);
     
     try {
       const db = getFirebaseDb();
@@ -575,7 +575,7 @@ export class MessageSyncService implements IMessageSyncService {
         chatIds.push(doc.id);
       });
       
-      console.log(`[MessageSyncService] User has ${chatIds.length} chats`);
+      logger.debug(`[MessageSyncService] User has ${chatIds.length} chats`);
       
       // 2. Fetch full chat data for each chat
       const conversations: Conversation[] = [];
@@ -592,15 +592,14 @@ export class MessageSyncService implements IMessageSyncService {
             lastMessage: chatData.lastMessage,
             lastActivity: chatData.lastMessageAt || chatData.createdAt,
             encryptionEnabled: chatData.encryptionEnabled || true,
-            publicKeys: {}
-          };
+            publicKeys: Record<string, never> };
           
           conversations.push(conversation);
           this.conversationCache.set(chatId, conversation);
         }
       }
       
-      console.log(`[MessageSyncService] Loaded ${conversations.length} conversation details`);
+      logger.debug(`[MessageSyncService] Loaded ${conversations.length} conversation details`);
       
       // 3. Sync messages for each conversation (limit to recent ones)
       const recentConversations = conversations.slice(0, 10); // Sync only 10 most recent
@@ -620,7 +619,7 @@ export class MessageSyncService implements IMessageSyncService {
             }
           }
         } catch (error) {
-          console.error(`[MessageSyncService] Failed to sync conversation ${conversation.id}:`, error);
+          logger.error(`[MessageSyncService] Failed to sync conversation ${conversation.id}:`, error);
           // Continue with other conversations
         }
       }
@@ -629,13 +628,13 @@ export class MessageSyncService implements IMessageSyncService {
       await this.retryFailedMessages();
       
     } catch (error) {
-      console.error('[MessageSyncService] Error syncing conversations:', getErrorMessage(error));
+      logger.error('[MessageSyncService] Error syncing conversations:', getErrorMessage(error));
       throw error;
     }
   }
 
   async rotateEncryptionKeys(userId: string): Promise<void> {
-    console.log(`[MessageSyncService] Rotating encryption keys for user: ${userId}`);
+    logger.debug(`[MessageSyncService] Rotating encryption keys for user: ${userId}`);
     
     try {
       // TODO: Implement key rotation
@@ -645,18 +644,18 @@ export class MessageSyncService implements IMessageSyncService {
       // 4. Upload new public key
       // 5. Re-encrypt recent messages with new key
       
-      console.log('[MessageSyncService] Generating new key pair...');
+      logger.debug('[MessageSyncService] Generating new key pair...');
       // TODO: Generate keys using crypto library
       
-      console.log('[MessageSyncService] Deactivating old keys...');
+      logger.debug('[MessageSyncService] Deactivating old keys...');
       // TODO: Update old keys in Firestore
       
-      console.log('[MessageSyncService] Uploading new public key...');
+      logger.debug('[MessageSyncService] Uploading new public key...');
       // TODO: Store new key in Firestore
       
-      console.log('[MessageSyncService] Key rotation complete');
+      logger.debug('[MessageSyncService] Key rotation complete');
     } catch (error) {
-      console.error('[MessageSyncService] Error rotating encryption keys:', getErrorMessage(error));
+      logger.error('[MessageSyncService] Error rotating encryption keys:', getErrorMessage(error));
       throw error;
     }
   }
@@ -664,7 +663,7 @@ export class MessageSyncService implements IMessageSyncService {
   private async processMessageQueue(): Promise<void> {
     const netInfo = await NetInfo.fetch();
     if (!netInfo.isConnected) {
-      console.log('[MessageSyncService] No network connection - skipping queue processing');
+      logger.debug('[MessageSyncService] No network connection - skipping queue processing');
       return;
     }
     
@@ -672,7 +671,7 @@ export class MessageSyncService implements IMessageSyncService {
       .filter(item => item.message.deliveryStatus === 'sending' && 
               (!item.nextRetryAt || item.nextRetryAt <= new Date()));
     
-    console.log(`[MessageSyncService] Processing ${pendingMessages.length} pending messages`);
+    logger.debug(`[MessageSyncService] Processing ${pendingMessages.length} pending messages`);
     
     const encryptionService = ChatEncryptionService.getInstance();
     const db = getFirebaseDb();
@@ -742,7 +741,7 @@ export class MessageSyncService implements IMessageSyncService {
         this.messageQueue.delete(item.id);
         
       } catch (error) {
-        console.error(`[MessageSyncService] Failed to send message ${item.id}:`, error);
+        logger.error(`[MessageSyncService] Failed to send message ${item.id}:`, error);
         item.retryCount++;
         
         if (item.retryCount >= item.maxRetries) {
@@ -899,7 +898,7 @@ export class MessageSyncService implements IMessageSyncService {
         }
       }
     } catch (error) {
-      console.error('[MessageSyncService] Error updating delivery statuses:', error);
+      logger.error('[MessageSyncService] Error updating delivery statuses:', error);
     }
   }
 }
