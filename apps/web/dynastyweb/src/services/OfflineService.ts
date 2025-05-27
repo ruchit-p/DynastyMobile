@@ -10,8 +10,7 @@ import { Workbox } from 'workbox-window';
 // MARK: - Types
 export interface OfflineAction {
   id: string;
-  type: 'message' | 'reaction' | 'media_upload' | 'profile_update' | 'vault_update';
-  chatId?: string;
+  type: 'media_upload' | 'profile_update' | 'vault_update';
   data: any;
   timestamp: number;
   retryCount: number;
@@ -114,11 +113,6 @@ export class OfflineService {
           actionsStore.createIndex('by-timestamp', 'timestamp');
           actionsStore.createIndex('by-priority', 'priority');
 
-          // Messages store
-          const messagesStore = db.createObjectStore('messages', { keyPath: 'id' });
-          messagesStore.createIndex('by-chat', 'chatId');
-          messagesStore.createIndex('by-timestamp', 'timestamp');
-          messagesStore.createIndex('by-status', 'status');
 
           // Cache store
           const cacheStore = db.createObjectStore('cache', { keyPath: 'key' });
@@ -354,43 +348,6 @@ export class OfflineService {
   }
 
   // MARK: - Offline Messages
-  /**
-   * Store message for offline access
-   */
-  async storeOfflineMessage(message: Omit<OfflineMessage, 'status'>): Promise<void> {
-    try {
-      if (!this.db || !this.config.enableOfflineMessages) {
-        return;
-      }
-
-      const offlineMessage: OfflineMessage = {
-        ...message,
-        status: 'pending'
-      };
-
-      await this.db.add('messages', offlineMessage);
-      console.log(`[Offline] Message stored offline: ${message.id}`);
-
-    } catch (error) {
-      console.error('[Offline] Failed to store offline message:', error);
-    }
-  }
-
-  /**
-   * Get offline messages for a chat
-   */
-  async getOfflineMessages(chatId: string): Promise<OfflineMessage[]> {
-    try {
-      if (!this.db) {
-        return [];
-      }
-
-      return await this.db.getAllFromIndex('messages', 'by-chat', chatId);
-    } catch (error) {
-      console.error('[Offline] Failed to get offline messages:', error);
-      return [];
-    }
-  }
 
   // MARK: - Cache Management
   /**

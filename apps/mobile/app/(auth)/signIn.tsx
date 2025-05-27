@@ -33,7 +33,7 @@ const dynastyLogo = require('../../assets/images/dynasty.png');
 
 export default function SignInScreen() {
   const router = useRouter();
-  const { signIn, signInWithGoogle, isLoading } = useAuth(); // Use signIn and signInWithGoogle from context
+  const { signIn, signInWithGoogle, signInWithApple, isLoading } = useAuth(); // Use signIn, signInWithGoogle, and signInWithApple from context
   const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
     severity: ErrorSeverity.ERROR,
     title: 'Sign In Error',
@@ -131,6 +131,24 @@ export default function SignInScreen() {
     }
   };
 
+  const handleAppleSignIn = async () => {
+    reset();
+    setError(null);
+    try {
+      await signInWithApple();
+      // Navigation is handled by AuthProvider
+    } catch (e: any) {
+      // Don't show error if user cancelled
+      if (e.code !== 'auth/user-cancelled') {
+        handleError(e, {
+          action: 'appleSignIn',
+          showToUser: true
+        });
+        setError(e.message || "Apple Sign-In failed.");
+      }
+    }
+  };
+
   const handlePhoneSignIn = () => {
     router.push('/(auth)/phoneSignIn'); // Example, create this screen later
   };
@@ -223,16 +241,8 @@ export default function SignInScreen() {
           {isAppleSignInAvailable && (
             <AppleSignInButton 
               style={styles.appleButton}
-              onSuccess={() => {
-                logger.debug('Apple sign in successful');
-                router.replace('/(tabs)/feed');
-              }}
-              onError={(error) => {
-                handleError(error, {
-                  context: 'Apple sign in failed',
-                  showToUser: true
-                });
-              }}
+              onPress={handleAppleSignIn}
+              disabled={isLoading}
             />
           )}
 

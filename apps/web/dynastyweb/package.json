@@ -69,6 +69,7 @@
     "crypto-js": "^4.2.0",
     "idb": "^8.0.1",
     "libsodium-wrappers": "^0.7.15",
+    "libsodium-wrappers-sumo": "^0.7.15",
     "lamejs": "^1.2.1",
     "workbox-sw": "^7.3.0",
     "workbox-webpack-plugin": "^7.3.0",

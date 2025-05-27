@@ -35,7 +35,7 @@ const dynastyLogo = require('../../assets/images/dynasty.png');
 
 export default function SignUpScreen() {
   const router = useRouter();
-  const { signUp, signInWithGoogle, isLoading } = useAuth();
+  const { signUp, signInWithGoogle, signInWithApple, isLoading } = useAuth();
   const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
     severity: ErrorSeverity.ERROR,
     title: 'Sign Up Error',
@@ -130,6 +130,24 @@ export default function SignUpScreen() {
       }
     } finally {
       setGoogleLoading(false);
+    }
+  };
+
+  const handleAppleSignUp = async () => {
+    reset();
+    setError(null);
+    try {
+      await signInWithApple();
+      // Navigation is handled by AuthProvider
+    } catch (e: any) {
+      // Don't show error if user cancelled
+      if (e.code !== 'auth/user-cancelled') {
+        handleError(e, {
+          action: 'appleSignUp',
+          showToUser: true
+        });
+        setError(e.message || "Apple Sign-Up failed.");
+      }
     }
   };
 
@@ -231,16 +249,8 @@ export default function SignUpScreen() {
             {isAppleSignInAvailable && (
               <AppleSignInButton 
                 style={styles.appleButton}
-                onSuccess={() => {
-                  logger.debug('Apple sign up successful');
-                  router.replace('/(tabs)/feed');
-                }}
-                onError={(error) => {
-                  handleError(error, {
-                    context: 'Apple sign up failed',
-                    showToUser: true
-                  });
-                }}
+                onPress={handleAppleSignUp}
+                disabled={isLoading}
               />
             )}
 

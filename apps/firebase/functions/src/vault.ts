@@ -19,6 +19,7 @@ import {createLogContext, formatErrorForLogging} from "./utils/sanitization";
 import {sanitizeFilename} from "./utils/xssSanitization";
 import {validateRequest} from "./utils/request-validator";
 import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
+import {vaultSecurityService} from "./services/vaultSecurityService";
 
 // MARK: - Types
 interface VaultItem {

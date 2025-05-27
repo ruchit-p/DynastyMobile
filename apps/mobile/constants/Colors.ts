@@ -5,23 +5,29 @@
 
 // Base color palette - raw color values
 const palette = {
-  // Primary colors
+  // Primary colors - Dynasty Greens
   dynastyGreen: {
-    dark: '#1A4B44',    // Primary green
-    medium: '#2D7A6E',  // Medium shade
-    light: '#A3C1AD',   // Light shade
-    extraLight: '#E8F5E9', // Very subtle background
+    dark: '#163D21',       // British racing green
+    primary: '#14562D',    // Cal Poly green
+    light: '#6DBC74',      // Mantis
+    extraLight: '#B0EDB1', // Celadon
+  },
+  
+  // Gold colors
+  dynastyGold: {
+    light: '#FFB81F',      // Selective yellow
+    dark: '#D4AF4A',       // Gold metallic
   },
   
   // Neutral colors for text, backgrounds, etc.
   neutral: {
-    black: '#000000',
-    darkest: '#11181C',  // Darkest text
-    dark: '#333333',     // Dark text
-    medium: '#687076',   // Medium text/icons
-    light: '#9BA1A6',    // Light text/icons
-    lighter: '#E0E0E0',  // Borders
-    lightest: '#F4F4F4', // Background
+    black: '#1E1D1E',      // Eerie black
+    darkest: '#1E1D1E',    // Eerie black
+    dark: '#595E65',       // Davy's gray
+    medium: '#595E65',     // Davy's gray
+    light: '#DFDFDF',      // Platinum
+    lighter: '#DFDFDF',    // Platinum
+    lightest: '#F8F8F8',   // Seasalt
     white: '#FFFFFF',
   },
   
@@ -43,7 +49,7 @@ export const Colors = {
       secondary: palette.neutral.dark,
       tertiary: palette.neutral.medium,
       inverse: palette.neutral.white,
-      link: '#0a7ea4',      // Tint color
+      link: palette.dynastyGreen.primary,      // Tint color
       success: palette.status.success,
       warning: palette.status.warning,
       error: palette.status.error,
@@ -59,20 +65,20 @@ export const Colors = {
     },
     button: {
       primary: {
-        background: palette.dynastyGreen.dark,
+        background: palette.dynastyGreen.primary,
         text: palette.neutral.white,
       },
       secondary: {
         background: palette.neutral.lightest,
-        text: palette.dynastyGreen.dark,
+        text: palette.dynastyGreen.primary,
       },
     },
     icon: {
-      primary: palette.dynastyGreen.dark,
+      primary: palette.dynastyGreen.primary,
       secondary: palette.neutral.medium,
     },
     tab: {
-      active: palette.dynastyGreen.dark,
+      active: palette.dynastyGreen.primary,
       inactive: palette.neutral.medium,
     },
     status: {
@@ -105,7 +111,7 @@ export const Colors = {
     },
     button: {
       primary: {
-        background: palette.dynastyGreen.dark,
+        background: palette.dynastyGreen.primary,
         text: palette.neutral.white,
       },
       secondary: {
@@ -134,26 +140,26 @@ export const Colors = {
   light_legacy: {
     text: palette.neutral.darkest,
     background: palette.neutral.white,
-    tint: '#0a7ea4',
+    tint: palette.dynastyGreen.primary,
     icon: palette.neutral.medium,
     tabIconDefault: palette.neutral.medium,
-    tabIconSelected: palette.dynastyGreen.dark,
-    primary: palette.dynastyGreen.dark,
-    segmentActive: palette.dynastyGreen.dark,
-    buttonBackground: palette.dynastyGreen.dark,
+    tabIconSelected: palette.dynastyGreen.primary,
+    primary: palette.dynastyGreen.primary,
+    segmentActive: palette.dynastyGreen.primary,
+    buttonBackground: palette.dynastyGreen.primary,
     buttonText: palette.neutral.white,
     backgroundColor: palette.neutral.lightest,
   },
   dark_legacy: {
     text: palette.neutral.lightest,
     background: '#151718',
-    tint: palette.neutral.white,
+    tint: palette.dynastyGreen.light,
     icon: palette.neutral.light,
     tabIconDefault: palette.neutral.light,
-    tabIconSelected: palette.neutral.white,
-    primary: palette.dynastyGreen.dark,
-    segmentActive: palette.dynastyGreen.dark,
-    buttonBackground: palette.dynastyGreen.dark,
+    tabIconSelected: palette.dynastyGreen.light,
+    primary: palette.dynastyGreen.primary,
+    segmentActive: palette.dynastyGreen.primary,
+    buttonBackground: palette.dynastyGreen.primary,
     buttonText: palette.neutral.white,
   },
   
@@ -161,8 +167,12 @@ export const Colors = {
   palette,
   
   // Direct color access (for convenience)
-  dynastyGreen: palette.dynastyGreen.dark, 
+  dynastyGreen: palette.dynastyGreen.primary,
+  dynastyGreenDark: palette.dynastyGreen.dark,
   dynastyGreenLight: palette.dynastyGreen.light,
+  dynastyGreenExtraLight: palette.dynastyGreen.extraLight,
+  dynastyGoldLight: palette.dynastyGold.light,
+  dynastyGoldDark: palette.dynastyGold.dark,
 };
 
 export default Colors;
