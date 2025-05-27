@@ -4,13 +4,13 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getFirebaseDb } from '../../src/lib/firebase';
 import { useAuth } from '../../src/contexts/AuthContext';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
 // Import design system components
 import Screen from '../../components/ui/Screen';
-import ThemedText from '../../components/ThemedText';
+import { ThemedText } from '../../components/ThemedText';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Avatar from '../../components/ui/Avatar';
@@ -20,6 +20,7 @@ import ListItem from '../../components/ListItem';
 // Import design tokens
 import { Spacing } from '../../constants/Spacing';
 import { useTextColor, useBorderColor } from '../../hooks/useThemeColor';
+import { logger } from '../../src/services/LoggingService';
 
 interface UserProfile {
   name: string;
@@ -108,7 +109,7 @@ const ProfileScreen = () => {
         connectionsCount: connectionsCount - 1 // Subtract 1 to exclude the user themselves
       });
     } catch (error) {
-      console.error('Error fetching profile stats:', error);
+      logger.error('Error fetching profile stats:', error);
       // Don't throw error, just use default values
     }
   };
@@ -180,6 +181,12 @@ const ProfileScreen = () => {
       text: 'Family Management',
       onPress: withErrorHandling(() => router.push('/(screens)/familyManagement' as any)),
     },
+    // Add debug menu item in development mode
+    ...(__DEV__ ? [{
+      icon: 'bug-outline' as keyof typeof Ionicons.glyphMap,
+      text: 'Test Logging System',
+      onPress: withErrorHandling(() => router.push('/(screens)/testLogging' as any)),
+    }] : []),
   ];
 
   if (isLoading) {

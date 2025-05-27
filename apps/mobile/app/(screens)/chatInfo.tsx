@@ -17,9 +17,10 @@ import { Colors } from '../../constants/Colors';
 import { useThemeColor } from '../../hooks/useThemeColor';
 import Avatar from '../../components/ui/Avatar';
 import { callFirebaseFunction } from '../../src/lib/errorUtils';
-import ChatNotificationService from '../../src/services/ChatNotificationService';
+import { ChatNotificationService } from '../../src/services/ChatNotificationService';
 import { getFirebaseDb } from '../../src/lib/firebase';
 import { format } from 'date-fns';
+import { logger } from '../../src/services/LoggingService';
 
 interface ChatInfoParams {
   chatId: string;
@@ -60,11 +61,7 @@ export default function ChatInfoScreen() {
   const borderColor = useThemeColor({}, 'border');
 
   // Load chat details
-  useEffect(() => {
-    loadChatDetails();
-  }, [params.chatId]);
-
-  const loadChatDetails = async () => {
+  const loadChatDetails = useCallback(async () => {
     try {
       setIsLoading(true);
       
@@ -101,12 +98,16 @@ export default function ChatInfoScreen() {
         } : null);
       }
     } catch (error) {
-      console.error('Failed to load chat details:', error);
+      logger.error('Failed to load chat details:', error);
       Alert.alert('Error', 'Failed to load chat information');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [params.chatId, user?.uid]);
+
+  useEffect(() => {
+    loadChatDetails();
+  }, [loadChatDetails]);
 
   // Toggle notifications
   const handleNotificationToggle = useCallback(async (value: boolean) => {
@@ -124,7 +125,7 @@ export default function ChatInfoScreen() {
         await ChatNotificationService.muteChat(params.chatId);
       }
     } catch (error) {
-      console.error('Failed to update notifications:', error);
+      logger.error('Failed to update notifications:', error);
       setNotificationsEnabled(!value); // Revert
       Alert.alert('Error', 'Failed to update notification settings');
     }
@@ -170,14 +171,14 @@ export default function ChatInfoScreen() {
                 loadChatDetails(); // Reload
               }
             } catch (error) {
-              console.error('Failed to remove member:', error);
+              logger.error('Failed to remove member:', error);
               Alert.alert('Error', 'Failed to remove member');
             }
           },
         },
       ]
     );
-  }, [user, params.chatId, router]);
+  }, [user, params.chatId, router, loadChatDetails]);
 
   // Update member role
   const handleUpdateRole = useCallback((member: ChatMember) => {
@@ -199,14 +200,14 @@ export default function ChatInfoScreen() {
               });
               loadChatDetails();
             } catch (error) {
-              console.error('Failed to update role:', error);
+              logger.error('Failed to update role:', error);
               Alert.alert('Error', 'Failed to update member role');
             }
           },
         },
       ]
     );
-  }, [params.chatId]);
+  }, [params.chatId, loadChatDetails]);
 
   // Edit group info
   const handleEditGroupInfo = useCallback(() => {
@@ -245,7 +246,7 @@ export default function ChatInfoScreen() {
               router.back();
               router.back(); // Go back to chat list
             } catch (error) {
-              console.error('Failed to delete chat:', error);
+              logger.error('Failed to delete chat:', error);
               Alert.alert('Error', 'Failed to delete chat');
             }
           },

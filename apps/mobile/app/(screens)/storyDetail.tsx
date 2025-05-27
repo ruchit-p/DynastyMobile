@@ -35,9 +35,10 @@ import MediaGallery from '../../components/ui/MediaGallery';
 import TaggedPeopleBadges, { PersonInfo as BadgePersonInfo } from '../../components/ui/TaggedPeopleBadges';
 import { fetchUserProfilesByIds, UserProfile } from '../../src/lib/userUtils'; // Import fetch function
 import { showErrorAlert } from '../../src/lib/errorUtils'; // Added import
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { logger } from '../../src/services/LoggingService';
 
 interface StoryComment {
   id: string;
@@ -143,7 +144,7 @@ const StoryDetailScreen = () => {
             try {
               fetchedPeopleDetails = (await fetchUserProfilesByIds(peopleIds)) as BadgePersonInfo[];
             } catch (peopleError) {
-              console.error("Error fetching tagged people for StoryDetail:", peopleError);
+              logger.error("Error fetching tagged people for StoryDetail:", peopleError);
               // Continue without people details if fetch fails
             }
           }
@@ -173,7 +174,7 @@ const StoryDetailScreen = () => {
           setIsLoadingLikeStatus(true);
           checkStoryLikeStatusMobile(storyId).then(status => {
             if (isMounted) setIsLiked(status);
-          }).catch(err => console.error("Failed to get like status", err))
+          }).catch(err => logger.error("Failed to get like status", err))
             .finally(() => { if (isMounted) setIsLoadingLikeStatus(false); });
 
           getStoryCommentsMobile(storyId).then(rawComments => {
@@ -195,7 +196,7 @@ const StoryDetailScreen = () => {
               }));
             };
             setComments(mapRawCommentsRecursively(rawComments).reverse());
-          }).catch(err => console.error("Failed to get comments", err));
+          }).catch(err => logger.error("Failed to get comments", err));
 
           navigation.setOptions({
             ...commonHeaderOptions,
@@ -214,7 +215,7 @@ const StoryDetailScreen = () => {
 
         } catch (error: any) {
           if (isMounted) {
-            console.error(error);
+            logger.error(error);
             
             handleError(error, {
               action: 'loadStoryData',
@@ -251,7 +252,7 @@ const StoryDetailScreen = () => {
     try {
       await toggleStoryLikeMobile(story.id, originalIsLiked);
     } catch (error: any) {
-      console.error("Error toggling like:", error);
+      logger.error("Error toggling like:", error);
       
       handleError(error, {
         action: 'handleLikePress',
@@ -355,7 +356,7 @@ const StoryDetailScreen = () => {
         setComments(prev => replaceOptimistic(prev));
 
       } else {
-        console.warn("Failed to post comment. Server response issue. Data:", JSON.stringify(serverResponse, null, 2));
+        logger.warn("Failed to post comment. Server response issue. Data:", JSON.stringify(serverResponse, null, 2));
         Alert.alert("Comment Error", serverResponse?.error || "Failed to post comment. Please try again.");
         const removeOptimistic = (existingComments: StoryComment[]): StoryComment[] => {
           return existingComments.filter(c => c.id !== tempId).map(c => {
@@ -368,7 +369,7 @@ const StoryDetailScreen = () => {
         setComments(prev => removeOptimistic(prev));
       }
     } catch (error) {
-      console.error("Error posting comment:", error);
+      logger.error("Error posting comment:", error);
       const removeOptimisticOnError = (existingComments: StoryComment[]): StoryComment[] => {
         return existingComments.filter(c => c.id !== tempId).map(c => {
           if (c.replies) {
@@ -443,7 +444,7 @@ const StoryDetailScreen = () => {
       });
 
     } catch (error) {
-      console.error("Error toggling comment like:", error);
+      logger.error("Error toggling comment like:", error);
       if (originalCommentState) {
         const revertLikeStatus = (commentsToSearch: StoryComment[]): StoryComment[] => {
           return commentsToSearch.map(c => {
@@ -499,7 +500,7 @@ const StoryDetailScreen = () => {
                 Alert.alert("Error", "Failed to delete the story. Please try again.");
               }
             } catch (error) {
-              console.error("Error deleting story:", error);
+              logger.error("Error deleting story:", error);
               showErrorAlert(error, "Error Deleting Story");
             }
           },

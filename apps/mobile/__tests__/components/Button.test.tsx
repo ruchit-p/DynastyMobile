@@ -77,14 +77,14 @@ describe('Button Component', () => {
     const { getByTestId: getSecondary } = render(
       <Button title="Secondary" onPress={() => {}} variant="secondary" />
     );
-    const { getByTestId: getDestructive } = render(
-      <Button title="Delete" onPress={() => {}} variant="destructive" />
+    const { getByTestId: getOutline } = render(
+      <Button title="Outline" onPress={() => {}} variant="outline" />
     );
     
     // Just check that they render without errors
     expect(getPrimary('button-touchable')).toBeTruthy();
     expect(getSecondary('button-touchable')).toBeTruthy();
-    expect(getDestructive('button-touchable')).toBeTruthy();
+    expect(getOutline('button-touchable')).toBeTruthy();
   });
 
   it('applies size styles', () => {
@@ -113,7 +113,7 @@ describe('Button Component', () => {
     // Style could be an array or object, handle both cases
     const styles = Array.isArray(button.props.style) ? button.props.style : [button.props.style];
     const hasCustomBackground = styles.some(
-      style => style && style.backgroundColor === 'red'
+      (style: any) => style && style.backgroundColor === 'red'
     );
     expect(hasCustomBackground).toBe(true);
   });

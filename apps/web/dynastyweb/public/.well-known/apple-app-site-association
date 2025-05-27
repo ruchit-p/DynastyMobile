@@ -1,0 +1,21 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "UYC9467JJK.com.mydynastyapp.dynasty",
+        "paths": [
+          "/",
+          "/story/*",
+          "/event/*",
+          "/profile/*",
+          "/family/*",
+          "/invite/*"
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["UYC9467JJK.com.mydynastyapp.dynasty"]
+  }
+}

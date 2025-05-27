@@ -3,19 +3,17 @@ import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import VerifyOtpScreen from '../../../app/(auth)/verifyOtp';
 import { useAuth } from '../../../src/contexts/AuthContext';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 // Mock dependencies
 jest.mock('../../../src/contexts/AuthContext');
+jest.mock('expo-router');
 
 // Get router mock from setup
-const router = require('expo-router').useRouter();
+const router = useRouter() as jest.MockedFunction<typeof useRouter>;
 
-// Override useLocalSearchParams for this test
-jest.mock('expo-router', () => ({
-  ...jest.requireActual('expo-router'),
-  useLocalSearchParams: jest.fn(() => ({ phoneNumber: '+1234567890' })),
-}));
+// Setup mocks
+(useLocalSearchParams as jest.Mock).mockReturnValue({ phoneNumber: '+1234567890' });
 
 const mockConfirmPhoneCode = jest.fn();
 const mockSignInWithPhoneNumber = jest.fn();

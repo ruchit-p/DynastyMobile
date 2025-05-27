@@ -1,62 +1,103 @@
-# Dynasty Mobile Documentation
+# Dynasty Documentation
 
-This directory contains documentation for the Dynasty Mobile app.
+Welcome to the Dynasty project documentation. This guide will help you navigate through our comprehensive documentation.
 
-## Authentication Documentation
+## 📚 Documentation Structure
 
-1. **[auth_context_diagram.md](auth_context_diagram.md)** - A mermaid diagram showing the structure and relationships of the AuthContext components.
+### [Architecture](./architecture/)
+System design, data flow, and architectural decisions for the Dynasty platform.
 
-2. **[auth_flow_sequence.md](auth_flow_sequence.md)** - A mermaid sequence diagram showing the authentication flows for different sign-in methods.
+- [System Overview](./architecture/system-overview.md) - High-level architecture
+- [Data Flow](./architecture/data-flow.md) - How data moves through the system
+- [Security Architecture](./architecture/security-architecture.md) - Security design principles
+- [Technology Stack](./architecture/technology-stack.md) - Technology choices and rationale
 
-3. **[auth_context_explanation.md](auth_context_explanation.md)** - Detailed explanation of how the authentication system works.
+### [API Reference](./api-reference/)
+Complete API documentation for all services and endpoints.
 
-4. **[auth_context_interface.md](auth_context_interface.md)** - Documentation of the AuthContext interface, including properties and methods.
+- [Firebase Functions](./api-reference/firebase-functions.md) - All cloud functions
+- [Authentication](./api-reference/authentication.md) - Auth endpoints and methods
+- [Messaging](./api-reference/messaging.md) - Chat and messaging APIs
+- [Vault](./api-reference/vault.md) - File storage and management
+- [Stories & Events](./api-reference/stories-events.md) - Content creation APIs
 
-## Story Creation Documentation
+### [Developer Guides](./guides/)
+How-to guides and tutorials for common tasks.
 
-1. **[story_creation_flow.md](story_creation_flow.md)** - A mermaid diagram showing the structure and flow of the story creation process.
+- [Getting Started](./guides/getting-started.md) - Developer onboarding
+- [Deployment](./guides/deployment.md) - Deploy to production
+- [Testing](./guides/testing.md) - Testing strategies and commands
+- [Troubleshooting](./guides/troubleshooting.md) - Common issues and solutions
+- [Contributing](./guides/contributing.md) - Contribution guidelines
 
-2. **[story_creation_sequence.md](story_creation_sequence.md)** - A mermaid sequence diagram showing the detailed interactions during story creation.
+### [Features](./features/)
+In-depth documentation for each major feature.
 
-3. **[story_creation_explanation.md](story_creation_explanation.md)** - Detailed explanation of how the story creation process works.
+- **[Authentication](./features/authentication/)** - User authentication system
+- **[Messaging](./features/messaging/)** - E2E encrypted chat system
+- **[Stories](./features/stories/)** - Family story creation and sharing
+- **[Vault](./features/vault/)** - Secure file storage
 
-4. **[story_data_model.md](story_data_model.md)** - Documentation of the data model for stories, including Firestore structure and relationships.
+### [Security](./security/)
+Security documentation and best practices.
 
-## Viewing the Diagrams
+- [Security Overview](./security/README.md) - Security principles
+- [Audit Report](./security/audit-report.md) - Latest security audit
+- [CSRF Protection](./security/csrf-protection.md) - Cross-site request forgery
+- [Encryption](./security/encryption.md) - Encryption methods and implementation
+- [Best Practices](./security/best-practices.md) - Security guidelines
 
-The diagrams are written in Mermaid syntax. To view them:
+### [Infrastructure](./infrastructure/)
+Infrastructure setup and configuration.
 
-### Option 1: GitHub
+- [Firebase Setup](./infrastructure/firebase-setup.md) - Firebase configuration
+- [Cloudflare R2](./infrastructure/cloudflare-r2.md) - Object storage setup
+- [Monitoring](./infrastructure/monitoring.md) - Logging and monitoring
 
-If you're viewing these files on GitHub, the mermaid diagrams will render automatically.
+## 🚀 Quick Links
 
-### Option 2: VS Code
+- [CHANGELOG](../CHANGELOG.md) - Version history and updates
+- [Mobile App README](../apps/mobile/README.md) - Mobile app specific docs
+- [Web App README](../apps/web/dynastyweb/README.md) - Web app specific docs
+- [Firebase Functions README](../apps/firebase/functions/README.md) - Backend docs
 
-Install the "Markdown Preview Mermaid Support" extension in VS Code, then preview the markdown files.
+## 📖 Documentation Standards
 
-### Option 3: Mermaid Live Editor
+### File Naming
+- Use lowercase with hyphens: `feature-name.md`
+- Be descriptive but concise
+- Group related docs in subdirectories
 
-1. Copy the mermaid code (content between the triple backticks)
-2. Visit [Mermaid Live Editor](https://mermaid.live/)
-3. Paste the code to render the diagram
+### Content Structure
+1. Clear title and description
+2. Table of contents for long documents
+3. Code examples with syntax highlighting
+4. Diagrams where helpful
+5. Links to related documentation
 
-### Option 4: Export as Images
+### Maintenance
+- Review quarterly for accuracy
+- Update with major feature changes
+- Archive outdated documentation
+- Keep examples current
 
-You can export the diagrams as PNG or SVG files using the Mermaid CLI:
+## 🔍 Finding Information
 
-```bash
-npm install -g @mermaid-js/mermaid-cli
-mmdc -i auth_context_diagram.md -o auth_context_diagram.png
-mmdc -i story_creation_flow.md -o story_creation_flow.png
-```
+### By Topic
+- **New Developer?** Start with [Getting Started](./guides/getting-started.md)
+- **Deploying?** See [Deployment Guide](./guides/deployment.md)
+- **Security Questions?** Check [Security Docs](./security/)
+- **API Reference?** Browse [API Documentation](./api-reference/)
 
-## System Overview
+### By Platform
+- **Mobile Development** - See mobile-specific docs in features
+- **Web Development** - See web-specific docs in features
+- **Backend Development** - See API reference and infrastructure
 
-The Dynasty Mobile app uses Firebase services with custom React implementations:
+## 📝 Contributing to Docs
 
-- **Authentication**: Firebase Authentication with custom React Context
-- **Data Storage**: Firebase Firestore for structured data
-- **Media Storage**: Firebase Storage for photos and videos
-- **Cloud Functions**: Firebase Cloud Functions for backend processing
+See [Contributing Guide](./guides/contributing.md) for documentation standards and submission process.
 
-For detailed implementation, see the source code in the `apps/mobile/src/` directory.
+---
+
+*Last Updated: January 2025*

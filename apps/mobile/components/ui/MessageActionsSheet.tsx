@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -55,6 +55,84 @@ export default function MessageActionsSheet({
 }: MessageActionsSheetProps) {
   const bottomSheetRef = useRef<BottomSheetModal>(null);
 
+  const showIOSActionSheet = useCallback(() => {
+    const options: string[] = [];
+    const actions: (() => void)[] = [];
+    
+    // Copy
+    if (message.text) {
+      options.push('Copy');
+      actions.push(async () => {
+        if (message.text) {
+          await Clipboard.setStringAsync(message.text);
+          onCopy?.();
+        }
+        onClose();
+      });
+    }
+    
+    // Reply
+    options.push('Reply');
+    actions.push(() => {
+      onReply?.();
+      onClose();
+    });
+    
+    // Edit (for own messages)
+    if (isOwnMessage) {
+      options.push('Edit');
+      actions.push(() => {
+        const messageTime = new Date(message.timestamp);
+        const now = new Date();
+        const diffMinutes = (now.getTime() - messageTime.getTime()) / (1000 * 60);
+        
+        if (diffMinutes > 5) {
+          Alert.alert(
+            'Cannot Edit',
+            'Messages can only be edited within 5 minutes of sending.',
+            [{ text: 'OK' }]
+          );
+          onClose();
+          return;
+        }
+        
+        onEdit?.();
+        onClose();
+      });
+    }
+    
+    // Delete
+    if (isOwnMessage) {
+      options.push('Delete for Everyone');
+      actions.push(() => {
+        onDelete?.(true);
+        onClose();
+      });
+    }
+    options.push('Delete for Me');
+    actions.push(() => {
+      onDelete?.(false);
+      onClose();
+    });
+    
+    // Cancel
+    options.push('Cancel');
+    
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        options,
+        cancelButtonIndex: options.length - 1,
+        destructiveButtonIndex: isOwnMessage ? options.length - 3 : options.length - 2,
+      },
+      (buttonIndex) => {
+        if (buttonIndex !== options.length - 1) {
+          actions[buttonIndex]?.();
+        }
+        onClose();
+      }
+    );
+  }, [message, isOwnMessage, onClose, onCopy, onReply, onEdit, onDelete]);
+
   useEffect(() => {
     if (visible) {
       if (Platform.OS === 'ios') {
@@ -65,7 +143,7 @@ export default function MessageActionsSheet({
     } else {
       bottomSheetRef.current?.dismiss();
     }
-  }, [visible]);
+  }, [visible, showIOSActionSheet]);
 
   const handleCopy = async () => {
     if (message.text) {
@@ -149,70 +227,6 @@ export default function MessageActionsSheet({
     onClose();
   };
 
-  const showIOSActionSheet = () => {
-    const options = ['Copy', 'Reply'];
-    const icons = ['copy', 'arrow-undo'];
-    
-    if (isOwnMessage) {
-      const messageTime = new Date(message.timestamp);
-      const now = new Date();
-      const diffMinutes = (now.getTime() - messageTime.getTime()) / (1000 * 60);
-      
-      if (diffMinutes <= 5) {
-        options.push('Edit');
-        icons.push('create');
-      }
-    }
-    
-    if (onForward) {
-      options.push('Forward');
-      icons.push('arrow-redo');
-    }
-    
-    if (message.text) {
-      options.push('Share');
-      icons.push('share');
-    }
-    
-    options.push('Delete');
-    icons.push('trash');
-    
-    options.push('Cancel');
-
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        options,
-        cancelButtonIndex: options.length - 1,
-        destructiveButtonIndex: options.indexOf('Delete'),
-      },
-      (buttonIndex) => {
-        const action = options[buttonIndex];
-        switch (action) {
-          case 'Copy':
-            handleCopy();
-            break;
-          case 'Reply':
-            handleReply();
-            break;
-          case 'Edit':
-            handleEdit();
-            break;
-          case 'Forward':
-            onForward?.();
-            onClose();
-            break;
-          case 'Share':
-            handleShare();
-            break;
-          case 'Delete':
-            handleDelete();
-            break;
-          default:
-            onClose();
-        }
-      }
-    );
-  };
 
   const renderAction = (action: MessageAction) => (
     <TouchableOpacity

@@ -19,3 +19,84 @@ android
 
 
 **/.claude/settings.local.json
+
+# Logs
+*.log
+yarn-error.log
+firestore-debug.log
+firebase-debug.log
+pubsub-debug.log
+
+# Build artifacts
+lib/
+*.tsbuildinfo
+coverage/
+firebase-export-*
+
+# Package manager conflicts
+package-lock.json
+
+# Empty directories
+logs/
+packages/
+
+# Backup files
+*.bak
+
+# Test files
+test-*.js
+test-*.html
+
+# Additional environment files
+.env.prod
+.env.sentry-build-plugin
+*.env.local
+
+# iOS specific
+*.mobileprovision
+*.cer
+*.p12
+*.p8
+ios/.xcode.env.local
+ios/Pods/
+
+# Android specific
+*.keystore
+!debug.keystore
+*.jks
+android/app/release/
+
+# Sentry
+.sentryclirc
+
+# IDE specific
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Build outputs
+dist/
+build/
+out/
+*.ipa
+*.apk
+*.aab
+
+# Next.js
+.next/
+.vercel/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Firebase emulator data
+apps/firebase/emulator-data/

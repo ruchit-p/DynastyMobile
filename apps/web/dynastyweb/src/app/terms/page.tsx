@@ -17,8 +17,8 @@ export default function TermsOfServicePage() {
             <div className="text-center mb-12">
               <h1 className="text-4xl font-bold text-gray-900 mb-4">Terms of Service</h1>
               <p className="text-lg text-gray-600">
-                <strong>Effective Date:</strong> [Insert Date]<br />
-                <strong>Last Updated:</strong> [Insert Date]
+                <strong>Effective Date:</strong> May 27, 2025<br />
+                <strong>Last Updated:</strong> May 27, 2025
               </p>
             </div>
 
@@ -31,7 +31,7 @@ export default function TermsOfServicePage() {
                   By accessing, downloading, installing, or using Dynasty (the &quot;App&quot;), you (&quot;User,&quot; &quot;you,&quot; or &quot;your&quot;) agree to be bound by these Terms of Service (&quot;Terms&quot;). If you do not agree to these Terms, do not use the App.
                 </p>
                 <p className="text-gray-700 leading-relaxed">
-                  Dynasty is operated by [Company Name] (&quot;Company,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;). These Terms constitute a legally binding agreement between you and the Company.
+                  Dynasty is operated by Dynasty Platforms (&quot;Company,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;). These Terms constitute a legally binding agreement between you and the Company.
                 </p>
               </section>
 
@@ -159,10 +159,10 @@ export default function TermsOfServicePage() {
                 </p>
                 <div className="bg-gray-50 p-6 rounded-lg mt-4">
                   <p className="text-gray-700">
-                    <strong>[Company Name]</strong><br />
-                    Email: legal@[company].com<br />
-                    Address: [Company Address]<br />
-                    Phone: [Phone Number]
+                    <strong>Dynasty Platforms</strong><br />
+                    Email: support@mydynastyapp.com<br />
+                    Address: 7901 4th St N STE 300, St. Petersburg, FL 33702<br />
+                    Phone: +1 (866) 314-1530
                   </p>
                 </div>
               </section>

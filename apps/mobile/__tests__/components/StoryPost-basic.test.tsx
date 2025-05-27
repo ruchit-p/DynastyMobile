@@ -6,7 +6,7 @@ import { Story } from '../../src/lib/storyUtils';
 // Mock dependencies
 jest.mock('../../src/lib/userUtils', () => ({
   fetchUserProfilesByIds: jest.fn().mockResolvedValue([]),
-  UserProfile: {},
+  UserProfile: {} as Record<string, never>,
 }));
 
 jest.mock('../../src/lib/dateUtils', () => ({
@@ -17,29 +17,31 @@ jest.mock('../../src/lib/dateUtils', () => ({
 describe('StoryPost Component - Basic Tests', () => {
   const mockStory: Story = {
     id: 'story-1',
+    title: 'Test Story',
     authorID: 'user-1',
     author: {
       id: 'user-1',
       displayName: 'John Doe',
       profilePicture: 'https://example.com/profile.jpg',
     },
-    familyID: 'family-1',
-    createdAt: new Date('2024-01-01'),
+    familyTreeId: 'family-1',
+    createdAt: { seconds: Math.floor(new Date('2024-01-01').getTime() / 1000), nanoseconds: 0 },
     blocks: [
       {
-        type: 'text',
+        localId: 'block-1',
+        type: 'text' as const,
         data: 'This is a test story',
         isEncrypted: false,
       },
       {
-        type: 'image',
+        localId: 'block-2',
+        type: 'image' as const,
         data: ['https://example.com/image1.jpg'],
         isEncrypted: false,
       },
     ],
-    visibility: 'family',
-    likeCount: 5,
-    commentCount: 3,
+    privacy: 'family',
+    peopleInvolved: [],
     isDeleted: false,
   };
 
@@ -79,7 +81,8 @@ describe('StoryPost Component - Basic Tests', () => {
       ...mockStory,
       blocks: [
         {
-          type: 'text',
+          localId: 'block-text-1',
+          type: 'text' as const,
           data: 'Text only story',
           isEncrypted: false,
         },
@@ -106,8 +109,8 @@ describe('StoryPost Component - Basic Tests', () => {
       ...mockStory,
       location: {
         address: 'New York, NY',
-        latitude: 40.7128,
-        longitude: -74.0060,
+        lat: 40.7128,
+        lng: -74.0060,
       },
     };
     
@@ -136,7 +139,8 @@ describe('StoryPost Component - Basic Tests', () => {
       ...mockStory,
       blocks: [
         {
-          type: 'text',
+          localId: 'block-encrypted-1',
+          type: 'text' as const,
           data: 'Encrypted content',
           isEncrypted: true,
         },

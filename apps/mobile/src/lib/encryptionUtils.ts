@@ -1,5 +1,6 @@
 import { getFirebaseDb, getFirebaseAuth } from './firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../services/LoggingService';
 
 export interface EncryptionSettings {
   encryptStories: boolean;
@@ -48,7 +49,7 @@ export async function getEncryptionSettings(): Promise<EncryptionSettings> {
 
     return DEFAULT_SETTINGS;
   } catch (error) {
-    console.error('Failed to get encryption settings:', error);
+    logger.error('Failed to get encryption settings:', error);
     return DEFAULT_SETTINGS;
   }
 }
@@ -75,7 +76,7 @@ export async function updateEncryptionSettings(
     // Update local cache
     await AsyncStorage.setItem(ENCRYPTION_SETTINGS_KEY, JSON.stringify(updatedSettings));
   } catch (error) {
-    console.error('Failed to update encryption settings:', error);
+    logger.error('Failed to update encryption settings:', error);
     throw error;
   }
 }
@@ -111,6 +112,6 @@ export async function clearEncryptionSettingsCache(): Promise<void> {
   try {
     await AsyncStorage.removeItem(ENCRYPTION_SETTINGS_KEY);
   } catch (error) {
-    console.error('Failed to clear encryption settings cache:', error);
+    logger.error('Failed to clear encryption settings cache:', error);
   }
 }

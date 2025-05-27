@@ -5,7 +5,7 @@ import { createFamilyMemberMobile } from '../../src/lib/firebaseUtils';
 import { commonHeaderOptions } from '../../constants/headerConfig';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { showErrorAlert } from '../../src/lib/errorUtils';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 

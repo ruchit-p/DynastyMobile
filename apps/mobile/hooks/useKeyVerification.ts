@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Alert } from 'react-native';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import functions from '@react-native-firebase/functions';
 import { ChatEncryptionService } from '../src/services/encryption';
 
 interface UseKeyVerificationOptions {
@@ -48,8 +48,7 @@ export const useKeyVerification = ({ remoteUserId, remoteUserName }: UseKeyVerif
       }
 
       // Call Firebase function to mark as verified
-      const functions = getFunctions();
-      const verifyKey = httpsCallable(functions, 'verifyKeyFingerprint');
+      const verifyKey = functions().httpsCallable('verifyKeyFingerprint');
       
       await verifyKey({
         targetUserId: remoteUserId,

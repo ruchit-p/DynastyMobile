@@ -7,8 +7,8 @@ import {
   Platform,
   TouchableOpacity,
   TextInput,
-  Image,
-  Alert,
+  // Image,
+  // Alert,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
@@ -18,16 +18,17 @@ import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/Float
 import AppHeader from '../../components/ui/AppHeader';
 import IconButton, { IconSet } from '../../components/ui/IconButton';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getFirebaseAuth, getFirebaseDb } from '../../src/lib/firebase';
-import { getUpcomingEventsMobile, formatEventDate, formatEventTime } from '../../src/lib/eventUtils';
+import { getFirebaseDb } from '../../src/lib/firebase';
+import { getUpcomingEventsMobile, formatEventTime } from '../../src/lib/eventUtils';
 import MediaGallery, { MediaItem } from '../../components/ui/MediaGallery';
 import { showErrorAlert } from '../../src/lib/errorUtils';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useOffline } from '../../src/contexts/OfflineContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../../src/services/LoggingService';
 
 // Define Event interface for type safety
 interface Event {
@@ -58,7 +59,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
   };
 
   // ADDED: Diagnostic log
-  console.log(`[EventCard] Rendering for event "${event.name}". Cover photos:`, JSON.stringify(event.coverPhotos, null, 2));
+  logger.debug(`[EventCard] Rendering for event "${event.name}". Cover photos:`, JSON.stringify(event.coverPhotos, null, 2));
 
   return (
     <View style={styles.eventCard}>
@@ -208,7 +209,7 @@ const EventListScreen = () => {
     },
   ];
 
-  const fetchEvents = useCallback(withErrorHandling(async (forceRefresh = false) => {
+  const fetchEvents = useCallback(() => withErrorHandling(async (forceRefresh = false) => {
     try {
       if (!user?.uid) {
         setAllEvents([]);
@@ -226,7 +227,7 @@ const EventListScreen = () => {
           // Check if cache is not too old (e.g., 1 hour)
           const cacheAge = Date.now() - (cached.timestamp || 0);
           if (cacheAge < 3600000 || !isOnline) { // 1 hour or offline
-            console.log('EventListScreen: Using cached events');
+            logger.debug('EventListScreen: Using cached events');
             setAllEvents(cached.events);
             setIsLoadingEvents(false);
             setRefreshing(false);
@@ -242,7 +243,7 @@ const EventListScreen = () => {
                   timestamp: Date.now()
                 }));
               }).catch(error => {
-                console.error('Background fetch failed:', error);
+                logger.error('Background fetch failed:', error);
               });
             }
             return;
@@ -267,7 +268,7 @@ const EventListScreen = () => {
         setAllEvents([]);
       }
     } catch (error) {
-      console.error("Error fetching events: ", error);
+      logger.error("Error fetching events: ", error);
       handleError(error, { action: 'fetch_events', source: 'EventListScreen' });
       
       // Try to use cached data on error
@@ -286,7 +287,7 @@ const EventListScreen = () => {
       setIsLoadingEvents(false);
       setRefreshing(false);
     }
-  }), [user, handleError, isOnline]);
+  })(), [user, handleError, isOnline]);
   
   // Helper function to map events
   const mapEventsToInterface = (eventDetails: any[]): Event[] => {
@@ -330,10 +331,10 @@ const EventListScreen = () => {
         }
       });
       loadEventsOnFocus();
-    }, [user, fetchEvents, handleError])
+    }, [user, fetchEvents, handleError, withErrorHandling])
   );
 
-  const onRefresh = useCallback(withErrorHandling(async () => {
+  const onRefresh = useCallback(() => withErrorHandling(async () => {
     try {
       setRefreshing(true);
       
@@ -341,9 +342,9 @@ const EventListScreen = () => {
       if (isOnline) {
         try {
           await forceSync();
-          console.log('EventListScreen: Sync completed, refreshing events');
+          logger.debug('EventListScreen: Sync completed, refreshing events');
         } catch (error) {
-          console.error('EventListScreen: Sync failed:', error);
+          logger.error('EventListScreen: Sync failed:', error);
         }
       }
       
@@ -352,7 +353,7 @@ const EventListScreen = () => {
     } catch (error) {
       handleError(error, { action: 'refresh_events', source: 'EventListScreen' });
     }
-  }), [fetchEvents, withErrorHandling, handleError, isOnline, forceSync]);
+  })(), [fetchEvents, withErrorHandling, handleError, isOnline, forceSync]);
 
   const getEventsForSegment = (): Event[] => {
     try {

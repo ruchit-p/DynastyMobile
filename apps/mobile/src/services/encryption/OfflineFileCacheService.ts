@@ -2,8 +2,8 @@ import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { Buffer } from '@craftzdog/react-native-buffer';
-import MediaEncryptionService from './MediaEncryptionService';
-import { getFirebaseStorage } from '../../lib/firebase';
+import { MediaEncryptionService } from './MediaEncryptionService';
+import { logger } from '../LoggingService';
 
 interface CachedFile {
   fileId: string;
@@ -101,7 +101,7 @@ export class OfflineFileCacheService {
       // Clean up expired entries
       await this.cleanupExpiredFiles();
     } catch (error) {
-      console.error('Failed to load cache index:', error);
+      logger.error('Failed to load cache index:', error);
     }
   }
 
@@ -110,7 +110,7 @@ export class OfflineFileCacheService {
       const cacheArray = Array.from(this.cacheIndex.values());
       await AsyncStorage.setItem(this.CACHE_INDEX_KEY, JSON.stringify(cacheArray));
     } catch (error) {
-      console.error('Failed to save cache index:', error);
+      logger.error('Failed to save cache index:', error);
     }
   }
 
@@ -196,7 +196,7 @@ export class OfflineFileCacheService {
 
       return cachedFile;
     } catch (error) {
-      console.error('Failed to cache file:', error);
+      logger.error('Failed to cache file:', error);
       return null;
     }
   }
@@ -234,7 +234,7 @@ export class OfflineFileCacheService {
       const decryptedUri = await this.decryptCachedFile(cached);
       return decryptedUri;
     } catch (error) {
-      console.error('Failed to get cached file:', error);
+      logger.error('Failed to get cached file:', error);
       return null;
     }
   }
@@ -270,7 +270,7 @@ export class OfflineFileCacheService {
     // Schedule cleanup after a delay
     setTimeout(() => {
       FileSystem.deleteAsync(tempUri, { idempotent: true })
-        .catch(err => console.error('Failed to cleanup temp file:', err));
+        .catch(err => logger.error('Failed to cleanup temp file:', err));
     }, 5 * 60 * 1000); // 5 minutes
 
     return tempUri;
@@ -300,7 +300,7 @@ export class OfflineFileCacheService {
     try {
       await FileSystem.deleteAsync(cached.localUri, { idempotent: true });
     } catch (error) {
-      console.error('Failed to delete cached file:', error);
+      logger.error('Failed to delete cached file:', error);
     }
 
     this.cacheIndex.delete(fileId);
@@ -430,7 +430,7 @@ export class OfflineFileCacheService {
   private async processPendingDownloads() {
     for (const fileId of this.downloadQueue) {
       // Implementation would retry failed downloads
-      console.log(`Processing pending download for ${fileId}`);
+      logger.debug(`Processing pending download for ${fileId}`);
     }
     this.downloadQueue.clear();
   }
@@ -470,7 +470,7 @@ export class OfflineFileCacheService {
       await FileSystem.deleteAsync(this.TEMP_DIR, { idempotent: true });
       await this.initializeCacheDirectory();
     } catch (error) {
-      console.error('Failed to clear temp directory:', error);
+      logger.error('Failed to clear temp directory:', error);
     }
   }
 

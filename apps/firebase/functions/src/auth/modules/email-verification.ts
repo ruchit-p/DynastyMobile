@@ -4,15 +4,17 @@ import {logger} from "firebase-functions/v2";
 import {getAuth} from "firebase-admin/auth";
 import {MailDataRequired} from "@sendgrid/mail";
 import * as sgMail from "@sendgrid/mail";
-import {isValidEmail} from "../../utils/validation";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "../../common";
-import {createError, withErrorHandling, ErrorCode} from "../../utils/errors";
+import {createError, ErrorCode} from "../../utils/errors";
 import {withAuth, RateLimitType} from "../../middleware";
 import {UserDocument} from "../types/user";
 import {initSendGrid} from "../config/sendgrid";
-import {SENDGRID_APIKEY, SENDGRID_FROMEMAIL, SENDGRID_TEMPLATES_VERIFICATION, FRONTEND_URL} from "../config/secrets";
+import {SENDGRID_CONFIG, FRONTEND_URL} from "../config/secrets";
+import {getSendGridConfig} from "../config/sendgridConfig";
 import {ERROR_MESSAGES, TOKEN_EXPIRY} from "../config/constants";
 import {generateSecureToken, hashToken} from "../utils/tokens";
+import {validateRequest} from "../../utils/request-validator";
+import {VALIDATION_SCHEMAS} from "../../config/validation-schemas";
 
 /**
  * Sends a verification email to a newly registered user
@@ -21,15 +23,18 @@ export const sendVerificationEmail = onCall(
   {
     region: DEFAULT_REGION,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-    secrets: [SENDGRID_APIKEY, SENDGRID_FROMEMAIL, SENDGRID_TEMPLATES_VERIFICATION, FRONTEND_URL],
+    secrets: [SENDGRID_CONFIG, FRONTEND_URL],
   },
   withAuth(
     async (request) => {
-      const {userId, email, displayName} = request.data;
+      // Validate and sanitize input using centralized validator
+      const validatedData = validateRequest(
+        request.data,
+        VALIDATION_SCHEMAS.sendVerificationEmail,
+        request.auth?.uid
+      );
 
-      if (!email || !isValidEmail(email)) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, "Valid email address is required.");
-      }
+      const {userId, email, displayName} = validatedData;
 
       initSendGrid();
       const db = getFirestore();
@@ -57,11 +62,10 @@ export const sendVerificationEmail = onCall(
       });
 
       // Prepare and send email
-      const fromEmail = SENDGRID_FROMEMAIL.value();
-      const verificationTemplateId = SENDGRID_TEMPLATES_VERIFICATION.value();
+      const sendgridConfig = getSendGridConfig();
       const frontendUrlValue = FRONTEND_URL.value();
 
-      if (!fromEmail || !verificationTemplateId || !frontendUrlValue) {
+      if (!sendgridConfig.fromEmail || !sendgridConfig.templates.verification || !frontendUrlValue) {
         logger.error("SendGrid configuration secrets are missing for sendVerificationEmail.");
         throw createError(ErrorCode.INTERNAL, "Email service configuration error.");
       }
@@ -70,10 +74,10 @@ export const sendVerificationEmail = onCall(
       const msg: MailDataRequired = {
         to: email,
         from: {
-          email: fromEmail,
+          email: sendgridConfig.fromEmail,
           name: "Dynasty App",
         },
-        templateId: verificationTemplateId,
+        templateId: sendgridConfig.templates.verification,
         dynamicTemplateData: {
           userName: displayName || userData.firstName || "User",
           verificationLink: verificationLink,
@@ -90,11 +94,14 @@ export const sendVerificationEmail = onCall(
       }
     },
     "sendVerificationEmail",
-    "auth", // Authentication level
     {
-      type: RateLimitType.AUTH,
-      maxRequests: 3, // 3 verification emails per hour
-      windowSeconds: 3600, // 1 hour window
+      authLevel: "auth",
+      enableCSRF: true,
+      rateLimitConfig: {
+        type: RateLimitType.AUTH,
+        maxRequests: 3, // 3 verification emails per hour
+        windowSeconds: 3600, // 1 hour window
+      },
     }
   )
 );
@@ -108,12 +115,15 @@ export const verifyEmail = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
     secrets: [],
   },
-  withErrorHandling(async (request) => {
-    const {token} = request.data;
+  withAuth(async (request) => {
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.verifyEmail,
+      request.auth?.uid
+    );
 
-    if (!token || typeof token !== "string") {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Verification token is required.");
-    }
+    const {token} = validatedData;
 
     const db = getFirestore();
     const hashedToken = hashToken(token);
@@ -157,5 +167,13 @@ export const verifyEmail = onCall(
     }
 
     return {success: true, message: "Email verified successfully."};
-  }, "verifyEmail")
+  }, "verifyEmail", {
+    authLevel: "none", // Email verification doesn't require auth
+    enableCSRF: true,
+    rateLimitConfig: {
+      type: RateLimitType.AUTH,
+      maxRequests: 10, // Allow more attempts for email verification
+      windowSeconds: 3600, // 1 hour window
+    },
+  })
 );

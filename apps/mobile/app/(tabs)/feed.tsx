@@ -20,15 +20,16 @@ import { Ionicons } from '@expo/vector-icons';
 // Import design tokens
 import { Spacing, BorderRadius, Shadows } from '../../constants/Spacing';
 import { Colors } from '../../constants/Colors';
-import Typography from '../../constants/Typography';
+import { Typography } from '../../constants/Typography';
 import { showErrorAlert } from '../../src/lib/errorUtils';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { OfflineIndicator } from '../../components/ui/OfflineIndicator';
 import { SyncStatus } from '../../components/ui/SyncStatus';
 
 import type { Story as StoryType } from '../../src/lib/storyUtils';
+import { logger } from '../../src/services/LoggingService';
 
 interface FeedEvent {
   id: string;
@@ -50,7 +51,7 @@ interface FeedStory extends StoryType {
 type FeedItem = FeedStory | FeedEvent;
 
 const FeedScreen = () => {
-  console.log('--- FeedScreen IS RENDERING ---');
+  logger.debug('--- FeedScreen IS RENDERING ---');
   const router = useRouter();
   const { user, firestoreUser } = useAuth();
   const db = getFirebaseDb();
@@ -99,12 +100,12 @@ const FeedScreen = () => {
         // Try to load from cache first
         const cachedData = await feedCache.getCachedFeed(user.uid, {});
         if (cachedData && cachedData.length > 0) {
-          console.log('FeedScreen: Loaded cached data:', cachedData.length, 'items');
+          logger.debug('FeedScreen: Loaded cached data:', cachedData.length, 'items');
           setFeedItems(cachedData as FeedItem[]);
           setIsLoadingFeed(false);
         }
       } catch (error) {
-        console.error('FeedScreen: Error loading cached data:', error);
+        logger.error('FeedScreen: Error loading cached data:', error);
       } finally {
         setIsLoadingFromCache(false);
       }
@@ -129,7 +130,7 @@ const FeedScreen = () => {
     try {
       // Check if online, if not, use cached data
       if (!isOnline && !isRefresh) {
-        console.log('FeedScreen: Offline, using cached data');
+        logger.debug('FeedScreen: Offline, using cached data');
         const cachedData = await feedCache.getCachedFeed(user.uid, {});
         if (cachedData) {
           setFeedItems(cachedData as FeedItem[]);
@@ -205,7 +206,7 @@ const FeedScreen = () => {
       
       // Cache the data for offline access
       await feedCache.cacheFeedData(user.uid, combinedItems);
-      console.log('FeedScreen: Cached', combinedItems.length, 'feed items');
+      logger.debug('FeedScreen: Cached', combinedItems.length, 'feed items');
 
     } catch (error) {
       // Use our error handler instead of showErrorAlert
@@ -217,7 +218,7 @@ const FeedScreen = () => {
       
       // If online fetch fails, try cache
       if (isOnline) {
-        console.log('FeedScreen: Online fetch failed, trying cache');
+        logger.debug('FeedScreen: Online fetch failed, trying cache');
         const cachedData = await feedCache.getCachedFeed(user.uid, {});
         if (cachedData) {
           setFeedItems(cachedData as FeedItem[]);
@@ -228,7 +229,7 @@ const FeedScreen = () => {
       setIsLoadingFeed(false);
       setIsRefreshing(false);
     }
-  }, [user, firestoreUser, db, isOnline, feedItems.length]);
+  }, [user, firestoreUser, db, isOnline, feedItems.length, feedCache, handleError]);
 
   useFocusEffect(
     useCallback(() => {
@@ -243,9 +244,9 @@ const FeedScreen = () => {
     if (isOnline) {
       try {
         await forceSync();
-        console.log('FeedScreen: Sync completed, refreshing feed');
+        logger.debug('FeedScreen: Sync completed, refreshing feed');
       } catch (error) {
-        console.error('FeedScreen: Sync failed:', error);
+        logger.error('FeedScreen: Sync failed:', error);
       }
     }
     
@@ -364,7 +365,7 @@ const FeedScreen = () => {
           },
           {
             title: 'Report',
-            onPress: () => console.log(`Report pressed for ${selectedItem?.type} ${selectedItem?.id}`),
+            onPress: () => logger.debug(`Report pressed for ${selectedItem?.type} ${selectedItem?.id}`),
             style: 'destructive',
             icon: 'flag-outline',
           },

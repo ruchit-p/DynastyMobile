@@ -1,7 +1,9 @@
 import {onCall} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
-import {withAuth, withResourceAccess, PermissionLevel} from "./middleware/auth";
+import {withAuth, withResourceAccess, PermissionLevel, RateLimitType} from "./middleware/auth";
 import {createError, ErrorCode, handleError} from "./utils/errors";
+import {validateRequest} from "./utils/request-validator";
+import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
 
 // Initialize if not already done
 if (!admin.apps.length) {
@@ -15,12 +17,16 @@ const db = admin.firestore();
  */
 export const createChat = onCall(withAuth(async (request) => {
   try {
-    const {participantIds, isGroup, groupName, encryptionEnabled = false} = request.data;
     const creatorId = request.auth!.uid;
 
-    if (!participantIds || !Array.isArray(participantIds) || participantIds.length === 0) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Participant IDs are required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.createChat,
+      creatorId
+    );
+
+    const {participantIds, isGroup, groupName, encryptionEnabled = false} = validatedData;
 
     // Add creator to participants if not included
     const allParticipants = [...new Set([creatorId, ...participantIds])];
@@ -88,6 +94,7 @@ export const createChat = onCall(withAuth(async (request) => {
     };
 
     if (isGroup && groupName) {
+      // Group name is already sanitized by the validator
       chatData.name = groupName;
     }
 
@@ -137,19 +144,31 @@ export const createChat = onCall(withAuth(async (request) => {
   } catch (error) {
     return handleError(error, "createChat");
   }
-}, "createChat"));
+}, "createChat", {
+  authLevel: "onboarded",
+  enableCSRF: true,
+  rateLimitConfig: {
+    type: RateLimitType.WRITE,
+    maxRequests: 10,
+    windowSeconds: 60,
+  },
+}));
 
 /**
  * Update chat settings
  */
 export const updateChatSettings = onCall(withResourceAccess(async (request, resource) => {
   try {
-    const {chatId, settings} = request.data;
     const userId = request.auth!.uid;
 
-    if (!chatId || !settings || typeof settings !== "object") {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid parameters");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.updateChatSettings,
+      userId
+    );
+
+    const {chatId, settings} = validatedData;
 
     const chat = resource;
 
@@ -187,8 +206,16 @@ export const updateChatSettings = onCall(withResourceAccess(async (request, reso
     return handleError(error, "updateChatSettings");
   }
 }, "updateChatSettings", {
-  resourceType: "chat",
-  requiredLevel: PermissionLevel.ADMIN,
+  resourceConfig: {
+    resourceType: "chat",
+    requiredLevel: PermissionLevel.ADMIN,
+  },
+  enableCSRF: true,
+  rateLimitConfig: {
+    type: RateLimitType.WRITE,
+    maxRequests: 10,
+    windowSeconds: 60,
+  },
 }));
 
 /**
@@ -196,12 +223,16 @@ export const updateChatSettings = onCall(withResourceAccess(async (request, reso
  */
 export const addChatMembers = onCall(withResourceAccess(async (request, resource) => {
   try {
-    const {chatId, memberIds} = request.data;
     const userId = request.auth!.uid;
 
-    if (!chatId || !memberIds || !Array.isArray(memberIds) || memberIds.length === 0) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid parameters");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.addChatMembers,
+      userId
+    );
+
+    const {chatId, memberIds} = validatedData;
 
     const chat = resource;
 
@@ -275,8 +306,16 @@ export const addChatMembers = onCall(withResourceAccess(async (request, resource
     return handleError(error, "addChatMembers");
   }
 }, "addChatMembers", {
-  resourceType: "chat",
-  requiredLevel: PermissionLevel.ADMIN,
+  resourceConfig: {
+    resourceType: "chat",
+    requiredLevel: PermissionLevel.ADMIN,
+  },
+  enableCSRF: true,
+  rateLimitConfig: {
+    type: RateLimitType.WRITE,
+    maxRequests: 10,
+    windowSeconds: 60,
+  },
 }));
 
 /**
@@ -284,12 +323,16 @@ export const addChatMembers = onCall(withResourceAccess(async (request, resource
  */
 export const removeChatMember = onCall(withResourceAccess(async (request, resource) => {
   try {
-    const {chatId, memberId} = request.data;
     const userId = request.auth!.uid;
 
-    if (!chatId || !memberId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid parameters");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.removeChatMember,
+      userId
+    );
+
+    const {chatId, memberId} = validatedData;
 
     const chat = resource;
 
@@ -351,8 +394,16 @@ export const removeChatMember = onCall(withResourceAccess(async (request, resour
     return handleError(error, "removeChatMember");
   }
 }, "removeChatMember", {
-  resourceType: "chat",
-  requiredLevel: PermissionLevel.ADMIN,
+  resourceConfig: {
+    resourceType: "chat",
+    requiredLevel: PermissionLevel.ADMIN,
+  },
+  enableCSRF: true,
+  rateLimitConfig: {
+    type: RateLimitType.WRITE,
+    maxRequests: 10,
+    windowSeconds: 60,
+  },
 }));
 
 /**
@@ -360,12 +411,16 @@ export const removeChatMember = onCall(withResourceAccess(async (request, resour
  */
 export const updateMemberRole = onCall(withResourceAccess(async (request, resource) => {
   try {
-    const {chatId, memberId, role} = request.data;
     const userId = request.auth!.uid;
 
-    if (!chatId || !memberId || !role || !["admin", "member"].includes(role)) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid parameters");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.updateMemberRole,
+      userId
+    );
+
+    const {chatId, memberId, role} = validatedData;
 
     const chat = resource;
 
@@ -411,8 +466,16 @@ export const updateMemberRole = onCall(withResourceAccess(async (request, resour
     return handleError(error, "updateMemberRole");
   }
 }, "updateMemberRole", {
-  resourceType: "chat",
-  requiredLevel: PermissionLevel.ADMIN,
+  resourceConfig: {
+    resourceType: "chat",
+    requiredLevel: PermissionLevel.ADMIN,
+  },
+  enableCSRF: true,
+  rateLimitConfig: {
+    type: RateLimitType.WRITE,
+    maxRequests: 10,
+    windowSeconds: 60,
+  },
 }));
 
 /**
@@ -420,12 +483,16 @@ export const updateMemberRole = onCall(withResourceAccess(async (request, resour
  */
 export const updateChatNotifications = onCall(withAuth(async (request) => {
   try {
-    const {chatId, muted} = request.data;
     const userId = request.auth!.uid;
 
-    if (!chatId || typeof muted !== "boolean") {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid parameters");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.updateChatNotifications,
+      userId
+    );
+
+    const {chatId, muted} = validatedData;
 
     // Check if user is member
     const memberRef = db.collection("chats").doc(chatId).collection("members").doc(userId);
@@ -445,19 +512,31 @@ export const updateChatNotifications = onCall(withAuth(async (request) => {
   } catch (error) {
     return handleError(error, "updateChatNotifications");
   }
-}, "updateChatNotifications"));
+}, "updateChatNotifications", {
+  authLevel: "onboarded",
+  enableCSRF: true,
+  rateLimitConfig: {
+    type: RateLimitType.WRITE,
+    maxRequests: 20,
+    windowSeconds: 60,
+  },
+}));
 
 /**
  * Delete a chat (admin only for groups, any participant for direct)
  */
 export const deleteChat = onCall(withResourceAccess(async (request, resource) => {
   try {
-    const {chatId} = request.data;
     const userId = request.auth!.uid;
 
-    if (!chatId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Chat ID is required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.deleteChat,
+      userId
+    );
+
+    const {chatId} = validatedData;
 
     const chat = resource;
 
@@ -493,8 +572,16 @@ export const deleteChat = onCall(withResourceAccess(async (request, resource) =>
     return handleError(error, "deleteChat");
   }
 }, "deleteChat", {
-  resourceType: "chat",
-  requiredLevel: PermissionLevel.ADMIN,
+  resourceConfig: {
+    resourceType: "chat",
+    requiredLevel: PermissionLevel.ADMIN,
+  },
+  enableCSRF: true,
+  rateLimitConfig: {
+    type: RateLimitType.WRITE,
+    maxRequests: 5,
+    windowSeconds: 60,
+  },
 }));
 
 /**
@@ -502,11 +589,16 @@ export const deleteChat = onCall(withResourceAccess(async (request, resource) =>
  */
 export const getChatDetails = onCall(withResourceAccess(async (request, resource) => {
   try {
-    const {chatId} = request.data;
+    const userId = request.auth!.uid;
 
-    if (!chatId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Chat ID is required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getChatDetails,
+      userId
+    );
+
+    const {chatId} = validatedData;
 
     const chat = {id: chatId, ...resource};
 

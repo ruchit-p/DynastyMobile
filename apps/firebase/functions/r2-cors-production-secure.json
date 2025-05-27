@@ -1,0 +1,31 @@
+[
+  {
+    "AllowedOrigins": [
+      "https://mydynastyapp.com",
+      "https://www.mydynastyapp.com",
+      "https://app.mydynastyapp.com",
+      "https://api.mydynastyapp.com"
+    ],
+    "AllowedMethods": [
+      "GET",
+      "PUT",
+      "HEAD"
+    ],
+    "AllowedHeaders": [
+      "Content-Type",
+      "Content-Length",
+      "Content-MD5",
+      "Cache-Control",
+      "x-amz-content-sha256",
+      "x-amz-date",
+      "x-amz-security-token",
+      "x-amz-user-agent"
+    ],
+    "ExposeHeaders": [
+      "ETag",
+      "Content-Length",
+      "Content-Type"
+    ],
+    "MaxAgeSeconds": 3600
+  }
+]

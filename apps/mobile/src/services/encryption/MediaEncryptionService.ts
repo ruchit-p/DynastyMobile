@@ -3,13 +3,13 @@ import { Buffer } from '@craftzdog/react-native-buffer';
 import * as FileSystem from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { getFirebaseStorage, getFirebaseAuth } from '../../lib/firebase';
-import AuditLogService from './AuditLogService';
+import { AuditLogService } from './AuditLogService';
+import { logger } from '../LoggingService';
 
 // Constants
 const ALGORITHM = 'aes-256-gcm';
 const KEY_LENGTH = 32; // 256 bits
 const IV_LENGTH = 16; // 128 bits
-const TAG_LENGTH = 16; // 128 bits
 const CHUNK_SIZE = 64 * 1024; // 64KB chunks for large files
 
 export interface EncryptedFile {
@@ -88,7 +88,7 @@ export class MediaEncryptionService {
         tag
       };
     } catch (error) {
-      console.error('Failed to encrypt file:', error);
+      logger.error('Failed to encrypt file:', error);
       throw error;
     }
   }
@@ -115,7 +115,7 @@ export class MediaEncryptionService {
 
       return new Uint8Array(decrypted);
     } catch (error) {
-      console.error('Failed to decrypt file:', error);
+      logger.error('Failed to decrypt file:', error);
       throw error;
     }
   }
@@ -191,7 +191,7 @@ export class MediaEncryptionService {
 
       return { key: encryptionKey, iv, tag };
     } catch (error) {
-      console.error('Failed to encrypt large file:', error);
+      logger.error('Failed to encrypt large file:', error);
       throw error;
     }
   }
@@ -274,7 +274,7 @@ export class MediaEncryptionService {
       
       return result;
     } catch (error) {
-      console.error('Failed to upload encrypted file:', error);
+      logger.error('Failed to upload encrypted file:', error);
       
       // Log file upload failure
       await AuditLogService.getInstance().logEvent(
@@ -335,7 +335,7 @@ export class MediaEncryptionService {
 
       return finalOutputUri;
     } catch (error) {
-      console.error('Failed to download and decrypt file:', error);
+      logger.error('Failed to download and decrypt file:', error);
       throw error;
     }
   }
@@ -349,7 +349,7 @@ export class MediaEncryptionService {
       const fileRef = storage.refFromURL(encryptedUrl);
       await fileRef.delete();
     } catch (error) {
-      console.error('Failed to delete encrypted file:', error);
+      logger.error('Failed to delete encrypted file:', error);
       // Don't throw - file might already be deleted
     }
   }
@@ -392,7 +392,7 @@ export class MediaEncryptionService {
 
       return encryptionResult;
     } catch (error) {
-      console.error('Failed to generate encrypted thumbnail:', error);
+      logger.error('Failed to generate encrypted thumbnail:', error);
       throw error;
     }
   }
@@ -412,10 +412,10 @@ export class MediaEncryptionService {
       // 1. Use expo-av to extract a frame from the video
       // 2. Convert the frame to an image
       // 3. Resize and encrypt it like an image thumbnail
-      console.log('Video thumbnail generation not yet implemented');
+      logger.debug('Video thumbnail generation not yet implemented');
       return null;
     } catch (error) {
-      console.error('Failed to generate video thumbnail:', error);
+      logger.error('Failed to generate video thumbnail:', error);
       return null;
     }
   }
@@ -507,7 +507,7 @@ export class MediaEncryptionService {
 
       return { isValid: true };
     } catch (error) {
-      console.error('Failed to validate file:', error);
+      logger.error('Failed to validate file:', error);
       return { isValid: false, error: 'Failed to validate file' };
     }
   }

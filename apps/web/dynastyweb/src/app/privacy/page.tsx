@@ -17,8 +17,8 @@ export default function PrivacyPolicyPage() {
             <div className="text-center mb-12">
               <h1 className="text-4xl font-bold text-gray-900 mb-4">Privacy Policy</h1>
               <p className="text-lg text-gray-600">
-                <strong>Effective Date:</strong> [Insert Date]<br />
-                <strong>Last Updated:</strong> [Insert Date]
+                <strong>Effective Date:</strong> May 27, 2025<br />
+                <strong>Last Updated:</strong> May 27, 2025
               </p>
             </div>
 
@@ -28,7 +28,7 @@ export default function PrivacyPolicyPage() {
               <section className="mb-8">
                 <h2 className="text-2xl font-semibold text-gray-900 mb-4">1. INTRODUCTION</h2>
                 <p className="text-gray-700 leading-relaxed mb-4">
-                  Welcome to Dynasty, the family social media platform operated by [Company Name] (&quot;Company,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;). This Privacy Policy explains how we collect, use, disclose, and safeguard your personal information when you use our mobile application and web services (collectively, the &quot;Service&quot;).
+                  Welcome to Dynasty, the family social media platform operated by Dynasty Platforms (&quot;Company,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;). This Privacy Policy explains how we collect, use, disclose, and safeguard your personal information when you use our mobile application and web services (collectively, the &quot;Service&quot;).
                 </p>
                 <div className="bg-green-50 border-l-4 border-green-400 p-6 rounded">
                   <p className="text-green-800 font-medium">
@@ -112,7 +112,24 @@ export default function PrivacyPolicyPage() {
                   <li>Delivering push notifications for new content and messages</li>
                   <li>Facilitating family member invitations and connection requests</li>
                   <li>Providing customer support and technical assistance</li>
+                  <li><strong>SMS Communications:</strong> Sending verification codes, security alerts, and family-related notifications via text message</li>
                 </ul>
+
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-6 rounded mt-4">
+                  <h4 className="font-semibold text-blue-900 mb-2">SMS Consent:</h4>
+                  <p className="text-blue-800 mb-2">
+                    By providing your phone number during registration, you consent to receive SMS messages from Dynasty for:
+                  </p>
+                  <ul className="list-disc pl-6 text-blue-800 space-y-1">
+                    <li>Account verification and security codes</li>
+                    <li>Two-factor authentication</li>
+                    <li>Family member invitation notifications</li>
+                    <li>Important security alerts</li>
+                  </ul>
+                  <p className="text-blue-800 mt-2">
+                    <strong>You can opt-out at any time by replying STOP to any SMS message.</strong> Message and data rates may apply.
+                  </p>
+                </div>
               </section>
 
               <section className="mb-8">
@@ -168,17 +185,17 @@ export default function PrivacyPolicyPage() {
                 <div className="bg-gray-50 p-6 rounded-lg mb-4">
                   <h4 className="font-semibold text-gray-900 mb-2">General Inquiries:</h4>
                   <p className="text-gray-700">
-                    Email: privacy@[company].com<br />
-                    Phone: [Privacy Phone Number]<br />
-                    Address: [Privacy Officer Address]
+                    Email: support@mydynastyapp.com<br />
+                    Phone: +1 (866) 314-1530<br />
+                    Address: 7901 4th St N STE 300, St. Petersburg, FL 33702
                   </p>
                 </div>
 
                 <h3 className="text-xl font-medium text-gray-900 mb-3">7.2 Exercise Your Rights</h3>
                 <h4 className="text-lg font-medium text-gray-800 mb-2">Request Process:</h4>
                 <ul className="list-disc pl-6 text-gray-700 space-y-1 mb-4">
-                  <li>Submit requests through our privacy portal: [URL]</li>
-                  <li>Email requests to privacy@[company].com</li>
+                  <li>Submit requests through our privacy portal: https://mydynastyapp.com/privacy</li>
+                  <li>Email requests to support@mydynastyapp.com</li>
                   <li>In-app privacy request submission</li>
                   <li>Phone support for complex requests</li>
                 </ul>

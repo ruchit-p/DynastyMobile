@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import ThemedText from '@/components/ThemedText';
+import { ThemedText } from '@/components/ThemedText';
 import Card from '@/components/ui/Card';
-import Colors from '@/constants/Colors';
+import { Colors } from '@/constants/Colors';
 import { Typography } from '@/constants/Typography';
 import { Spacing, BorderRadius } from '@/constants/Spacing';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -228,7 +228,7 @@ const RSVPSummary: React.FC<RSVPSummaryProps> = ({
               <View style={styles.insight}>
                 <Ionicons name="help-circle" size={16} color={Colors[scheme].warning} />
                 <ThemedText style={styles.insightText}>
-                  Many "maybe" responses. Follow up closer to the event date.
+                  Many &quot;maybe&quot; responses. Follow up closer to the event date.
                 </ThemedText>
               </View>
             )}

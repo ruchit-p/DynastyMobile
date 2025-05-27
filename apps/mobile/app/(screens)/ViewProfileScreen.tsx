@@ -8,9 +8,10 @@ import type { StackHeaderProps } from '@react-navigation/stack';
 import AnimatedActionSheet, { ActionSheetAction } from '../../components/ui/AnimatedActionSheet';
 import { getMemberProfileDataMobile, type MemberProfile, updateMemberProfileDataMobile } from '../../src/lib/firebaseUtils';
 import { useAuth } from '../../src/contexts/AuthContext';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { logger } from '../../src/services/LoggingService';
 
 function ViewProfileScreenContent() {
   const colorScheme = useColorScheme() || 'light';
@@ -33,7 +34,7 @@ function ViewProfileScreenContent() {
   const [editedUser, setEditedUser] = useState<MemberProfile | null>(null);
   const [isActionSheetVisible, setIsActionSheetVisible] = useState(false);
 
-  const fetchMemberData = useCallback(withErrorHandling(async () => {
+  const fetchMemberData = useCallback(() => withErrorHandling(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -52,7 +53,7 @@ function ViewProfileScreenContent() {
       const initialAvatar = memberData.avatar || authUser?.photoURL || undefined;
       setEditedUser({ ...memberData, avatar: initialAvatar });
     } catch (fetchError) {
-      console.error('Error fetching member data:', fetchError);
+      logger.error('Error fetching member data:', fetchError);
       const errorMsg = 'Failed to load profile data';
       setError(errorMsg);
       handleError(fetchError, {
@@ -63,7 +64,7 @@ function ViewProfileScreenContent() {
     } finally {
       setIsLoading(false);
     }
-  }, { operation: 'fetchMemberData' }), [params.userId, params.memberId, authUser?.uid, withErrorHandling, handleError]);
+  }, { operation: 'fetchMemberData' })(), [params.userId, params.memberId, authUser?.uid, withErrorHandling, handleError]);
 
   // Set up header with dynamic title and action buttons using AppHeader
   useEffect(() => {
@@ -99,7 +100,7 @@ function ViewProfileScreenContent() {
         />
       ),
     });
-  }, [navigation, params.name, params.memberName, userData?.name, colorScheme]);
+  }, [navigation, params.name, params.memberName, userData?.name, colorScheme, router]);
 
   // Add useEffect to clear local errors when global error state resets
   useEffect(() => {
@@ -172,7 +173,7 @@ function ViewProfileScreenContent() {
       setIsEditing(false);
       Alert.alert('Profile Updated', 'Your changes have been saved successfully.');
     } catch (error: any) {
-      console.error('Failed to save profile changes:', error);
+      logger.error('Failed to save profile changes:', error);
       Alert.alert('Save Error', `Could not save changes: ${error.message || 'Unknown error'}`);
       handleError(error, {
         operation: 'saveChanges',
@@ -199,7 +200,7 @@ function ViewProfileScreenContent() {
   const removeUser = withErrorHandling(async () => {
     try {
       // In a real app, call an API to remove the user
-      console.log('Removing user:', userData?.id);
+      logger.debug('Removing user:', userData?.id);
       Alert.alert('User Removed', `${userData?.name || 'The user'} has been removed from the family tree.`);
       // Navigate back or to a relevant screen
       if (router.canGoBack()) {

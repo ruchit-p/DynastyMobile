@@ -1,5 +1,6 @@
 // Examples of how to use the Firestore helper functions in your components
 import { getDocument, getDocuments, createDocument, updateDocument, deleteDocument } from './firebase';
+import { logger } from '../services/LoggingService';
 
 // Example 1: Get a user document
 // Instead of: db.collection('users').doc(userId).get()
@@ -11,11 +12,11 @@ const getUserData = async (userId: string) => {
     if (userDoc.exists) {
       return userDoc.data();
     } else {
-      console.log('User document not found');
+      logger.debug('User document not found');
       return null;
     }
   } catch (error) {
-    console.error('Error getting user document:', error);
+    logger.error('Error getting user document:', error);
     throw error;
   }
 };
@@ -34,7 +35,7 @@ const getUserPosts = async (userId: string) => {
       ...doc.data()
     }));
   } catch (error) {
-    console.error('Error getting user posts:', error);
+    logger.error('Error getting user posts:', error);
     throw error;
   }
 };
@@ -54,7 +55,7 @@ const addComment = async (postId: string, userId: string, text: string) => {
     const commentRef = await createDocument('comments', commentData);
     return commentRef.id;
   } catch (error) {
-    console.error('Error adding comment:', error);
+    logger.error('Error adding comment:', error);
     throw error;
   }
 };
@@ -71,7 +72,7 @@ const updateUserProfile = async (userId: string, profileData: any) => {
     
     return true;
   } catch (error) {
-    console.error('Error updating user profile:', error);
+    logger.error('Error updating user profile:', error);
     throw error;
   }
 };
@@ -84,7 +85,7 @@ const deletePost = async (postId: string) => {
     await deleteDocument('posts', postId);
     return true;
   } catch (error) {
-    console.error('Error deleting post:', error);
+    logger.error('Error deleting post:', error);
     throw error;
   }
 };

@@ -10,6 +10,9 @@ module.exports = function (api) {
         {
           root: ["./"],
           alias: {
+            'crypto': 'react-native-quick-crypto',
+            'stream': 'readable-stream',
+            'buffer': '@craftzdog/react-native-buffer',
             ui: "./packages/ui/src",
             utils: "./packages/utils/src",
             '@mobile': './apps/mobile/app'

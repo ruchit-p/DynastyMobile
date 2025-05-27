@@ -8,11 +8,8 @@ import {
   Platform,
   TouchableOpacity,
   TextInput,
-  Image,
   Alert,
   Switch,
-  InputAccessoryView,
-  Keyboard,
   Dimensions,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -21,19 +18,20 @@ import * as ImagePicker from 'expo-image-picker';
 import { getFirebaseAuth } from '../../src/lib/firebase';
 import { createEventMobile } from '../../src/lib/eventUtils';
 import { useImageUpload } from '../../hooks/useImageUpload';
-import { callFirebaseFunction, showErrorAlert } from '../../src/lib/errorUtils'; // Corrected import for callFirebaseFunction
-import { showErrorAlert as oldShowErrorAlert } from '../../src/lib/errorUtils'; // Added for consistent error display
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { showErrorAlert } from '../../src/lib/errorUtils';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 import { useSmartMediaUpload } from '../../hooks/useSmartMediaUpload';
 import { useEncryption } from '../../src/contexts/EncryptionContext';
+import { sanitizeUserInput, sanitizeUrl } from '../../src/lib/xssSanitization';
 
 // Custom components
 import FullScreenDatePicker from '../../components/ui/FullScreenDatePicker';
 import TimePickerModal from '../../components/ui/TimePickerModal';
 import MediaGallery, { MediaItem } from '../../components/ui/MediaGallery';
 import { Colors } from '../../constants/Colors'; // Import Colors for dynastyGreen
+import { logger } from '../../src/services/LoggingService';
 
 // Define the primary green color from the app's theme
 const dynastyGreen = Colors.dynastyGreen; // Use from Colors.ts
@@ -143,13 +141,10 @@ const CreateEventScreen = () => {
     selectedMembers: [],
   });
 
-  const [isCreatingEvent, setIsCreatingEvent] = useState<boolean>(false);
+  const [_isCreatingEvent, setIsCreatingEvent] = useState<boolean>(false);
 
   // Family members state
-  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
-  const [loadingMembers, setLoadingMembers] = useState(true);
-  const [membersError, setMembersError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [familyMembers] = useState<FamilyMember[]>([]);
 
   // Initialize Firebase Auth
   const auth = getFirebaseAuth();
@@ -174,25 +169,22 @@ const CreateEventScreen = () => {
   // for multiple uploads and to align with web's `uploadMedia` utility.
   // For now, keeping it to see how it conflicts or can be used.
   const { 
-    isUploading: isUploadingImage, 
-    uploadProgress,
-    error: uploadError,
-    uploadImage 
+    isUploading: isUploadingImage
   } = useImageUpload();
   
   const smartUpload = useSmartMediaUpload();
-  const { isEncryptionReady } = useEncryption();
+  useEncryption();
 
   // State for DateTimePickerModal (NEW)
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const [isTimePickerVisible, setTimePickerVisibility] = useState(false);
-  const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date'); // This is for the NEW modal picker
+  const [_pickerMode, _setPickerMode] = useState<'date' | 'time'>('date'); // This is for the NEW modal picker
   const [currentPickerTarget, setCurrentPickerTarget] = useState<'eventDate' | 'endDate' | 'rsvpDeadline' | null>(null); // This is for the NEW date modal picker
   const [timePickerTarget, setTimePickerTarget] = useState<'startTime' | 'endTime' | null>(null); // This is for the NEW time modal picker
 
   // This effect handles parameters passed from other screens (like location or visibility selection)
   useEffect(() => {
-    console.log('[CreateEventScreen] Params received:', JSON.stringify(params, null, 2));
+    logger.debug('[CreateEventScreen] Params received:', JSON.stringify(params, null, 2));
     // Handle prefilled date and time from calendar view
     if (params.prefillDate) {
       try {
@@ -211,18 +203,18 @@ const CreateEventScreen = () => {
           expoRouter.setParams({ prefillDate: undefined, prefillStartTime: undefined, prefillEndTime: undefined });
         }
       } catch (e) {
-        console.error("Failed to parse prefilled date", e);
+        logger.error("Failed to parse prefilled date", e);
       }
     }
 
     // Handle selection screen params
     let paramsUsed = false;
     if (params.fromScreen === 'selectVisibility' && params.selectedVisibility) {
-      console.log('[CreateEventScreen] Applying visibility params:', params.selectedVisibility);
+      logger.debug('[CreateEventScreen] Applying visibility params:', params.selectedVisibility);
       setNewEvent(prev => ({ ...prev, privacy: params.selectedVisibility! }));
       paramsUsed = true;
     } else if (params.fromScreen === 'selectLocation' && params.selectedLocation) {
-      console.log('[CreateEventScreen] Applying location params:', params.selectedLocation);
+      logger.debug('[CreateEventScreen] Applying location params:', params.selectedLocation);
       const lat = params.selectedLocationLat ? parseFloat(params.selectedLocationLat) : null;
       const lng = params.selectedLocationLng ? parseFloat(params.selectedLocationLng) : null;
       if (lat !== null && lng !== null) {
@@ -236,7 +228,7 @@ const CreateEventScreen = () => {
       }
       paramsUsed = true;
     } else if (params.fromScreen === 'selectInviteType' && params.selectedInviteType) {
-      console.log('[CreateEventScreen] Applying invite type params:', params.selectedInviteType);
+      logger.debug('[CreateEventScreen] Applying invite type params:', params.selectedInviteType);
       setNewEvent(prev => ({ ...prev, inviteType: params.selectedInviteType!}));
       if (params.selectedInviteType === 'select' && params.newSelectedMembers) {
         try {
@@ -245,14 +237,14 @@ const CreateEventScreen = () => {
             setNewEvent(prev => ({ ...prev, selectedMembers: members }));
           }
         } catch (e) {
-          console.error("Failed to parse selected members from params", e);
+          logger.error("Failed to parse selected members from params", e);
         }
       }
       paramsUsed = true;
     }
 
     if (paramsUsed && Platform.OS !== 'web') {
-      console.log('[CreateEventScreen] Clearing fromScreen params');
+      logger.debug('[CreateEventScreen] Clearing fromScreen params');
       expoRouter.setParams({
         fromScreen: undefined,
         selectedVisibility: undefined,
@@ -330,7 +322,7 @@ const CreateEventScreen = () => {
         }));
       }
     } catch (error) {
-      console.error("Error picking media: ", error);
+      logger.error("Error picking media: ", error);
       Alert.alert("Media Picker Error", "Could not load items from library.");
     }
   };
@@ -377,7 +369,7 @@ const CreateEventScreen = () => {
         }));
       }
     } catch (error) {
-      console.error("Error replacing media: ", error);
+      logger.error("Error replacing media: ", error);
       Alert.alert("Media Picker Error", "Could not replace the item.");
     }
   };
@@ -409,7 +401,7 @@ const CreateEventScreen = () => {
           const uniqueFileName = `${auth.currentUser!.uid}-${Date.now()}-${i}-${item.uri.split('/').pop()}`;
           const storagePath = `eventImages/${auth.currentUser!.uid}/${newEvent.title.replace(/\s+/g, '_')}_${Date.now()}_${i}/${uniqueFileName}`;
           
-          console.log(`[uploadAllEventMedia] Uploading: ${item.uri} to ${storagePath}`);
+          logger.debug(`[uploadAllEventMedia] Uploading: ${item.uri} to ${storagePath}`);
           
           // Use smart upload which handles encryption based on settings
           const uploadResult = await smartUpload.uploadMedia(
@@ -432,7 +424,7 @@ const CreateEventScreen = () => {
 
           if (uploadResult) {
             const imageUrl = uploadResult.url;
-            console.log(`[uploadAllEventMedia] Uploaded ${item.uri} to ${imageUrl}${uploadResult.key ? ' (encrypted)' : ''}`);
+            logger.debug(`[uploadAllEventMedia] Uploaded ${item.uri} to ${imageUrl}${uploadResult.key ? ' (encrypted)' : ''}`);
             finalMediaUris[i] = imageUrl; // Update the URI in the final list
             uploadedUrls.push(imageUrl); // Collect successfully uploaded URLs for the payload
             setCompletedUploads(prev => prev + 1);
@@ -440,11 +432,11 @@ const CreateEventScreen = () => {
              setOverallProgress( (completedUploads + 1) / totalUploads * 100);
 
           } else {
-            console.warn(`[uploadAllEventMedia] Upload failed for ${item.uri}, URL was null.`);
+            logger.warn(`[uploadAllEventMedia] Upload failed for ${item.uri}, URL was null.`);
             // finalMediaUris[i] remains the local URI, it won't be in uploadedUrls
           }
         } catch (error) {
-          console.error(`[uploadAllEventMedia] Error uploading media ${item.uri}:`, error);
+          logger.error(`[uploadAllEventMedia] Error uploading media ${item.uri}:`, error);
           // finalMediaUris[i] remains local URI
         }
       } else {
@@ -539,25 +531,29 @@ const CreateEventScreen = () => {
         return date.toISOString().split('T')[0];
       };
 
-      // Use the eventUtils function to create the event
+      // Use the eventUtils function to create the event with sanitized inputs
       const eventId = await createEventMobile({
-        title: newEvent.title.trim(),
-        description: newEvent.description.trim(),
+        title: sanitizeUserInput(newEvent.title, { maxLength: 200, trim: true }),
+        description: sanitizeUserInput(newEvent.description, { maxLength: 2000, trim: true }),
         eventDate: formatDateToYYYYMMDD(newEvent.eventDate) || '',
         endDate: newEvent.isMultiDay ? formatDateToYYYYMMDD(newEvent.endDate) : undefined,
         startTime: newEvent.startTime,
         endTime: newEvent.endTime,
         timezone: newEvent.timezone,
-        location: newEvent.isVirtual ? undefined : newEvent.selectedLocation,
+        location: newEvent.isVirtual ? undefined : (newEvent.selectedLocation ? {
+          address: sanitizeUserInput(newEvent.selectedLocation.address, { maxLength: 500, trim: true }),
+          lat: newEvent.selectedLocation.lat,
+          lng: newEvent.selectedLocation.lng
+        } : null),
         isVirtual: newEvent.isVirtual,
-        virtualLink: newEvent.isVirtual ? newEvent.virtualLink.trim() : undefined,
+        virtualLink: newEvent.isVirtual ? sanitizeUrl(newEvent.virtualLink) : undefined,
         privacy: newEvent.privacy,
         allowGuestPlusOne: newEvent.allowGuestPlusOne,
         showGuestList: newEvent.showGuestList,
         requireRsvp: newEvent.requireRsvp,
         rsvpDeadline: newEvent.requireRsvp ? formatDateToYYYYMMDD(newEvent.rsvpDeadline) : undefined,
-        dresscode: newEvent.dressCode?.trim(),
-        whatToBring: newEvent.whatToBring?.trim(),
+        dresscode: newEvent.dressCode ? sanitizeUserInput(newEvent.dressCode, { maxLength: 200, trim: true }) : undefined,
+        whatToBring: newEvent.whatToBring ? sanitizeUserInput(newEvent.whatToBring, { maxLength: 500, trim: true }) : undefined,
         additionalInfo: undefined,
         invitedMemberIds: newEvent.inviteType === "all" 
             ? familyMembers.map(member => member.id)
@@ -569,7 +565,7 @@ const CreateEventScreen = () => {
         Alert.alert('Event Created', 'Your event has been successfully created!');
         router.back();
       } else {
-        console.error("[CreateEvent] Failed to create event, no event ID returned");
+        logger.error("[CreateEvent] Failed to create event, no event ID returned");
         showErrorAlert({ code: "unknown", message: "Event creation failed. Please try again." }, "Creation Failed");
       }
 

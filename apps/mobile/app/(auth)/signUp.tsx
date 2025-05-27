@@ -3,12 +3,10 @@ import {
   StyleSheet,
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   SafeAreaView,
   Platform,
   Image,
-  Alert,
   ScrollView,
   ActivityIndicator
 } from 'react-native';
@@ -17,13 +15,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { z } from 'zod';
+import { signupFormSchema, formatValidationErrors } from '../../src/lib/validation';
+import { ValidatedInput } from '../../components/ui/ValidatedInput';
+import { PasswordStrengthIndicator } from '../../components/ui/PasswordStrengthIndicator';
+import { useSanitizedInput } from '../../src/hooks/useSanitizedInput';
+import { AppleSignInButton, useAppleSignInAvailable } from '../../components/ui/AppleSignInButton';
+import { logger } from '../../src/services/LoggingService';
 
 // Import design system constants
 import { Colors } from '../../constants/Colors';
-import Typography from '../../constants/Typography';
+import { Typography } from '../../constants/Typography';
 import { Spacing, BorderRadius } from '../../constants/Spacing';
 
 const dynastyLogo = require('../../assets/images/dynasty.png');
@@ -36,11 +41,17 @@ export default function SignUpScreen() {
     title: 'Sign Up Error',
     trackCurrentScreen: true
   });
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  
+  // Use sanitized input hooks for all form fields
+  const emailInput = useSanitizedInput('', 'email');
+  const passwordInput = useSanitizedInput('', 'password');
+  const confirmPasswordInput = useSanitizedInput('', 'password');
+  
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [googleLoading, setGoogleLoading] = useState(false);
   const insets = useSafeAreaInsets();
+  const isAppleSignInAvailable = useAppleSignInAvailable();
 
   useEffect(() => {
     if (!isError) {
@@ -48,14 +59,55 @@ export default function SignUpScreen() {
     }
   }, [isError]);
 
+  // Combine XSS errors from all inputs
+  useEffect(() => {
+    const xssErrors = [
+      emailInput.xssDetected && 'Email contains potentially harmful content',
+      passwordInput.xssDetected && 'Password contains potentially harmful content',
+      confirmPasswordInput.xssDetected && 'Confirm password contains potentially harmful content'
+    ].filter(Boolean);
+    
+    if (xssErrors.length > 0) {
+      setError(xssErrors[0]);
+    } else if (error?.includes('potentially harmful content')) {
+      setError(null);
+    }
+  }, [emailInput.xssDetected, passwordInput.xssDetected, confirmPasswordInput.xssDetected, error]);
+
+  // Clear field error when user types
+  const handleFieldChange = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
   const handleSignUp = withErrorHandling(async () => {
     reset();
     setError(null);
-    if (!email || !password) {
-      setError("Please fill in all fields.");
+    setFieldErrors({});
+
+    // Check for XSS patterns before submission
+    if (emailInput.xssDetected || passwordInput.xssDetected || confirmPasswordInput.xssDetected) {
+      setError('Please remove any special characters and try again');
       return;
     }
-    await signUp(email, password);
+
+    try {
+      // Validate form data using sanitized values
+      const validatedData = signupFormSchema.parse({
+        email: emailInput.sanitizedValue,
+        password: passwordInput.value, // Use raw value for password
+        confirmPassword: confirmPasswordInput.value, // Use raw value for password
+      });
+      
+      await signUp(validatedData.email, validatedData.password);
+    } catch (e) {
+      if (e instanceof z.ZodError) {
+        setFieldErrors(formatValidationErrors(e.errors));
+      } else {
+        throw e; // Let withErrorHandling handle other errors
+      }
+    }
   });
 
   const handleGoogleSignUp = async () => {
@@ -72,7 +124,7 @@ export default function SignUpScreen() {
       } else {
         handleError(e, { 
           action: 'googleSignUp',
-          metadata: { email: email || 'unknown' }
+          metadata: { email: emailInput.sanitizedValue || 'unknown' }
         });
         setError(e.message || "Google Sign-Up failed.");
       }
@@ -102,22 +154,47 @@ export default function SignUpScreen() {
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>Join Dynasty and build your family legacy</Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Email Address"
-              placeholderTextColor="#888"
-              value={email}
-              onChangeText={setEmail}
+            <ValidatedInput
+              label="Email Address"
+              placeholder="Enter your email"
+              value={emailInput.value}
+              onChangeText={(value) => {
+                emailInput.setValue(value);
+                handleFieldChange('email');
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
+              error={fieldErrors.email || (emailInput.xssDetected ? 'Invalid characters detected' : undefined)}
+              required
             />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#888"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
+            
+            <ValidatedInput
+              label="Password"
+              placeholder="Create a strong password"
+              value={passwordInput.value}
+              onChangeText={(value) => {
+                passwordInput.setValue(value);
+                handleFieldChange('password');
+              }}
+              isPassword
+              error={fieldErrors.password || (passwordInput.xssDetected ? 'Invalid characters detected' : undefined)}
+              required
+            />
+            
+            {passwordInput.value && <PasswordStrengthIndicator password={passwordInput.value} />}
+            
+            <ValidatedInput
+              label="Confirm Password"
+              placeholder="Re-enter your password"
+              value={confirmPasswordInput.value}
+              onChangeText={(value) => {
+                confirmPasswordInput.setValue(value);
+                handleFieldChange('confirmPassword');
+              }}
+              isPassword
+              error={fieldErrors.confirmPassword || (confirmPasswordInput.xssDetected ? 'Invalid characters detected' : undefined)}
+              required
+              containerStyle={{ marginTop: Spacing.sm }}
             />
 
             {error && <Text style={styles.errorText}>{error}</Text>}
@@ -150,6 +227,22 @@ export default function SignUpScreen() {
                 </>
               )}
             </TouchableOpacity>
+
+            {isAppleSignInAvailable && (
+              <AppleSignInButton 
+                style={styles.appleButton}
+                onSuccess={() => {
+                  logger.debug('Apple sign up successful');
+                  router.replace('/(tabs)/feed');
+                }}
+                onError={(error) => {
+                  handleError(error, {
+                    context: 'Apple sign up failed',
+                    showToUser: true
+                  });
+                }}
+              />
+            )}
 
             <TouchableOpacity style={[styles.socialButton, styles.phoneButton, isLoading && styles.buttonDisabled]} onPress={handlePhoneSignUp}>
               <Ionicons name="call-outline" size={20} color="#1A4B44" style={styles.socialIcon} />
@@ -261,6 +354,10 @@ const styles = StyleSheet.create({
   },
   phoneButtonText: {
     color: Colors.dynastyGreen,
+  },
+  appleButton: {
+    width: '100%',
+    marginBottom: Spacing.md,
   },
   footer: {
     flexDirection: 'row',

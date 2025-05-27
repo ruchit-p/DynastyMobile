@@ -1,6 +1,7 @@
 import { getFirebaseFunctions } from './firebase';
 import { httpsCallable } from '@react-native-firebase/functions';
 import { errorHandler, ErrorSeverity } from './ErrorHandlingService';
+import { logger } from '../services/LoggingService';
 
 /**
  * Types and interfaces for story operations
@@ -356,7 +357,7 @@ export const toggleCommentLikeMobile = async (
     if (typeof data.success === 'boolean' && typeof data.liked === 'boolean') {
        return { success: data.success, liked: data.liked, error: data.error };
     } else {
-      console.error('Invalid response structure from likeComment:', data);
+      logger.error('Invalid response structure from likeComment:', data);
       return { success: false, liked: false, error: "Invalid response from server." };
     }
   } catch (error: any) {

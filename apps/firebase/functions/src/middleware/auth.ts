@@ -6,6 +6,8 @@ import {
   ErrorCode,
   withErrorHandling,
 } from "../utils/errors";
+import {requireCSRFToken, CSRFValidatedRequest} from "./csrf";
+import {createLogContext, formatErrorForLogging} from "../utils/sanitization";
 
 // Firestore DB reference for reuse
 const db = getFirestore();
@@ -308,11 +310,11 @@ export async function checkRateLimit(
     try {
       const userDoc = await db.collection("users").doc(uid).get();
       if (userDoc.exists && userDoc.data()?.isAdmin) {
-        logger.debug(`Rate limit bypassed for admin user ${uid}`);
+        logger.debug("Rate limit bypassed for admin user", createLogContext({uid}));
         return uid; // Admin bypass
       }
     } catch (error) {
-      logger.warn(`Failed to check admin status for rate limiting: ${error}`);
+      logger.warn("Failed to check admin status for rate limiting", formatErrorForLogging(error, {uid}));
       // Continue with rate limiting if admin check fails
     }
   }
@@ -374,25 +376,186 @@ export async function checkRateLimit(
     }
 
     // Log other transaction errors but don't block the request
-    logger.error(`Rate limit check failed: ${error}`);
+    logger.error("Rate limit check failed", formatErrorForLogging(error, {uid}));
     return uid;
   }
+}
+
+/**
+ * Check rate limit for unauthenticated requests using IP address
+ * @param request Firebase callable request
+ * @param config Rate limit configuration
+ * @throws HttpsError if rate limit is exceeded
+ */
+export async function checkRateLimitByIP(
+  request: CallableRequest,
+  config: RateLimitConfig = {}
+): Promise<void> {
+  const {
+    type = RateLimitType.AUTH,
+    maxRequests = 5, // Much stricter for unauthenticated requests
+    windowSeconds = 300, // 5 minutes
+  } = config;
+
+  // Get IP address from request
+  const ip = request.rawRequest?.ip || 
+             request.rawRequest?.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || 
+             'unknown';
+  
+  if (ip === 'unknown') {
+    logger.warn("Unable to determine IP address for rate limiting");
+    return; // Don't block if we can't determine IP
+  }
+
+  const now = new Date();
+  const rateLimitRef = db.collection("rateLimits").doc(`ip_${ip}_${type}`);
+
+  try {
+    await db.runTransaction(async (transaction) => {
+      const rateLimitDoc = await transaction.get(rateLimitRef);
+
+      if (!rateLimitDoc.exists) {
+        // First request in window
+        transaction.set(rateLimitRef, {
+          ip: ip,
+          type: type,
+          requestCount: 1,
+          windowStart: Timestamp.fromDate(now),
+          lastRequestTime: Timestamp.fromDate(now),
+        });
+        return;
+      }
+
+      const data = rateLimitDoc.data();
+      const windowStartTime = data.windowStart.toDate();
+      const windowEndTime = new Date(windowStartTime.getTime() + (windowSeconds * 1000));
+
+      if (now > windowEndTime) {
+        // Window has expired, start new window
+        transaction.update(rateLimitRef, {
+          requestCount: 1,
+          windowStart: Timestamp.fromDate(now),
+          lastRequestTime: Timestamp.fromDate(now),
+        });
+      } else {
+        // Still in window
+        if (data.requestCount >= maxRequests) {
+          // Rate limit exceeded
+          throw createError(
+            ErrorCode.RESOURCE_EXHAUSTED,
+            `Too many attempts. Please try again in ${Math.ceil((windowEndTime.getTime() - now.getTime()) / 60)} minutes.`
+          );
+        }
+
+        // Increment request count
+        transaction.update(rateLimitRef, {
+          requestCount: data.requestCount + 1,
+          lastRequestTime: Timestamp.fromDate(now),
+        });
+      }
+    });
+
+    logger.debug("IP rate limit check passed", createLogContext({
+      ip: ip.substring(0, 8) + '...', // Log partial IP for debugging
+      type,
+    }));
+  } catch (error: any) {
+    // Rethrow rate limit errors
+    if (error.code === ErrorCode.RESOURCE_EXHAUSTED) {
+      logger.warn("IP rate limit exceeded", createLogContext({
+        ip: ip.substring(0, 8) + '...',
+        type,
+      }));
+      throw error;
+    }
+
+    // Log other transaction errors but don't block the request
+    logger.error("IP rate limit check failed", formatErrorForLogging(error, {ip}));
+  }
+}
+
+/**
+ * Configuration for withAuth middleware
+ */
+export interface AuthConfig {
+  authLevel?: "none" | "auth" | "verified" | "onboarded";
+  rateLimitConfig?: RateLimitConfig;
+  enableCSRF?: boolean; // Enable CSRF protection for state-changing operations
 }
 
 /**
  * Higher-order function for wrapping Firebase functions with standard auth checks
  * @param handler The function handler to wrap
  * @param handlerName Name of the handler for logging
- * @param authLevel Required authentication level
- * @param rateLimitConfig Optional rate limiting configuration
+ * @param authLevel Required authentication level (deprecated - use config object)
+ * @param rateLimitConfig Optional rate limiting configuration (deprecated - use config object)
  * @returns Wrapped function with authentication checks
  */
 export function withAuth<T>(
   handler: (request: CallableRequest) => Promise<T>,
   handlerName: string,
-  authLevel: "none" | "auth" | "verified" | "onboarded" = "auth",
+  authLevel?: "none" | "auth" | "verified" | "onboarded",
+  rateLimitConfig?: RateLimitConfig
+): (request: CallableRequest) => Promise<T>;
+export function withAuth<T>(
+  handler: (request: CallableRequest) => Promise<T>,
+  handlerName: string,
+  config: AuthConfig
+): (request: CallableRequest) => Promise<T>;
+export function withAuth<T>(
+  handler: (request: CallableRequest) => Promise<T>,
+  handlerName: string,
+  authLevelOrConfig?: "none" | "auth" | "verified" | "onboarded" | AuthConfig,
   rateLimitConfig?: RateLimitConfig
 ) {
+  // Handle both old and new API
+  let config: AuthConfig;
+  if (typeof authLevelOrConfig === "string" || authLevelOrConfig === undefined) {
+    config = {
+      authLevel: authLevelOrConfig || "auth",
+      rateLimitConfig,
+      enableCSRF: false, // Default to false for backward compatibility
+    };
+  } else {
+    config = authLevelOrConfig;
+  }
+
+  const {authLevel = "auth", enableCSRF = false} = config;
+
+  // If CSRF is enabled, wrap with CSRF protection
+  if (enableCSRF) {
+    return requireCSRFToken(
+      withErrorHandling(async (request: CSRFValidatedRequest): Promise<T> => {
+        // Skip auth for 'none' level
+        if (authLevel === "none") {
+          return await handler(request);
+        }
+
+        // Apply rate limiting if configured
+        if (config.rateLimitConfig) {
+          await checkRateLimit(request, config.rateLimitConfig);
+        }
+
+        // Apply appropriate auth check based on level
+        switch (authLevel) {
+        case "auth":
+          requireAuth(request);
+          break;
+        case "verified":
+          await requireVerifiedUser(request);
+          break;
+        case "onboarded":
+          await requireOnboardedUser(request);
+          break;
+        }
+
+        // Call the handler function
+        return await handler(request);
+      }, handlerName)
+    );
+  }
+
+  // Original behavior without CSRF
   return withErrorHandling(async (request: CallableRequest): Promise<T> => {
     // Skip auth for 'none' level
     if (authLevel === "none") {
@@ -400,8 +563,8 @@ export function withAuth<T>(
     }
 
     // Apply rate limiting if configured
-    if (rateLimitConfig) {
-      await checkRateLimit(request, rateLimitConfig);
+    if (config.rateLimitConfig) {
+      await checkRateLimit(request, config.rateLimitConfig);
     }
 
     // Apply appropriate auth check based on level
@@ -423,11 +586,20 @@ export function withAuth<T>(
 }
 
 /**
+ * Configuration for withResourceAccess middleware
+ */
+export interface ResourceAccessMiddlewareConfig {
+  resourceConfig: ResourceAccessConfig;
+  rateLimitConfig?: RateLimitConfig;
+  enableCSRF?: boolean; // Enable CSRF protection for state-changing operations
+}
+
+/**
  * Higher-order function for wrapping Firebase functions with resource access checks
  * @param handler The function handler to wrap
  * @param handlerName Name of the handler for logging
- * @param resourceConfig Resource access configuration
- * @param rateLimitConfig Optional rate limiting configuration
+ * @param resourceConfig Resource access configuration (deprecated - use config object)
+ * @param rateLimitConfig Optional rate limiting configuration (deprecated - use config object)
  * @returns Wrapped function with resource access checks
  */
 export function withResourceAccess<T>(
@@ -435,15 +607,61 @@ export function withResourceAccess<T>(
   handlerName: string,
   resourceConfig: ResourceAccessConfig,
   rateLimitConfig?: RateLimitConfig
+): (request: CallableRequest) => Promise<T>;
+export function withResourceAccess<T>(
+  handler: (request: CallableRequest, resource: any) => Promise<T>,
+  handlerName: string,
+  config: ResourceAccessMiddlewareConfig
+): (request: CallableRequest) => Promise<T>;
+export function withResourceAccess<T>(
+  handler: (request: CallableRequest, resource: any) => Promise<T>,
+  handlerName: string,
+  resourceConfigOrConfig: ResourceAccessConfig | ResourceAccessMiddlewareConfig,
+  rateLimitConfig?: RateLimitConfig
 ) {
+  // Handle both old and new API
+  let config: ResourceAccessMiddlewareConfig;
+  if ("resourceType" in resourceConfigOrConfig) {
+    // Old API
+    config = {
+      resourceConfig: resourceConfigOrConfig,
+      rateLimitConfig,
+      enableCSRF: false, // Default to false for backward compatibility
+    };
+  } else {
+    // New API
+    config = resourceConfigOrConfig;
+  }
+
+  const {enableCSRF = false} = config;
+
+  // If CSRF is enabled, wrap with CSRF protection
+  if (enableCSRF) {
+    return requireCSRFToken(
+      withErrorHandling(async (request: CSRFValidatedRequest): Promise<T> => {
+        // Apply rate limiting if configured
+        if (config.rateLimitConfig) {
+          await checkRateLimit(request, config.rateLimitConfig);
+        }
+
+        // Check resource access
+        const {resource} = await checkResourceAccess(request, config.resourceConfig);
+
+        // Call the handler with the resource
+        return await handler(request, resource);
+      }, handlerName)
+    );
+  }
+
+  // Original behavior without CSRF
   return withErrorHandling(async (request: CallableRequest): Promise<T> => {
     // Apply rate limiting if configured
-    if (rateLimitConfig) {
-      await checkRateLimit(request, rateLimitConfig);
+    if (config.rateLimitConfig) {
+      await checkRateLimit(request, config.rateLimitConfig);
     }
 
     // Check resource access
-    const {resource} = await checkResourceAccess(request, resourceConfig);
+    const {resource} = await checkResourceAccess(request, config.resourceConfig);
 
     // Call the handler with the resource
     return await handler(request, resource);

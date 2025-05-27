@@ -2,7 +2,7 @@ import React from 'react';
 import { createStackNavigator, StackNavigationProp } from '@react-navigation/stack';
 import { View } from 'react-native';
 import { RouteProp } from '@react-navigation/native';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 
 // Import screens

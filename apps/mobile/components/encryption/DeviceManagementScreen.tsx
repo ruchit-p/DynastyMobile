@@ -5,7 +5,7 @@ import { ListItem } from '../ListItem';
 import { Button } from '../ui/Button';
 import { IconButton } from '../ui/IconButton';
 import { Colors } from '../../constants/Colors';
-import Typography from '../../constants/Typography';
+import { Typography } from '../../constants/Typography';
 import { Spacing } from '../../constants/Spacing';
 import { MultiDeviceService } from '../../src/services/encryption';
 import { callFirebaseFunction } from '../../src/lib/errorUtils';
@@ -203,7 +203,7 @@ export default function DeviceManagementScreen() {
           <View style={styles.infoCard}>
             <Ionicons name="information-circle" size={20} color={Colors.light.text.secondary} />
             <Text style={styles.infoText}>
-              Only trusted devices can decrypt your messages. Remove a device if it's lost or you no longer use it.
+              Only trusted devices can decrypt your messages. Remove a device if it&apos;s lost or you no longer use it.
             </Text>
           </View>
         </View>

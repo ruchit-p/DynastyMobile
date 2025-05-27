@@ -1,10 +1,10 @@
 import * as FileSystem from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { createHash } from 'react-native-quick-crypto';
+// import { createHash } from 'react-native-quick-crypto';
 import { Buffer } from '@craftzdog/react-native-buffer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import MediaEncryptionService from './MediaEncryptionService';
-import { getFirebaseStorage } from '../../lib/firebase';
+import { MediaEncryptionService } from './MediaEncryptionService';
+import { logger } from '../LoggingService';
 
 interface PreviewCache {
   fileId: string;
@@ -65,7 +65,7 @@ export class FilePreviewService {
       // Clean up old previews
       await this.cleanupOldPreviews();
     } catch (error) {
-      console.error('Failed to load preview cache:', error);
+      logger.error('Failed to load preview cache:', error);
     }
   }
 
@@ -74,7 +74,7 @@ export class FilePreviewService {
       const cacheArray = Array.from(this.previewCache.values());
       await AsyncStorage.setItem(this.PREVIEW_CACHE_KEY, JSON.stringify(cacheArray));
     } catch (error) {
-      console.error('Failed to save preview cache:', error);
+      logger.error('Failed to save preview cache:', error);
     }
   }
 
@@ -114,7 +114,7 @@ export class FilePreviewService {
         return await this.generatePlaceholderPreview(fileId, mimeType);
       }
     } catch (error) {
-      console.error('Failed to get encrypted preview:', error);
+      logger.error('Failed to get encrypted preview:', error);
       return null;
     }
   }
@@ -292,7 +292,7 @@ export class FilePreviewService {
         metadata: cached.metadata
       };
     } catch (error) {
-      console.error('Failed to decrypt preview:', error);
+      logger.error('Failed to decrypt preview:', error);
       return null;
     }
   }
@@ -329,7 +329,7 @@ export class FilePreviewService {
         try {
           await FileSystem.deleteAsync(cache.previewUri, { idempotent: true });
         } catch (error) {
-          console.error(`Failed to delete preview ${fileId}:`, error);
+          logger.error(`Failed to delete preview ${fileId}:`, error);
         }
         this.previewCache.delete(fileId);
       }
@@ -360,7 +360,7 @@ export class FilePreviewService {
       await FileSystem.deleteAsync(this.PREVIEW_DIR, { idempotent: true });
       await this.initializePreviewDirectory();
     } catch (error) {
-      console.error('Failed to clear preview directory:', error);
+      logger.error('Failed to clear preview directory:', error);
     }
 
     // Clear cache
@@ -406,7 +406,7 @@ export class FilePreviewService {
   async preloadPreviews(files: { id: string; uri: string; mimeType: string }[]) {
     const preloadPromises = files.map(file => 
       this.getEncryptedPreview(file.id, file.uri, file.mimeType)
-        .catch(error => console.error(`Failed to preload preview for ${file.id}:`, error))
+        .catch(error => logger.error(`Failed to preload preview for ${file.id}:`, error))
     );
 
     await Promise.all(preloadPromises);

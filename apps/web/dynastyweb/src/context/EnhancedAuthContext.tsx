@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import {
   User,
   signInWithEmailAndPassword,
@@ -11,11 +11,21 @@ import {
   browserLocalPersistence,
   updateEmail as firebaseUpdateEmail,
   updatePassword as firebaseUpdatePassword,
+  sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
   RecaptchaVerifier,
   signInWithPhoneNumber,
   ConfirmationResult,
+  multiFactor,
+  PhoneAuthProvider,
+  PhoneMultiFactorGenerator,
+  TotpMultiFactorGenerator,
+  TotpSecret,
+  MultiFactorError,
+  MultiFactorResolver,
+  MultiFactorInfo,
+  // MultiFactorSession and ApplicationVerifier removed as they're not used
 } from 'firebase/auth';
 import { auth, functions, db } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
@@ -26,6 +36,9 @@ import { notificationService } from '@/services/NotificationService';
 import { cacheService, cacheKeys } from '@/services/CacheService';
 import { syncQueue } from '@/services/SyncQueueService';
 import { networkMonitor } from '@/services/NetworkMonitor';
+import { useCSRF } from '@/hooks/useCSRF';
+import { createCSRFClient } from '@/lib/csrf-client';
+import { fingerprintService } from '@/services/FingerprintService';
 
 // MARK: - Interfaces and Types
 interface FirebaseError extends Error {
@@ -37,6 +50,7 @@ declare global {
   interface Window {
     recaptchaVerifier: RecaptchaVerifier;
     confirmationResult: ConfirmationResult;
+    mfaRecaptchaVerifier: RecaptchaVerifier;
   }
 }
 
@@ -79,10 +93,40 @@ interface SignUpResult {
   historyBookId: string;
 }
 
+// MARK: - MFA Types
+export interface MfaEnrollmentInfo {
+  factorId: string;
+  displayName: string;
+  enrollmentTime: string;
+  phoneNumber?: string;
+}
+
+export interface TotpSetupInfo {
+  secretKey: string;
+  qrCodeUrl: string;
+  displayName: string;
+  totpSecret: TotpSecret;
+}
+
+export interface MfaChallenge {
+  resolver: MultiFactorResolver;
+  selectedFactorId: string;
+}
+
+export interface MfaSignInState {
+  isRequired: boolean;
+  availableFactors: MultiFactorInfo[];
+  resolver: MultiFactorResolver | null;
+  selectedFactor: MultiFactorInfo | null;
+}
+
 export interface AuthContextType {
   currentUser: User | null;
   firestoreUser: FirestoreUser | null;
   loading: boolean;
+  csrfToken: string | null;
+  isCSRFReady: boolean;
+  mfaSignInState: MfaSignInState;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<boolean>;
@@ -107,12 +151,30 @@ export interface AuthContextType {
   }>;
   refreshFirestoreUser: () => Promise<void>;
   updateUserProfile: (displayName: string) => Promise<void>;
+  // MFA Methods
+  getMfaEnrollmentInfo: () => MfaEnrollmentInfo[];
+  setupTotpMfa: (displayName: string) => Promise<TotpSetupInfo>;
+  enrollTotpMfa: (totpSecret: TotpSecret, code: string) => Promise<void>;
+  setupPhoneMfa: (phoneNumber: string) => Promise<string>;
+  enrollPhoneMfa: (verificationId: string, code: string) => Promise<void>;
+  unenrollMfa: (factorId: string) => Promise<void>;
+  completeMfaSignIn: (factorId: string, code: string) => Promise<void>;
+  selectMfaFactor: (factor: MultiFactorInfo) => void;
+  resetMfaSignIn: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   currentUser: null,
   firestoreUser: null,
   loading: false,
+  csrfToken: null,
+  isCSRFReady: false,
+  mfaSignInState: {
+    isRequired: false,
+    availableFactors: [],
+    resolver: null,
+    selectedFactor: null,
+  },
   signUp: async () => {},
   signIn: async () => {},
   signInWithGoogle: async () => false,
@@ -133,6 +195,16 @@ const AuthContext = createContext<AuthContextType>({
     inviteeEmail: '',
   }),
   refreshFirestoreUser: async () => {},
+  // MFA Methods
+  getMfaEnrollmentInfo: () => [],
+  setupTotpMfa: async () => ({ secretKey: '', qrCodeUrl: '', displayName: '', totpSecret: null as unknown as TotpSecret }),
+  enrollTotpMfa: async () => {},
+  setupPhoneMfa: async () => '',
+  enrollPhoneMfa: async () => {},
+  unenrollMfa: async () => {},
+  completeMfaSignIn: async () => {},
+  selectMfaFactor: () => {},
+  resetMfaSignIn: () => {},
 });
 
 // MARK: - Helper Functions
@@ -224,6 +296,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [firestoreUser, setFirestoreUser] = useState<FirestoreUser | null>(null);
   const [loading, setLoading] = useState(true);
   const { handleError, handleFirebaseError, setUserId } = useErrorHandler();
+  
+  // MARK: - MFA State Management
+  const [mfaSignInState, setMfaSignInState] = useState<MfaSignInState>({
+    isRequired: false,
+    availableFactors: [],
+    resolver: null,
+    selectedFactor: null,
+  });
+  
+  // CSRF Protection
+  const { csrfToken, isReady: isCSRFReady } = useCSRF(functions);
+  const csrfClient = useMemo(
+    () => createCSRFClient(functions, () => csrfToken),
+    [csrfToken]
+  );
 
   const refreshFirestoreUser = useCallback(async () => {
     if (user?.uid) {
@@ -243,6 +330,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       // Start network monitoring
       networkMonitor.start();
+      
+      // Initialize fingerprint service and verify device
+      await fingerprintService.initialize();
+      const trustResult = await fingerprintService.verifyDevice(userId);
+      
+      console.log('[Auth] Device verification completed:', {
+        trustScore: trustResult.device?.trustScore,
+        isNewDevice: trustResult.device?.isNewDevice,
+        requiresAdditionalAuth: trustResult.requiresAdditionalAuth
+      });
+      
+      // Handle additional auth requirements if needed
+      if (trustResult.requiresAdditionalAuth) {
+        console.log('[Auth] Device requires additional authentication');
+        // You can store this in state or handle additional auth here
+      }
       
       console.log('[Auth] User services initialized');
     } catch (error) {
@@ -267,6 +370,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       // Clear sync queue for user
       await syncQueue.clearQueue();
+      
+      // Clear fingerprint data
+      fingerprintService.clearAllData();
       
       console.log('[Auth] User services cleaned up');
     } catch (error) {
@@ -305,6 +411,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUp = async (email: string, password: string): Promise<void> => {
     try {
+      // handleSignUp doesn't require CSRF (public endpoint)
       const handleSignUp = httpsCallable<SignUpRequest, SignUpResult>(functions, 'handleSignUp');
       await handleSignUp({ email, password });
 
@@ -319,9 +426,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signIn = async (email: string, password: string) => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      // Reset MFA state on successful sign-in
+      setMfaSignInState({
+        isRequired: false,
+        availableFactors: [],
+        resolver: null,
+        selectedFactor: null,
+      });
     } catch (error) {
-      const message = handleFirebaseError(error, 'sign-in');
-      throw new Error(message);
+      // Check if this is an MFA error
+      if ((error as MultiFactorError).code === 'auth/multi-factor-auth-required') {
+        const mfaError = error as MultiFactorError;
+        const resolver = mfaError.resolver;
+        
+        setMfaSignInState({
+          isRequired: true,
+          availableFactors: resolver.hints,
+          resolver,
+          selectedFactor: null,
+        });
+        
+        // Re-throw the error but with a specific MFA message
+        throw new Error('Multi-factor authentication required');
+      } else {
+        const message = handleFirebaseError(error, 'sign-in');
+        throw new Error(message);
+      }
     }
   };
 
@@ -408,8 +538,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const resetPassword = async (email: string) => {
     try {
-      const sendPasswordResetEmail = httpsCallable(functions, 'sendPasswordResetEmail');
-      await sendPasswordResetEmail({ email });
+      // Use Firebase Auth's built-in password reset functionality
+      await sendPasswordResetEmail(auth, email);
     } catch (error) {
       const message = handleFirebaseError(error, 'reset-password');
       throw new Error(message);
@@ -459,8 +589,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const sendVerificationEmail = async () => {
     try {
-      const sendEmail = httpsCallable(functions, 'sendVerificationEmail');
-      await sendEmail();
+      // Use CSRF-protected client for state-changing operation
+      await csrfClient.callFunction('sendVerificationEmail', {});
     } catch (error) {
       const message = handleFirebaseError(error, 'send-verification-email');
       throw new Error(message);
@@ -505,10 +635,222 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  // MARK: - MFA Methods
+  
+  /**
+   * Get enrolled MFA factors for the current user
+   */
+  const getMfaEnrollmentInfo = useCallback((): MfaEnrollmentInfo[] => {
+    if (!user) return [];
+    
+    return multiFactor(user).enrolledFactors.map(factor => ({
+      factorId: factor.uid,
+      displayName: factor.displayName || 'Unknown Factor',
+      enrollmentTime: factor.enrollmentTime,
+      phoneNumber: factor.factorId === 'phone' ? factor.phoneNumber : undefined,
+    }));
+  }, [user]);
+
+  /**
+   * Setup TOTP MFA - generates secret and QR code
+   */
+  const setupTotpMfa = useCallback(async (displayName: string): Promise<TotpSetupInfo> => {
+    if (!user) throw new Error('No user logged in');
+    
+    try {
+      const session = await multiFactor(user).getSession();
+      const totpSecret = await TotpMultiFactorGenerator.generateSecret(session);
+      
+      const qrCodeUrl = totpSecret.generateQrCodeUrl(
+        user.email || 'Dynasty User',
+        'Dynasty Family App'
+      );
+      
+      return {
+        secretKey: totpSecret.secretKey,
+        qrCodeUrl,
+        displayName,
+        totpSecret,
+      };
+    } catch (error) {
+      const message = handleFirebaseError(error, 'setup-totp-mfa');
+      throw new Error(message);
+    }
+  }, [user, handleFirebaseError]);
+
+  /**
+   * Enroll TOTP MFA with verification code
+   */
+  const enrollTotpMfa = useCallback(async (totpSecret: TotpSecret, code: string): Promise<void> => {
+    if (!user) throw new Error('No user logged in');
+    
+    try {
+      const credential = TotpMultiFactorGenerator.assertionForEnrollment(totpSecret, code);
+      await multiFactor(user).enroll(credential, totpSecret.hashLength.toString());
+    } catch (error) {
+      const message = handleFirebaseError(error, 'enroll-totp-mfa');
+      throw new Error(message);
+    }
+  }, [user, handleFirebaseError]);
+
+  /**
+   * Setup Phone MFA - sends SMS verification
+   */
+  const setupPhoneMfa = useCallback(async (phoneNumber: string): Promise<string> => {
+    if (!user) throw new Error('No user logged in');
+    
+    try {
+      const session = await multiFactor(user).getSession();
+      
+      // Create or reuse recaptcha verifier
+      if (!window.mfaRecaptchaVerifier) {
+        window.mfaRecaptchaVerifier = new RecaptchaVerifier(auth, 'mfa-recaptcha-container', {
+          size: 'invisible'
+        });
+      }
+      
+      const phoneInfoOptions = {
+        phoneNumber,
+        session,
+      };
+      
+      const verificationId = await PhoneAuthProvider.verifyPhoneNumber(
+        phoneInfoOptions,
+        window.mfaRecaptchaVerifier
+      );
+      
+      return verificationId;
+    } catch (error) {
+      const message = handleFirebaseError(error, 'setup-phone-mfa');
+      throw new Error(message);
+    }
+  }, [user, handleFirebaseError]);
+
+  /**
+   * Enroll Phone MFA with SMS verification code
+   */
+  const enrollPhoneMfa = useCallback(async (verificationId: string, code: string): Promise<void> => {
+    if (!user) throw new Error('No user logged in');
+    
+    try {
+      const phoneAuthCredential = PhoneAuthProvider.credential(verificationId, code);
+      const credential = PhoneMultiFactorGenerator.assertion(phoneAuthCredential);
+      
+      await multiFactor(user).enroll(credential, 'Phone');
+    } catch (error) {
+      const message = handleFirebaseError(error, 'enroll-phone-mfa');
+      throw new Error(message);
+    }
+  }, [user, handleFirebaseError]);
+
+  /**
+   * Unenroll an MFA factor
+   */
+  const unenrollMfa = useCallback(async (factorId: string): Promise<void> => {
+    if (!user) throw new Error('No user logged in');
+    
+    try {
+      const enrolledFactors = multiFactor(user).enrolledFactors;
+      const factor = enrolledFactors.find(f => f.uid === factorId);
+      
+      if (!factor) {
+        throw new Error('MFA factor not found');
+      }
+      
+      await multiFactor(user).unenroll(factor);
+    } catch (error) {
+      const message = handleFirebaseError(error, 'unenroll-mfa');
+      throw new Error(message);
+    }
+  }, [user, handleFirebaseError]);
+
+  /**
+   * Complete MFA sign-in with verification code
+   */
+  const completeMfaSignIn = useCallback(async (factorId: string, code: string): Promise<void> => {
+    if (!mfaSignInState.resolver) {
+      throw new Error('No MFA resolver available');
+    }
+    
+    try {
+      const selectedHint = mfaSignInState.availableFactors.find(factor => factor.uid === factorId);
+      if (!selectedHint) {
+        throw new Error('Selected MFA factor not found');
+      }
+      
+      let credential;
+      
+      if (selectedHint.factorId === TotpMultiFactorGenerator.FACTOR_ID) {
+        // TOTP credential
+        credential = TotpMultiFactorGenerator.assertionForSignIn(selectedHint.uid, code);
+      } else if (selectedHint.factorId === PhoneMultiFactorGenerator.FACTOR_ID) {
+        // Phone credential - need to verify phone number first
+        if (!window.mfaRecaptchaVerifier) {
+          window.mfaRecaptchaVerifier = new RecaptchaVerifier(auth, 'mfa-recaptcha-container', {
+            size: 'invisible'
+          });
+        }
+        
+        const phoneInfoOptions = {
+          multiFactorHint: selectedHint,
+          session: mfaSignInState.resolver.session,
+        };
+        
+        const verificationId = await PhoneAuthProvider.verifyPhoneNumber(
+          phoneInfoOptions,
+          window.mfaRecaptchaVerifier
+        );
+        
+        const phoneAuthCredential = PhoneAuthProvider.credential(verificationId, code);
+        credential = PhoneMultiFactorGenerator.assertion(phoneAuthCredential);
+      } else {
+        throw new Error('Unsupported MFA factor type');
+      }
+      
+      await mfaSignInState.resolver.resolveSignIn(credential);
+      
+      // Reset MFA state on successful sign-in
+      setMfaSignInState({
+        isRequired: false,
+        availableFactors: [],
+        resolver: null,
+        selectedFactor: null,
+      });
+    } catch (error) {
+      const message = handleFirebaseError(error, 'complete-mfa-sign-in');
+      throw new Error(message);
+    }
+  }, [mfaSignInState, handleFirebaseError]);
+
+  /**
+   * Select an MFA factor for sign-in
+   */
+  const selectMfaFactor = useCallback((factor: MultiFactorInfo): void => {
+    setMfaSignInState(prev => ({
+      ...prev,
+      selectedFactor: factor,
+    }));
+  }, []);
+
+  /**
+   * Reset MFA sign-in state
+   */
+  const resetMfaSignIn = useCallback((): void => {
+    setMfaSignInState({
+      isRequired: false,
+      availableFactors: [],
+      resolver: null,
+      selectedFactor: null,
+    });
+  }, []);
+
   const value: AuthContextType = {
     currentUser: user,
     firestoreUser,
     loading,
+    csrfToken,
+    isCSRFReady,
+    mfaSignInState,
     signUp,
     signIn,
     signInWithGoogle,
@@ -522,7 +864,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     sendVerificationEmail,
     signUpWithInvitation,
     verifyInvitation,
-    refreshFirestoreUser
+    refreshFirestoreUser,
+    // MFA Methods
+    getMfaEnrollmentInfo,
+    setupTotpMfa,
+    enrollTotpMfa,
+    setupPhoneMfa,
+    enrollPhoneMfa,
+    unenrollMfa,
+    completeMfaSignIn,
+    selectMfaFactor,
+    resetMfaSignIn,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

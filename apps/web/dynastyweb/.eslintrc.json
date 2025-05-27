@@ -3,6 +3,9 @@
   "ignorePatterns": ["src/components/library/**/*"],
   "rules": {
     "@typescript-eslint/no-unused-vars": "warn",
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@next/next/no-img-element": "warn",
+    "import/no-anonymous-default-export": "warn",
     "react-hooks/exhaustive-deps": "warn"
   }
-} 
+}

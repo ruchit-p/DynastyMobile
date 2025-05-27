@@ -15,8 +15,9 @@ import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
 import Screen from '../../components/ui/Screen';
 import Button from '../../components/ui/Button';
-import ThemedText from '../../components/ThemedText';
+import { ThemedText } from '../../components/ThemedText';
 import { Spacing } from '../../constants/Spacing';
+import { logger } from '../../src/services/LoggingService';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -96,22 +97,22 @@ const FilePreviewScreen = () => {
         const localPath = `${FileSystem.cacheDirectory}${fileName ? fileName.replace(/[^a-zA-Z0-9.]/g, '_') : `preview_${Date.now()}`}${extension}`;
         
         try {
-          console.log(`Attempting to download ${fileType}: ${initialFileUri} to ${localPath}`);
+          logger.debug(`Attempting to download ${fileType}: ${initialFileUri} to ${localPath}`);
           const downloadResult = await FileSystem.downloadAsync(initialFileUri, localPath);
-          console.log("Download HTTP Result:", JSON.stringify({ status: downloadResult.status, headers: downloadResult.headers, mimeType: downloadResult.mimeType }));
+          logger.debug("Download HTTP Result:", JSON.stringify({ status: downloadResult.status, headers: downloadResult.headers, mimeType: downloadResult.mimeType }));
 
           if (isMounted) {
             if (downloadResult.status === 200) {
               try {
                 const fileInfo = await FileSystem.getInfoAsync(downloadResult.uri);
-                console.log("Downloaded File Info:", JSON.stringify(fileInfo));
+                logger.debug("Downloaded File Info:", JSON.stringify(fileInfo));
 
                 if (fileInfo.exists && fileInfo.size && fileInfo.size > 500) { // Check existence and size
             setMediaUriToDisplay(downloadResult.uri);
             setError(null); 
                 } else {
                   const sizeError = fileInfo.exists ? `File size too small (${fileInfo.size} bytes)` : 'File not found after download';
-                  console.error("Downloaded file seems invalid or too small. URI:", downloadResult.uri, "Info:", fileInfo);
+                  logger.error("Downloaded file seems invalid or too small. URI:", downloadResult.uri, "Info:", fileInfo);
                   setError(`Failed to download a valid media file. ${sizeError}.`);
                   setMediaUriToDisplay(null);
                 }
@@ -165,7 +166,7 @@ const FilePreviewScreen = () => {
       isMounted = false;
       if (mediaUriToDisplay && mediaUriToDisplay.startsWith(FileSystem.cacheDirectory || '')) {
         FileSystem.deleteAsync(mediaUriToDisplay, { idempotent: true })
-          .then(() => console.log("Deleted cached preview file:", mediaUriToDisplay))
+          .then(() => logger.debug("Deleted cached preview file:", mediaUriToDisplay))
           .catch(e => {
             handleError(e, { 
               functionName: 'deleteCache', 
@@ -174,7 +175,7 @@ const FilePreviewScreen = () => {
           });
       }
     };
-  }, [initialFileUri, fileName, fileType]);
+  }, [initialFileUri, fileName, fileType, handleError, mediaUriToDisplay, withErrorHandling]);
 
   useEffect(() => {
     return () => {
@@ -185,7 +186,7 @@ const FilePreviewScreen = () => {
   }, [player]);
 
   const handleVideoLoad = () => {
-    console.log('Video ready for display/playback');
+    logger.debug('Video ready for display/playback');
   };
 
   const handleShare = async () => {

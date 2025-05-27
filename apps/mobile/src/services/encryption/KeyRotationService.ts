@@ -1,8 +1,9 @@
 import * as SecureStore from 'expo-secure-store';
-import { Buffer } from '@craftzdog/react-native-buffer';
 import { callFirebaseFunction } from '../../lib/errorUtils';
-import E2EEService, { KeyPair } from './E2EEService';
-import AuditLogService from './AuditLogService';
+import { LibsignalService } from './libsignal/LibsignalService';
+import { KeyPair } from './index';
+import { AuditLogService } from './AuditLogService';
+import { logger } from '../LoggingService';
 
 interface RotatingKeyPair {
   id: string;
@@ -75,7 +76,7 @@ export class KeyRotationService {
       // Start automatic rotation monitoring
       this.startAutomaticRotation();
     } catch (error) {
-      console.error('Failed to initialize key rotation:', error);
+      logger.error('Failed to initialize key rotation:', error);
       throw error;
     }
   }
@@ -96,7 +97,7 @@ export class KeyRotationService {
       try {
         callback(event);
       } catch (error) {
-        console.error('Error in rotation callback:', error);
+        logger.error('Error in rotation callback:', error);
       }
     });
   }
@@ -153,7 +154,7 @@ export class KeyRotationService {
         });
       }
     } catch (error) {
-      console.error('Failed to check rotation warning:', error);
+      logger.error('Failed to check rotation warning:', error);
     }
   }
 
@@ -170,7 +171,7 @@ export class KeyRotationService {
         await this.rotateKeys();
       }
     } catch (error) {
-      console.error('Failed to check rotation:', error);
+      logger.error('Failed to check rotation:', error);
     }
   }
 
@@ -178,7 +179,7 @@ export class KeyRotationService {
    * Create initial identity key
    */
   private async createInitialKey(): Promise<void> {
-    const keyPair = await E2EEService.getInstance().generateKeyPair();
+    const keyPair = await LibsignalService.getInstance().generateKeyPair();
     const rotatingKey: RotatingKeyPair = {
       id: `key_${Date.now()}`,
       keyPair,
@@ -198,7 +199,7 @@ export class KeyRotationService {
    */
   async rotateKeys(): Promise<void> {
     try {
-      console.log('Starting key rotation...');
+      logger.debug('Starting key rotation...');
       
       // Get old key before rotation
       const oldActiveKey = await this.getActiveKey();
@@ -211,7 +212,7 @@ export class KeyRotationService {
       });
 
       // Generate new key pair
-      const keyPair = await E2EEService.getInstance().generateKeyPair();
+      const keyPair = await LibsignalService.getInstance().generateKeyPair();
       const currentVersion = await this.getCurrentKeyVersion();
       
       const newKey: RotatingKeyPair = {
@@ -247,7 +248,7 @@ export class KeyRotationService {
         newKeyId: newKey.id
       });
 
-      console.log('Key rotation completed successfully');
+      logger.debug('Key rotation completed successfully');
       
       // Log successful key rotation
       await AuditLogService.getInstance().logEvent(
@@ -262,7 +263,7 @@ export class KeyRotationService {
         }
       );
     } catch (error) {
-      console.error('Failed to rotate keys:', error);
+      logger.error('Failed to rotate keys:', error);
       
       // Emit rotation failed event
       this.emitRotationEvent({
@@ -300,7 +301,7 @@ export class KeyRotationService {
 
       return JSON.parse(keyData);
     } catch (error) {
-      console.error('Failed to get active key:', error);
+      logger.error('Failed to get active key:', error);
       return null;
     }
   }
@@ -325,7 +326,7 @@ export class KeyRotationService {
 
       return keys.sort((a, b) => b.createdAt - a.createdAt);
     } catch (error) {
-      console.error('Failed to get all keys:', error);
+      logger.error('Failed to get all keys:', error);
       return [];
     }
   }
@@ -339,14 +340,14 @@ export class KeyRotationService {
     for (const key of keys) {
       try {
         // Get current identity key
-        const originalIdentity = await E2EEService.getInstance().getIdentityKeyPair();
-        await E2EEService.getInstance().restoreKeyPair(key.keyPair);
+        const originalIdentity = await LibsignalService.getInstance().getIdentityKeyPair();
+        await LibsignalService.getInstance().restoreKeyPair(key.keyPair);
 
-        const decrypted = await E2EEService.getInstance().decryptMessage(encryptedData);
+        const decrypted = await LibsignalService.getInstance().decryptMessage(encryptedData);
         
         // Restore original key
         if (originalIdentity) {
-          await E2EEService.getInstance().restoreKeyPair(originalIdentity);
+          await LibsignalService.getInstance().restoreKeyPair(originalIdentity);
         }
 
         return decrypted;
@@ -431,7 +432,7 @@ export class KeyRotationService {
         expiresAt: key.expiresAt,
       });
     } catch (error) {
-      console.error('Failed to upload rotated public key:', error);
+      logger.error('Failed to upload rotated public key:', error);
       throw error;
     }
   }

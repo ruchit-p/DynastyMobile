@@ -3,14 +3,15 @@ import { View, Text, StyleSheet, ScrollView, Switch, Alert } from 'react-native'
 import { useRouter, useNavigation } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { Spacing, BorderRadius } from '../../constants/Spacing';
-import Typography from '../../constants/Typography';
+import { Typography } from '../../constants/Typography';
 import AppHeader from '../../components/ui/AppHeader';
 import IconButton, { IconSet } from '../../components/ui/IconButton';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 import { getNotificationService } from '../../src/services/NotificationService';
 import Button from '../../components/ui/Button';
+import { logger } from '../../src/services/LoggingService';
 
 interface PreferenceItem {
   key: keyof NotificationPreferences;
@@ -93,12 +94,7 @@ const NotificationPreferencesScreen = () => {
 
   const notificationService = getNotificationService();
 
-  // Load preferences on mount
-  useEffect(() => {
-    loadPreferences();
-  }, []);
-
-  const loadPreferences = withErrorHandling(async () => {
+  const loadPreferences = useCallback(withErrorHandling(async () => {
     try {
       setIsLoading(true);
       const prefs = await notificationService.getNotificationPreferences();
@@ -116,7 +112,7 @@ const NotificationPreferencesScreen = () => {
             { text: 'Cancel', style: 'cancel' },
             { text: 'Open Settings', onPress: () => {
               // This would open system settings on a real device
-              console.log('Open system settings');
+              logger.debug('Open system settings');
             }},
           ]
         );
@@ -128,7 +124,12 @@ const NotificationPreferencesScreen = () => {
     } finally {
       setIsLoading(false);
     }
-  });
+  }), [handleError, notificationService]);
+
+  // Load preferences on mount
+  useEffect(() => {
+    loadPreferences();
+  }, [loadPreferences]);
 
   const handleToggle = (key: keyof NotificationPreferences) => {
     const newPreferences = { ...preferences };

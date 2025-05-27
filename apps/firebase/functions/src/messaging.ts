@@ -2,6 +2,9 @@ import {onCall} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import {withAuth} from "./middleware/auth";
 import {createError, ErrorCode, handleError} from "./utils/errors";
+import {sanitizeUserInput, detectXSSPatterns, logXSSAttempt} from "./utils/xssSanitization";
+import {validateRequest} from "./utils/request-validator";
+import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
 
 // Initialize if not already done
 if (!admin.apps.length) {
@@ -25,12 +28,16 @@ interface MessageData {
  */
 export const sendMessage = onCall(withAuth(async (request) => {
   try {
-    const {chatId, message} = request.data;
     const senderId = request.auth!.uid;
 
-    if (!chatId || !message) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Chat ID and message are required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.sendMessage,
+      senderId
+    );
+
+    const {chatId, message} = validatedData;
 
     // Validate message structure
     const {text, mediaUrls, type = "text", encryptedContent, metadata} = message as MessageData;
@@ -75,10 +82,37 @@ export const sendMessage = onCall(withAuth(async (request) => {
       // Store a placeholder for notification
       messageData.notificationText = type === "text" ? "Encrypted message" : `Encrypted ${type}`;
     } else {
-      // Regular message
+      // Regular message - sanitize content
       messageData.isEncrypted = false;
-      if (text) messageData.text = text;
-      if (mediaUrls && mediaUrls.length > 0) messageData.mediaUrls = mediaUrls;
+
+      if (text) {
+        // Sanitize text message to prevent XSS
+        const sanitizedText = sanitizeUserInput(text, {
+          allowHtml: false,
+          maxLength: 5000,
+          trim: true,
+        });
+
+        // Check for XSS patterns
+        if (detectXSSPatterns(text)) {
+          logXSSAttempt(text, {
+            userId: senderId,
+            chatId,
+            functionName: "sendMessage",
+          });
+          throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid characters detected in message");
+        }
+
+        messageData.text = sanitizedText;
+      }
+
+      if (mediaUrls && mediaUrls.length > 0) {
+        // Sanitize media URLs
+        messageData.mediaUrls = mediaUrls.map((url) => sanitizeUserInput(url, {
+          allowHtml: false,
+          maxLength: 1000,
+        }));
+      }
     }
 
     // Add message to chat
@@ -123,12 +157,16 @@ export const sendMessage = onCall(withAuth(async (request) => {
  */
 export const sendMessageNotification = onCall(withAuth(async (request) => {
   try {
-    const {chatId, messageId} = request.data;
     const senderId = request.auth!.uid;
 
-    if (!chatId || !messageId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Chat ID and message ID are required");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.sendMessageNotification,
+      senderId
+    );
+
+    const {chatId, messageId} = validatedData;
 
     // Get chat details
     const chatDoc = await db.collection("chats").doc(chatId).get();
@@ -269,12 +307,16 @@ export const sendMessageNotification = onCall(withAuth(async (request) => {
  */
 export const updateNotificationSettings = onCall(withAuth(async (request) => {
   try {
-    const {settings} = request.data;
     const userId = request.auth!.uid;
 
-    if (!settings || typeof settings !== "object") {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid settings object");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.updateNotificationSettings,
+      userId
+    );
+
+    const {settings} = validatedData;
 
     // Update user's notification settings
     await db.collection("users").doc(userId).update({
@@ -293,12 +335,16 @@ export const updateNotificationSettings = onCall(withAuth(async (request) => {
  */
 export const registerFCMToken = onCall(withAuth(async (request) => {
   try {
-    const {token} = request.data;
     const userId = request.auth!.uid;
 
-    if (!token || typeof token !== "string") {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid FCM token");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.registerFCMToken,
+      userId
+    );
+
+    const {token} = validatedData;
 
     // Add token to user's token array
     await db.collection("users").doc(userId).update({
@@ -317,12 +363,16 @@ export const registerFCMToken = onCall(withAuth(async (request) => {
  */
 export const removeFCMToken = onCall(withAuth(async (request) => {
   try {
-    const {token} = request.data;
     const userId = request.auth!.uid;
 
-    if (!token || typeof token !== "string") {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid FCM token");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.removeFCMToken,
+      userId
+    );
+
+    const {token} = validatedData;
 
     // Remove token from user's token array
     await db.collection("users").doc(userId).update({
@@ -341,12 +391,16 @@ export const removeFCMToken = onCall(withAuth(async (request) => {
  */
 export const sendTypingNotification = onCall(withAuth(async (request) => {
   try {
-    const {chatId, isTyping} = request.data;
     const userId = request.auth!.uid;
 
-    if (!chatId || typeof isTyping !== "boolean") {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid parameters");
-    }
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.sendTypingNotification,
+      userId
+    );
+
+    const {chatId, isTyping} = validatedData;
 
     // Get chat details
     const chatDoc = await db.collection("chats").doc(chatId).get();

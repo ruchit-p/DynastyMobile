@@ -257,6 +257,17 @@ jest.mock('@react-native-firebase/messaging', () => ({
   }),
 }));
 
+jest.mock('@react-native-firebase/crashlytics', () => ({
+  default: () => ({
+    log: jest.fn(),
+    recordError: jest.fn(),
+    setAttribute: jest.fn(),
+    setAttributes: jest.fn(),
+    setUserId: jest.fn(),
+    crash: jest.fn(),
+  }),
+}));
+
 // Mock AsyncStorage
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(() => Promise.resolve(null)),
@@ -541,6 +552,18 @@ jest.mock('./src/lib/errorUtils', () => ({
       super(message);
       this.code = code;
     }
+  }
+}));
+
+// Mock NativeLibsignal
+jest.mock('./src/specs/NativeLibsignal', () => ({
+  default: {
+    generateSafetyNumber: jest.fn(() => Promise.resolve({
+      displayString: '12345 67890 12345 67890 12345 67890',
+      qrCodeData: 'mock-qr-data'
+    })),
+    verifySafetyNumber: jest.fn(() => Promise.resolve(true)),
+    // Add other methods as needed
   }
 }));
 

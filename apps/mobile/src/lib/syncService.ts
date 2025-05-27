@@ -1,17 +1,58 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import DeviceInfo from 'react-native-device-info';
-import { getFirebaseDb, getFirebaseFunctions } from './firebase';
+// import { getFirebaseDb, getFirebaseFunctions } from './firebase';
 import { callFirebaseFunction } from './errorUtils';
-import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+// import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import { SyncDatabase } from '../database/SyncDatabase';
-import { 
-  SyncOperation, 
-  OperationType, 
-  EntityType,
-  SyncStatus,
-  LocalSyncOperation 
-} from '../database/schema';
+import { logger } from '../services/LoggingService';
+// TODO: Fix these imports - types don't exist in schema
+// import { 
+//   SyncOperation, 
+//   OperationType, 
+//   EntityType,
+//   SyncStatus,
+//   LocalSyncOperation 
+// } from '../database/schema';
+
+// Temporary type definitions until schema is fixed
+enum OperationType {
+  CREATE = 'CREATE',
+  UPDATE = 'UPDATE',
+  DELETE = 'DELETE'
+}
+
+enum EntityType {
+  USER = 'USER',
+  STORY = 'STORY',
+  EVENT = 'EVENT',
+  MESSAGE = 'MESSAGE',
+  FAMILY_TREE = 'FAMILY_TREE'
+}
+
+enum SyncStatus {
+  PENDING = 'PENDING',
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED'
+}
+
+interface SyncOperation {
+  id: string;
+  entityType: EntityType;
+  entityId: string;
+  operationType: OperationType;
+  data: any;
+  status: SyncStatus;
+  retryCount: number;
+  createdAt: string;
+  syncedAt?: string;
+  error?: string;
+}
+
+interface LocalSyncOperation extends SyncOperation {
+  localId: string;
+}
 
 // Constants
 const SYNC_STORAGE_KEY = '@dynasty_sync_state';
@@ -65,16 +106,16 @@ class SyncService {
    */
   async initialize(userId: string): Promise<void> {
     if (this.isInitialized) {
-      console.log('SyncService: Already initialized');
+      logger.debug('SyncService: Already initialized');
       return;
     }
 
     try {
-      console.log('SyncService: Initializing...');
+      logger.debug('SyncService: Initializing...');
       
       // Get device ID
       this.deviceId = await DeviceInfo.getUniqueId();
-      console.log('SyncService: Device ID:', this.deviceId);
+      logger.debug('SyncService: Device ID:', this.deviceId);
       
       // Load sync state
       await this.loadSyncState(userId);
@@ -89,7 +130,7 @@ class SyncService {
       this.startSyncInterval();
       
       this.isInitialized = true;
-      console.log('SyncService: Initialization complete');
+      logger.debug('SyncService: Initialization complete');
       
       // Perform initial sync if online
       const netState = await NetInfo.fetch();
@@ -97,7 +138,7 @@ class SyncService {
         this.sync();
       }
     } catch (error) {
-      console.error('SyncService: Initialization failed:', error);
+      logger.error('SyncService: Initialization failed:', error);
       throw error;
     }
   }
@@ -106,7 +147,7 @@ class SyncService {
    * Clean up and stop sync service
    */
   async cleanup(): Promise<void> {
-    console.log('SyncService: Cleaning up...');
+    logger.debug('SyncService: Cleaning up...');
     
     if (this.networkListener) {
       this.networkListener.unsubscribe();
@@ -156,7 +197,7 @@ class SyncService {
       };
       
       await this.db.addToSyncQueue(syncOp);
-      console.log('SyncService: Operation queued:', syncOp.id);
+      logger.debug('SyncService: Operation queued:', syncOp.id);
       
       // Update pending count
       if (this.syncState) {
@@ -170,7 +211,7 @@ class SyncService {
         this.sync();
       }
     } catch (error) {
-      console.error('SyncService: Failed to queue operation:', error);
+      logger.error('SyncService: Failed to queue operation:', error);
       throw error;
     }
   }
@@ -180,14 +221,14 @@ class SyncService {
    */
   async sync(): Promise<void> {
     if (this.isSyncing) {
-      console.log('SyncService: Sync already in progress');
+      logger.debug('SyncService: Sync already in progress');
       return;
     }
     
     // Check network
     const netState = await NetInfo.fetch();
     if (!netState.isConnected) {
-      console.log('SyncService: No network connection, skipping sync');
+      logger.debug('SyncService: No network connection, skipping sync');
       return;
     }
     
@@ -195,11 +236,11 @@ class SyncService {
     this.notifyListeners('onSyncStart');
     
     try {
-      console.log('SyncService: Starting sync...');
+      logger.debug('SyncService: Starting sync...');
       
       // Get pending operations
       const pendingOps = await this.db.getPendingOperations(BATCH_SIZE);
-      console.log(`SyncService: Found ${pendingOps.length} pending operations`);
+      logger.debug(`SyncService: Found ${pendingOps.length} pending operations`);
       
       if (pendingOps.length === 0) {
         this.isSyncing = false;
@@ -217,7 +258,7 @@ class SyncService {
           processed++;
           this.notifyListeners('onSyncProgress', processed, pendingOps.length);
         } catch (error) {
-          console.error('SyncService: Operation failed:', op.id, error);
+          logger.error('SyncService: Operation failed:', op.id, error);
           errors.push(error as Error);
           
           // Update retry count
@@ -236,11 +277,11 @@ class SyncService {
         await this.saveSyncState();
       }
       
-      console.log(`SyncService: Sync complete. Processed: ${processed}/${pendingOps.length}`);
+      logger.debug(`SyncService: Sync complete. Processed: ${processed}/${pendingOps.length}`);
       this.notifyListeners('onSyncComplete', errors.length === 0);
       
     } catch (error) {
-      console.error('SyncService: Sync failed:', error);
+      logger.error('SyncService: Sync failed:', error);
       this.notifyListeners('onSyncComplete', false, error as Error);
     } finally {
       this.isSyncing = false;
@@ -252,7 +293,7 @@ class SyncService {
    */
   private async processSyncOperation(op: LocalSyncOperation): Promise<void> {
     try {
-      console.log(`SyncService: Processing operation ${op.id}`);
+      logger.debug(`SyncService: Processing operation ${op.id}`);
       
       // Call Firebase sync function
       const result = await callFirebaseFunction('enqueueSyncOperation', {
@@ -267,10 +308,10 @@ class SyncService {
       if (result.success) {
         // Mark as synced
         await this.db.markOperationSynced(op.id);
-        console.log(`SyncService: Operation ${op.id} synced successfully`);
+        logger.debug(`SyncService: Operation ${op.id} synced successfully`);
       } else if (result.conflict) {
         // Handle conflict
-        console.log(`SyncService: Conflict detected for operation ${op.id}`);
+        logger.debug(`SyncService: Conflict detected for operation ${op.id}`);
         await this.handleConflict(op, result.conflict);
       } else {
         throw new Error(result.error || 'Unknown sync error');
@@ -321,11 +362,11 @@ class SyncService {
    */
   private setupNetworkMonitoring(): void {
     this.networkListener = NetInfo.addEventListener((state: NetInfoState) => {
-      console.log('SyncService: Network state changed:', state.isConnected);
+      logger.debug('SyncService: Network state changed:', state.isConnected);
       
       if (state.isConnected && !this.isSyncing) {
         // Network reconnected, trigger sync
-        console.log('SyncService: Network reconnected, triggering sync');
+        logger.debug('SyncService: Network reconnected, triggering sync');
         this.sync();
       }
     });
@@ -364,7 +405,7 @@ class SyncService {
         await this.saveSyncState();
       }
     } catch (error) {
-      console.error('SyncService: Failed to load sync state:', error);
+      logger.error('SyncService: Failed to load sync state:', error);
     }
   }
 
@@ -378,7 +419,7 @@ class SyncService {
       const key = `${SYNC_STORAGE_KEY}_${this.syncState.deviceId}`;
       await AsyncStorage.setItem(key, JSON.stringify(this.syncState));
     } catch (error) {
-      console.error('SyncService: Failed to save sync state:', error);
+      logger.error('SyncService: Failed to save sync state:', error);
     }
   }
 
@@ -418,7 +459,7 @@ class SyncService {
    * Force sync (useful for pull-to-refresh)
    */
   async forceSync(): Promise<void> {
-    console.log('SyncService: Force sync requested');
+    logger.debug('SyncService: Force sync requested');
     await this.sync();
   }
 
@@ -426,7 +467,7 @@ class SyncService {
    * Clear all sync data (for logout)
    */
   async clearSyncData(): Promise<void> {
-    console.log('SyncService: Clearing sync data');
+    logger.debug('SyncService: Clearing sync data');
     await this.db.clearSyncQueue();
     await AsyncStorage.removeItem(`${SYNC_STORAGE_KEY}_${this.deviceId}`);
     this.syncState = null;

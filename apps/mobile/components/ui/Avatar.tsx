@@ -10,10 +10,8 @@ import {
   Text
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Spacing, BorderRadius } from '../../constants/Spacing';
 import { useColorScheme } from '../../hooks/useColorScheme';
 import { useBackgroundColor, useBorderColor, useTextColor } from '../../hooks/useThemeColor';
-import { Colors } from '../../constants/Colors';
 
 export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | number;
 
@@ -56,7 +54,6 @@ const Avatar: React.FC<AvatarProps> = ({
   testID,
 }) => {
   const colorScheme = useColorScheme();
-  const theme = colorScheme || 'light';
   
   // Get theme colors
   const borderColor = useBorderColor('primary');

@@ -18,13 +18,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Fingerprint, Key, Trash, Loader2, Shield, Lock, Database } from "lucide-react"
-import { useAuth } from "@/context/AuthContext"
+import { useAuth } from "@/context/EnhancedAuthContext"
 import { useToast } from "@/components/ui/use-toast"
 import { doc, deleteDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { deleteUser } from "firebase/auth"
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog"
 import { SettingsManager, type PrivacySettings } from "@/utils/settingsManager"
+import MfaManagement from "@/components/security/MfaManagement"
 
 export default function PrivacySecurityPage() {
   const router = useRouter()
@@ -274,6 +275,9 @@ export default function PrivacySecurityPage() {
             </Button>
           </div>
         </div>
+
+        {/* Multi-Factor Authentication Section */}
+        <MfaManagement className="mt-8" />
 
         {/* Danger Zone section */}
         <div className="space-y-4">

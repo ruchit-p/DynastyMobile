@@ -5,6 +5,7 @@ import { getFirestore, connectFirestoreEmulator, FirebaseFirestoreTypes } from '
 import { getFunctions, connectFunctionsEmulator, FirebaseFunctionsTypes } from '@react-native-firebase/functions';
 import { getStorage, connectStorageEmulator, FirebaseStorageTypes } from '@react-native-firebase/storage';
 import { ensureFirebaseInitialized } from './firebaseInit';
+import { logger } from '../services/LoggingService';
 
 // For React Native Firebase, the native configuration (GoogleService-Info.plist / google-services.json)
 // is typically used for initialization, and explicit initializeApp(config) in JS is not needed
@@ -14,22 +15,22 @@ let _app: ReactNativeFirebase.FirebaseApp | undefined; // Use the type from RNF
 const retrieveApp = (): ReactNativeFirebase.FirebaseApp => { // Renamed from getApp to avoid conflict
   try {
     if (!_app) {
-      console.log('Firebase JS: Attempting to retrieve default app instance...');
+      logger.debug('Firebase JS: Attempting to retrieve default app instance...');
       // Ensure Firebase is initialized first
       ensureFirebaseInitialized();
       _app = getFirebaseCoreApp(); // Use RNF's getApp() to get the default app
-      console.log('Firebase JS: Default app instance retrieved.');
+      logger.debug('Firebase JS: Default app instance retrieved.');
     }
     return _app;
   } catch (error) {
-    console.error('Firebase Initialization Error:', error);
+    logger.error('Firebase Initialization Error:', error);
     // Check if this is a common initialization issue
     if (error && error.message && error.message.includes('No Firebase App')) {
-      console.error('Firebase app not found. This usually means:');
-      console.error('1. Native Firebase modules are not properly linked');
-      console.error('2. The app needs to be rebuilt after adding Firebase');
-      console.error('3. For iOS: cd ios && pod install');
-      console.error('4. For Android: Ensure google-services.json is in android/app/');
+      logger.error('Firebase app not found. This usually means:');
+      logger.error('1. Native Firebase modules are not properly linked');
+      logger.error('2. The app needs to be rebuilt after adding Firebase');
+      logger.error('3. For iOS: cd ios && pod install');
+      logger.error('4. For Android: Ensure google-services.json is in android/app/');
     }
     throw error; // Re-throw since app is critical
   }
@@ -40,13 +41,13 @@ const getAuthInstance = (): FirebaseAuthTypes.Module => {
   try {
     if (!_auth) {
       retrieveApp(); // Ensure app is initialized/retrieved first
-      console.log('Firebase JS: Attempting to initialize Auth instance...');
+      logger.debug('Firebase JS: Attempting to initialize Auth instance...');
       _auth = getAuth();
-      console.log('Firebase JS: Auth instance initialized.');
+      logger.debug('Firebase JS: Auth instance initialized.');
     }
     return _auth;
   } catch (error) {
-    console.error('Firebase Auth Initialization Error:', error);
+    logger.error('Firebase Auth Initialization Error:', error);
     throw error; // Re-throw since auth is critical
   }
 };
@@ -58,30 +59,30 @@ const getDbInstance = (): FirebaseFirestoreTypes.Module => {
   try {
     if (!_db) {
       retrieveApp(); // Ensure app is initialized/retrieved first
-      console.log('Firebase JS: Attempting to initialize Firestore instance...');
+      logger.debug('Firebase JS: Attempting to initialize Firestore instance...');
       _db = getFirestore();
       
       // Enable offline persistence
       if (!_offlinePersistenceEnabled) {
-        console.log('Firebase JS: Enabling Firestore offline persistence...');
+        logger.debug('Firebase JS: Enabling Firestore offline persistence...');
         _db.settings({
           persistence: true,
           cacheSizeBytes: 50 * 1024 * 1024, // 50MB cache size
           ignoreUndefinedProperties: true
         }).then(() => {
           _offlinePersistenceEnabled = true;
-          console.log('Firebase JS: Firestore offline persistence enabled with 50MB cache.');
+          logger.debug('Firebase JS: Firestore offline persistence enabled with 50MB cache.');
         }).catch((error) => {
-          console.warn('Firebase JS: Failed to enable offline persistence:', error);
+          logger.warn('Firebase JS: Failed to enable offline persistence:', error);
           // Continue without offline persistence rather than failing
         });
       }
       
-      console.log('Firebase JS: Firestore instance initialized.');
+      logger.debug('Firebase JS: Firestore instance initialized.');
     }
     return _db;
   } catch (error) {
-    console.error('Firebase Firestore Initialization Error:', error);
+    logger.error('Firebase Firestore Initialization Error:', error);
     throw error; // Re-throw since firestore is critical
   }
 };
@@ -91,14 +92,14 @@ const getFunctionsInstance = (): FirebaseFunctionsTypes.Module => {
   try {
     if (!_functions) {
       retrieveApp(); // Ensure app is initialized/retrieved first
-      console.log('Firebase JS: Attempting to initialize Functions instance...');
+      logger.debug('Firebase JS: Attempting to initialize Functions instance...');
       // For specific app instance or region: getFunctions(retrieveApp(), 'your-region')
       _functions = getFunctions(retrieveApp()); // Pass the app instance
-      console.log('Firebase JS: Functions instance initialized.');
+      logger.debug('Firebase JS: Functions instance initialized.');
     }
     return _functions;
   } catch (error) {
-    console.error('Firebase Functions Initialization Error:', error);
+    logger.error('Firebase Functions Initialization Error:', error);
     throw error; // Re-throw since functions are critical
   }
 };
@@ -108,14 +109,14 @@ const getStorageInstance = (): FirebaseStorageTypes.Module => {
   try {
     if (!_storage) {
       retrieveApp(); // Ensure app is initialized/retrieved first
-      console.log('Firebase JS: Attempting to initialize Storage instance...');
+      logger.debug('Firebase JS: Attempting to initialize Storage instance...');
       // For specific app instance or bucket: getStorage(retrieveApp(), 'gs://your-bucket')
       _storage = getStorage(retrieveApp()); // Pass the app instance
-      console.log('Firebase JS: Storage instance initialized.');
+      logger.debug('Firebase JS: Storage instance initialized.');
     }
     return _storage;
   } catch (error) {
-    console.error('Firebase Storage Initialization Error:', error);
+    logger.error('Firebase Storage Initialization Error:', error);
     throw error; // Re-throw since storage is critical
   }
 };
@@ -124,41 +125,41 @@ const getStorageInstance = (): FirebaseStorageTypes.Module => {
 export const connectToEmulators = () => {
   if (__DEV__) {
     const FBASE_EMULATOR_HOST = '127.0.0.1'; 
-    console.log('Firebase JS: Attempting to connect to Firebase Emulators on host:', FBASE_EMULATOR_HOST);
+    logger.debug('Firebase JS: Attempting to connect to Firebase Emulators on host:', FBASE_EMULATOR_HOST);
 
     try {
       const auth = getAuthInstance();
       connectAuthEmulator(auth, `http://${FBASE_EMULATOR_HOST}:9099`);
-      console.log('Firebase JS: Auth emulator connected');
+      logger.debug('Firebase JS: Auth emulator connected');
     } catch (e) {
-      console.warn('Firebase Emulator Connection Error (auth):', e);
+      logger.warn('Firebase Emulator Connection Error (auth):', e);
     }
 
     try {
       const db = getDbInstance();
       connectFirestoreEmulator(db, FBASE_EMULATOR_HOST, 8080);
-      console.log('Firebase JS: Firestore emulator connected');
+      logger.debug('Firebase JS: Firestore emulator connected');
     } catch (e) {
-      console.warn('Firebase Emulator Connection Error (firestore):', e);
+      logger.warn('Firebase Emulator Connection Error (firestore):', e);
     }
     
     try {
       const functions = getFunctionsInstance();
       connectFunctionsEmulator(functions, FBASE_EMULATOR_HOST, 5001);
-      console.log('Firebase JS: Functions emulator connected');
+      logger.debug('Firebase JS: Functions emulator connected');
     } catch (e) {
-      console.warn('Firebase Emulator Connection Error (functions):', e);
+      logger.warn('Firebase Emulator Connection Error (functions):', e);
     }
 
     try {
       const storage = getStorageInstance();
       connectStorageEmulator(storage, FBASE_EMULATOR_HOST, 9199);
-      console.log('Firebase JS: Storage emulator connected');
+      logger.debug('Firebase JS: Storage emulator connected');
     } catch (e) {
-      console.warn('Firebase Emulator Connection Error (storage):', e);
+      logger.warn('Firebase Emulator Connection Error (storage):', e);
     }
   } else {
-    console.log('Firebase JS: Not in DEV mode, skipping emulator connection.');
+    logger.debug('Firebase JS: Not in DEV mode, skipping emulator connection.');
   }
 };
 
@@ -176,7 +177,7 @@ const getDocument = async (collectionPath: string, docId: string) => {
     const db = getDbInstance();
     return await db.collection(collectionPath).doc(docId).get();
   } catch (error) {
-    console.error('Firebase Get Document Error:', error);
+    logger.error('Firebase Get Document Error:', error);
     throw error;
   }
 };
@@ -190,7 +191,7 @@ const getDocuments = async (collectionPath: string, queries: any[] = []) => {
     });
     return await query.get();
   } catch (error) {
-    console.error('Firebase Get Documents Error:', error);
+    logger.error('Firebase Get Documents Error:', error);
     throw error;
   }
 };
@@ -200,7 +201,7 @@ const createDocument = async (collectionPath: string, data: any) => {
     const db = getDbInstance();
     return await db.collection(collectionPath).add(data);
   } catch (error) {
-    console.error('Firebase Create Document Error:', error);
+    logger.error('Firebase Create Document Error:', error);
     throw error;
   }
 };
@@ -210,7 +211,7 @@ const updateDocument = async (collectionPath: string, docId: string, data: any) 
     const db = getDbInstance();
     return await db.collection(collectionPath).doc(docId).update(data);
   } catch (error) {
-    console.error('Firebase Update Document Error:', error);
+    logger.error('Firebase Update Document Error:', error);
     throw error;
   }
 };
@@ -220,7 +221,7 @@ const deleteDocument = async (collectionPath: string, docId: string) => {
     const db = getDbInstance();
     return await db.collection(collectionPath).doc(docId).delete();
   } catch (error) {
-    console.error('Firebase Delete Document Error:', error);
+    logger.error('Firebase Delete Document Error:', error);
     throw error;
   }
 };
@@ -236,13 +237,13 @@ const setFirestoreNetwork = async (enabled: boolean): Promise<void> => {
     const db = getDbInstance();
     if (enabled) {
       await db.enableNetwork();
-      console.log('Firebase JS: Firestore network enabled');
+      logger.debug('Firebase JS: Firestore network enabled');
     } else {
       await db.disableNetwork();
-      console.log('Firebase JS: Firestore network disabled (offline mode)');
+      logger.debug('Firebase JS: Firestore network disabled (offline mode)');
     }
   } catch (error) {
-    console.error('Firebase JS: Error changing network state:', error);
+    logger.error('Firebase JS: Error changing network state:', error);
     throw error;
   }
 };
@@ -252,9 +253,9 @@ const clearFirestoreCache = async (): Promise<void> => {
   try {
     const db = getDbInstance();
     await db.clearPersistence();
-    console.log('Firebase JS: Firestore cache cleared');
+    logger.debug('Firebase JS: Firestore cache cleared');
   } catch (error) {
-    console.error('Firebase JS: Error clearing cache:', error);
+    logger.error('Firebase JS: Error clearing cache:', error);
     throw error;
   }
 };

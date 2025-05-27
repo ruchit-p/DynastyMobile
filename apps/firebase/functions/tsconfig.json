@@ -14,5 +14,10 @@
   "compileOnSave": true,
   "include": [
     "src"
+  ],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/__tests__/**/*",
+    "src/test/**/*"
   ]
 }

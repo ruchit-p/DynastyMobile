@@ -13,7 +13,7 @@ import MediaGallery from './MediaGallery';
 import { Colors } from '../../constants/Colors';
 import { useThemeColor } from '../../hooks/useThemeColor';
 import { getFirebaseDb } from '../../src/lib/firebase';
-import ChatEncryptionService from '../../src/services/encryption/ChatEncryptionService';
+import { ChatEncryptionService } from '../../src/services/encryption/ChatEncryptionService';
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 
 interface MediaItem {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
@@ -31,7 +31,8 @@ interface InvitedSignupFormData {
   token: string;
 }
 
-export default function InvitedSignupPage() {
+// Separate component that uses useSearchParams
+function InvitedSignupContent() {
   const [formData, setFormData] = useState<InvitedSignupFormData>({
     email: "",
     password: "",
@@ -255,5 +256,48 @@ export default function InvitedSignupPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Loading component for the suspense fallback
+function InvitedSignupLoading() {
+  return (
+    <div className="min-h-screen bg-[#F9FAFB] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <Link href="/">
+          <Image
+            src="/dynasty.png"
+            alt="Dynasty Logo"
+            width={60}
+            height={60}
+            className="mx-auto"
+          />
+        </Link>
+        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          Complete Your Account Setup
+        </h2>
+        <p className="mt-2 text-center text-sm text-gray-600">
+          You&apos;ve been invited to join a family tree
+        </p>
+      </div>
+
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+          <div className="flex justify-center items-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-[#0A5C36]" />
+            <span className="ml-2 text-gray-600">Loading invitation details...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Main component that wraps the content in Suspense
+export default function InvitedSignupPage() {
+  return (
+    <Suspense fallback={<InvitedSignupLoading />}>
+      <InvitedSignupContent />
+    </Suspense>
   )
 } 

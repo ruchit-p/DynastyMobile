@@ -5,18 +5,17 @@ import {
   Text, 
   ScrollView, 
   SafeAreaView,
-  TouchableOpacity,
-  Platform
+  TouchableOpacity
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
 // Import design system
 import { Colors } from '../../constants/Colors';
-import Typography from '../../constants/Typography';
+import { Typography } from '../../constants/Typography';
 import { Spacing, BorderRadius, Shadows, Layout } from '../../constants/Spacing';
 import { useColorScheme } from '../../hooks/useColorScheme';
 import { 

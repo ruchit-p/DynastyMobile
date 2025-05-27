@@ -1,0 +1,31 @@
+[
+  {
+    "AllowedOrigins": [
+      "*"
+    ],
+    "AllowedMethods": [
+      "GET",
+      "PUT",
+      "POST",
+      "DELETE",
+      "HEAD"
+    ],
+    "AllowedHeaders": [
+      "Content-Type",
+      "Content-Length",
+      "Authorization",
+      "x-amz-meta-*",
+      "x-amz-content-sha256",
+      "x-amz-date",
+      "x-amz-security-token",
+      "x-amz-user-agent"
+    ],
+    "ExposeHeaders": [
+      "ETag",
+      "Content-Length",
+      "Content-Type",
+      "x-amz-meta-*"
+    ],
+    "MaxAgeSeconds": 3600
+  }
+]

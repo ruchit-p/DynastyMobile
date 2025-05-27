@@ -19,11 +19,6 @@ export default function BackgroundSyncDebug() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Only show in development mode
-  if (!__DEV__) {
-    return null;
-  }
-
   const updateStatus = async () => {
     try {
       const status = await backgroundSyncTask.getStatus();
@@ -36,6 +31,11 @@ export default function BackgroundSyncDebug() {
   useEffect(() => {
     updateStatus();
   }, []);
+
+  // Only show in development mode
+  if (!__DEV__) {
+    return null;
+  }
 
   const handleConfigureSync = async () => {
     setIsLoading(true);

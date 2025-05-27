@@ -2,17 +2,16 @@ import {onCall} from "firebase-functions/v2/https";
 import {getFirestore, Timestamp, FieldValue} from "firebase-admin/firestore";
 import {logger} from "firebase-functions/v2";
 import {getAuth} from "firebase-admin/auth";
-import {MailDataRequired} from "@sendgrid/mail";
-import * as sgMail from "@sendgrid/mail";
-import {isValidEmail} from "../../utils/validation";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "../../common";
 import {createError, withErrorHandling, ErrorCode} from "../../utils/errors";
 import {InvitationData, FamilyInvitation} from "../types/invitation";
 import {UserDocument} from "../types/user";
 import {initSendGrid} from "../config/sendgrid";
-import {SENDGRID_APIKEY, SENDGRID_FROMEMAIL, SENDGRID_TEMPLATES_INVITE, FRONTEND_URL} from "../config/secrets";
-import {ERROR_MESSAGES, TOKEN_EXPIRY} from "../config/constants";
+import {SENDGRID_CONFIG, FRONTEND_URL} from "../config/secrets";
+import {TOKEN_EXPIRY} from "../config/constants";
 import {generateSecureToken, hashToken} from "../utils/tokens";
+import {validateRequest} from "../../utils/request-validator";
+import {VALIDATION_SCHEMAS} from "../../config/validation-schemas";
 
 /**
  * Sends an invitation email to a newly added family member
@@ -21,19 +20,21 @@ export const sendFamilyTreeInvitation = onCall({
   region: DEFAULT_REGION,
   memory: "512MiB",
   timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
-  secrets: [SENDGRID_APIKEY, SENDGRID_FROMEMAIL, SENDGRID_TEMPLATES_INVITE, FRONTEND_URL],
+  secrets: [SENDGRID_CONFIG, FRONTEND_URL],
 }, async (request) => {
-  const invitationData: InvitationData = request.data;
+  // Validate and sanitize input using centralized validator
+  const validatedData = validateRequest(
+    request.data,
+    VALIDATION_SCHEMAS.sendFamilyTreeInvitation,
+    request.auth?.uid
+  );
+
+  const invitationData: InvitationData = validatedData;
   logger.info(`Starting invitation process for ${invitationData.inviteeEmail} to family tree ${invitationData.familyTreeId}`);
 
   try {
     // Initialize SendGrid
     initSendGrid();
-
-    // Input validation
-    if (!invitationData.inviteeId || !invitationData.inviteeEmail || !invitationData.inviterId || !invitationData.familyTreeId) {
-      throw new Error(ERROR_MESSAGES.INVALID_REQUEST);
-    }
 
     // Verify that the inviter is the authenticated user
     const auth = request.auth;
@@ -93,11 +94,11 @@ export const sendFamilyTreeInvitation = onCall({
     // Create invitation link with token
     const invitationLink = `${FRONTEND_URL.value()}/signup/invited?token=${invitationToken}&id=${invitationRef.id}`;
 
-    // Send invitation email using SendGrid template
-    const msg: MailDataRequired = {
+    // Send invitation email using helper
+    const {sendEmail} = await import("../utils/sendgridHelper");
+    await sendEmail({
       to: invitationData.inviteeEmail,
-      from: SENDGRID_FROMEMAIL.value(),
-      templateId: SENDGRID_TEMPLATES_INVITE.value(),
+      templateType: "invite",
       dynamicTemplateData: {
         name: invitationData.inviteeName,
         inviterName: invitationData.inviterName,
@@ -105,10 +106,36 @@ export const sendFamilyTreeInvitation = onCall({
         acceptLink: invitationLink,
         year: new Date().getFullYear(),
       },
-    };
-
-    await sgMail.send(msg);
+    });
     logger.info(`Successfully sent invitation email to ${invitationData.inviteeEmail}`);
+
+    // Also send SMS if phone number is provided
+    if (invitationData.phoneNumber) {
+      try {
+        const {getTwilioService} = await import("../../services/twilioService");
+        const twilioService = getTwilioService();
+        
+        // Create shortened link or use full link
+        const smsLink = invitationLink; // In production, you might want to use a URL shortener
+        
+        await twilioService.sendSms(
+          {
+            to: invitationData.phoneNumber,
+            body: `${invitationData.inviterName} invited you to join the ${invitationData.familyTreeName} family tree on Dynasty! Accept here: ${smsLink}`
+          },
+          invitationData.inviterId,
+          'family_invite',
+          {
+            inviteeId: invitationData.inviteeId,
+            familyTreeId: invitationData.familyTreeId
+          }
+        );
+        logger.info(`Successfully sent invitation SMS to ${invitationData.phoneNumber}`);
+      } catch (smsError) {
+        // Log SMS error but don't fail the entire invitation
+        logger.error("Failed to send invitation SMS:", smsError);
+      }
+    }
 
     return {
       success: true,
@@ -130,15 +157,20 @@ export const acceptFamilyInvitation = onCall(
     secrets: [], // Accesses Firestore & Auth
   },
   withErrorHandling(async (request) => {
-    const {auth, data} = request;
-    const {invitationToken} = data;
+    const {auth} = request;
 
     if (!auth) {
       throw createError(ErrorCode.UNAUTHENTICATED, "User must be authenticated to accept an invitation.");
     }
-    if (!invitationToken || typeof invitationToken !== "string") {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Invitation token is required.");
-    }
+
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.acceptFamilyInvitation,
+      auth.uid
+    );
+
+    const {invitationToken} = validatedData;
 
     const db = getFirestore();
     const hashedToken = hashToken(invitationToken);
@@ -220,10 +252,22 @@ export const inviteUserToFamily = onCall(
   {
     region: DEFAULT_REGION,
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
-    secrets: [SENDGRID_APIKEY, SENDGRID_FROMEMAIL, SENDGRID_TEMPLATES_INVITE, FRONTEND_URL],
+    secrets: [SENDGRID_CONFIG, FRONTEND_URL],
   },
   withErrorHandling(async (request) => {
-    const {auth, data} = request;
+    const {auth} = request;
+
+    if (!auth) {
+      throw createError(ErrorCode.UNAUTHENTICATED, "User must be authenticated to send invitations.");
+    }
+
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.inviteUserToFamily,
+      auth.uid
+    );
+
     const {
       inviteeEmail,
       inviteeName, // Optional: for a more personal email
@@ -236,17 +280,7 @@ export const inviteUserToFamily = onCall(
       dateOfBirth,
       phoneNumber,
       relationshipToInviter, // e.g., "child", "spouse", "parent"
-    } = data;
-
-    if (!auth) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "User must be authenticated to send invitations.");
-    }
-    if (!inviteeEmail || !isValidEmail(inviteeEmail)) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "A valid invitee email address is required.");
-    }
-    if (!familyTreeId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Family Tree ID is required.");
-    }
+    } = validatedData;
 
     initSendGrid();
     const db = getFirestore();
@@ -297,12 +331,10 @@ export const inviteUserToFamily = onCall(
 
     await invitationRef.set(newInvitation);
 
-    const fromEmail = SENDGRID_FROMEMAIL.value();
-    const inviteTemplateId = SENDGRID_TEMPLATES_INVITE.value();
     const frontendUrlValue = FRONTEND_URL.value();
 
-    if (!fromEmail || !inviteTemplateId || !frontendUrlValue) {
-      logger.error("SendGrid configuration secrets are missing for family invitation.");
+    if (!frontendUrlValue) {
+      logger.error("FRONTEND_URL configuration secret is missing for family invitation.");
       await invitationRef.update({status: "failed_config_error"}); // Mark invite as failed
       throw createError(ErrorCode.INTERNAL, "Email service configuration error prevents sending invitation.");
     }
@@ -310,13 +342,11 @@ export const inviteUserToFamily = onCall(
     // Link could go to signup with prefill, or a dedicated accept invite page
     const acceptLink = `${frontendUrlValue}/accept-invitation?token=${invitationToken}`;
 
-    const msg: MailDataRequired = {
+    // Send invitation email using helper
+    const {sendEmail} = await import("../utils/sendgridHelper");
+    await sendEmail({
       to: inviteeEmail,
-      from: {
-        email: fromEmail,
-        name: "Dynasty App",
-      },
-      templateId: inviteTemplateId,
+      templateType: "invite",
       dynamicTemplateData: {
         inviterName: inviterName,
         inviteeName: inviteeName || "Friend",
@@ -324,9 +354,7 @@ export const inviteUserToFamily = onCall(
         acceptLink: acceptLink,
         // Any other data your template needs
       },
-    };
-
-    await sgMail.send(msg);
+    });
     logger.info(`Successfully sent invitation email to ${inviteeEmail}`);
 
     return {

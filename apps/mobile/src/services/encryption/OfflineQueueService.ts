@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { getFirebaseDb } from '../../lib/firebase';
+import { logger } from '../LoggingService';
 
 interface QueuedMessage {
   id: string;
@@ -64,7 +65,7 @@ export class OfflineQueueService {
       const wasOffline = !this.isOnline;
       this.isOnline = state.isConnected ?? false;
 
-      console.log('Network state changed:', { isOnline: this.isOnline, wasOffline });
+      logger.debug('Network state changed:', { isOnline: this.isOnline, wasOffline });
 
       // Process queue when coming back online
       if (wasOffline && this.isOnline) {
@@ -94,7 +95,7 @@ export class OfflineQueueService {
         this.processAllQueues();
       }
     } catch (error) {
-      console.error('Failed to load queues from storage:', error);
+      logger.error('Failed to load queues from storage:', error);
     }
   }
 
@@ -108,7 +109,7 @@ export class OfflineQueueService {
       const files = Array.from(this.fileQueue.values());
       await AsyncStorage.setItem(this.FILE_QUEUE_KEY, JSON.stringify(files));
     } catch (error) {
-      console.error('Failed to save queues to storage:', error);
+      logger.error('Failed to save queues to storage:', error);
     }
   }
 
@@ -214,14 +215,14 @@ export class OfflineQueueService {
         await this.saveQueuestoStorage();
         
       } catch (error) {
-        console.error(`Failed to send queued message ${message.id}:`, error);
+        logger.error(`Failed to send queued message ${message.id}:`, error);
         
         // Increment retry count
         message.retryCount++;
         
         if (message.retryCount >= message.maxRetries) {
           // Move to failed queue or notify user
-          console.error(`Message ${message.id} failed after ${message.maxRetries} retries`);
+          logger.error(`Message ${message.id} failed after ${message.maxRetries} retries`);
           this.messageQueue.delete(message.id);
         } else {
           // Update queue with retry count
@@ -241,7 +242,7 @@ export class OfflineQueueService {
    */
   private async sendQueuedMessage(message: QueuedMessage) {
     if (!this.chatEncryptionService) {
-      console.error('[OfflineQueueService] ChatEncryptionService not injected');
+      logger.error('[OfflineQueueService] ChatEncryptionService not injected');
       throw new Error('ChatEncryptionService not available');
     }
 
@@ -290,13 +291,13 @@ export class OfflineQueueService {
         await this.saveQueuestoStorage();
         
       } catch (error) {
-        console.error(`Failed to process file operation ${operation.id}:`, error);
+        logger.error(`Failed to process file operation ${operation.id}:`, error);
         
         // Increment retry count
         operation.retryCount++;
         
         if (operation.retryCount >= operation.maxRetries) {
-          console.error(`File operation ${operation.id} failed after ${operation.maxRetries} retries`);
+          logger.error(`File operation ${operation.id} failed after ${operation.maxRetries} retries`);
           this.fileQueue.delete(operation.id);
         } else {
           this.fileQueue.set(operation.id, operation);
@@ -316,7 +317,7 @@ export class OfflineQueueService {
   private async processFileOperation(operation: QueuedFileOperation) {
     // This would integrate with your vault service
     // For now, just log the operation
-    console.log('Processing file operation:', operation);
+    logger.debug('Processing file operation:', operation);
     
     if (operation.type === 'upload' && operation.fileUri) {
       // Upload file to encrypted vault

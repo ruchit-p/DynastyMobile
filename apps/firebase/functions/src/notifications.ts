@@ -6,11 +6,30 @@ import {getFirestore, FieldValue} from "firebase-admin/firestore";
 import {getMessaging} from "firebase-admin/messaging";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
 import {createError, withErrorHandling, ErrorCode} from "./utils/errors";
-import {onDocumentCreated} from "firebase-functions/v2/firestore";
+import {onDocumentCreated, onDocumentUpdated} from "firebase-functions/v2/firestore";
 import {onSchedule} from "firebase-functions/v2/scheduler";
+import {validateRequest} from "./utils/request-validator";
+import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
 
 const db = getFirestore();
 const messaging = getMessaging();
+
+// MARK: - Helper Functions
+
+/**
+ * Get a safe preview of a token for logging
+ * @param token The token to preview
+ * @returns A safe preview of the token
+ */
+function getTokenPreview(token: string | undefined | null): string {
+  if (!token || typeof token !== "string") {
+    return "invalid-token";
+  }
+  if (token.length < 5) {
+    return `${token}...`;
+  }
+  return `${token.substring(0, 5)}...`;
+}
 
 // MARK: - Types
 
@@ -31,13 +50,16 @@ interface NotificationData {
 type NotificationType =
   | "story:new"
   | "story:liked"
+  | "story:tagged"
   | "comment:new"
   | "comment:reply"
   | "event:invitation"
   | "event:updated"
   | "event:reminder"
+  | "event:rsvp"
   | "family:invitation"
-  | "system:announcement";
+  | "system:announcement"
+  | "message:new";
 
 interface UserDevice {
   userId: string;
@@ -157,10 +179,10 @@ const createAndSendNotification = async (
             },
           },
         });
-        logger.info(`Sent push notification ${notificationId} to device ${device.token.substring(0, 5)}...`);
+        logger.info(`Sent push notification ${notificationId} to device ${getTokenPreview(device.token)}`);
         return true;
       } catch (error) {
-        logger.error(`Failed to send push notification to device ${device.token.substring(0, 5)}...`, error);
+        logger.error(`Failed to send push notification to device ${getTokenPreview(device.token)}`, error);
 
         // Check if error is due to invalid token
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -171,7 +193,7 @@ const createAndSendNotification = async (
         ) {
           // Delete invalid device token
           await doc.ref.delete();
-          logger.info(`Deleted invalid device token ${device.token.substring(0, 5)}...`);
+          logger.info(`Deleted invalid device token ${getTokenPreview(device.token)}`);
         }
         return false;
       }
@@ -194,17 +216,20 @@ export const registerDeviceToken = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
 }, withErrorHandling(async (request) => {
-  const {auth, data} = request;
+  const {auth} = request;
 
   if (!auth) {
     throw createError(ErrorCode.UNAUTHENTICATED, "You must be logged in to register a device token");
   }
 
-  const {token, platform, deleteDuplicates} = data;
+  // Validate and sanitize input using centralized validator
+  const validatedData = validateRequest(
+    request.data,
+    VALIDATION_SCHEMAS.registerDeviceToken,
+    auth.uid
+  );
 
-  if (!token) {
-    throw createError(ErrorCode.INVALID_ARGUMENT, "Device token is required");
-  }
+  const {token, platform, deleteDuplicates} = validatedData;
 
   const tokenSnapshot = await db.collection("userDevices")
     .where("token", "==", token)
@@ -263,16 +288,20 @@ export const sendNotification = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
 }, withErrorHandling(async (request) => {
-  const {auth, data} = request;
+  const {auth} = request;
 
   if (!auth) {
     throw createError(ErrorCode.UNAUTHENTICATED, "You must be logged in to send a notification");
   }
 
-  const {userId, title, body, type, relatedItemId, link, imageUrl} = data;
-  if (!userId || !title || !body || !type) {
-    throw createError(ErrorCode.INVALID_ARGUMENT, "userId, title, body, and type are required");
-  }
+  // Validate and sanitize input using centralized validator
+  const validatedData = validateRequest(
+    request.data,
+    VALIDATION_SCHEMAS.sendNotification,
+    auth.uid
+  );
+
+  const {userId, title, body, type, relatedItemId, link, imageUrl} = validatedData;
 
   const notification: NotificationData = {
     userId,
@@ -299,16 +328,20 @@ export const markNotificationRead = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
 }, withErrorHandling(async (request) => {
-  const {auth, data} = request;
+  const {auth} = request;
 
   if (!auth) {
     throw createError(ErrorCode.UNAUTHENTICATED, "You must be logged in to update notifications");
   }
 
-  const {notificationId} = data;
-  if (!notificationId) {
-    throw createError(ErrorCode.INVALID_ARGUMENT, "Notification ID is required");
-  }
+  // Validate and sanitize input using centralized validator
+  const validatedData = validateRequest(
+    request.data,
+    VALIDATION_SCHEMAS.markNotificationAsRead,
+    auth.uid
+  );
+
+  const {notificationId} = validatedData;
 
   const notificationRef = db.collection("notifications").doc(notificationId);
   const notificationDoc = await notificationRef.get();
@@ -370,13 +403,20 @@ export const getUserNotifications = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
 }, withErrorHandling(async (request) => {
-  const {auth, data} = request;
+  const {auth} = request;
 
   if (!auth) {
     throw createError(ErrorCode.UNAUTHENTICATED, "You must be logged in to get notifications");
   }
 
-  const {limit = 20, offset = 0, includeRead = true} = data || {};
+  // Validate and sanitize input using centralized validator
+  const validatedData = validateRequest(
+    request.data || {},
+    VALIDATION_SCHEMAS.getUserNotifications,
+    auth.uid
+  );
+
+  const {limit = 20, offset = 0, includeRead = true} = validatedData;
   let query = db.collection("notifications")
     .where("userId", "==", auth.uid)
     .orderBy("createdAt", "desc");
@@ -413,16 +453,20 @@ export const deleteNotification = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
 }, withErrorHandling(async (request) => {
-  const {auth, data} = request;
+  const {auth} = request;
 
   if (!auth) {
     throw createError(ErrorCode.UNAUTHENTICATED, "You must be logged in to delete notifications");
   }
 
-  const {notificationId} = data;
-  if (!notificationId) {
-    throw createError(ErrorCode.INVALID_ARGUMENT, "Notification ID is required");
-  }
+  // Validate and sanitize input using centralized validator
+  const validatedData = validateRequest(
+    request.data,
+    VALIDATION_SCHEMAS.deleteNotification,
+    auth.uid
+  );
+
+  const {notificationId} = validatedData;
 
   const notificationRef = db.collection("notifications").doc(notificationId);
   const notificationDoc = await notificationRef.get();
@@ -605,12 +649,12 @@ export const validateTokensScheduled = onSchedule({
             // Delete invalid token
             await doc.ref.delete();
             invalidTokensRemoved++;
-            logger.info(`Deleted invalid device token ${device.token.substring(0, 5)}... for user ${device.userId}`);
+            logger.info(`Deleted invalid device token ${getTokenPreview(device.token)} for user ${device.userId}`);
             return {valid: false, docId: doc.id, reason: "invalid_token"};
           }
 
           // For other errors, log but don't delete
-          logger.warn(`Error validating token ${device.token.substring(0, 5)}...`, error);
+          logger.warn(`Error validating token ${getTokenPreview(device.token)}`, error);
           return {valid: false, docId: doc.id, reason: "validation_error"};
         }
       });
@@ -912,5 +956,316 @@ export const sendEventReminders = onSchedule({
     }
   } catch (error) {
     logger.error("Error sending event reminders:", error);
+  }
+});
+
+/**
+ * Create notification when a new message is sent
+ */
+export const onMessageCreated = onDocumentCreated({
+  document: "messages/{messageId}",
+  region: DEFAULT_REGION,
+}, async (event) => {
+  try {
+    const snapshot = event.data;
+    if (!snapshot) {
+      logger.error("No data associated with the event");
+      return;
+    }
+
+    const messageData = snapshot.data();
+    const chatId = messageData.chatId;
+    const senderId = messageData.senderId;
+    const messageText = messageData.text || "New message";
+    const messageType = messageData.type || "text";
+
+    // Get chat details to find recipients
+    const chatDoc = await db.collection("chats").doc(chatId).get();
+    if (!chatDoc.exists) {
+      logger.error(`Chat ${chatId} not found for message notification`);
+      return;
+    }
+
+    const chatData = chatDoc.data();
+    const participants = chatData?.participants || [];
+
+    // Get sender info
+    const senderDoc = await db.collection("users").doc(senderId).get();
+    if (!senderDoc.exists) {
+      logger.error(`Sender ${senderId} not found for message notification`);
+      return;
+    }
+
+    const senderData = senderDoc.data();
+    const senderName = senderData?.displayName || senderData?.firstName || "Someone";
+
+    // Determine notification body based on message type
+    let notificationBody = messageText;
+    if (messageType === "image") {
+      notificationBody = "📷 Sent a photo";
+    } else if (messageType === "video") {
+      notificationBody = "📹 Sent a video";
+    } else if (messageType === "audio") {
+      notificationBody = "🎤 Sent a voice message";
+    } else if (messageType === "file") {
+      notificationBody = "📎 Sent a file";
+    }
+
+    // Send notifications to all participants except the sender
+    const notificationPromises = participants
+      .filter((participantId: string) => participantId !== senderId)
+      .map(async (recipientId: string) => {
+        const notification: NotificationData = {
+          userId: recipientId,
+          title: chatData?.name || senderName,
+          body: chatData?.name ? `${senderName}: ${notificationBody}` : notificationBody,
+          type: "message:new",
+          relatedItemId: chatId,
+          link: `/chat/${chatId}`,
+          isRead: false,
+        };
+
+        await createAndSendNotification(notification);
+      });
+
+    await Promise.all(notificationPromises);
+  } catch (error) {
+    logger.error("Error creating message notification:", error);
+  }
+});
+
+/**
+ * Create notification when someone is tagged in a story
+ */
+export const onStoryCreatedOrUpdated = onDocumentCreated({
+  document: "stories/{storyId}",
+  region: DEFAULT_REGION,
+}, async (event) => {
+  try {
+    const snapshot = event.data;
+    if (!snapshot) {
+      logger.error("No data associated with the event");
+      return;
+    }
+
+    const storyData = snapshot.data();
+    const storyId = snapshot.id;
+    const authorId = storyData.authorID;
+    const peopleInvolved = storyData.peopleInvolved || [];
+    const storyTitle = storyData.title || "Untitled Story";
+
+    if (peopleInvolved.length === 0) {
+      return; // No one to notify
+    }
+
+    // Get author info
+    const authorDoc = await db.collection("users").doc(authorId).get();
+    if (!authorDoc.exists) {
+      logger.error(`Author ${authorId} not found for story tag notification`);
+      return;
+    }
+
+    const authorData = authorDoc.data();
+    const authorName = authorData?.displayName || authorData?.firstName || "Someone";
+
+    // Send notifications to all tagged people except the author
+    const notificationPromises = peopleInvolved
+      .filter((personId: string) => personId !== authorId)
+      .map(async (taggedPersonId: string) => {
+        const notification: NotificationData = {
+          userId: taggedPersonId,
+          title: "You were tagged in a story",
+          body: `${authorName} tagged you in "${storyTitle}"`,
+          type: "story:tagged",
+          relatedItemId: storyId,
+          link: `/story/${storyId}`,
+          imageUrl: storyData.coverImage?.url || storyData.media?.[0]?.url,
+          isRead: false,
+        };
+
+        await createAndSendNotification(notification);
+      });
+
+    await Promise.all(notificationPromises);
+  } catch (error) {
+    logger.error("Error creating story tag notification:", error);
+  }
+});
+
+/**
+ * Also handle story updates for new tags
+ */
+export const onStoryUpdated = onDocumentUpdated({
+  document: "stories/{storyId}",
+  region: DEFAULT_REGION,
+}, async (event) => {
+  // For now, we'll skip update notifications to avoid duplicate notifications
+  // In a production system, you'd compare before/after to only notify newly tagged people
+  return;
+});
+
+/**
+ * Create notification when someone RSVPs to an event
+ */
+export const onEventRsvpUpdated = onDocumentUpdated({
+  document: "eventInvitations/{invitationId}",
+  region: DEFAULT_REGION,
+}, async (event) => {
+  try {
+    const snapshot = event.data;
+    if (!snapshot) {
+      logger.error("No data associated with the event");
+      return;
+    }
+
+    const before = snapshot.before.data();
+    const after = snapshot.after.data();
+
+    // Check if RSVP status changed
+    if (before.rsvpStatus === after.rsvpStatus) {
+      return; // No change in RSVP status
+    }
+
+    const invitationData = after;
+    const eventId = invitationData.eventId;
+    const memberId = invitationData.memberId;
+    const rsvpStatus = invitationData.rsvpStatus;
+
+    // Only notify on actual RSVP responses
+    if (!rsvpStatus || rsvpStatus === "pending") {
+      return;
+    }
+
+    // Get event details
+    const eventDoc = await db.collection("events").doc(eventId).get();
+    if (!eventDoc.exists) {
+      logger.error(`Event ${eventId} not found for RSVP notification`);
+      return;
+    }
+
+    const eventData = eventDoc.data();
+    const hostId = eventData?.hostId;
+    const eventTitle = eventData?.title || "your event";
+
+    // Don't notify if the host is RSVPing to their own event
+    if (hostId === memberId) {
+      return;
+    }
+
+    // Get guest info
+    const guestDoc = await db.collection("users").doc(memberId).get();
+    if (!guestDoc.exists) {
+      logger.error(`Guest ${memberId} not found for RSVP notification`);
+      return;
+    }
+
+    const guestData = guestDoc.data();
+    const guestName = guestData?.displayName || guestData?.firstName || "Someone";
+
+    // Create appropriate message based on RSVP status
+    let notificationBody = "";
+    if (rsvpStatus === "yes") {
+      notificationBody = `${guestName} is attending ${eventTitle}`;
+    } else if (rsvpStatus === "no") {
+      notificationBody = `${guestName} can't attend ${eventTitle}`;
+    } else if (rsvpStatus === "maybe") {
+      notificationBody = `${guestName} might attend ${eventTitle}`;
+    }
+
+    // Create notification for host
+    const notification: NotificationData = {
+      userId: hostId,
+      title: "RSVP Update",
+      body: notificationBody,
+      type: "event:rsvp",
+      relatedItemId: eventId,
+      link: `/events/${eventId}`,
+      isRead: false,
+    };
+
+    await createAndSendNotification(notification);
+  } catch (error) {
+    logger.error("Error creating RSVP notification:", error);
+  }
+});
+
+/**
+ * Create notification when an event is updated
+ */
+export const onEventUpdated = onDocumentUpdated({
+  document: "events/{eventId}",
+  region: DEFAULT_REGION,
+}, async (event) => {
+  try {
+    const snapshot = event.data;
+    if (!snapshot) {
+      logger.error("No data associated with the event");
+      return;
+    }
+
+    const before = snapshot.before.data();
+    const after = snapshot.after.data();
+
+    // Check if significant fields changed
+    const significantChange =
+      before.title !== after.title ||
+      before.eventDate !== after.eventDate ||
+      before.eventTime !== after.eventTime ||
+      before.location !== after.location ||
+      before.description !== after.description;
+
+    if (!significantChange) {
+      return; // No significant changes to notify about
+    }
+    const eventId = snapshot.after.id;
+    const hostId = after.hostId;
+    const eventTitle = after.title || "Event";
+
+    // Get all accepted invitations for this event
+    const invitationsSnapshot = await db.collection("eventInvitations")
+      .where("eventId", "==", eventId)
+      .where("rsvpStatus", "in", ["yes", "maybe"])
+      .get();
+
+    if (invitationsSnapshot.empty) {
+      return; // No one to notify
+    }
+
+    // Get host info
+    const hostDoc = await db.collection("users").doc(hostId).get();
+    if (!hostDoc.exists) {
+      logger.error(`Host ${hostId} not found for event update notification`);
+      return;
+    }
+
+    const hostData = hostDoc.data();
+    const hostName = hostData?.displayName || hostData?.firstName || "The host";
+
+    // Send notifications to all attendees
+    const notificationPromises = invitationsSnapshot.docs.map(async (invitationDoc) => {
+      const invitation = invitationDoc.data();
+      const userId = invitation.memberId;
+
+      // Don't notify the host
+      if (userId === hostId) {
+        return;
+      }
+
+      const notification: NotificationData = {
+        userId,
+        title: "Event Updated",
+        body: `${hostName} updated "${eventTitle}"`,
+        type: "event:updated",
+        relatedItemId: eventId,
+        link: `/events/${eventId}`,
+        isRead: false,
+      };
+
+      await createAndSendNotification(notification);
+    });
+
+    await Promise.all(notificationPromises);
+  } catch (error) {
+    logger.error("Error creating event update notification:", error);
   }
 });

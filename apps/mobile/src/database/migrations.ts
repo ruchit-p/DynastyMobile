@@ -5,6 +5,7 @@
 
 import SQLite from 'react-native-sqlite-storage';
 import { TABLE_SCHEMAS, DATABASE_INDEXES } from './schema';
+import { logger } from '../services/LoggingService';
 
 interface Migration {
   version: number;
@@ -95,14 +96,14 @@ export class MigrationRunner {
     const pendingMigrations = migrations.filter(m => m.version > currentVersion);
     
     if (pendingMigrations.length === 0) {
-      console.log('[Migration] Database is up to date');
+      logger.debug('[Migration] Database is up to date');
       return;
     }
     
-    console.log(`[Migration] Running ${pendingMigrations.length} migrations...`);
+    logger.debug(`[Migration] Running ${pendingMigrations.length} migrations...`);
     
     for (const migration of pendingMigrations) {
-      console.log(`[Migration] Running migration ${migration.version}: ${migration.name}`);
+      logger.debug(`[Migration] Running migration ${migration.version}: ${migration.name}`);
       
       try {
         await this.db.transaction(async (tx) => {
@@ -121,14 +122,14 @@ export class MigrationRunner {
           );
         });
         
-        console.log(`[Migration] Completed migration ${migration.version}`);
+        logger.debug(`[Migration] Completed migration ${migration.version}`);
       } catch (error) {
-        console.error(`[Migration] Failed to run migration ${migration.version}:`, error);
+        logger.error(`[Migration] Failed to run migration ${migration.version}:`, error);
         throw error;
       }
     }
     
-    console.log('[Migration] All migrations completed successfully');
+    logger.debug('[Migration] All migrations completed successfully');
   }
   
   /**
@@ -145,10 +146,10 @@ export class MigrationRunner {
       .filter(m => m.version > targetVersion && m.version <= currentVersion)
       .reverse();
     
-    console.log(`[Migration] Rolling back ${rollbackMigrations.length} migrations...`);
+    logger.debug(`[Migration] Rolling back ${rollbackMigrations.length} migrations...`);
     
     for (const migration of rollbackMigrations) {
-      console.log(`[Migration] Rolling back migration ${migration.version}: ${migration.name}`);
+      logger.debug(`[Migration] Rolling back migration ${migration.version}: ${migration.name}`);
       
       try {
         await this.db.transaction(async (tx) => {
@@ -167,21 +168,21 @@ export class MigrationRunner {
           );
         });
         
-        console.log(`[Migration] Rolled back migration ${migration.version}`);
+        logger.debug(`[Migration] Rolled back migration ${migration.version}`);
       } catch (error) {
-        console.error(`[Migration] Failed to rollback migration ${migration.version}:`, error);
+        logger.error(`[Migration] Failed to rollback migration ${migration.version}:`, error);
         throw error;
       }
     }
     
-    console.log('[Migration] Rollback completed successfully');
+    logger.debug('[Migration] Rollback completed successfully');
   }
   
   /**
    * Reset database (rollback all migrations)
    */
   async reset(): Promise<void> {
-    console.log('[Migration] Resetting database...');
+    logger.debug('[Migration] Resetting database...');
     await this.rollbackTo(0);
   }
   

@@ -1,15 +1,16 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useThemeColor } from '../../hooks/useThemeColor';
 import { Colors } from '../../constants/Colors';
 import { Spacing } from '../../constants/Spacing';
-import Typography from '../../constants/Typography';
+import { Typography } from '../../constants/Typography';
 import { ConflictResolver, ConflictData, ResolutionChoice } from '../../components/ui/ConflictResolver';
 import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import { Ionicons } from '@expo/vector-icons';
+import { logger } from '../../src/services/LoggingService';
 
 /**
  * ConflictResolutionScreen - Full screen for managing multiple data conflicts
@@ -72,7 +73,7 @@ export default function ConflictResolutionScreen() {
   // Handle individual conflict resolution
   const handleResolve = useCallback((conflictId: string, choice: ResolutionChoice, mergedValue?: any) => {
     // In real app, this would sync the resolution to the server
-    console.log(`Resolving conflict ${conflictId} with choice: ${choice}`);
+    logger.debug(`Resolving conflict ${conflictId} with choice: ${choice}`);
     
     setConflicts(prev => prev.filter(c => c.id !== conflictId));
     setResolvedCount(prev => prev + 1);
@@ -80,7 +81,7 @@ export default function ConflictResolutionScreen() {
 
   // Handle skipping a conflict
   const handleSkip = useCallback((conflictId: string) => {
-    console.log(`Skipping conflict ${conflictId}`);
+    logger.debug(`Skipping conflict ${conflictId}`);
     // Move to end of list
     setConflicts(prev => {
       const conflict = prev.find(c => c.id === conflictId);

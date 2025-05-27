@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import Typography from '../../constants/Typography';
+import { Typography } from '../../constants/Typography';
 import { Spacing , BorderRadius } from '../../constants/Spacing';
-import { AuditLogService } from '../../src/services/encryption';
 import { callFirebaseFunction } from '../../src/lib/errorUtils';
 import { format } from 'date-fns';
 import Button from '../../components/ui/Button';
 import { useColorScheme } from '../../hooks/useColorScheme';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import FlashList from '../../components/ui/FlashList';
+import { FlashList } from '../../components/ui/FlashList';
+import { logger } from '../../src/services/LoggingService';
 
 interface AuditLog {
   id: string;
@@ -29,15 +29,10 @@ export default function AuditLogsScreen() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [filter, setFilter] = useState<string | null>(null);
-  const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
-  const isDark = colorScheme === 'dark';
+  const _isDark = colorScheme === 'dark';
 
-  useEffect(() => {
-    loadAuditLogs();
-  }, [filter]);
-
-  const loadAuditLogs = async () => {
+  const loadAuditLogs = useCallback(async () => {
     try {
       setLoading(true);
       const result = await callFirebaseFunction('exportAuditLogs', {
@@ -50,12 +45,16 @@ export default function AuditLogsScreen() {
         setLogs(result.data);
       }
     } catch (error) {
-      console.error('Failed to load audit logs:', error);
+      logger.error('Failed to load audit logs:', error);
       Alert.alert('Error', 'Failed to load audit logs');
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
+
+  useEffect(() => {
+    loadAuditLogs();
+  }, [loadAuditLogs]);
 
   const exportLogs = async (format: 'json' | 'csv') => {
     try {
@@ -82,7 +81,7 @@ export default function AuditLogsScreen() {
         Alert.alert('Success', `Logs exported to ${fileName}`);
       }
     } catch (error) {
-      console.error('Failed to export logs:', error);
+      logger.error('Failed to export logs:', error);
       Alert.alert('Error', 'Failed to export audit logs');
     } finally {
       setExporting(false);

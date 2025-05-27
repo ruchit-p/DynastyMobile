@@ -1,6 +1,7 @@
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getErrorMessage } from '../lib/errorUtils';
+import { logger } from './LoggingService';
 
 // Types
 export interface FeedItem {
@@ -80,7 +81,7 @@ export class FeedCacheService implements IFeedCacheService {
   private readonly METADATA_KEY = '@dynasty_feed_metadata';
 
   private constructor() {
-    console.log('[FeedCacheService] Initialized');
+    logger.debug('[FeedCacheService] Initialized');
     this.loadMetadata();
   }
 
@@ -92,7 +93,7 @@ export class FeedCacheService implements IFeedCacheService {
   }
 
   async cacheFeedData(items: FeedItem[], cursor?: string, filter?: FeedFilter): Promise<void> {
-    console.log(`[FeedCacheService] Caching ${items.length} feed items`);
+    logger.debug(`[FeedCacheService] Caching ${items.length} feed items`);
     
     try {
       const cacheKey = this.getCacheKey(filter);
@@ -133,13 +134,13 @@ export class FeedCacheService implements IFeedCacheService {
       // Check cache size and cleanup if needed
       await this.checkCacheSize();
     } catch (error) {
-      console.error('[FeedCacheService] Error caching feed data:', getErrorMessage(error));
+      logger.error('[FeedCacheService] Error caching feed data:', getErrorMessage(error));
       throw error;
     }
   }
 
   async getCachedFeed(cursor?: string, filter?: FeedFilter): Promise<FeedPage | null> {
-    console.log(`[FeedCacheService] Getting cached feed (cursor: ${cursor})`);
+    logger.debug(`[FeedCacheService] Getting cached feed (cursor: ${cursor})`);
     
     try {
       const cacheKey = this.getCacheKey(filter);
@@ -148,14 +149,14 @@ export class FeedCacheService implements IFeedCacheService {
       // Check metadata
       const metadata = this.cacheMetadata.get(cacheKey);
       if (!metadata) {
-        console.log('[FeedCacheService] No cached metadata found');
+        logger.debug('[FeedCacheService] No cached metadata found');
         return null;
       }
       
       // Check memory cache first
       const memoryPage = metadata.pages.get(pageKey);
       if (memoryPage && this.isPageValid(memoryPage)) {
-        console.log('[FeedCacheService] Returning from memory cache');
+        logger.debug('[FeedCacheService] Returning from memory cache');
         return memoryPage;
       }
       
@@ -164,20 +165,20 @@ export class FeedCacheService implements IFeedCacheService {
       if (storedPage && this.isPageValid(storedPage)) {
         // Update memory cache
         metadata.pages.set(pageKey, storedPage);
-        console.log('[FeedCacheService] Returning from storage cache');
+        logger.debug('[FeedCacheService] Returning from storage cache');
         return storedPage;
       }
       
-      console.log('[FeedCacheService] Cache miss or expired');
+      logger.debug('[FeedCacheService] Cache miss or expired');
       return null;
     } catch (error) {
-      console.error('[FeedCacheService] Error getting cached feed:', getErrorMessage(error));
+      logger.error('[FeedCacheService] Error getting cached feed:', getErrorMessage(error));
       return null;
     }
   }
 
   async invalidateCache(filter?: FeedFilter): Promise<void> {
-    console.log('[FeedCacheService] Invalidating cache', filter);
+    logger.debug('[FeedCacheService] Invalidating cache', filter);
     
     try {
       if (filter) {
@@ -204,13 +205,13 @@ export class FeedCacheService implements IFeedCacheService {
       
       await this.saveMetadata();
     } catch (error) {
-      console.error('[FeedCacheService] Error invalidating cache:', getErrorMessage(error));
+      logger.error('[FeedCacheService] Error invalidating cache:', getErrorMessage(error));
       throw error;
     }
   }
 
   async syncFeedUpdates(userId: string, familyId: string): Promise<void> {
-    console.log(`[FeedCacheService] Syncing feed updates for user: ${userId}, family: ${familyId}`);
+    logger.debug(`[FeedCacheService] Syncing feed updates for user: ${userId}, family: ${familyId}`);
     
     try {
       // TODO: Implement feed sync
@@ -225,25 +226,25 @@ export class FeedCacheService implements IFeedCacheService {
       const metadata = this.cacheMetadata.get(cacheKey);
       
       if (!metadata) {
-        console.log('[FeedCacheService] No cache to sync');
+        logger.debug('[FeedCacheService] No cache to sync');
         return;
       }
       
       // TODO: Fetch updates since last sync
       const lastSync = metadata.lastSync;
-      console.log(`[FeedCacheService] Last sync: ${lastSync.toISOString()}`);
+      logger.debug(`[FeedCacheService] Last sync: ${lastSync.toISOString()}`);
       
       // TODO: Apply updates to cached pages
       // For now, invalidate cache to force refresh
       await this.invalidateCache(filter);
     } catch (error) {
-      console.error('[FeedCacheService] Error syncing feed updates:', getErrorMessage(error));
+      logger.error('[FeedCacheService] Error syncing feed updates:', getErrorMessage(error));
       throw error;
     }
   }
 
   async updateCacheItem(itemId: string, updates: Partial<FeedItem>): Promise<void> {
-    console.log(`[FeedCacheService] Updating cached item: ${itemId}`);
+    logger.debug(`[FeedCacheService] Updating cached item: ${itemId}`);
     
     try {
       // Update item in all cached pages
@@ -264,12 +265,12 @@ export class FeedCacheService implements IFeedCacheService {
             // Store updated page
             await this.storePage(cacheKey, pageKey, page);
             
-            console.log(`[FeedCacheService] Updated item in cache: ${cacheKey}/${pageKey}`);
+            logger.debug(`[FeedCacheService] Updated item in cache: ${cacheKey}/${pageKey}`);
           }
         }
       }
     } catch (error) {
-      console.error('[FeedCacheService] Error updating cache item:', getErrorMessage(error));
+      logger.error('[FeedCacheService] Error updating cache item:', getErrorMessage(error));
       throw error;
     }
   }
@@ -295,16 +296,16 @@ export class FeedCacheService implements IFeedCacheService {
       
       return { size: totalSize, items: totalItems, lastSync };
     } catch (error) {
-      console.error('[FeedCacheService] Error getting cache stats:', getErrorMessage(error));
+      logger.error('[FeedCacheService] Error getting cache stats:', getErrorMessage(error));
       return { size: 0, items: 0, lastSync: null };
     }
   }
 
   async clearExpiredCache(): Promise<void> {
-    console.log('[FeedCacheService] Clearing expired cache');
+    logger.debug('[FeedCacheService] Clearing expired cache');
     
     try {
-      const now = Date.now();
+      // const now = Date.now(); // eslint-disable-line @typescript-eslint/no-unused-vars
       let clearedCount = 0;
       
       for (const [cacheKey, metadata] of this.cacheMetadata.entries()) {
@@ -327,16 +328,16 @@ export class FeedCacheService implements IFeedCacheService {
         }
       }
       
-      console.log(`[FeedCacheService] Cleared ${clearedCount} expired pages`);
+      logger.debug(`[FeedCacheService] Cleared ${clearedCount} expired pages`);
       await this.saveMetadata();
     } catch (error) {
-      console.error('[FeedCacheService] Error clearing expired cache:', getErrorMessage(error));
+      logger.error('[FeedCacheService] Error clearing expired cache:', getErrorMessage(error));
       throw error;
     }
   }
 
   async preloadFeed(userId: string, familyId: string): Promise<void> {
-    console.log(`[FeedCacheService] Preloading feed for user: ${userId}, family: ${familyId}`);
+    logger.debug(`[FeedCacheService] Preloading feed for user: ${userId}, family: ${familyId}`);
     
     try {
       // TODO: Implement feed preloading
@@ -349,12 +350,12 @@ export class FeedCacheService implements IFeedCacheService {
       // Check if already cached
       const existingCache = await this.getCachedFeed(undefined, filter);
       if (existingCache && this.isPageValid(existingCache)) {
-        console.log('[FeedCacheService] Feed already cached and valid');
+        logger.debug('[FeedCacheService] Feed already cached and valid');
         return;
       }
       
       // TODO: Fetch from server
-      console.log('[FeedCacheService] Would fetch feed from server for preloading');
+      logger.debug('[FeedCacheService] Would fetch feed from server for preloading');
       
       // Simulate preloaded data
       const mockItems: FeedItem[] = [
@@ -376,7 +377,7 @@ export class FeedCacheService implements IFeedCacheService {
       
       await this.cacheFeedData(mockItems, undefined, filter);
     } catch (error) {
-      console.error('[FeedCacheService] Error preloading feed:', getErrorMessage(error));
+      logger.error('[FeedCacheService] Error preloading feed:', getErrorMessage(error));
       throw error;
     }
   }
@@ -424,7 +425,7 @@ export class FeedCacheService implements IFeedCacheService {
       
       return null;
     } catch (error) {
-      console.error('[FeedCacheService] Error loading page:', getErrorMessage(error));
+      logger.error('[FeedCacheService] Error loading page:', getErrorMessage(error));
       return null;
     }
   }
@@ -438,12 +439,12 @@ export class FeedCacheService implements IFeedCacheService {
     try {
       const stored = await AsyncStorage.getItem(this.METADATA_KEY);
       if (stored) {
-        const metadata = JSON.parse(stored);
+        // const metadata = JSON.parse(stored); // eslint-disable-line @typescript-eslint/no-unused-vars
         // TODO: Reconstruct Map objects from stored data
-        console.log('[FeedCacheService] Loaded metadata from storage');
+        logger.debug('[FeedCacheService] Loaded metadata from storage');
       }
     } catch (error) {
-      console.error('[FeedCacheService] Error loading metadata:', getErrorMessage(error));
+      logger.error('[FeedCacheService] Error loading metadata:', getErrorMessage(error));
     }
   }
 
@@ -460,7 +461,7 @@ export class FeedCacheService implements IFeedCacheService {
       
       await AsyncStorage.setItem(this.METADATA_KEY, JSON.stringify(metadata));
     } catch (error) {
-      console.error('[FeedCacheService] Error saving metadata:', getErrorMessage(error));
+      logger.error('[FeedCacheService] Error saving metadata:', getErrorMessage(error));
     }
   }
 
@@ -468,7 +469,7 @@ export class FeedCacheService implements IFeedCacheService {
     const stats = await this.getCacheStats();
     
     if (stats.size > this.config.maxCacheSize) {
-      console.log('[FeedCacheService] Cache size exceeded, clearing old entries');
+      logger.debug('[FeedCacheService] Cache size exceeded, clearing old entries');
       await this.clearExpiredCache();
       
       // If still too large, remove oldest pages

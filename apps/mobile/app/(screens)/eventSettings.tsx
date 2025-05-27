@@ -2,9 +2,10 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
 import { useNavigation } from 'expo-router';
 import { commonHeaderOptions } from '../../constants/headerConfig';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { logger } from '../../src/services/LoggingService';
 
 const EventSettingsScreen = () => {
   const navigation = useNavigation();
@@ -30,21 +31,21 @@ const EventSettingsScreen = () => {
     setNavigationOptions().catch((error) => {
       handleError(error, { component: 'EventSettingsScreen', action: 'setNavigationOptions' });
     });
-  }, [navigation]);
+  }, [navigation, handleError, setNavigationOptions]);
 
   const handleSettingsUpdate = withErrorHandling(async (settingType: string, value: any) => {
     // Placeholder for future settings update logic
-    console.log(`Updating ${settingType} to ${value}`);
+    logger.debug(`Updating ${settingType} to ${value}`);
   });
 
   const loadUserSettings = withErrorHandling(async () => {
     // Placeholder for loading user settings
-    console.log('Loading user event settings');
+    logger.debug('Loading user event settings');
   });
 
   const saveSettings = withErrorHandling(async (settings: Record<string, any>) => {
     // Placeholder for saving settings
-    console.log('Saving event settings:', settings);
+    logger.debug('Saving event settings:', settings);
   });
 
   return (

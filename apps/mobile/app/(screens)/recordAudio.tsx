@@ -22,13 +22,14 @@ import { Colors } from '../../constants/Colors';
 import { Spacing } from '../../constants/Spacing';
 import { commonHeaderOptions } from '../../constants/headerConfig';
 import { showErrorAlert } from '../../src/lib/errorUtils';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { logger } from '../../src/services/LoggingService';
 
 const RecordAudioScreen = () => {
   const router = useRouter();
-  const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
+  const { handleError, withErrorHandling: _withErrorHandling, isError, reset: _reset } = useErrorHandler({
     severity: ErrorSeverity.ERROR,
     title: 'Audio Recording Error',
     trackCurrentScreen: true
@@ -171,7 +172,7 @@ const RecordAudioScreen = () => {
       
       if (uri) {
         setAudioUri(uri);
-        console.log('Recording URI:', uri);
+        logger.debug('Recording URI:', uri);
       }
       
       // Reset audio mode (optional, depends on desired app behavior)

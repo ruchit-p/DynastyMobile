@@ -3,17 +3,18 @@ import { StyleSheet, View, Alert, ActivityIndicator } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Screen from '../../components/ui/Screen';
 import EmptyState from '../../components/ui/EmptyState';
-import ThemedText from '../../components/ThemedText';
+import { ThemedText } from '../../components/ThemedText';
 import AppHeader from '../../components/ui/AppHeader';
 import FileListItemWithPreview from '../../components/ui/FileListItemWithPreview';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
-import FlashList from '../../components/ui/FlashList';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
+import { FlashList } from '../../components/ui/FlashList';
 import Button from '../../components/ui/Button';
 import { Colors } from '../../constants/Colors';
 import { Spacing } from '../../constants/Spacing';
 import { getVaultService, VaultItem } from '../../src/services/VaultService';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { logger } from '../../src/services/LoggingService';
 
 type UIVaultItem = {
   id: string;
@@ -139,7 +140,7 @@ const VaultTrashScreen = () => {
                   successCount++;
                 } catch (error) {
                   errorCount++;
-                  console.error(`Failed to restore item ${itemId}:`, error);
+                  logger.error(`Failed to restore item ${itemId}:`, error);
                 }
               }
 

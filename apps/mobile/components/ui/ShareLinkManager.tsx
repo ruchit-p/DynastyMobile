@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Colors } from '../../constants/Colors';
-import Typography from '../../constants/Typography';
+import { Typography } from '../../constants/Typography';
 import { Spacing, BorderRadius } from '../../constants/Spacing';
 import { SecureFileSharingService } from '../../src/services/encryption';
 import { format } from 'date-fns';
 import { useColorScheme } from '../../hooks/useColorScheme';
-import ErrorBoundary from './ErrorBoundary';
+import { ErrorBoundary } from './ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
@@ -44,22 +44,25 @@ export default function ShareLinkManager({ fileId, userId, onCreateShare }: Shar
     trackCurrentScreen: true
   });
 
+  const loadShareLinks = useCallback(
+    withErrorHandling(async () => {
+      try {
+        setLoading(true);
+        const links = await SecureFileSharingService.getInstance().getUserShareLinks(userId);
+        setShareLinks(links);
+      } catch (error) {
+        console.error('Failed to load share links:', error);
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    }, { action: 'loadShareLinks', userId }),
+    [userId, withErrorHandling]
+  );
+
   useEffect(() => {
     loadShareLinks();
-  }, [userId]);
-
-  const loadShareLinks = withErrorHandling(async () => {
-    try {
-      setLoading(true);
-      const links = await SecureFileSharingService.getInstance().getUserShareLinks(userId);
-      setShareLinks(links);
-    } catch (error) {
-      console.error('Failed to load share links:', error);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  }, { action: 'loadShareLinks', userId });
+  }, [loadShareLinks]);
 
   const handleCopyLink = withErrorHandling(async (shareUrl: string) => {
     try {

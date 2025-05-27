@@ -23,7 +23,7 @@ jest.mock('expo-av', () => ({
       setProgressUpdateInterval: jest.fn(),
     })),
     RecordingOptionsPresets: {
-      HIGH_QUALITY: {},
+      HIGH_QUALITY: Record<string, never>,
     },
   },
 }));

@@ -5,11 +5,11 @@ import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 import { Colors } from '../../constants/Colors';
-import Typography from '../../constants/Typography';
+import { Typography } from '../../constants/Typography';
 
 const PrivacyPolicyScreen = () => {
   const navigation = useNavigation();
-  const { handleError, withErrorHandling, reset } = useErrorHandler({
+  const { handleError, withErrorHandling: _withErrorHandling, reset } = useErrorHandler({
     severity: ErrorSeverity.INFO,
     title: 'Privacy Policy Error',
     trackCurrentScreen: true,
@@ -132,7 +132,7 @@ const PrivacyPolicyScreen = () => {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>
-              This Privacy Policy is designed to be transparent about our data practices while ensuring the highest level of protection for your family's privacy and security.
+              This Privacy Policy is designed to be transparent about our data practices while ensuring the highest level of protection for your family&apos;s privacy and security.
             </Text>
           </View>
 

@@ -1,13 +1,14 @@
 import React from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Platform, View, Text, Alert, StyleSheet } from 'react-native';
+import { Platform, View, Text, StyleSheet } from 'react-native';
 import AppHeader from '../../components/ui/AppHeader'; // Import the new AppHeader
 import IconButton, { IconSet } from '../../components/ui/IconButton'; // Import the new IconButton
 import NotificationBell from '../../components/ui/NotificationBell'; // Import NotificationBell
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { logger } from '../../src/services/LoggingService';
 
 // Define a placeholder for Colors if not imported (used for tab bar, not header anymore for Profile)
 const Colors = {
@@ -63,7 +64,7 @@ export default function TabLayout() {
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
       <Text
         style={{ color: Colors.primary, marginRight: 15, fontSize: 16 }}
-        onPress={withErrorHandling(() => console.log('Today pressed'))} // Placeholder action
+        onPress={withErrorHandling(() => logger.debug('Today pressed'))} // Placeholder action
       >
         Today
       </Text>

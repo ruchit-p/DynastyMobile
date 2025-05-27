@@ -8,13 +8,11 @@ import {
   Platform,
   TouchableOpacity,
   TextInput,
-  Image,
   Alert,
   Modal,
   Button,
   Linking,
   ActivityIndicator,
-  KeyboardAvoidingView
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useNavigation, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -29,20 +27,21 @@ import AddDetailsButton from '../../components/ui/AddDetailsButton';
 import AddContentButton from '../../components/ui/AddContentButton';
 import MediaGallery, { MediaItem } from '../../components/ui/MediaGallery';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { createStoryMobile, updateStoryMobile, fetchAccessibleStoriesMobile, Story as FetchedStory, StoryBlock as FetchedStoryBlock } from '../../src/lib/storyUtils';
+import { createStoryMobile, updateStoryMobile, fetchAccessibleStoriesMobile, StoryBlock as FetchedStoryBlock } from '../../src/lib/storyUtils';
 import Fonts from '../../constants/Fonts';
 import { useImageUpload } from '../../hooks/useImageUpload';
 import { useScreenResult } from '../../src/contexts/ScreenResultContext';
 import { showErrorAlert } from '../../src/lib/errorUtils';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 import { useSmartMediaUpload } from '../../hooks/useSmartMediaUpload';
 import { useEncryption } from '../../src/contexts/EncryptionContext';
 import { useOffline } from '../../src/contexts/OfflineContext';
 import { syncService } from '../../src/lib/syncService';
-import { StorySyncService } from '../../src/services/StorySyncService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../../src/services/LoggingService';
+import { sanitizeUserInput } from '../../src/lib/xssSanitization';
 
 // MARK: - Types
 type BlockType = "text" | "image" | "video" | "audio";
@@ -60,7 +59,7 @@ interface Location {
 }
 
 const CreateStoryScreen = () => {
-  const { user, firestoreUser, functions } = useAuth();
+  const { user, firestoreUser } = useAuth();
   const router = useRouter();
   const navigation = useNavigation();
   const { handleError, withErrorHandling, isError, reset } = useErrorHandler({
@@ -82,10 +81,10 @@ const CreateStoryScreen = () => {
     fromScreen?: string;
     initialSelectedLocation?: string;
   }>(); 
-  const { uploadImage, isUploading: isImageUploading, uploadProgress } = useImageUpload();
+  const { uploadImage } = useImageUpload();
   const { result: screenResult, setResult: setScreenResult } = useScreenResult();
   const smartUpload = useSmartMediaUpload();
-  const { isEncryptionReady } = useEncryption();
+  useEncryption();
   const { isOnline } = useOffline();
 
   useEffect(() => {
@@ -138,15 +137,15 @@ const CreateStoryScreen = () => {
 
   // ADDED: useEffect to log isAudioActionSheetVisible changes
   useEffect(() => {
-    console.log(`isAudioActionSheetVisible changed to: ${isAudioActionSheetVisible}`);
+    logger.debug(`isAudioActionSheetVisible changed to: ${isAudioActionSheetVisible}`);
   }, [isAudioActionSheetVisible]);
 
   // Effect to handle results from other screens (SelectMembersScreen, SelectLocationScreen)
   useFocusEffect(
     useCallback(() => {
       if (screenResult) {
-        console.log("CreateStoryScreen received screen result:", screenResult);
-        const { purpose, selectedIds, location: resultLocation, timestamp } = screenResult;
+        logger.debug("CreateStoryScreen received screen result:", screenResult);
+        const { purpose, selectedIds, location: resultLocation } = screenResult;
 
         if (purpose === 'tagging' && selectedIds) {
           setTaggedMembers(prev => {
@@ -176,7 +175,7 @@ const CreateStoryScreen = () => {
         // Consider clearing this param from router if it should only be processed once
         // router.setParams({ initialSelectedLocation: undefined }); 
       } catch (e) {
-        console.error("Error parsing initial selected location from params:", e);
+        logger.error("Error parsing initial selected location from params:", e);
       }
     }
     // Other initial param handling can go here
@@ -187,13 +186,13 @@ const CreateStoryScreen = () => {
   // Function to upload all images in image blocks and return updated blocks with Firebase Storage URLs
   const uploadAllMedia = async (storyBlocks: {
     type: string;
-    data: any; // For 'image' blocks, this will be Array<{uri: string, type: 'image'|'video', ...}>
+    data: any; // For 'image' blocks, this will be {uri: string, type: 'image'|'video', ...}[]
                // For 'audio'/'video' (dedicated), this will be a string URI
     localId: string;
   }[]) => {
     // If offline, skip upload and return original blocks
     if (!isOnline) {
-      console.log('Offline mode: Skipping media upload');
+      logger.debug('Offline mode: Skipping media upload');
       return storyBlocks;
     }
     // Count total media items that need to be uploaded
@@ -263,7 +262,7 @@ const CreateStoryScreen = () => {
                 processedMediaItems.push(mediaItem); // Fallback, keep original item with local URI
               }
             } catch (error) {
-              console.error(`Error uploading media ${mediaItem.uri} in block ${block.localId}, item index ${j}:`, error);
+              logger.error(`Error uploading media ${mediaItem.uri} in block ${block.localId}, item index ${j}:`, error);
               processedMediaItems.push(mediaItem); // Fallback
             }
           } else {
@@ -300,7 +299,7 @@ const CreateStoryScreen = () => {
           }
           // Fallback: original URI remains if upload fails
         } catch (error) {
-          console.error(`Error uploading media ${block.data} in block ${i}:`, error);
+          logger.error(`Error uploading media ${block.data} in block ${i}:`, error);
           // Fallback: original URI remains
         }
       }
@@ -310,7 +309,8 @@ const CreateStoryScreen = () => {
     return updatedBlocks;
   };
 
-  const handleSaveStory = useCallback(withErrorHandling(async () => {
+  const handleSaveStory = useCallback(async () => {
+    return withErrorHandling(async () => {
     reset();
     if (!storyTitle.trim()) {
       showErrorAlert({ message: 'Please provide a title for your story.', code: 'missing-title' }, 'Missing Title');
@@ -327,7 +327,7 @@ const CreateStoryScreen = () => {
       if (block.type === 'text') {
         return {
           type: 'text',
-          data: block.content,
+          data: sanitizeUserInput(block.content as string, { maxLength: 5000, trim: true }),
           localId: block.id
         };
       } else if (block.type === 'image') {
@@ -350,7 +350,10 @@ const CreateStoryScreen = () => {
         const audioContent = block.content as { uri: string; duration?: number; name?: string; isRecording?: boolean };
         return {
           type: 'audio',
-          data: audioContent, 
+          data: {
+            ...audioContent,
+            name: audioContent.name ? sanitizeUserInput(audioContent.name, { maxLength: 255, trim: true }) : audioContent.name
+          }, 
           localId: block.id
         };
       } else {
@@ -369,10 +372,14 @@ const CreateStoryScreen = () => {
         
         const storyPayload = {
           authorID: user?.uid || '',
-          title: storyTitle,
-          subtitle: showSubtitle ? subtitle : undefined,
+          title: sanitizeUserInput(storyTitle, { maxLength: 200, trim: true }),
+          subtitle: showSubtitle ? sanitizeUserInput(subtitle, { maxLength: 300, trim: true }) : undefined,
           eventDate: showDate && storyDate ? storyDate.toISOString() : undefined,
-          location: showLocation && location ? { lat: location.latitude, lng: location.longitude, address: location.address || '' } : undefined,
+          location: showLocation && location ? { 
+            lat: location.latitude, 
+            lng: location.longitude, 
+            address: sanitizeUserInput(location.address || '', { maxLength: 500, trim: true }) 
+          } : undefined,
           privacy: (privacy === 'personal' ? 'privateAccess' : privacy) as 'family' | 'privateAccess' | 'custom',
           customAccessMembers: privacy === 'custom' ? customSelectedViewers : undefined,
           blocks: transformedBlocks, // Use local URIs when offline
@@ -381,7 +388,7 @@ const CreateStoryScreen = () => {
           _isOffline: true,
           _tempId: tempStoryId,
           createdAt: new Date().toISOString(),
-          authorName: firestoreUser?.displayName || 'Unknown',
+          authorName: sanitizeUserInput(firestoreUser?.displayName || 'Unknown', { maxLength: 100, trim: true }),
         };
         
         // Queue for sync when online
@@ -409,10 +416,14 @@ const CreateStoryScreen = () => {
         
         const storyPayload = {
           authorID: user?.uid || '',
-          title: storyTitle,
-          subtitle: showSubtitle ? subtitle : undefined,
+          title: sanitizeUserInput(storyTitle, { maxLength: 200, trim: true }),
+          subtitle: showSubtitle ? sanitizeUserInput(subtitle, { maxLength: 300, trim: true }) : undefined,
           eventDate: showDate && storyDate ? storyDate.toISOString() : undefined,
-          location: showLocation && location ? { lat: location.latitude, lng: location.longitude, address: location.address || '' } : undefined,
+          location: showLocation && location ? { 
+            lat: location.latitude, 
+            lng: location.longitude, 
+            address: sanitizeUserInput(location.address || '', { maxLength: 500, trim: true }) 
+          } : undefined,
           privacy: (privacy === 'personal' ? 'privateAccess' : privacy) as 'family' | 'privateAccess' | 'custom',
           customAccessMembers: privacy === 'custom' ? customSelectedViewers : undefined,
           blocks: updatedBlocks,
@@ -420,10 +431,10 @@ const CreateStoryScreen = () => {
           peopleInvolved: taggedMembers,
         };
         
-        console.log('Full story payload:', JSON.stringify(storyPayload, null, 2));
+        logger.debug('Full story payload:', JSON.stringify(storyPayload, null, 2));
 
         const newStoryId = await createStoryMobile(storyPayload);
-        console.log('Story created with ID:', newStoryId);
+        logger.debug('Story created with ID:', newStoryId);
         Alert.alert('Success', 'Your story has been saved.');
         router.navigate('/(tabs)/feed');
       }
@@ -442,9 +453,11 @@ const CreateStoryScreen = () => {
     } finally {
       setIsLoading(false);
     }
-  }), [storyTitle, firestoreUser, user, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, router, uploadImage, handleError, reset, isOnline]);
+    })();
+  }, [storyTitle, firestoreUser, user, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, router, uploadImage, handleError, reset, isOnline, uploadAllMedia, withErrorHandling]);
 
-  const handleUpdateStory = useCallback(withErrorHandling(async () => {
+  const handleUpdateStory = useCallback(async () => {
+    return withErrorHandling(async () => {
     reset();
     if (!storyTitle.trim()) {
       showErrorAlert({ message: 'Please provide a title for your story.', code: 'missing-title' }, 'Missing Title');
@@ -459,7 +472,7 @@ const CreateStoryScreen = () => {
     
     const transformedBlocksForUpdate = blocks.map(block => {
       if (block.type === 'text') {
-        return { type: 'text', data: block.content, localId: block.id };
+        return { type: 'text', data: sanitizeUserInput(block.content as string, { maxLength: 5000, trim: true }), localId: block.id };
       } else if (block.type === 'image') {
         // block.content is MediaItem[]
         // Preserve essential details of each media item for storage
@@ -477,7 +490,14 @@ const CreateStoryScreen = () => {
         };
       } else if (block.type === 'audio') {
         const audioContent = block.content as { uri: string; duration?: number; name?: string; isRecording?: boolean };
-        return { type: 'audio', data: audioContent, localId: block.id };
+        return { 
+          type: 'audio', 
+          data: {
+            ...audioContent,
+            name: audioContent.name ? sanitizeUserInput(audioContent.name, { maxLength: 255, trim: true }) : audioContent.name
+          }, 
+          localId: block.id 
+        };
       }
       return { type: block.type, data: block.content, localId: block.id };
     });
@@ -487,10 +507,14 @@ const CreateStoryScreen = () => {
       const updatedBlocks = await uploadAllMedia(transformedBlocksForUpdate);
       
       const storyUpdatePayload: Parameters<typeof updateStoryMobile>[2] = {
-        title: storyTitle,
-        subtitle: showSubtitle ? subtitle : undefined,
+        title: sanitizeUserInput(storyTitle, { maxLength: 200, trim: true }),
+        subtitle: showSubtitle ? sanitizeUserInput(subtitle, { maxLength: 300, trim: true }) : undefined,
         eventDate: showDate && storyDate ? new Date(storyDate).toISOString() : undefined,
-        location: showLocation && location ? { lat: location.latitude, lng: location.longitude, address: location.address || '' } : undefined,
+        location: showLocation && location ? { 
+          lat: location.latitude, 
+          lng: location.longitude, 
+          address: sanitizeUserInput(location.address || '', { maxLength: 500, trim: true }) 
+        } : undefined,
         privacy: (privacy === 'personal' ? 'privateAccess' : privacy) as 'family' | 'privateAccess' | 'custom',
         customAccessMembers: privacy === 'custom' ? customSelectedViewers : undefined,
         blocks: updatedBlocks,
@@ -503,7 +527,7 @@ const CreateStoryScreen = () => {
         }
       });
       
-      console.log('Updating story with payload:', JSON.stringify(storyUpdatePayload, null, 2));
+      logger.debug('Updating story with payload:', JSON.stringify(storyUpdatePayload, null, 2));
 
       await updateStoryMobile(storyIdForEdit!, user.uid, storyUpdatePayload);
       Alert.alert('Success', 'Your story has been updated.');
@@ -521,7 +545,8 @@ const CreateStoryScreen = () => {
     } finally {
       setIsLoading(false);
     }
-  }), [storyTitle, storyIdForEdit, user, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, router, uploadImage, handleError, reset]);
+    })();
+  }, [storyTitle, storyIdForEdit, user, blocks, subtitle, showSubtitle, storyDate, showDate, location, showLocation, privacy, customSelectedViewers, taggedMembers, router, uploadImage, handleError, reset, uploadAllMedia, withErrorHandling]);
 
   // MARK: - Load Story Data for Editing
   useEffect(() => {
@@ -620,7 +645,7 @@ const CreateStoryScreen = () => {
                   }
                 } else {
                   // fb.data is not an array (should not happen for image blocks)
-                  console.warn(`Story ${storyToEdit.id}, block ${fb.localId || 'unknown'}: image block data is not an array.`, fb.data);
+                  logger.warn(`Story ${storyToEdit.id}, block ${fb.localId || 'unknown'}: image block data is not an array.`, fb.data);
                   contentValue = [];
                 }
               } else if (fb.type === 'audio') {
@@ -657,7 +682,7 @@ const CreateStoryScreen = () => {
       };
       loadStoryForEdit();
     }
-  }, [isActuallyEditingNow, storyIdForEdit, user, firestoreUser, navigation, router]);
+  }, [isActuallyEditingNow, storyIdForEdit, user, firestoreUser, navigation, router, handleError]);
 
   // MARK: - Navigation Setup & Data Return Handling
   useEffect(() => {
@@ -703,7 +728,7 @@ const CreateStoryScreen = () => {
       headerTitleStyle: { fontWeight: '600' }, 
       headerBackTitleVisible: false,
     });
-  }, [navigation, router, isLoading, displayAsEditMode, handleSaveStory, handleUpdateStory, isUploading]);
+  }, [navigation, router, isLoading, displayAsEditMode, handleSaveStory, handleUpdateStory, isUploading, isActuallyEditingNow]);
 
   useEffect(() => {
     // Listener for when the screen comes into focus
@@ -731,7 +756,7 @@ const CreateStoryScreen = () => {
             router.setParams({ returnedPurpose: undefined, selectedIds: undefined, timestamp: undefined }); 
           }
         } catch (e) {
-          console.error("Error processing returned member IDs:", e);
+          logger.error("Error processing returned member IDs:", e);
         }
       }
 
@@ -754,13 +779,13 @@ const CreateStoryScreen = () => {
             timestamp: undefined // Also clear timestamp if used from location screen
           });
         } else {
-          console.error("Error parsing returned location coordinates:", {returnedLocationLat, returnedLocationLng});
+          logger.error("Error parsing returned location coordinates:", {returnedLocationLat, returnedLocationLng});
         }
       }
     });
 
     return unsubscribe; // Cleanup listener on unmount
-  }, [navigation, params]);
+  }, [navigation, params, router]);
 
   // Check for returned audio recording
   useEffect(() => {
@@ -769,7 +794,7 @@ const CreateStoryScreen = () => {
     
     if (recordedAudioUri) {
       // Log only when we actually have data and are about to process it
-      console.log('Processing returned audio:', { recordedAudioUri, recordedAudioDuration });
+      logger.debug('Processing returned audio:', { recordedAudioUri, recordedAudioDuration });
       // Create a new audio block with the recorded audio
       const newBlock: StoryBlock = {
         id: Math.random().toString(36).substr(2, 9),
@@ -780,7 +805,7 @@ const CreateStoryScreen = () => {
           isRecording: true,
         },
       };
-      console.log('Recorded newAudioBlock to add:', JSON.stringify(newBlock, null, 2)); // This log can stay
+      logger.debug('Recorded newAudioBlock to add:', JSON.stringify(newBlock, null, 2)); // This log can stay
       setBlocks(prevBlocks => [...prevBlocks, newBlock]);
       
       // Clear params to avoid re-processing
@@ -790,7 +815,7 @@ const CreateStoryScreen = () => {
 
   // Log blocks state whenever it changes
   useEffect(() => {
-    console.log('Current story blocks state:', JSON.stringify(blocks, null, 2));
+    logger.debug('Current story blocks state:', JSON.stringify(blocks, null, 2));
   }, [blocks]);
 
   const addBlock = (type: BlockType) => {
@@ -819,7 +844,7 @@ const CreateStoryScreen = () => {
   
   // Handle uploading audio files
   const handleUploadAudio = async () => {
-    console.log('handleUploadAudio: function entered'); // ADDED LOG
+    logger.debug('handleUploadAudio: function entered'); // ADDED LOG
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
@@ -833,11 +858,11 @@ const CreateStoryScreen = () => {
           mediaTypes: ['images', 'videos'],
           quality: 1.0,
         });
-        console.log('iOS ImagePicker result:', JSON.stringify(result, null, 2)); // ADDED LOG
+        logger.debug('iOS ImagePicker result:', JSON.stringify(result, null, 2)); // ADDED LOG
     
         if (!result.canceled && result.assets && result.assets.length > 0) {
           const asset = result.assets[0];
-          console.log('iOS selected asset:', JSON.stringify(asset, null, 2)); // ADDED LOG
+          logger.debug('iOS selected asset:', JSON.stringify(asset, null, 2)); // ADDED LOG
           // Ensure the selected asset might be an audio file (e.g., check extension or type if available, though ImagePicker is limited here)
           // For now, we assume if the user picked it in an "audio" context, it's intended as audio.
           const newBlock: StoryBlock = {
@@ -850,7 +875,7 @@ const CreateStoryScreen = () => {
               isRecording: false,
             },
           };
-          console.log('iOS newAudioBlock to add:', JSON.stringify(newBlock, null, 2)); // ADDED LOG
+          logger.debug('iOS newAudioBlock to add:', JSON.stringify(newBlock, null, 2)); // ADDED LOG
           setBlocks(prevBlocks => [...prevBlocks, newBlock]);
         }
       } else {
@@ -859,11 +884,11 @@ const CreateStoryScreen = () => {
           type: 'audio/*',
           copyToCacheDirectory: true, // Good practice for accessing the file
         });
-        console.log('Android DocumentPicker result:', JSON.stringify(result, null, 2)); // ADDED LOG
+        logger.debug('Android DocumentPicker result:', JSON.stringify(result, null, 2)); // ADDED LOG
         
         if (result.canceled === false && result.assets && result.assets.length > 0) { // Ensured assets exist and not empty
           const asset = result.assets[0];
-          console.log('Android selected asset:', JSON.stringify(asset, null, 2)); // ADDED LOG
+          logger.debug('Android selected asset:', JSON.stringify(asset, null, 2)); // ADDED LOG
           const newBlock: StoryBlock = {
             id: Math.random().toString(36).substr(2, 9),
             type: 'audio',
@@ -874,12 +899,12 @@ const CreateStoryScreen = () => {
               isRecording: false,
             },
           };
-          console.log('Android newAudioBlock to add:', JSON.stringify(newBlock, null, 2)); // ADDED LOG
+          logger.debug('Android newAudioBlock to add:', JSON.stringify(newBlock, null, 2)); // ADDED LOG
           setBlocks(prevBlocks => [...prevBlocks, newBlock]);
         }
       }
     } catch (error) {
-      console.error("Error picking audio file: ", error);
+      logger.error("Error picking audio file: ", error);
       showErrorAlert(error, "Upload Error");
     }
     setAudioActionSheetVisible(false);
@@ -887,7 +912,7 @@ const CreateStoryScreen = () => {
 
   // Handle recording audio
   const handleRecordAudio = () => {
-    console.log('handleRecordAudio: function entered'); // ADDED LOG
+    logger.debug('handleRecordAudio: function entered'); // ADDED LOG
     router.push('/recordAudio' as any);
     setAudioActionSheetVisible(false);
   };
@@ -955,7 +980,7 @@ const CreateStoryScreen = () => {
         );
       }
     } catch (error) {
-      console.error("Error launching media library:", error);
+      logger.error("Error launching media library:", error);
       showErrorAlert("Media Picker Error", "Could not open the media library.");
     }
   };
@@ -1071,12 +1096,12 @@ const CreateStoryScreen = () => {
 
   // MARK: - Render audio block
   const renderAudioBlock = (block: StoryBlock) => {
-    console.log('renderAudioBlock called for block:', JSON.stringify(block, null, 2)); // ADDED LOG
+    logger.debug('renderAudioBlock called for block:', JSON.stringify(block, null, 2)); // ADDED LOG
     const content = block.content;
     const isRecording = typeof content === 'object' && content.isRecording;
     const audioName = typeof content === 'object' && content.name ? content.name : 'Audio Clip';
     const hasAudioContent = content && (typeof content === 'string' || (typeof content === 'object' && content.uri));
-    console.log('renderAudioBlock details:', { isRecording, audioName, hasAudioContent, contentUri: typeof content === 'object' ? content.uri : 'N/A' }); // ADDED LOG
+    logger.debug('renderAudioBlock details:', { isRecording, audioName, hasAudioContent, contentUri: typeof content === 'object' ? content.uri : 'N/A' }); // ADDED LOG
     
     if (!hasAudioContent) {
       // If no audio content yet, show the audio upload button
@@ -1118,7 +1143,7 @@ const CreateStoryScreen = () => {
   };
 
   // MARK: - Render Methods for Modals
-  const renderAddDetailsModal = () => (
+  const _renderAddDetailsModal = () => (
     <Modal
       animationType="slide"
       transparent={true}

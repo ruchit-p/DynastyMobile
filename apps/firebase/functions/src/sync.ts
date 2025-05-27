@@ -3,7 +3,8 @@ import * as admin from "firebase-admin";
 import {logger} from "firebase-functions/v2";
 import {withAuth} from "./middleware/auth";
 import {createError, ErrorCode, handleError} from "./utils/errors";
-import {validateRequiredFields} from "./utils/validation";
+import {validateRequest} from "./utils/request-validator";
+import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
 import {
   SyncOperation,
   ClientSyncState,
@@ -28,12 +29,15 @@ export const enqueueSyncOperation = onCall(withAuth(async (request) => {
 
   try {
     const userId = request.auth!.uid;
-    const data = request.data;
 
-    // Validate required fields
-    validateRequiredFields(data, ["operationType", "collection"]);
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.enqueueSyncOperation,
+      userId
+    );
 
-    const {operationType, collection, documentId, operationData, conflictResolution} = data;
+    const {operationType, collection, documentId, operationData, conflictResolution, clientVersion, serverVersion} = validatedData;
 
     // Validate operation type
     if (!Object.values(OperationType).includes(operationType)) {
@@ -60,8 +64,8 @@ export const enqueueSyncOperation = onCall(withAuth(async (request) => {
       retryCount: 0,
       status: SyncStatus.PENDING,
       conflictResolution: conflictResolution || ConflictResolutionStrategy.CLIENT_WINS,
-      clientVersion: data.clientVersion,
-      serverVersion: data.serverVersion,
+      clientVersion: clientVersion,
+      serverVersion: serverVersion,
     };
 
     // Add to queue
@@ -91,6 +95,14 @@ export const processSyncQueue = onCall(withAuth(async (request) => {
 
   try {
     const userId = request.auth!.uid;
+
+    // Validate request (no parameters required for this function)
+    validateRequest(
+      request.data || {},
+      {rules: [], xssCheck: false}, // No specific validation needed
+      userId
+    );
+
     const db = admin.firestore();
 
     // Get pending operations
@@ -200,6 +212,14 @@ export const getSyncQueueStatus = onCall(withAuth(async (request) => {
 
   try {
     const userId = request.auth!.uid;
+
+    // Validate request (no parameters required for this function)
+    validateRequest(
+      request.data || {},
+      {rules: [], xssCheck: false}, // No specific validation needed
+      userId
+    );
+
     const db = admin.firestore();
 
     // Get counts for each status
@@ -253,11 +273,16 @@ export const detectConflicts = onCall(withAuth(async (request) => {
   const functionName = "detectConflicts";
 
   try {
-    const data = request.data;
+    const userId = request.auth!.uid;
 
-    validateRequiredFields(data, ["collection", "documentId", "clientVersion"]);
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.detectConflicts,
+      userId
+    );
 
-    const {collection, documentId, clientVersion, clientData} = data;
+    const {collection, documentId, clientVersion, clientData, operationId} = validatedData;
 
     const db = admin.firestore();
     const docRef = db.collection(collection).doc(documentId);
@@ -277,7 +302,7 @@ export const detectConflicts = onCall(withAuth(async (request) => {
     // Check for version mismatch
     if (serverVersion !== clientVersion) {
       const conflict: SyncConflict = {
-        operationId: data.operationId || `conflict-${Date.now()}`,
+        operationId: operationId || `conflict-${Date.now()}`,
         collection,
         documentId,
         clientVersion,
@@ -315,11 +340,15 @@ export const resolveConflicts = onCall(withAuth(async (request) => {
 
   try {
     const userId = request.auth!.uid;
-    const data = request.data;
 
-    validateRequiredFields(data, ["conflictId", "strategy"]);
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.resolveConflicts,
+      userId
+    );
 
-    const {conflictId, strategy, resolvedData} = data;
+    const {conflictId, strategy, resolvedData} = validatedData;
 
     // Validate strategy
     if (!Object.values(ConflictResolutionStrategy).includes(strategy)) {
@@ -405,11 +434,15 @@ export const batchSyncOperations = onCall(withAuth(async (request) => {
 
   try {
     const userId = request.auth!.uid;
-    const data = request.data as BatchSyncRequest;
 
-    validateRequiredFields(data, ["operations", "deviceId"]);
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.batchSyncOperations,
+      userId
+    ) as BatchSyncRequest;
 
-    const {operations, deviceId} = data;
+    const {operations, deviceId} = validatedData;
 
     if (!Array.isArray(operations) || operations.length === 0) {
       throw createError(ErrorCode.INVALID_ARGUMENT, "Operations must be a non-empty array");
@@ -425,8 +458,7 @@ export const batchSyncOperations = onCall(withAuth(async (request) => {
 
     // Add all operations to the queue
     for (const op of operations) {
-      validateRequiredFields(op, ["operationType", "collection"]);
-
+      // Individual operation validation is handled by the centralized validator
       const operation: Omit<SyncOperation, "id"> = {
         userId,
         operationType: op.operationType,

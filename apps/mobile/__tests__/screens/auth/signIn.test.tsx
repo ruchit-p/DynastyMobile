@@ -3,12 +3,14 @@ import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import SignInScreen from '../../../app/(auth)/signIn';
 import { useAuth } from '../../../src/contexts/AuthContext';
+import { useRouter } from 'expo-router';
 
 // Mock dependencies
 jest.mock('../../../src/contexts/AuthContext');
+jest.mock('expo-router');
 
 // Get router mock from setup
-const router = require('expo-router').useRouter();
+const router = useRouter() as jest.MockedFunction<typeof useRouter>;
 
 const mockSignIn = jest.fn();
 const mockSignInWithGoogle = jest.fn();

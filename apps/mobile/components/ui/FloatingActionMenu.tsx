@@ -9,7 +9,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 
 // Import design system components
-import ThemedText from '../ThemedText';
+import { ThemedText } from '../ThemedText';
 import { Spacing, BorderRadius, Shadows } from '../../constants/Spacing';
 import { useBackgroundColor, useBorderColor, useIconColor } from '../../hooks/useThemeColor';
 import { Colors } from '../../constants/Colors';

@@ -1,5 +1,6 @@
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import { getErrorMessage } from '../lib/errorUtils';
+import { logger } from './LoggingService';
 
 // Types
 export type EntityType = 'user' | 'story' | 'event' | 'familyMember' | 'relationship' | 'message';
@@ -70,7 +71,7 @@ export class ConflictResolutionService implements IConflictResolutionService {
   private conflictHistory: Map<string, ConflictData> = new Map();
 
   private constructor() {
-    console.log('[ConflictResolutionService] Initialized');
+    logger.debug('[ConflictResolutionService] Initialized');
     this.registerBuiltInStrategies();
     this.setDefaultStrategies();
   }
@@ -83,7 +84,7 @@ export class ConflictResolutionService implements IConflictResolutionService {
   }
 
   detectConflicts(entityType: EntityType, localData: any, remoteData: any): ConflictData | null {
-    console.log(`[ConflictResolutionService] Detecting conflicts for ${entityType}`);
+    logger.debug(`[ConflictResolutionService] Detecting conflicts for ${entityType}`);
     
     try {
       // Quick check - if one doesn't exist, no conflict
@@ -99,7 +100,7 @@ export class ConflictResolutionService implements IConflictResolutionService {
       const conflictedFields = this.findConflictedFields(localData, remoteData, entityType);
       
       if (conflictedFields.length === 0) {
-        console.log('[ConflictResolutionService] No conflicts detected');
+        logger.debug('[ConflictResolutionService] No conflicts detected');
         return null;
       }
       
@@ -119,16 +120,16 @@ export class ConflictResolutionService implements IConflictResolutionService {
       
       this.conflictHistory.set(conflict.id, conflict);
       
-      console.log(`[ConflictResolutionService] Detected ${conflictedFields.length} conflicts:`, conflictedFields);
+      logger.debug(`[ConflictResolutionService] Detected ${conflictedFields.length} conflicts:`, conflictedFields);
       return conflict;
     } catch (error) {
-      console.error('[ConflictResolutionService] Error detecting conflicts:', getErrorMessage(error));
+      logger.error('[ConflictResolutionService] Error detecting conflicts:', getErrorMessage(error));
       return null;
     }
   }
 
   async resolveConflict(conflict: ConflictData, strategyName?: string): Promise<ResolutionResult> {
-    console.log(`[ConflictResolutionService] Resolving conflict ${conflict.id} with strategy: ${strategyName}`);
+    logger.debug(`[ConflictResolutionService] Resolving conflict ${conflict.id} with strategy: ${strategyName}`);
     
     try {
       conflict.status = 'resolving';
@@ -161,10 +162,10 @@ export class ConflictResolutionService implements IConflictResolutionService {
       conflict.resolution = resolution;
       conflict.status = 'resolved';
       
-      console.log('[ConflictResolutionService] Conflict resolved:', resolution);
+      logger.debug('[ConflictResolutionService] Conflict resolved:', resolution);
       return resolution;
     } catch (error) {
-      console.error('[ConflictResolutionService] Error resolving conflict:', getErrorMessage(error));
+      logger.error('[ConflictResolutionService] Error resolving conflict:', getErrorMessage(error));
       conflict.status = 'failed';
       throw error;
     }
@@ -179,7 +180,7 @@ export class ConflictResolutionService implements IConflictResolutionService {
   }
 
   async applyResolution(conflict: ConflictData, resolution: ResolutionResult): Promise<void> {
-    console.log(`[ConflictResolutionService] Applying resolution for conflict ${conflict.id}`);
+    logger.debug(`[ConflictResolutionService] Applying resolution for conflict ${conflict.id}`);
     
     try {
       // TODO: Apply the resolution
@@ -190,32 +191,32 @@ export class ConflictResolutionService implements IConflictResolutionService {
       
       switch (conflict.entityType) {
         case 'user':
-          console.log('[ConflictResolutionService] Applying user data resolution');
+          logger.debug('[ConflictResolutionService] Applying user data resolution');
           // TODO: Update user profile/settings
           break;
           
         case 'story':
-          console.log('[ConflictResolutionService] Applying story resolution');
+          logger.debug('[ConflictResolutionService] Applying story resolution');
           // TODO: Update story data
           break;
           
         case 'event':
-          console.log('[ConflictResolutionService] Applying event resolution');
+          logger.debug('[ConflictResolutionService] Applying event resolution');
           // TODO: Update event data
           break;
           
         case 'familyMember':
-          console.log('[ConflictResolutionService] Applying family member resolution');
+          logger.debug('[ConflictResolutionService] Applying family member resolution');
           // TODO: Update family tree
           break;
           
         case 'relationship':
-          console.log('[ConflictResolutionService] Applying relationship resolution');
+          logger.debug('[ConflictResolutionService] Applying relationship resolution');
           // TODO: Update relationships
           break;
           
         case 'message':
-          console.log('[ConflictResolutionService] Applying message resolution');
+          logger.debug('[ConflictResolutionService] Applying message resolution');
           // TODO: Update message data
           break;
       }
@@ -223,13 +224,13 @@ export class ConflictResolutionService implements IConflictResolutionService {
       // Mark as applied
       conflict.status = 'resolved';
     } catch (error) {
-      console.error('[ConflictResolutionService] Error applying resolution:', getErrorMessage(error));
+      logger.error('[ConflictResolutionService] Error applying resolution:', getErrorMessage(error));
       throw error;
     }
   }
 
   registerStrategy(strategy: ResolutionStrategy): void {
-    console.log(`[ConflictResolutionService] Registering strategy: ${strategy.name}`);
+    logger.debug(`[ConflictResolutionService] Registering strategy: ${strategy.name}`);
     this.strategies.set(strategy.name, strategy);
   }
 
@@ -264,7 +265,7 @@ export class ConflictResolutionService implements IConflictResolutionService {
   }
 
   setDefaultStrategy(entityType: EntityType, strategyName: string): void {
-    console.log(`[ConflictResolutionService] Setting default strategy for ${entityType}: ${strategyName}`);
+    logger.debug(`[ConflictResolutionService] Setting default strategy for ${entityType}: ${strategyName}`);
     this.defaultStrategies.set(entityType, strategyName);
   }
 

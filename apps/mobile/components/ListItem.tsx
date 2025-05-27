@@ -3,7 +3,7 @@ import { TouchableOpacity, StyleSheet, View, StyleProp, ViewStyle } from 'react-
 import { Ionicons } from '@expo/vector-icons';
 
 // Import design system components and utilities
-import ThemedText from './ThemedText';
+import { ThemedText } from './ThemedText';
 import { Spacing } from '../constants/Spacing';
 import { useIconColor, useTextColor } from '../hooks/useThemeColor';
 

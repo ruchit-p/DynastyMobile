@@ -3,10 +3,10 @@ import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-na
 import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { ProfileVisibilityOption } from './privacySettings'; // Import type
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
-import FlashList from '../../components/ui/FlashList';
+import { FlashList } from '../../components/ui/FlashList';
 
 const PROFILE_VISIBILITY_OPTIONS: ProfileVisibilityOption[] = ['Public', 'Connections Only', 'Private'];
 

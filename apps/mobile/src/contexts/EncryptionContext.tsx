@@ -1,9 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Alert } from 'react-native';
 import { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { getFirebaseAuth } from '../lib/firebase';
 import { callFirebaseFunction } from '../lib/errorUtils';
-import { ChatEncryptionService, E2EEService } from '../../src/services/encryption';
+import { ChatEncryptionService, LibsignalService } from '../../src/services/encryption';
+import { logger } from '../services/LoggingService';
 
 interface EncryptionContextType {
   isEncryptionReady: boolean;
@@ -40,6 +41,38 @@ export const EncryptionProvider: React.FC<EncryptionProviderProps> = ({ children
   const [encryptionError, setEncryptionError] = useState<Error | null>(null);
   const [currentUser, setCurrentUser] = useState<FirebaseAuthTypes.User | null>(null);
 
+  const initializeEncryption = useCallback(async () => {
+    if (isInitializing || isEncryptionReady) return;
+
+    try {
+      setIsInitializing(true);
+      setEncryptionError(null);
+
+      logger.debug('Initializing end-to-end encryption...');
+      
+      // Initialize the encryption service
+      await ChatEncryptionService.initializeEncryption();
+      
+      setIsEncryptionReady(true);
+      setIsEncryptionEnabled(true);
+      logger.debug('End-to-end encryption initialized successfully');
+    } catch (error) {
+      logger.error('Failed to initialize encryption:', error);
+      setEncryptionError(error as Error);
+      
+      Alert.alert(
+        'Encryption Setup Failed',
+        'Failed to set up end-to-end encryption. You can still use the app, but messages won\'t be encrypted.',
+        [
+          { text: 'Retry', onPress: () => initializeEncryption() },
+          { text: 'Continue', style: 'cancel' }
+        ]
+      );
+    } finally {
+      setIsInitializing(false);
+    }
+  }, [isInitializing, isEncryptionReady]);
+
   useEffect(() => {
     const auth = getFirebaseAuth();
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -64,39 +97,7 @@ export const EncryptionProvider: React.FC<EncryptionProviderProps> = ({ children
     });
 
     return unsubscribe;
-  }, []);
-
-  const initializeEncryption = async () => {
-    if (isInitializing || isEncryptionReady) return;
-
-    try {
-      setIsInitializing(true);
-      setEncryptionError(null);
-
-      console.log('Initializing end-to-end encryption...');
-      
-      // Initialize the encryption service
-      await ChatEncryptionService.initializeEncryption();
-      
-      setIsEncryptionReady(true);
-      setIsEncryptionEnabled(true);
-      console.log('End-to-end encryption initialized successfully');
-    } catch (error) {
-      console.error('Failed to initialize encryption:', error);
-      setEncryptionError(error as Error);
-      
-      Alert.alert(
-        'Encryption Setup Failed',
-        'Failed to set up end-to-end encryption. You can still use the app, but messages won\'t be encrypted.',
-        [
-          { text: 'Retry', onPress: initializeEncryption },
-          { text: 'Continue', style: 'cancel' }
-        ]
-      );
-    } finally {
-      setIsInitializing(false);
-    }
-  };
+  }, [initializeEncryption]);
 
   const resetEncryption = async () => {
     try {
@@ -109,7 +110,7 @@ export const EncryptionProvider: React.FC<EncryptionProviderProps> = ({ children
             text: 'Reset',
             style: 'destructive',
             onPress: async () => {
-              await E2EEService.clearAllData();
+              await LibsignalService.clearAllData();
               setIsEncryptionReady(false);
               
               // Re-initialize
@@ -119,7 +120,7 @@ export const EncryptionProvider: React.FC<EncryptionProviderProps> = ({ children
         ]
       );
     } catch (error) {
-      console.error('Failed to reset encryption:', error);
+      logger.error('Failed to reset encryption:', error);
       Alert.alert('Error', 'Failed to reset encryption');
     }
   };
@@ -136,9 +137,9 @@ export const EncryptionProvider: React.FC<EncryptionProviderProps> = ({ children
         throw new Error('Failed to verify key fingerprint');
       }
       
-      console.log('Key fingerprint verified successfully');
+      logger.debug('Key fingerprint verified successfully');
     } catch (error) {
-      console.error('Failed to verify key fingerprint:', error);
+      logger.error('Failed to verify key fingerprint:', error);
       throw error;
     }
   };
@@ -152,7 +153,7 @@ export const EncryptionProvider: React.FC<EncryptionProviderProps> = ({ children
       
       return result.result?.verified || false;
     } catch (error) {
-      console.error('Failed to get verification status:', error);
+      logger.error('Failed to get verification status:', error);
       return false;
     }
   };

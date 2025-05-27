@@ -7,6 +7,52 @@ module.exports = (async () => {
   defaultConfig.resolver = {
     ...defaultConfig.resolver,
     unstable_enablePackageExports: false,
+    resolveRequest: (context, moduleName, platform) => {
+      if (moduleName === 'crypto') {
+        // when importing crypto, resolve to react-native-quick-crypto
+        return context.resolveRequest(
+          context,
+          'react-native-quick-crypto',
+          platform,
+        );
+      }
+      if (moduleName === 'stream') {
+        // when importing stream, resolve to readable-stream
+        return context.resolveRequest(
+          context,
+          'readable-stream',
+          platform,
+        );
+      }
+      if (moduleName === 'buffer' || moduleName === 'node:buffer') {
+        // when importing buffer or node:buffer, resolve to @craftzdog/react-native-buffer
+        return context.resolveRequest(
+          context,
+          '@craftzdog/react-native-buffer',
+          platform,
+        );
+      }
+      if (moduleName === 'fs') {
+        // when importing fs, return a mock module since React Native doesn't have filesystem access
+        return {
+          type: 'empty',
+        };
+      }
+      if (moduleName === 'path') {
+        // when importing path, return a mock module
+        return {
+          type: 'empty',
+        };
+      }
+      if (moduleName === 'os') {
+        // when importing os, return a mock module
+        return {
+          type: 'empty',
+        };
+      }
+      // otherwise chain to the standard Metro resolver.
+      return context.resolveRequest(context, moduleName, platform);
+    },
   };
   
   // Customize the config further if needed

@@ -1,6 +1,7 @@
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import { getErrorMessage } from '../lib/errorUtils';
 import { getFirebaseDb } from '../lib/firebase';
+import { logger } from './LoggingService';
 
 // Types
 export interface EventLocation {
@@ -71,7 +72,7 @@ export class EventSyncService implements IEventSyncService {
   private rsvpQueue: Map<string, RSVPStatus> = new Map();
 
   private constructor() {
-    console.log('[EventSyncService] Initialized');
+    logger.debug('[EventSyncService] Initialized');
   }
 
   static getInstance(): EventSyncService {
@@ -82,7 +83,7 @@ export class EventSyncService implements IEventSyncService {
   }
 
   async syncEvent(eventId: string): Promise<void> {
-    console.log(`[EventSyncService] Syncing event: ${eventId}`);
+    logger.debug(`[EventSyncService] Syncing event: ${eventId}`);
     
     try {
       // TODO: Implement event sync
@@ -98,7 +99,7 @@ export class EventSyncService implements IEventSyncService {
       
       if (eventDoc.exists) {
         const remoteEvent = eventDoc.data() as Event;
-        console.log(`[EventSyncService] Remote event found:`, remoteEvent);
+        logger.debug(`[EventSyncService] Remote event found:`, remoteEvent);
         
         // TODO: Compare with local version
         // Check for changes in:
@@ -116,13 +117,13 @@ export class EventSyncService implements IEventSyncService {
         }
       }
     } catch (error) {
-      console.error('[EventSyncService] Error syncing event:', getErrorMessage(error));
+      logger.error('[EventSyncService] Error syncing event:', getErrorMessage(error));
       throw error;
     }
   }
 
   async syncRSVPs(eventId: string): Promise<void> {
-    console.log(`[EventSyncService] Syncing RSVPs for event: ${eventId}`);
+    logger.debug(`[EventSyncService] Syncing RSVPs for event: ${eventId}`);
     
     try {
       // TODO: Implement RSVP sync
@@ -144,20 +145,20 @@ export class EventSyncService implements IEventSyncService {
         remoteRSVPs.push({ userId: doc.id, ...doc.data() } as RSVPStatus);
       });
       
-      console.log(`[EventSyncService] Found ${remoteRSVPs.length} remote RSVPs`);
+      logger.debug(`[EventSyncService] Found ${remoteRSVPs.length} remote RSVPs`);
       
       // TODO: Merge with local RSVPs
       // Priority: Most recent response_date wins
       // Special handling for guest count updates
     } catch (error) {
-      console.error('[EventSyncService] Error syncing RSVPs:', getErrorMessage(error));
+      logger.error('[EventSyncService] Error syncing RSVPs:', getErrorMessage(error));
       throw error;
     }
   }
 
   async queueEventCreate(event: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     const eventId = `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.log(`[EventSyncService] Queueing event creation: ${eventId}`);
+    logger.debug(`[EventSyncService] Queueing event creation: ${eventId}`);
     
     try {
       // TODO: Implement event creation queue
@@ -185,19 +186,19 @@ export class EventSyncService implements IEventSyncService {
       
       // Queue location geocoding if address provided
       if (event.location?.address && !event.location.latitude) {
-        console.log('[EventSyncService] Location geocoding needed for:', event.location.address);
+        logger.debug('[EventSyncService] Location geocoding needed for:', event.location.address);
         // TODO: Queue geocoding task
       }
       
       return eventId;
     } catch (error) {
-      console.error('[EventSyncService] Error queueing event creation:', getErrorMessage(error));
+      logger.error('[EventSyncService] Error queueing event creation:', getErrorMessage(error));
       throw error;
     }
   }
 
   async queueEventUpdate(eventId: string, updates: Partial<Event>): Promise<void> {
-    console.log(`[EventSyncService] Queueing event update: ${eventId}`, updates);
+    logger.debug(`[EventSyncService] Queueing event update: ${eventId}`, updates);
     
     try {
       // TODO: Implement update queue
@@ -219,18 +220,18 @@ export class EventSyncService implements IEventSyncService {
       
       // Special handling for location updates
       if (updates.location) {
-        console.log('[EventSyncService] Location update detected');
+        logger.debug('[EventSyncService] Location update detected');
         // TODO: Queue location sync
       }
     } catch (error) {
-      console.error('[EventSyncService] Error queueing event update:', getErrorMessage(error));
+      logger.error('[EventSyncService] Error queueing event update:', getErrorMessage(error));
       throw error;
     }
   }
 
   async queueRSVPUpdate(eventId: string, userId: string, status: RSVPStatus): Promise<void> {
     const rsvpKey = `${eventId}_${userId}`;
-    console.log(`[EventSyncService] Queueing RSVP update: ${rsvpKey}`, status);
+    logger.debug(`[EventSyncService] Queueing RSVP update: ${rsvpKey}`, status);
     
     try {
       // TODO: Implement RSVP queue
@@ -259,13 +260,13 @@ export class EventSyncService implements IEventSyncService {
         eventUpdate.updates.rsvps = rsvps;
       }
     } catch (error) {
-      console.error('[EventSyncService] Error queueing RSVP update:', getErrorMessage(error));
+      logger.error('[EventSyncService] Error queueing RSVP update:', getErrorMessage(error));
       throw error;
     }
   }
 
   async resolveEventConflicts(conflict: EventConflict): Promise<Event> {
-    console.log('[EventSyncService] Resolving event conflict:', conflict);
+    logger.debug('[EventSyncService] Resolving event conflict:', conflict);
     
     try {
       // TODO: Implement conflict resolution
@@ -333,13 +334,13 @@ export class EventSyncService implements IEventSyncService {
           return remoteVersion;
       }
     } catch (error) {
-      console.error('[EventSyncService] Error resolving conflicts:', getErrorMessage(error));
+      logger.error('[EventSyncService] Error resolving conflicts:', getErrorMessage(error));
       throw error;
     }
   }
 
   async syncLocationData(eventId: string): Promise<void> {
-    console.log(`[EventSyncService] Syncing location data for event: ${eventId}`);
+    logger.debug(`[EventSyncService] Syncing location data for event: ${eventId}`);
     
     try {
       // TODO: Implement location sync
@@ -354,7 +355,7 @@ export class EventSyncService implements IEventSyncService {
         const location = eventUpdate.updates.location;
         
         if (location.address && (!location.latitude || !location.longitude)) {
-          console.log('[EventSyncService] Geocoding address:', location.address);
+          logger.debug('[EventSyncService] Geocoding address:', location.address);
           // TODO: Call geocoding service
           // For now, simulate geocoding
           location.latitude = 37.7749;
@@ -362,12 +363,12 @@ export class EventSyncService implements IEventSyncService {
         }
         
         if (location.placeId) {
-          console.log('[EventSyncService] Fetching place details:', location.placeId);
+          logger.debug('[EventSyncService] Fetching place details:', location.placeId);
           // TODO: Fetch place details from Places API
         }
       }
     } catch (error) {
-      console.error('[EventSyncService] Error syncing location data:', getErrorMessage(error));
+      logger.error('[EventSyncService] Error syncing location data:', getErrorMessage(error));
       throw error;
     }
   }

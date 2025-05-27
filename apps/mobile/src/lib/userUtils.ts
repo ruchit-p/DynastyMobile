@@ -1,6 +1,7 @@
 import { collection, doc, getDoc, getDocs, query, where, FieldPath } from '@react-native-firebase/firestore';
 import { getFirebaseDb } from './firebase'; // Corrected import
 import { errorHandler, ErrorSeverity } from './ErrorHandlingService';
+import { logger } from '../services/LoggingService';
 
 export interface UserProfile {
   id: string;
@@ -46,7 +47,7 @@ export const fetchUserProfilesByIds = async (userIds: string[]): Promise<UserPro
               profilePictureUrl: data.profilePictureUrl || undefined,
             });
           } else {
-            console.warn(`No document found for user ID: ${docSnap.id} (this should not happen with 'in' query if ID was in chunk)`);
+            logger.warn(`No document found for user ID: ${docSnap.id} (this should not happen with 'in' query if ID was in chunk)`);
           }
         });
       }
@@ -75,7 +76,7 @@ export const fetchUserProfilesByIds = async (userIds: string[]): Promise<UserPro
  */
 export const fetchUserProfileById = async (userId: string): Promise<UserProfile | null> => {
   if (!userId) {
-    console.log("fetchUserProfileById: No userId provided");
+    logger.debug("fetchUserProfileById: No userId provided");
     return null;
   }
   const db = getFirebaseDb(); // Get Firestore instance
@@ -91,7 +92,7 @@ export const fetchUserProfileById = async (userId: string): Promise<UserProfile 
         profilePictureUrl: data.profilePictureUrl || undefined,
       };
     } else {
-      console.warn(`No user found with ID: ${userId}`);
+      logger.warn(`No user found with ID: ${userId}`);
       return null;
     }
   } catch (error) {

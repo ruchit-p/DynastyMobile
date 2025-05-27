@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 // Import design system components and utilities
-import ThemedText from '../ThemedText';
+import { ThemedText } from '../ThemedText';
 import { Spacing, BorderRadius, Shadows } from '../../constants/Spacing';
 import { useBackgroundColor, useTextColor, useBorderColor } from '../../hooks/useThemeColor';
 import { Colors } from '../../constants/Colors';

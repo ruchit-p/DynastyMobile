@@ -12,12 +12,12 @@ import {
   Image,
   Animated
 } from 'react-native';
-import { useRouter, useLocalSearchParams, Link, Stack } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 import { 
@@ -28,7 +28,8 @@ import {
 } from '../../src/config/phoneAuth';
 import { Colors } from '../../constants/Colors';
 import { Typography } from '../../constants/Typography';
-import { Spacing, BorderRadius, Shadows } from '../../constants/Spacing';
+import { Spacing, BorderRadius } from '../../constants/Spacing';
+import { logger } from '../../src/services/LoggingService';
 
 const dynastyLogo = require('../../assets/images/dynasty.png');
 
@@ -99,16 +100,16 @@ export default function VerifyOtpScreen() {
   
   const errorAnimation = useRef(new Animated.Value(0)).current;
   const successAnimation = useRef(new Animated.Value(0)).current;
-  const inputRefs = useRef<TextInput[]>([]);
+  // const inputRefs = useRef<TextInput[]>([]); // eslint-disable-line @typescript-eslint/no-unused-vars
   const hasLoggedInitialLoad = useRef(false);
 
   // Reduce excessive logging - only log on meaningful state changes
   useEffect(() => {
     if (!hasLoggedInitialLoad.current) {
-      console.log('[VerifyOtpScreen] Component Load: isLoading:', isLoading, 'phoneAuthConfirmation exists:', !!phoneAuthConfirmation, 'phoneNumberSent:', phoneNumberSent);
+      logger.debug('[VerifyOtpScreen] Component Load: isLoading:', isLoading, 'phoneAuthConfirmation exists:', !!phoneAuthConfirmation, 'phoneNumberSent:', phoneNumberSent);
       hasLoggedInitialLoad.current = true;
     }
-  }, []);
+  }, [isLoading, phoneAuthConfirmation, phoneNumberSent]);
 
   useEffect(() => {
     if (!isError) {
@@ -161,7 +162,7 @@ export default function VerifyOtpScreen() {
         }),
       ]).start();
     }
-  }, [error]);
+  }, [error, errorAnimation]);
 
   // Auto-fill test code in development
   useEffect(() => {
@@ -169,21 +170,21 @@ export default function VerifyOtpScreen() {
       const testCode = getTestVerificationCode(phoneNumberSent);
       if (testCode) {
         setOtp(testCode);
-        console.log('📱 Auto-filled test verification code');
+        logger.debug('📱 Auto-filled test verification code');
       }
     }
   }, [phoneNumberSent]);
 
   useEffect(() => {
-    console.log('[VerifyOtpScreen] useEffect (initial): isLoading:', isLoading, 'phoneAuthConfirmation exists:', !!phoneAuthConfirmation);
+    logger.debug('[VerifyOtpScreen] useEffect (initial): isLoading:', isLoading, 'phoneAuthConfirmation exists:', !!phoneAuthConfirmation);
     if (!phoneAuthConfirmation && !isLoading && !phoneNumberSent) {
       // No confirmation and no phone number means user navigated here directly
-      console.warn("No phoneAuthConfirmation and no phone number. Redirecting to phone sign in.");
+      logger.warn("No phoneAuthConfirmation and no phone number. Redirecting to phone sign in.");
       router.replace('/(auth)/phoneSignIn');
     }
     // Removed immediate error for missing confirmation - let user try first
     // If confirmation is missing, the error will be shown when they try to verify
-  }, [phoneAuthConfirmation, isLoading, phoneNumberSent]);
+  }, [phoneAuthConfirmation, isLoading, phoneNumberSent, router]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>; // Correct type for setTimeout timer ID
@@ -242,9 +243,9 @@ export default function VerifyOtpScreen() {
     try {
       // Log for debugging
       if (PHONE_AUTH_CONFIG.enableDebugLogging) {
-        console.log('Verifying OTP for:', phoneNumberSent);
+        logger.debug('Verifying OTP for:', phoneNumberSent);
         if (isTestPhoneNumber(phoneNumberSent)) {
-          console.log('📱 Verifying test phone number');
+          logger.debug('📱 Verifying test phone number');
         }
       }
       
@@ -260,7 +261,7 @@ export default function VerifyOtpScreen() {
       }).start();
       // Navigation is handled by AuthProvider on successful auth state change
     } catch (e: any) {
-      console.error('OTP verification error:', e);
+      logger.error('OTP verification error:', e);
       
       const errorCode = e.code || 'default';
       const errorInfo = getOtpErrorMessageAndAction(errorCode);

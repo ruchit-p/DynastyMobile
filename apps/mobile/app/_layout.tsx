@@ -1,8 +1,8 @@
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
-import { LogBox } from 'react-native';
+import { LogBox, Linking } from 'react-native';
 import { errorHandler, ErrorSeverity } from '../src/lib/ErrorHandlingService';
-import ErrorBoundary from '../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../hooks/useErrorHandler';
 import { SplashScreen, Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
@@ -18,16 +18,36 @@ import 'react-native-get-random-values';
 import { connectToEmulators } from '../src/lib/firebase';
 import { ensureFirebaseInitialized } from '../src/lib/firebaseInit';
 import { Buffer } from '@craftzdog/react-native-buffer';
-import KeyRotationPrompt from '../components/encryption/KeyRotationPrompt';
+import { KeyRotationPrompt } from '../components/encryption/KeyRotationPrompt';
 import { backgroundSyncTask } from '../src/services/BackgroundSyncTask';
+import * as ExpoLinking from 'expo-linking';
+import * as Sentry from '@sentry/react-native';
+import { sentryConfig } from '../sentry.config';
+import { logger } from '../src/services/LoggingService';
+import crashlytics from '@react-native-firebase/crashlytics';
+// import { SessionExpiredModal } from '../components/ui/SessionExpiredModal'; // TODO: Create this component
+import MfaSignInModal from '../components/ui/MfaSignInModal';
 global.Buffer = Buffer as any;
 
 // Initialize Firebase as early as possible
 try {
   ensureFirebaseInitialized();
 } catch (error) {
-  console.error('Early Firebase initialization failed:', error);
+  logger.error('Early Firebase initialization failed:', error);
 }
+
+// Initialize Sentry
+Sentry.init(sentryConfig);
+
+// Initialize logging service
+logger.initialize(sentryConfig.dsn).catch(error => {
+  logger.error('Failed to initialize logging service:', error);
+});
+
+// Initialize Crashlytics
+crashlytics().setCrashlyticsCollectionEnabled(!__DEV__).catch(error => {
+  logger.error('Failed to initialize Crashlytics:', error);
+});
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -45,13 +65,13 @@ function AppContent() {
     // Hide splash screen once fonts are loaded (or error) AND auth state is determined
     if ((fontsLoaded || fontError) && !isAuthLoading) {
       SplashScreen.hideAsync().catch((error) => {
-        console.error('Failed to hide splash screen:', error);
+        logger.error('Failed to hide splash screen:', error);
       });
     }
     
     // Handle font loading errors
     if (fontError) {
-      console.error('Font loading error:', fontError);
+      logger.error('Font loading error:', fontError);
     }
   }, [fontsLoaded, fontError, isAuthLoading]);
 
@@ -69,10 +89,13 @@ function AppContent() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
+        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         {/* Expo Router's Stack implicitly renders the correct screen (Slot) */}
       </Stack>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <KeyRotationPrompt />
+      {/* <SessionExpiredModal /> */}
+      <MfaSignInModal />
     </ThemeProvider>
   );
 }
@@ -88,9 +111,9 @@ export default function RootLayout() {
         // Initialize background sync
         try {
           await backgroundSyncTask.configure();
-          console.log('[App] Background sync configured successfully');
+          logger.debug('[App] Background sync configured successfully');
         } catch (error) {
-          console.error('[App] Failed to configure background sync:', error);
+          logger.error('[App] Failed to configure background sync:', error);
         }
         
         // Suppress yellow box warnings in development
@@ -105,11 +128,11 @@ export default function RootLayout() {
           try {
             await connectToEmulators();
           } catch (error) {
-            console.error('Failed to connect to emulators:', error);
+            logger.error('Failed to connect to emulators:', error);
           }
         }
       } catch (error) {
-        console.error('App initialization failed:', error);
+        logger.error('App initialization failed:', error);
       }
     };
 

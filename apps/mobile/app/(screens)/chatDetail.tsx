@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -13,10 +13,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
-import FlashList from '../../components/ui/FlashList';
+import { FlashList } from '../../components/ui/FlashList';
 import { useEncryptedChat } from '../../hooks/useEncryptedChat';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Colors } from '../../constants/Colors';
@@ -33,9 +33,13 @@ import VoiceMessageRecorder from '../../components/ui/VoiceMessageRecorder';
 import VoiceMessagePlayer from '../../components/ui/VoiceMessagePlayer';
 import ChatMediaGallery from '../../components/ui/ChatMediaGallery';
 import TypingIndicator from '../../components/ui/TypingIndicator';
-import TypingService from '../../src/services/TypingService';
+import { TypingService } from '../../src/services/TypingService';
 import { MessageReactions, ReactionPicker } from '../../components/ui/MessageReactions';
-import ChatEncryptionService from '../../src/services/encryption/ChatEncryptionService';
+import { ChatEncryptionService } from '../../src/services/encryption/ChatEncryptionService';
+import { logger } from '../../src/services/LoggingService';
+import ChatHeader from '../../components/ui/ChatHeader';
+import { SafetyNumberService } from '../../src/services/SafetyNumberService';
+import KeyChangeNotification from '../../components/ui/KeyChangeNotification';
 
 interface ChatDetailScreenProps {
   chatId: string;
@@ -67,6 +71,9 @@ export default function ChatDetailScreen() {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [reactionPickerPosition, setReactionPickerPosition] = useState<{ x: number; y: number } | undefined>();
   const [reactionMessageId, setReactionMessageId] = useState<string | null>(null);
+  const [verificationStatus, setVerificationStatus] = useState<'verified' | 'unverified' | 'changed'>('unverified');
+  const [showKeyChangeNotification, setShowKeyChangeNotification] = useState(false);
+  const [keyChangeUserId, setKeyChangeUserId] = useState<string | null>(null);
   const messageListRef = useRef<any>(null);
   const typingTimerRef = useRef<NodeJS.Timeout>();
 
@@ -144,7 +151,7 @@ export default function ChatDetailScreen() {
     try {
       await ChatEncryptionService.toggleReaction(params.chatId, messageId, emoji);
     } catch (error) {
-      console.error('Failed to add reaction:', error);
+      logger.error('Failed to add reaction:', error);
     }
   }, [params.chatId]);
   
@@ -159,22 +166,25 @@ export default function ChatDetailScreen() {
     
     // Start typing if text is not empty
     if (text.trim()) {
-      TypingService.startTyping(params.chatId);
+      TypingService.getInstance().startTyping(params.chatId);
       
       // Set timer to stop typing after 3 seconds of inactivity
       typingTimerRef.current = setTimeout(() => {
-        TypingService.stopTyping(params.chatId);
+        TypingService.getInstance().stopTyping(params.chatId);
       }, 3000);
     } else {
       // Stop typing if text is empty
-      TypingService.stopTyping(params.chatId);
+      TypingService.getInstance().stopTyping(params.chatId);
     }
   }, [params.chatId]);
 
   // Parse participant IDs
-  const participantIds = Array.isArray(params.participantIds) 
-    ? params.participantIds 
-    : params.participantIds?.split(',') || [];
+  const participantIds = useMemo(() => 
+    Array.isArray(params.participantIds) 
+      ? params.participantIds 
+      : params.participantIds?.split(',') || [],
+    [params.participantIds]
+  );
     
   // Determine if this is a group chat
   const isGroupChat = participantIds.length > 1;
@@ -200,18 +210,32 @@ export default function ChatDetailScreen() {
         await initializeChat(params.chatId, participantIds);
       }, 'Failed to initialize encrypted chat')();
     }
-  }, [params.chatId, participantIds, isInitialized]);
+  }, [params.chatId, participantIds, isInitialized, initializeChat, withErrorHandling]);
+
+  // Fetch verification status for direct chats
+  useEffect(() => {
+    if (!user?.uid || participantIds.length !== 1) return;
+    
+    const otherUserId = participantIds[0];
+    if (otherUserId === user.uid) return;
+    
+    withErrorHandling(async () => {
+      const safetyNumberService = SafetyNumberService.getInstance();
+      const isVerified = await safetyNumberService.getVerificationStatus(user.uid, otherUserId);
+      setVerificationStatus(isVerified ? 'verified' : 'unverified');
+    }, 'Failed to fetch verification status')();
+  }, [user?.uid, participantIds, withErrorHandling]);
 
   // Subscribe to typing indicators
   useEffect(() => {
     if (!params.chatId) return;
 
-    const unsubscribe = TypingService.subscribeToTypingIndicators(
+    const unsubscribe = TypingService.getInstance().subscribeToTypingIndicators(
       params.chatId,
       async (userIds) => {
         setTypingUsers(userIds);
         if (userIds.length > 0) {
-          const names = await TypingService.getTypingUserNames(userIds);
+          const names = await TypingService.getInstance().getTypingUserNames(userIds);
           setTypingUserNames(names);
         } else {
           setTypingUserNames([]);
@@ -221,66 +245,25 @@ export default function ChatDetailScreen() {
 
     return () => {
       unsubscribe();
-      TypingService.cleanup(params.chatId);
+      TypingService.getInstance().cleanup(params.chatId);
     };
   }, [params.chatId]);
 
-  // Set up navigation header
-  useEffect(() => {
-    navigation.setOptions({
-      headerTitle: () => (
-        <View style={styles.headerTitleContainer}>
-          <Text style={[styles.headerTitleText, { color: textColor }]}>
-            {params.chatTitle || 'Encrypted Chat'}
-          </Text>
-          {isGroupChat && (
-            <View style={styles.groupBadge}>
-              <Ionicons name="people" size={12} color={Colors.dynastyGreen} />
-              <Text style={styles.groupBadgeText}>{participantIds.length + 1}</Text>
-            </View>
-          )}
-        </View>
-      ),
-      headerRight: () => (
-        <View style={styles.headerRight}>
-          <EncryptionIndicator status={encryptionStatus} />
-          <TouchableOpacity
-            onPress={() => router.push({
-              pathname: '/(screens)/chatSearch',
-              params: { chatId: params.chatId }
-            })}
-            style={styles.headerButton}
-          >
-            <Ionicons name="search" size={24} color={textColor} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setShowMediaGallery(true)}
-            style={styles.headerButton}
-          >
-            <Ionicons name="images" size={24} color={textColor} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setShowKeyVerification(true)}
-            style={styles.headerButton}
-          >
-            <Ionicons name="shield-checkmark" size={24} color={textColor} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => router.push({
-              pathname: '/(screens)/chatInfo',
-              params: { 
-                chatId: params.chatId,
-                chatTitle: params.chatTitle 
-              }
-            })}
-            style={styles.headerButton}
-          >
-            <Ionicons name="information-circle" size={24} color={textColor} />
-          </TouchableOpacity>
-        </View>
-      ),
-    });
-  }, [navigation, params.chatTitle, encryptionStatus, textColor, isGroupChat, participantIds, router, params.chatId]);
+  // Handle verification tap  
+  const handleVerificationTap = useCallback(() => {
+    if (participantIds.length === 1) {
+      const otherUserId = participantIds[0];
+      if (otherUserId !== user?.uid) {
+        router.push({
+          pathname: '/(screens)/safetyNumber',
+          params: { 
+            remoteUserId: otherUserId,
+            remoteUserName: params.chatTitle || 'User'
+          }
+        });
+      }
+    }
+  }, [participantIds, user?.uid, params.chatTitle, router]);
 
   // Handle media selection
   const { selectImages } = useImageUpload({
@@ -387,7 +370,7 @@ export default function ChatDetailScreen() {
         />
       </TouchableOpacity>
     );
-  }, [user, textColor, borderColor, handleReaction]);
+  }, [user, textColor, borderColor, handleReaction, markAsRead, participantIds.length]);
 
   if (isLoading && !isInitialized) {
     return (
@@ -420,6 +403,45 @@ export default function ChatDetailScreen() {
   return (
     <ErrorBoundary screenName="ChatDetail">
       <SafeAreaView style={[styles.container, { backgroundColor }]}>
+        <ChatHeader
+          title={params.chatTitle || 'Encrypted Chat'}
+          subtitle={isGroupChat ? `${participantIds.length + 1} members` : undefined}
+          isOnline={true}
+          verificationStatus={verificationStatus}
+          onBackPress={() => router.back()}
+          onVerificationPress={handleVerificationTap}
+          onSearchPress={() => router.push({
+            pathname: '/(screens)/chatSearch',
+            params: { chatId: params.chatId }
+          })}
+          onMediaPress={() => setShowMediaGallery(true)}
+          onInfoPress={() => router.push({
+            pathname: '/(screens)/chatInfo',
+            params: { 
+              chatId: params.chatId,
+              chatTitle: params.chatTitle 
+            }
+          })}
+        />
+        
+        {showKeyChangeNotification && keyChangeUserId && (
+          <KeyChangeNotification
+            userName={params.chatTitle || 'User'}
+            userId={keyChangeUserId}
+            onVerify={() => {
+              setShowKeyChangeNotification(false);
+              router.push({
+                pathname: '/(screens)/safetyNumber',
+                params: { 
+                  remoteUserId: keyChangeUserId,
+                  remoteUserName: params.chatTitle || 'User'
+                }
+              });
+            }}
+            onDismiss={() => setShowKeyChangeNotification(false)}
+          />
+        )}
+        
         <KeyboardAvoidingView
           style={styles.keyboardAvoidingView}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -589,14 +611,6 @@ const styles = StyleSheet.create({
   keyboardAvoidingView: {
     flex: 1,
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerButton: {
-    marginLeft: 15,
-    padding: 5,
-  },
   messagesList: {
     paddingHorizontal: 15,
     paddingVertical: 10,
@@ -662,28 +676,6 @@ const styles = StyleSheet.create({
   },
   sendButton: {
     padding: 10,
-  },
-  headerTitleContainer: {
-    alignItems: 'center',
-  },
-  headerTitleText: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  groupBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F7F5',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginTop: 4,
-    gap: 2,
-  },
-  groupBadgeText: {
-    fontSize: 12,
-    color: Colors.dynastyGreen,
-    fontWeight: '500',
   },
   reactionTouchArea: {
     position: 'absolute',

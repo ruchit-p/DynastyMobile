@@ -13,14 +13,15 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { BorderRadius, Spacing } from '../../constants/Spacing';
-import ThemedText from '../../components/ThemedText';
+import { ThemedText } from '../../components/ThemedText';
 import { commonHeaderOptions } from '../../constants/headerConfig';
 import { getFirebaseFunctions as firebaseFunctionsInstance, getFirebaseAuth as firebaseAuthInstance } from '../../src/lib/firebase';
 import { useScreenResult } from '../../src/contexts/ScreenResultContext';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
-import FlashList from '../../components/ui/FlashList';
+import { FlashList } from '../../components/ui/FlashList';
+import { logger } from '../../src/services/LoggingService';
 
 interface Member {
   id: string;
@@ -75,7 +76,7 @@ const SelectMembersScreen = () => {
           setSelectedMemberIds(ids);
         }
       } catch (e) {
-        console.error("Failed to parse preSelected members:", e);
+        logger.error("Failed to parse preSelected members:", e);
       }
     }
   }, [params.preSelected]);
@@ -92,7 +93,7 @@ const SelectMembersScreen = () => {
           'getFamilyManagementData'
         );
         
-        console.log("Calling getFamilyManagementData Firebase function (@react-native-firebase)...");
+        logger.debug("Calling getFamilyManagementData Firebase function (@react-native-firebase)...");
         const result = await getFamilyManagementDataFn();
         const data = result.data as { members: FirebaseMember[] };
 
@@ -101,7 +102,7 @@ const SelectMembersScreen = () => {
         const currentUserId = currentUser ? currentUser.uid : null;
 
         if (data && Array.isArray(data.members)) {
-          console.log("Received members:", data.members.length);
+          logger.debug("Received members:", data.members.length);
           const transformedMembers: Member[] = data.members
             .filter(fbMember => fbMember.id !== currentUserId) // Filter out the current user
             .map(fbMember => ({
@@ -112,11 +113,11 @@ const SelectMembersScreen = () => {
           setMembers(transformedMembers);
           setFilteredMembers(transformedMembers);
         } else {
-          console.error("Data from Firebase function is not in the expected format:", result.data);
+          logger.error("Data from Firebase function is not in the expected format:", result.data);
           setError("Failed to load family members: Invalid data format.");
         }
       } catch (error: any) {
-        console.error("Error fetching family members:", error);
+        logger.error("Error fetching family members:", error);
         
         handleError(error, {
           action: 'fetchFamilyMembers',
@@ -147,7 +148,7 @@ const SelectMembersScreen = () => {
     });
 
     fetchFamilyMembers();
-  }, []);
+  }, [handleError, purpose, reset, withErrorHandling]);
 
   // Filter members based on search text
   useEffect(() => {
@@ -175,7 +176,7 @@ const SelectMembersScreen = () => {
   const handleDone = withErrorHandling(async () => {
     reset();
     try {
-      console.log(`Selected for ${purpose}:`, selectedMemberIds);
+      logger.debug(`Selected for ${purpose}:`, selectedMemberIds);
       setResult({
         purpose,
         selectedIds: selectedMemberIds,
@@ -184,7 +185,7 @@ const SelectMembersScreen = () => {
       if (router.canGoBack()) {
         router.back();
       } else {
-        console.warn("SelectMembersScreen: router.canGoBack() is false. Navigating to /(screens)/createStory as fallback.");
+        logger.warn("SelectMembersScreen: router.canGoBack() is false. Navigating to /(screens)/createStory as fallback.");
         router.replace('/(screens)/createStory');
       }
     } catch (error: any) {

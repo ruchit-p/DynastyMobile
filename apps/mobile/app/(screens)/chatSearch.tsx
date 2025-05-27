@@ -15,10 +15,11 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Colors } from '../../constants/Colors';
 import { useThemeColor } from '../../hooks/useThemeColor';
-import FlashList from '../../components/ui/FlashList';
-import ChatEncryptionService, { Message } from '../../src/services/encryption/ChatEncryptionService';
+import { FlashList } from '../../components/ui/FlashList';
+import { ChatEncryptionService, Message } from '../../src/services/encryption/ChatEncryptionService';
 import { debounce } from 'lodash';
 import { format } from 'date-fns';
+import { logger } from '../../src/services/LoggingService';
 
 interface ChatSearchParams {
   chatId?: string;
@@ -83,7 +84,7 @@ export default function ChatSearchScreen() {
         
         setSearchResults(processedResults);
       } catch (error) {
-        console.error('Search failed:', error);
+        logger.error('Search failed:', error);
         setSearchResults([]);
       } finally {
         setIsSearching(false);

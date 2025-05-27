@@ -3,10 +3,10 @@ import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, Aler
 import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { showErrorAlert } from '../../src/lib/errorUtils';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
-import FlashList from '../../components/ui/FlashList';
+import { FlashList } from '../../components/ui/FlashList';
 
 const CAPACITY_PRESETS = ['Unlimited', '10', '25', '50', '100', 'Custom'];
 

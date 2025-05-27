@@ -10,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { Spacing, BorderRadius, Shadows } from '../../constants/Spacing';
-import Typography from '../../constants/Typography';
+import { Typography } from '../../constants/Typography';
 import { useEncryption } from '../../src/contexts/EncryptionContext';
 import { KeyRotationService } from '../../src/services/encryption';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -111,7 +111,7 @@ export const KeyRotationPrompt: React.FC = () => {
           <Text style={styles.title}>Security Key Rotation</Text>
           
           <Text style={styles.description}>
-            It's time to rotate your encryption keys for enhanced security. This process helps protect your messages even if old keys are compromised.
+            It&apos;s time to rotate your encryption keys for enhanced security. This process helps protect your messages even if old keys are compromised.
           </Text>
           
           <View style={styles.infoContainer}>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, TextInput, Modal, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import ThemedText from '../ThemedText';
+import { ThemedText } from '../ThemedText';
 import IconButton, { IconSet } from './IconButton';
 import Button from './Button';
 import Divider from './Divider';

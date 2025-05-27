@@ -15,7 +15,7 @@ import Screen from '../../components/ui/Screen';
 import EmptyState from '../../components/ui/EmptyState';
 import FloatingActionMenu, { FabMenuItemAction } from '../../components/ui/FloatingActionMenu';
 import StoryPost from '../../components/ui/StoryPost';
-import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 
 // Import design tokens
 import { Spacing } from '../../constants/Spacing';
@@ -29,6 +29,7 @@ import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 import { useOffline } from '../../src/contexts/OfflineContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../../src/services/LoggingService';
 
 // Main History Screen
 const HistoryScreen = () => {
@@ -55,7 +56,7 @@ const HistoryScreen = () => {
               const cachedUserStories = await AsyncStorage.getItem(`userStories_${user.uid}`);
               if (cachedUserStories) {
                 const cached = JSON.parse(cachedUserStories);
-                console.log('HistoryScreen: Using cached user stories');
+                logger.debug('HistoryScreen: Using cached user stories');
                 setUserStories(cached.stories || []);
                 setIsLoadingStories(false);
                 return;
@@ -106,7 +107,7 @@ const HistoryScreen = () => {
         }
       };
       fetchStories();
-    }, [user, handleError, isOnline])
+    }, [user, isOnline])
   );
 
   // Menu items for History Screen
@@ -148,11 +149,7 @@ const HistoryScreen = () => {
           style: 'destructive',
           onPress: () => {
             // Implement delete functionality
-            handleError(new Error('Delete functionality not yet implemented'), {
-              severity: ErrorSeverity.INFO,
-              metadata: { action: 'deleteStory', storyId: story.id },
-              showAlert: true
-            });
+            Alert.alert('Not Implemented', 'Delete functionality not yet implemented');
           }
         },
         { 
@@ -172,9 +169,9 @@ const HistoryScreen = () => {
         if (isOnline) {
           try {
             await forceSync();
-            console.log('HistoryScreen: Sync completed, refreshing stories');
+            logger.debug('HistoryScreen: Sync completed, refreshing stories');
           } catch (error) {
-            console.error('HistoryScreen: Sync failed:', error);
+            logger.error('HistoryScreen: Sync failed:', error);
           }
         }
         

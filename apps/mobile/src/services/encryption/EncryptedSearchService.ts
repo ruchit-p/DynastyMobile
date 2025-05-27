@@ -1,8 +1,9 @@
-import { createHash, randomBytes } from 'react-native-quick-crypto';
+import { createHash } from 'react-native-quick-crypto';
 import { Buffer } from '@craftzdog/react-native-buffer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirebaseDb } from '../../lib/firebase';
-import MetadataEncryptionService from './MetadataEncryptionService';
+import { MetadataEncryptionService } from './MetadataEncryptionService';
+import { logger } from '../LoggingService';
 
 interface SearchIndex {
   messageId: string;
@@ -54,7 +55,7 @@ export class EncryptedSearchService {
       // Load existing index
       await this.loadSearchIndex();
     } catch (error) {
-      console.error('Failed to initialize search service:', error);
+      logger.error('Failed to initialize search service:', error);
       throw error;
     }
   }
@@ -110,7 +111,7 @@ export class EncryptedSearchService {
           });
       }
     } catch (error) {
-      console.error('Failed to index message:', error);
+      logger.error('Failed to index message:', error);
       throw error;
     }
   }
@@ -144,7 +145,7 @@ export class EncryptedSearchService {
       // Sort by relevance
       return mergedResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
     } catch (error) {
-      console.error('Search failed:', error);
+      logger.error('Search failed:', error);
       throw error;
     }
   }
@@ -259,7 +260,7 @@ export class EncryptedSearchService {
 
       return results;
     } catch (error) {
-      console.error('Server search failed:', error);
+      logger.error('Server search failed:', error);
       return [];
     }
   }
@@ -274,7 +275,7 @@ export class EncryptedSearchService {
       
       return JSON.parse(indexData) as SearchIndex[];
     } catch (error) {
-      console.error('Failed to load search index:', error);
+      logger.error('Failed to load search index:', error);
       return [];
     }
   }
@@ -343,7 +344,7 @@ export class EncryptedSearchService {
     try {
       await this.db.collection('searchIndex').doc(messageId).delete();
     } catch (error) {
-      console.error('Failed to delete from server index:', error);
+      logger.error('Failed to delete from server index:', error);
     }
   }
 
@@ -365,7 +366,7 @@ export class EncryptedSearchService {
    * Rebuild search index from messages
    */
   async rebuildIndex(messages: { id: string; chatId: string; content: string }[]): Promise<void> {
-    console.log('Rebuilding search index...');
+    logger.debug('Rebuilding search index...');
     
     // Clear existing index
     await AsyncStorage.removeItem(this.INDEX_STORAGE_KEY);
@@ -375,11 +376,11 @@ export class EncryptedSearchService {
       try {
         await this.indexMessage(message.id, message.chatId, message.content);
       } catch (error) {
-        console.error(`Failed to index message ${message.id}:`, error);
+        logger.error(`Failed to index message ${message.id}:`, error);
       }
     }
     
-    console.log(`Indexed ${messages.length} messages`);
+    logger.debug(`Indexed ${messages.length} messages`);
   }
 }
 

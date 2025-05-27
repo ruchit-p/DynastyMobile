@@ -255,8 +255,6 @@ class CacheService {
     events: (familyTreeId: string, page?: number) => 
       CacheService.generateKey('events', familyTreeId, page),
     event: (eventId: string) => CacheService.generateKey('event', eventId),
-    messages: (chatId: string, page?: number) => 
-      CacheService.generateKey('messages', chatId, page),
     notifications: (userId: string, page?: number) => 
       CacheService.generateKey('notifications', userId, page),
     vaultItems: (userId: string, folderId?: string) => 

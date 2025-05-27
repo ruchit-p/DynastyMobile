@@ -1,6 +1,7 @@
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import { getErrorMessage } from '../lib/errorUtils';
 import { getFirebaseDb } from '../lib/firebase';
+import { logger } from './LoggingService';
 
 // Types
 export interface UserProfile {
@@ -62,7 +63,7 @@ export class UserSyncService implements IUserSyncService {
   private isSyncing = false;
 
   private constructor() {
-    console.log('[UserSyncService] Initialized');
+    logger.debug('[UserSyncService] Initialized');
   }
 
   static getInstance(): UserSyncService {
@@ -73,7 +74,7 @@ export class UserSyncService implements IUserSyncService {
   }
 
   async syncUserProfile(userId: string): Promise<void> {
-    console.log(`[UserSyncService] Syncing user profile for userId: ${userId}`);
+    logger.debug(`[UserSyncService] Syncing user profile for userId: ${userId}`);
     
     try {
       // TODO: Implement actual sync logic
@@ -88,7 +89,7 @@ export class UserSyncService implements IUserSyncService {
       
       if (userDoc.exists) {
         const remoteProfile = userDoc.data() as UserProfile;
-        console.log(`[UserSyncService] Remote profile found:`, remoteProfile);
+        logger.debug(`[UserSyncService] Remote profile found:`, remoteProfile);
         
         // TODO: Compare with local data and sync
         // For now, just log the operation
@@ -100,13 +101,13 @@ export class UserSyncService implements IUserSyncService {
         });
       }
     } catch (error) {
-      console.error('[UserSyncService] Error syncing user profile:', getErrorMessage(error));
+      logger.error('[UserSyncService] Error syncing user profile:', getErrorMessage(error));
       throw error;
     }
   }
 
   async syncUserSettings(userId: string): Promise<void> {
-    console.log(`[UserSyncService] Syncing user settings for userId: ${userId}`);
+    logger.debug(`[UserSyncService] Syncing user settings for userId: ${userId}`);
     
     try {
       // TODO: Implement settings sync
@@ -121,7 +122,7 @@ export class UserSyncService implements IUserSyncService {
       
       if (settingsDoc.exists) {
         const remoteSettings = settingsDoc.data() as UserSettings;
-        console.log(`[UserSyncService] Remote settings found:`, remoteSettings);
+        logger.debug(`[UserSyncService] Remote settings found:`, remoteSettings);
         
         // TODO: Implement merge logic
         await this.queueOperation({
@@ -132,13 +133,13 @@ export class UserSyncService implements IUserSyncService {
         });
       }
     } catch (error) {
-      console.error('[UserSyncService] Error syncing user settings:', getErrorMessage(error));
+      logger.error('[UserSyncService] Error syncing user settings:', getErrorMessage(error));
       throw error;
     }
   }
 
   async resolveUserConflicts(localData: any, remoteData: any): Promise<ConflictResolution> {
-    console.log('[UserSyncService] Resolving conflicts between:', { localData, remoteData });
+    logger.debug('[UserSyncService] Resolving conflicts between:', { localData, remoteData });
     
     try {
       // TODO: Implement conflict resolution strategies
@@ -168,7 +169,7 @@ export class UserSyncService implements IUserSyncService {
         };
       }
     } catch (error) {
-      console.error('[UserSyncService] Error resolving conflicts:', getErrorMessage(error));
+      logger.error('[UserSyncService] Error resolving conflicts:', getErrorMessage(error));
       throw error;
     }
   }
@@ -183,7 +184,7 @@ export class UserSyncService implements IUserSyncService {
     };
     
     this.syncQueue.set(id, syncOp);
-    console.log(`[UserSyncService] Queued operation ${id}:`, syncOp);
+    logger.debug(`[UserSyncService] Queued operation ${id}:`, syncOp);
     
     // TODO: Persist queue to AsyncStorage for reliability
     
@@ -192,12 +193,12 @@ export class UserSyncService implements IUserSyncService {
 
   async processQueue(): Promise<void> {
     if (this.isSyncing) {
-      console.log('[UserSyncService] Already processing queue');
+      logger.debug('[UserSyncService] Already processing queue');
       return;
     }
     
     this.isSyncing = true;
-    console.log('[UserSyncService] Processing sync queue...');
+    logger.debug('[UserSyncService] Processing sync queue...');
     
     try {
       const pendingOps = Array.from(this.syncQueue.values())
@@ -206,7 +207,7 @@ export class UserSyncService implements IUserSyncService {
       for (const op of pendingOps) {
         try {
           op.status = 'syncing';
-          console.log(`[UserSyncService] Processing operation ${op.id}`);
+          logger.debug(`[UserSyncService] Processing operation ${op.id}`);
           
           // TODO: Implement actual sync based on operation type
           // For now, simulate processing
@@ -215,13 +216,13 @@ export class UserSyncService implements IUserSyncService {
           op.status = 'completed';
           this.syncQueue.delete(op.id);
         } catch (error) {
-          console.error(`[UserSyncService] Failed to process operation ${op.id}:`, error);
+          logger.error(`[UserSyncService] Failed to process operation ${op.id}:`, error);
           op.status = 'failed';
           op.retryCount++;
           
           // TODO: Implement exponential backoff
           if (op.retryCount >= 3) {
-            console.error(`[UserSyncService] Operation ${op.id} failed after 3 retries`);
+            logger.error(`[UserSyncService] Operation ${op.id} failed after 3 retries`);
             // TODO: Move to dead letter queue
           }
         }

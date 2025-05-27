@@ -2,9 +2,11 @@ import 'react-native-get-random-values';
 import { Buffer } from 'buffer';
 import * as QuickCrypto from 'react-native-quick-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import E2EEService from './E2EEService';
-import { getFirebaseDb, getFirebaseAuth, getFirebaseStorage } from '../../lib/firebase';
+import { LibsignalService } from './libsignal/LibsignalService';
+import { getFirebaseDb, getFirebaseAuth } from '../../lib/firebase';
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import { getKeyCacheService } from './KeyCacheService';
+import { logger } from '../LoggingService';
 
 type Timestamp = FirebaseFirestoreTypes.Timestamp;
 
@@ -21,12 +23,6 @@ interface BackupKey {
   deviceId?: string;
 }
 
-interface RecoveryCode {
-  code: string;
-  createdAt: Timestamp;
-  usedAt?: Timestamp;
-  expiresAt: Timestamp;
-}
 
 interface BackupMetadata {
   userId: string;
@@ -43,7 +39,7 @@ export default class KeyBackupService {
   private readonly BACKUP_VERSION = 1;
   private readonly RECOVERY_CODE_LENGTH = 24;
   private readonly RECOVERY_CODE_EXPIRY = 365 * 24 * 60 * 60 * 1000; // 1 year
-  private readonly PBKDF2_ITERATIONS = 100000;
+  private readonly PBKDF2_ITERATIONS = 210000; // Updated to OWASP 2024 recommendation
   private readonly STORAGE_KEY_PREFIX = 'key_backup_';
 
   private constructor() {}
@@ -68,7 +64,7 @@ export default class KeyBackupService {
 
     try {
       // Get user's current key pair
-      const keyPair = await E2EEService.getInstance().getUserKeyPair();
+      const keyPair = await LibsignalService.getInstance().getIdentityKeyPair();
       if (!keyPair) throw new Error('No keys to backup');
 
       // Generate salt for password derivation
@@ -149,7 +145,7 @@ export default class KeyBackupService {
 
       return { backupId, recoveryCode };
     } catch (error) {
-      console.error('Failed to create key backup:', error);
+      logger.error('Failed to create key backup:', error);
       throw error;
     }
   }
@@ -189,7 +185,7 @@ export default class KeyBackupService {
       }
 
       // Restore the key pair
-      await E2EEService.getInstance().restoreKeyPair({
+      await LibsignalService.getInstance().restoreKeyPair({
         publicKey: backup.publicKey,
         privateKey
       });
@@ -202,7 +198,7 @@ export default class KeyBackupService {
       // Cache the restored backup
       await this.cacheBackupLocally(backup, derivedKey);
     } catch (error) {
-      console.error('Failed to restore from backup:', error);
+      logger.error('Failed to restore from backup:', error);
       throw error;
     }
   }
@@ -262,7 +258,7 @@ export default class KeyBackupService {
       const privateKey = await this.decryptData(backup.encryptedPrivateKey, derivedKey);
 
       // Restore the key pair
-      await E2EEService.getInstance().restoreKeyPair({
+      await LibsignalService.getInstance().restoreKeyPair({
         publicKey: backup.publicKey,
         privateKey
       });
@@ -272,7 +268,7 @@ export default class KeyBackupService {
         usedAt: Timestamp.now()
       });
     } catch (error) {
-      console.error('Failed to restore with recovery code:', error);
+      logger.error('Failed to restore with recovery code:', error);
       throw error;
     }
   }
@@ -286,7 +282,7 @@ export default class KeyBackupService {
     if (!userId) throw new Error('User not authenticated');
 
     try {
-      const keyPair = await E2EEService.getInstance().getUserKeyPair();
+      const keyPair = await LibsignalService.getInstance().getIdentityKeyPair();
       if (!keyPair) throw new Error('No keys to export');
 
       // Create export package
@@ -315,7 +311,7 @@ export default class KeyBackupService {
       // Add header and footer for clarity
       return `-----BEGIN DYNASTY KEY BACKUP-----\n${exportString}\n-----END DYNASTY KEY BACKUP-----`;
     } catch (error) {
-      console.error('Failed to export keys:', error);
+      logger.error('Failed to export keys:', error);
       throw error;
     }
   }
@@ -350,12 +346,12 @@ export default class KeyBackupService {
       }
 
       // Restore keys
-      await E2EEService.getInstance().restoreKeyPair({
+      await LibsignalService.getInstance().restoreKeyPair({
         publicKey: exportData.publicKey,
         privateKey
       });
     } catch (error) {
-      console.error('Failed to import keys:', error);
+      logger.error('Failed to import keys:', error);
       throw error;
     }
   }
@@ -377,7 +373,7 @@ export default class KeyBackupService {
 
       return !backupSnapshot.empty;
     } catch (error) {
-      console.error('Failed to check backup status:', error);
+      logger.error('Failed to check backup status:', error);
       return false;
     }
   }
@@ -400,7 +396,7 @@ export default class KeyBackupService {
       }
       return null;
     } catch (error) {
-      console.error('Failed to get backup hint:', error);
+      logger.error('Failed to get backup hint:', error);
       return null;
     }
   }
@@ -448,7 +444,7 @@ export default class KeyBackupService {
       // Clear local cache
       await this.clearLocalCache();
     } catch (error) {
-      console.error('Failed to delete backups:', error);
+      logger.error('Failed to delete backups:', error);
       throw error;
     }
   }
@@ -457,22 +453,53 @@ export default class KeyBackupService {
    * Derive encryption key from password
    */
   private async deriveKeyFromPassword(password: string, salt: string): Promise<string> {
-    // In production, use PBKDF2 or similar
-    const combined = password + salt;
-    const hash = QuickCrypto.createHash('sha256')
-      .update(combined)
-      .digest('base64');
-    return hash;
+    // Use cache service for performance
+    const keyCache = getKeyCacheService();
+    const saltBuffer = Buffer.from(salt, 'base64');
+    
+    const key = await keyCache.getOrDeriveKey(
+      password,
+      saltBuffer,
+      this.PBKDF2_ITERATIONS,
+      32,
+      'sha256',
+      () => QuickCrypto.pbkdf2Sync(
+        password,
+        saltBuffer,
+        this.PBKDF2_ITERATIONS,
+        32,
+        'sha256'
+      )
+    );
+    
+    return Buffer.from(key).toString('base64');
   }
 
   /**
    * Derive key from recovery code
    */
   private async deriveKeyFromRecoveryCode(recoveryCode: string): Promise<string> {
-    const hash = QuickCrypto.createHash('sha256')
-      .update(recoveryCode)
-      .digest('base64');
-    return hash;
+    // Use PBKDF2 for recovery codes as well
+    // Use a fixed salt for recovery codes to ensure consistency
+    const fixedSalt = Buffer.from('dynasty-recovery-code-salt-v1', 'utf8');
+    const keyCache = getKeyCacheService();
+    
+    const key = await keyCache.getOrDeriveKey(
+      recoveryCode,
+      fixedSalt,
+      this.PBKDF2_ITERATIONS,
+      32,
+      'sha256',
+      () => QuickCrypto.pbkdf2Sync(
+        recoveryCode,
+        fixedSalt,
+        this.PBKDF2_ITERATIONS,
+        32,
+        'sha256'
+      )
+    );
+    
+    return Buffer.from(key).toString('base64');
   }
 
   /**
@@ -493,7 +520,7 @@ export default class KeyBackupService {
       
       return Buffer.concat([nonce, tag, encrypted]).toString('base64');
     } catch (error) {
-      console.error('Failed to encrypt data:', error);
+      logger.error('Failed to encrypt data:', error);
       throw error;
     }
   }
@@ -519,7 +546,7 @@ export default class KeyBackupService {
       
       return decrypted.toString('utf8');
     } catch (error) {
-      console.error('Failed to decrypt data:', error);
+      logger.error('Failed to decrypt data:', error);
       throw error;
     }
   }
@@ -554,7 +581,7 @@ export default class KeyBackupService {
         .digest('hex');
       return inputHash === encrypted;
     } catch (error) {
-      console.error('Failed to validate recovery code:', error);
+      logger.error('Failed to validate recovery code:', error);
       return false;
     }
   }
@@ -566,8 +593,8 @@ export default class KeyBackupService {
     try {
       // Test encryption/decryption
       const testMessage = 'test';
-      const encrypted = await E2EEService.getInstance().encryptWithKey(testMessage, publicKey);
-      const decrypted = await E2EEService.getInstance().decryptWithKey(encrypted, privateKey);
+      const encrypted = await LibsignalService.getInstance().encryptWithKey(testMessage, publicKey);
+      const decrypted = await LibsignalService.getInstance().decryptWithKey(encrypted, privateKey);
       return decrypted === testMessage;
     } catch {
       return false;
@@ -611,7 +638,7 @@ export default class KeyBackupService {
         encrypted
       );
     } catch (error) {
-      console.error('Failed to cache backup locally:', error);
+      logger.error('Failed to cache backup locally:', error);
     }
   }
 
@@ -624,7 +651,7 @@ export default class KeyBackupService {
       const backupKeys = keys.filter(k => k.startsWith(this.STORAGE_KEY_PREFIX));
       await AsyncStorage.multiRemove(backupKeys);
     } catch (error) {
-      console.error('Failed to clear local cache:', error);
+      logger.error('Failed to clear local cache:', error);
     }
   }
 }

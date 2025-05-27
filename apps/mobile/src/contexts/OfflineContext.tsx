@@ -1,9 +1,10 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useRef, useCallback } from 'react';
 import { networkService } from '../services/NetworkService';
 import { syncService, SyncListener } from '../lib/syncService';
 import { useAuth } from './AuthContext';
 import { ConflictResolutionService } from '../services/ConflictResolutionService';
 import { Alert } from 'react-native';
+import { logger } from '../services/LoggingService';
 
 interface OfflineContextType {
   isOnline: boolean;
@@ -46,13 +47,37 @@ export const OfflineProvider: React.FC<OfflineProviderProps> = ({ children }) =>
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
   const [conflicts, setConflicts] = useState<any[]>([]);
   
+  // Use refs for values that are used in callbacks but shouldn't trigger re-renders
+  const isOnlineRef = useRef(isOnline);
+  const isSyncingRef = useRef(isSyncing);
+  const wasOfflineRef = useRef(wasOffline);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    isOnlineRef.current = isOnline;
+  }, [isOnline]);
+
+  useEffect(() => {
+    isSyncingRef.current = isSyncing;
+  }, [isSyncing]);
+
+  useEffect(() => {
+    wasOfflineRef.current = wasOffline;
+  }, [wasOffline]);
+  
   const conflictService = ConflictResolutionService.getInstance();
+
+  const updateSyncStatus = useCallback(() => {
+    const status = syncService.getSyncStatus();
+    setLastSyncTime(status.lastSync);
+    setPendingOperationsCount(status.pendingOperations);
+  }, [syncService]);
 
   useEffect(() => {
     // Subscribe to network status changes
     const unsubscribeNetwork = networkService.addListener((online, state) => {
-      console.log('OfflineContext: Network status changed:', online);
-      const previouslyOnline = isOnline;
+      logger.debug('OfflineContext: Network status changed:', online);
+      const previouslyOnline = isOnlineRef.current;
       setIsOnline(online);
       
       // Show alert when going offline
@@ -63,7 +88,7 @@ export const OfflineProvider: React.FC<OfflineProviderProps> = ({ children }) =>
           'You are now offline. Changes will be saved locally and synced when you reconnect.',
           [{ text: 'OK' }]
         );
-      } else if (online && wasOffline && isSyncing === false) {
+      } else if (online && wasOfflineRef.current && isSyncingRef.current === false) {
         // Only show "Back Online" if user was actually offline before
         setWasOffline(false);
         Alert.alert(
@@ -77,12 +102,12 @@ export const OfflineProvider: React.FC<OfflineProviderProps> = ({ children }) =>
     // Subscribe to sync events
     const syncListener: SyncListener = {
       onSyncStart: () => {
-        console.log('OfflineContext: Sync started');
+        logger.debug('OfflineContext: Sync started');
         setIsSyncing(true);
         setSyncProgress(null);
       },
       onSyncComplete: (success, error) => {
-        console.log('OfflineContext: Sync completed:', success);
+        logger.debug('OfflineContext: Sync completed:', success);
         setIsSyncing(false);
         setSyncProgress(null);
         
@@ -98,11 +123,11 @@ export const OfflineProvider: React.FC<OfflineProviderProps> = ({ children }) =>
         }
       },
       onSyncProgress: (current, total) => {
-        console.log(`OfflineContext: Sync progress ${current}/${total}`);
+        logger.debug(`OfflineContext: Sync progress ${current}/${total}`);
         setSyncProgress({ current, total });
       },
       onConflict: (conflict) => {
-        console.log('OfflineContext: Conflict detected:', conflict);
+        logger.debug('OfflineContext: Conflict detected:', conflict);
         setConflicts(prev => [...prev, conflict]);
         
         Alert.alert(
@@ -131,13 +156,7 @@ export const OfflineProvider: React.FC<OfflineProviderProps> = ({ children }) =>
       unsubscribeNetwork();
       unsubscribeSync();
     };
-  }, [user?.uid]);
-
-  const updateSyncStatus = () => {
-    const status = syncService.getSyncStatus();
-    setLastSyncTime(status.lastSync);
-    setPendingOperationsCount(status.pendingOperations);
-  };
+  }, [user?.uid, updateSyncStatus]);
 
   const forceSync = async () => {
     if (!isOnline) {
@@ -152,7 +171,7 @@ export const OfflineProvider: React.FC<OfflineProviderProps> = ({ children }) =>
     try {
       await syncService.forceSync();
     } catch (error) {
-      console.error('OfflineContext: Force sync failed:', error);
+      logger.error('OfflineContext: Force sync failed:', error);
       Alert.alert(
         'Sync Error',
         'Failed to sync. Please try again.',
@@ -171,7 +190,7 @@ export const OfflineProvider: React.FC<OfflineProviderProps> = ({ children }) =>
       // Trigger sync to apply resolution
       await forceSync();
     } catch (error) {
-      console.error('OfflineContext: Failed to resolve conflict:', error);
+      logger.error('OfflineContext: Failed to resolve conflict:', error);
       Alert.alert(
         'Resolution Failed',
         'Failed to resolve conflict. Please try again.',

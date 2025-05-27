@@ -1,10 +1,11 @@
 import 'react-native-get-random-values';
 import { Buffer } from 'buffer';
 import * as QuickCrypto from 'react-native-quick-crypto';
-import E2EEService from './E2EEService';
-import { getFirebaseDb, getFirebaseAuth } from '../../lib/firebase';
+import { E2EEService } from './E2EEService';
+// import { getFirebaseDb, getFirebaseAuth } from '../../lib/firebase';
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../LoggingService';
 
 type Timestamp = FirebaseFirestoreTypes.Timestamp;
 
@@ -126,7 +127,7 @@ export default class DoubleRatchetService {
       this.sessions.set(sessionId, session);
       await this.saveSessionToStorage(sessionId, session);
     } catch (error) {
-      console.error('Failed to initialize session:', error);
+      logger.error('Failed to initialize session:', error);
       throw error;
     }
   }
@@ -187,7 +188,7 @@ export default class DoubleRatchetService {
       this.sessions.set(sessionId, session);
       await this.saveSessionToStorage(sessionId, session);
     } catch (error) {
-      console.error('Failed to accept session:', error);
+      logger.error('Failed to accept session:', error);
       throw error;
     }
   }
@@ -230,7 +231,7 @@ export default class DoubleRatchetService {
         mac
       };
     } catch (error) {
-      console.error('Failed to encrypt message:', error);
+      logger.error('Failed to encrypt message:', error);
       throw error;
     }
   }
@@ -314,7 +315,7 @@ export default class DoubleRatchetService {
 
       return plaintext;
     } catch (error) {
-      console.error('Failed to decrypt message:', error);
+      logger.error('Failed to decrypt message:', error);
       throw error;
     }
   }
@@ -526,7 +527,7 @@ export default class DoubleRatchetService {
       const tag = cipher.getAuthTag();
       return Buffer.concat([tag, encrypted]).toString('base64');
     } catch (error) {
-      console.error('Failed to encrypt with message keys:', error);
+      logger.error('Failed to encrypt with message keys:', error);
       throw error;
     }
   }
@@ -556,7 +557,7 @@ export default class DoubleRatchetService {
       
       return decrypted.toString('utf8');
     } catch (error) {
-      console.error('Failed to decrypt with message keys:', error);
+      logger.error('Failed to decrypt with message keys:', error);
       throw error;
     }
   }
@@ -604,7 +605,7 @@ export default class DoubleRatchetService {
         JSON.stringify(sessionData)
       );
     } catch (error) {
-      console.error('Failed to save session:', error);
+      logger.error('Failed to save session:', error);
     }
   }
 
@@ -629,7 +630,7 @@ export default class DoubleRatchetService {
         }
       }
     } catch (error) {
-      console.error('Failed to load sessions:', error);
+      logger.error('Failed to load sessions:', error);
     }
   }
 
@@ -690,7 +691,7 @@ export default class DoubleRatchetService {
       this.sessions.set(sessionId, session);
       await this.saveSessionToStorage(sessionId, session);
     } catch (error) {
-      console.error('Failed to import session:', error);
+      logger.error('Failed to import session:', error);
       throw error;
     }
   }

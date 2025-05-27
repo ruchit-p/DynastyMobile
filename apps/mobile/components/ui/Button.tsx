@@ -13,11 +13,11 @@ import { Ionicons } from '@expo/vector-icons';
 
 // Import from our design system
 import { Colors } from '../../constants/Colors';
-import Typography from '../../constants/Typography';
+import { Typography } from '../../constants/Typography';
 import { Spacing, BorderRadius, Shadows } from '../../constants/Spacing';
 import { useColorScheme } from '../../hooks/useColorScheme';
 import { useButtonBackgroundColor, useButtonTextColor } from '../../hooks/useThemeColor';
-import ThemedText from '../ThemedText';
+import { ThemedText } from '../ThemedText';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'text' | 'outline';
 export type ButtonSize = 'small' | 'medium' | 'large';

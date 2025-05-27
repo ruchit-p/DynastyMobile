@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator , TextInpu
 import { Button } from '../ui/Button';
 import { Screen } from '../ui/Screen';
 import { Colors } from '../../constants/Colors';
-import Typography from '../../constants/Typography';
+import { Typography } from '../../constants/Typography';
 import { Spacing } from '../../constants/Spacing';
 import { KeyBackupService } from '../../src/services/encryption';
 import Clipboard from '@react-native-clipboard/clipboard';
