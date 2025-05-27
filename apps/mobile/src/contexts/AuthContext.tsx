@@ -1054,16 +1054,77 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signInWithApple = async () => {
+    if (!auth) {
+      throw new Error('Authentication service not initialized');
+    }
+    
     setIsLoading(true);
-    logger.debug("AuthContext: Apple Sign-In initiated (placeholder).");
-    // Placeholder for Apple Sign-In logic
-    // See https://rnfirebase.io/auth/social-auth#apple
-    // const appleAuthRequestResponse = await appleAuth.performRequest({...});
-    // const { identityToken } = appleAuthRequestResponse;
-    // const appleCredential = auth.AppleAuthProvider.credential(identityToken);
-    // await auth.signInWithCredential(appleCredential);
-    Alert.alert("Apple Sign-In", "Apple Sign-In is not yet implemented.");
-    setIsLoading(false);
+    errorHandler.setCurrentAction('signInWithApple');
+    
+    try {
+      logger.debug("AuthContext: Apple Sign-In initiated");
+      
+      // Create Apple auth provider
+      const appleAuthProvider = new RNAuth.auth.AppleAuthProvider();
+      
+      // Optional: Add scopes if needed
+      appleAuthProvider.addScope(RNAuth.auth.AppleAuthProvider.SCOPE.EMAIL);
+      appleAuthProvider.addScope(RNAuth.auth.AppleAuthProvider.SCOPE.FULL_NAME);
+      
+      // Sign in with Apple using Firebase Auth
+      const userCredential = await auth.signInWithProvider(appleAuthProvider);
+      
+      logger.debug('AuthContext: Apple Sign-In successful', { 
+        uid: userCredential.user.uid,
+        email: sanitizeEmail(userCredential.user.email || ''),
+        displayName: userCredential.user.displayName || 'Not provided'
+      });
+      
+      // Fingerprint tracking for Apple sign-in
+      await fingerprintService.trackLogin(userCredential.user.uid, 'apple');
+      
+      // Check onboarding status
+      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+      const userData = userDoc.data() as FirestoreUserType;
+      
+      if (!userData?.onboardingCompleted) {
+        logger.debug('AuthContext: Apple user needs onboarding', { uid: userCredential.user.uid });
+      }
+      
+    } catch (error: any) {
+      logger.error('AuthContext: Apple Sign In error:', error);
+      errorHandler.logError(error, {
+        context: 'signInWithApple',
+        severity: ErrorSeverity.ERROR,
+        additionalData: {
+          errorCode: error.code,
+          errorMessage: error.message
+        }
+      });
+      
+      // User-friendly error messages based on Firebase Auth error codes
+      let errorMessage = 'Apple Sign In failed. Please try again.';
+      
+      if (error.code === 'auth/operation-not-allowed') {
+        errorMessage = 'Apple Sign In is not enabled. Please contact support.';
+      } else if (error.code === 'auth/user-disabled') {
+        errorMessage = 'This account has been disabled. Please contact support.';
+      } else if (error.code === 'auth/user-cancelled') {
+        // User cancelled the sign-in flow
+        logger.debug('AuthContext: User canceled Apple Sign In');
+        setIsLoading(false);
+        return; // Don't show error for user cancellation
+      } else if (error.code === 'auth/invalid-credential') {
+        errorMessage = 'Invalid Apple credentials. Please try again.';
+      } else if (error.code === 'auth/account-exists-with-different-credential') {
+        errorMessage = 'An account already exists with the same email address. Please sign in using your original method.';
+      }
+      
+      Alert.alert('Sign In Failed', errorMessage);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const sendPasswordReset = async (email: string) => {

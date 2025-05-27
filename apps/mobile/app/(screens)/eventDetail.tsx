@@ -10,7 +10,7 @@ import Avatar from '@/components/ui/Avatar';
 import Card from '@/components/ui/Card';
 import { Colors } from '@/constants/Colors';
 import { Typography } from '@/constants/Typography';
-import { Spacing, BorderRadius } from '@/constants/Spacing';
+import { Spacing, BorderRadius, Shadows } from '@/constants/Spacing';
 import { commonHeaderOptions } from '@/constants/headerConfig';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { getEventDetailsMobile, EventDetails as MobileEventDetails, addCommentToEventMobile, deleteEventCommentMobile, RsvpStatus , deleteEventMobile, rsvpToEventMobile } from '@src/lib/eventUtils';

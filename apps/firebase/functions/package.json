@@ -31,6 +31,8 @@
     "dotenv": "^16.4.7",
     "firebase-admin": "^12.6.0",
     "firebase-functions": "^6.0.1",
+    "libsodium-wrappers": "^0.7.15",
+    "winston": "^3.16.0",
     "twilio": "^5.6.1"
   },
   "devDependencies": {

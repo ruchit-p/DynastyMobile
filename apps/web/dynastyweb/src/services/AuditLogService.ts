@@ -56,7 +56,6 @@ export type AuditEventType =
   | 'device_management'
   | 'privacy_action'
   | 'family_tree_access'
-  | 'chat_activity'
   | 'media_access'
   | 'export_activity';
 
@@ -425,7 +424,6 @@ export class AuditLogService {
       'device_management': 1.3,
       'privacy_action': 1.2,
       'family_tree_access': 1.1,
-      'chat_activity': 1.0,
       'media_access': 1.1,
       'export_activity': 1.8
     };
