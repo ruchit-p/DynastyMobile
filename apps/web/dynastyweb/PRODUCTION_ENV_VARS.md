@@ -18,13 +18,9 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your-measurement-id  # Optional, for analyti
 NEXT_PUBLIC_ENVIRONMENT=production
 ```
 
-### 2. Rate Limiting with Upstash (Highly Recommended)
-Without these, rate limiting will be disabled:
-
-```bash
-UPSTASH_REDIS_REST_URL=https://your-redis-instance.upstash.io
-UPSTASH_REDIS_REST_TOKEN=your-upstash-token
-```
+### 2. Rate Limiting (Handled by Cloudflare)
+Rate limiting is now handled by Cloudflare WAF rules at the edge level.
+No environment variables needed for rate limiting.
 
 ### 3. Sentry Error Monitoring (Required)
 Already configured in the project, but verify these are set:
@@ -73,8 +69,6 @@ vercel env add NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET production
 vercel env add NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID production
 vercel env add NEXT_PUBLIC_FIREBASE_APP_ID production
 vercel env add NEXT_PUBLIC_ENVIRONMENT production
-vercel env add UPSTASH_REDIS_REST_URL production
-vercel env add UPSTASH_REDIS_REST_TOKEN production
 vercel env add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY production
 vercel env add NEXT_PUBLIC_FINGERPRINT_API_KEY production
 vercel env add NEXT_PUBLIC_FINGERPRINT_SUBDOMAIN production
@@ -89,11 +83,11 @@ vercel env add NEXT_PUBLIC_FINGERPRINT_SUBDOMAIN production
 4. Under "Your apps", find your web app
 5. Copy the configuration values
 
-### Upstash Redis (for Rate Limiting)
-1. Sign up at [Upstash](https://upstash.com)
-2. Create a new Redis database
-3. Select "Global" for best performance
-4. Copy the REST URL and token from the dashboard
+### Cloudflare Rate Limiting
+1. Log into [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Navigate to Security → WAF → Rate limiting rules
+3. Create rate limiting rules for your domain
+4. See `RATE_LIMITING_OPTIONS.md` for detailed setup
 
 ### Sentry
 1. Go to [Sentry](https://sentry.io)
@@ -117,7 +111,7 @@ vercel env add NEXT_PUBLIC_FINGERPRINT_SUBDOMAIN production
 Before deploying to production, ensure:
 
 - [ ] All Firebase environment variables are set
-- [ ] Upstash Redis is configured (or accept no rate limiting)
+- [ ] Cloudflare rate limiting rules are configured
 - [ ] Sentry DSN is configured
 - [ ] Google Maps API key is set and restricted
 - [ ] FingerprintJS is configured
@@ -145,9 +139,9 @@ cp .env.example .env.local
 ## Troubleshooting
 
 ### Rate Limiting Not Working
-- Verify UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are set
-- Check Upstash dashboard for connection logs
-- Rate limiting is disabled in development mode
+- Verify Cloudflare WAF rules are active
+- Check Cloudflare Analytics for blocked requests
+- Ensure your domain is proxied through Cloudflare (orange cloud icon)
 
 ### Firebase Connection Issues
 - Verify all Firebase config values match your project

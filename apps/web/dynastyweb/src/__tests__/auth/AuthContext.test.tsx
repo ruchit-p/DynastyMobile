@@ -129,7 +129,7 @@ describe('AuthContext', () => {
         data: () => mockFirestoreUser,
       });
       
-      let authCallback: ((user: any) => void) | null = null;
+      let authCallback: ((user: unknown) => void) | null = null;
       (onAuthStateChanged as jest.Mock).mockImplementation((auth, callback) => {
         authCallback = callback;
         return mockUnsubscribe;
@@ -156,7 +156,7 @@ describe('AuthContext', () => {
     });
 
     it('updates when user logs out', async () => {
-      let authCallback: ((user: any) => void) | null = null;
+      let authCallback: ((user: unknown) => void) | null = null;
       (onAuthStateChanged as jest.Mock).mockImplementation((auth, callback) => {
         authCallback = callback;
         return mockUnsubscribe;
@@ -360,7 +360,7 @@ describe('AuthContext', () => {
       
       (getDoc as jest.Mock).mockRejectedValue(new Error('Firestore error'));
       
-      let authCallback: ((user: any) => void) | null = null;
+      let authCallback: ((user: unknown) => void) | null = null;
       (onAuthStateChanged as jest.Mock).mockImplementation((auth, callback) => {
         authCallback = callback;
         return mockUnsubscribe;
@@ -422,7 +422,7 @@ describe('AuthContext', () => {
         emailVerified: true,
       };
       
-      let authCallback: ((user: any) => void) | null = null;
+      let authCallback: ((user: unknown) => void) | null = null;
       (onAuthStateChanged as jest.Mock).mockImplementation((auth, callback) => {
         authCallback = callback;
         return mockUnsubscribe;
