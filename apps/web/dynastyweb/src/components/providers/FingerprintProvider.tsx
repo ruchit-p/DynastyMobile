@@ -24,7 +24,7 @@ export function FingerprintProvider({ children }: FingerprintProviderProps) {
         endpoint: FINGERPRINT_ENDPOINT,
         region: FINGERPRINT_REGION as 'us' | 'eu' | 'ap',
       }}
-      cacheLocation={"memory" as any}
+      cacheLocation="memory"
       cacheTimeInSeconds={60 * 60} // 1 hour
     >
       {children}
