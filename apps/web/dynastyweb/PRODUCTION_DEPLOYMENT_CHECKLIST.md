@@ -16,10 +16,10 @@ This checklist ensures all critical security fixes have been implemented before 
   - Permissions-Policy restricting camera, microphone, geolocation
 
 ### 2. **Rate Limiting** ✅
-- **File**: `middleware.ts`
-- **Implementation**: Upstash Redis rate limiting
-- **Configuration**: 60 requests per minute per IP
-- **Dependencies**: `@upstash/ratelimit` and `@upstash/redis` installed
+- **Handled by**: Cloudflare WAF + Firebase Functions
+- **Cloudflare**: Edge-level DDoS and bot protection
+- **Firebase**: API-level rate limiting already implemented
+- **No additional dependencies needed**
 
 ### 3. **Authentication Tests** ✅
 - **Created Tests**:
@@ -55,8 +55,8 @@ NEXT_PUBLIC_FINGERPRINT_SUBDOMAIN
 ### 2. Verify Security Headers
 After deployment, check headers at: https://securityheaders.com
 
-### 3. Test Rate Limiting
-Ensure rate limiting works by making rapid requests and checking for 429 responses.
+### 3. Configure Cloudflare Rate Limiting
+Set up rate limiting rules in Cloudflare dashboard (see RATE_LIMITING_OPTIONS.md).
 
 ### 4. Monitor Errors
 Check Sentry dashboard for any deployment errors.
@@ -92,7 +92,7 @@ Before going live:
 
 ## 📝 Notes
 
-- Rate limiting requires Upstash Redis setup
+- Rate limiting handled by Cloudflare and Firebase Functions
 - CSP uses nonces for better security in production
 - All security headers are automatically applied via middleware
 - Development mode has relaxed CSP for easier debugging

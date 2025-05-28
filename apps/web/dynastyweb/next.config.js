@@ -66,6 +66,7 @@ const nextConfig = {
         pathname: '/**',
       },
     ],
+    domains: ['localhost', '127.0.0.1'],
   },
   webpack: (config) => {
     config.resolve.alias = {
@@ -104,11 +105,8 @@ module.exports = withSentryConfig(
     // Upload a larger set of source maps for prettier stack traces (increases build time)
     widenClientFileUpload: true,
 
-    // Uncomment to route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers.
-    // This can increase your server load as well as your hosting bill.
-    // Note: Check that the configured route will not match with your Next.js middleware, otherwise reporting of client-
-    // side errors will fail.
-    // tunnelRoute: "/monitoring",
+    // Route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers
+    tunnelRoute: "/monitoring",
 
     // Automatically tree-shake Sentry logger statements to reduce bundle size
     disableLogger: true,
