@@ -2,10 +2,12 @@
 
 import {onCall, onRequest} from "firebase-functions/v2/https";
 import {getFirestore, FieldValue} from "firebase-admin/firestore";
+import {logger} from "firebase-functions/v2";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
 import {createError, withErrorHandling, ErrorCode} from "./utils/errors";
 import {validateRequest} from "./utils/request-validator";
 import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
+import {twilioAuthToken} from "./config/twilioConfig";
 import {
   getTwilioService,
   SMS_TEMPLATES,
@@ -348,9 +350,17 @@ export const twilioWebhook = onRequest({
       return;
     }
 
-    // Construct the full URL for signature validation
-    const protocol = req.headers["x-forwarded-proto"] || "https";
-    const host = req.headers.host;
+    // Construct the full URL for signature validation - sanitize headers
+    const protocol = req.headers["x-forwarded-proto"] === "http" ? "http" : "https";
+    const host = req.headers.host || "";
+
+    // Validate host header to prevent header injection
+    if (!host || !/^[a-zA-Z0-9.-]+(:[0-9]+)?$/.test(host)) {
+      logger.warn("Invalid host header in Twilio webhook", {host});
+      res.status(400).send("Bad Request: Invalid host header");
+      return;
+    }
+
     const url = `${protocol}://${host}${req.originalUrl}`;
 
     // Get Twilio auth token for validation

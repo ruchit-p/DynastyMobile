@@ -156,8 +156,10 @@ describe('Email Verification Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: testData.userId } as any,
+        auth: { uid: testData.userId ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await emailVerification.sendVerificationEmail.run(mockRequest);
@@ -217,8 +219,10 @@ describe('Email Verification Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: testData.userId } as any,
+        auth: { uid: testData.userId ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await emailVerification.sendVerificationEmail.run(mockRequest);
@@ -257,8 +261,10 @@ describe('Email Verification Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: testData.userId } as any,
+        auth: { uid: testData.userId ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(emailVerification.sendVerificationEmail.run(mockRequest))
@@ -300,8 +306,10 @@ describe('Email Verification Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: testData.userId } as any,
+        auth: { uid: testData.userId ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(emailVerification.sendVerificationEmail.run(mockRequest))
@@ -339,8 +347,10 @@ describe('Email Verification Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: testData.userId } as any,
+        auth: { uid: testData.userId ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(emailVerification.sendVerificationEmail.run(mockRequest))
@@ -379,8 +389,10 @@ describe('Email Verification Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: testData.userId } as any,
+        auth: { uid: testData.userId ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await emailVerification.sendVerificationEmail.run(mockRequest);
@@ -434,9 +446,11 @@ describe('Email Verification Module Comprehensive Tests', () => {
       mockAuth.updateUser.mockResolvedValue(undefined);
 
       const mockRequest: CallableRequest<any> = {
-        data: { token: testToken },
+        data: { token: testToken ,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await emailVerification.verifyEmail.run(mockRequest);
@@ -476,9 +490,11 @@ describe('Email Verification Module Comprehensive Tests', () => {
       });
 
       const mockRequest: CallableRequest<any> = {
-        data: { token: testToken },
+        data: { token: testToken ,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(emailVerification.verifyEmail.run(mockRequest))
@@ -519,9 +535,11 @@ describe('Email Verification Module Comprehensive Tests', () => {
       });
 
       const mockRequest: CallableRequest<any> = {
-        data: { token: testToken },
+        data: { token: testToken ,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(emailVerification.verifyEmail.run(mockRequest))
@@ -571,9 +589,11 @@ describe('Email Verification Module Comprehensive Tests', () => {
       mockAuth.updateUser.mockRejectedValue(new Error('Auth update failed'));
 
       const mockRequest: CallableRequest<any> = {
-        data: { token: testToken },
+        data: { token: testToken ,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       // Should not throw, just log the error
@@ -627,9 +647,11 @@ describe('Email Verification Module Comprehensive Tests', () => {
       mockAuth.updateUser.mockResolvedValue(undefined);
 
       const mockRequest: CallableRequest<any> = {
-        data: { token: testToken },
+        data: { token: testToken ,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await emailVerification.verifyEmail.run(mockRequest);
@@ -681,9 +703,11 @@ describe('Email Verification Module Comprehensive Tests', () => {
           userId: userId,
           email: email,
           displayName: 'Flow Test',
-        },
+        ,
+    acceptsStreaming: false},
         auth: { uid: userId } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const sendResult = await emailVerification.sendVerificationEmail.run(sendRequest);
@@ -724,9 +748,11 @@ describe('Email Verification Module Comprehensive Tests', () => {
       mockAuth.updateUser.mockResolvedValue(undefined);
 
       const verifyRequest: CallableRequest<any> = {
-        data: { token: 'test-verification-token-123' },
+        data: { token: 'test-verification-token-123' ,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const verifyResult = await emailVerification.verifyEmail.run(verifyRequest);
@@ -753,9 +779,11 @@ describe('Email Verification Module Comprehensive Tests', () => {
         data: {
           userId: 'test-user',
           email: 'invalid-email',
-        },
+        ,
+    acceptsStreaming: false},
         auth: { uid: 'test-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(emailVerification.sendVerificationEmail.run(mockRequest))
@@ -799,15 +827,19 @@ describe('Email Verification Module Comprehensive Tests', () => {
 
       // Simulate concurrent verification attempts
       const request1: CallableRequest<any> = {
-        data: { token: testToken },
+        data: { token: testToken ,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const request2: CallableRequest<any> = {
-        data: { token: testToken },
+        data: { token: testToken ,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       // Run both requests concurrently

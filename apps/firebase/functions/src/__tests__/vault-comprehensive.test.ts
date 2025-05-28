@@ -181,8 +181,10 @@ describe('Vault Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'test-user-id' } as any,
+        auth: { uid: 'test-user-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await vault.getVaultUploadSignedUrl.run(mockRequest);
@@ -257,8 +259,10 @@ describe('Vault Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'test-user-id' } as any,
+        auth: { uid: 'test-user-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await vault.getVaultUploadSignedUrl.run(mockRequest);
@@ -315,8 +319,10 @@ describe('Vault Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'test-user-id' } as any,
+        auth: { uid: 'test-user-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(vault.getVaultUploadSignedUrl.run(mockRequest))
@@ -338,8 +344,10 @@ describe('Vault Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'test-user-id' } as any,
+        auth: { uid: 'test-user-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(vault.getVaultUploadSignedUrl.run(mockRequest))
@@ -417,9 +425,11 @@ describe('Vault Module Comprehensive Tests', () => {
       }));
 
       const mockRequest: CallableRequest<any> = {
-        data: { parentId: null },
+        data: { parentId: null ,
+    acceptsStreaming: false},
         auth: { uid: userId } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await vault.getVaultItems.run(mockRequest);
@@ -443,9 +453,11 @@ describe('Vault Module Comprehensive Tests', () => {
 
     it('should handle unauthenticated requests', async () => {
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(vault.getVaultItems.run(mockRequest))
@@ -478,9 +490,11 @@ describe('Vault Module Comprehensive Tests', () => {
       mockDb.collection.mockReturnValue(query);
 
       const mockRequest: CallableRequest<any> = {
-        data: { parentId: parentId },
+        data: { parentId: parentId ,
+    acceptsStreaming: false},
         auth: { uid: userId } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await vault.getVaultItems.run(mockRequest);
@@ -529,9 +543,11 @@ describe('Vault Module Comprehensive Tests', () => {
       mockDb.collection.mockReturnValue(query);
 
       const mockRequest: CallableRequest<any> = {
-        data: { parentId: null },
+        data: { parentId: null ,
+    acceptsStreaming: false},
         auth: { uid: userId } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await vault.getVaultItems.run(mockRequest);
@@ -598,9 +614,11 @@ describe('Vault Module Comprehensive Tests', () => {
       }));
 
       const mockRequest: CallableRequest<any> = {
-        data: { parentId: null },
+        data: { parentId: null ,
+    acceptsStreaming: false},
         auth: { uid: userId } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await vault.getVaultItems.run(mockRequest);
@@ -624,8 +642,10 @@ describe('Vault Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'test-user-id' } as any,
+        auth: { uid: 'test-user-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await vault.createVaultFolder.run(mockRequest);
@@ -666,8 +686,10 @@ describe('Vault Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'test-user-id' } as any,
+        auth: { uid: 'test-user-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await vault.createVaultFolder.run(mockRequest);
@@ -695,8 +717,10 @@ describe('Vault Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'test-user-id' } as any,
+        auth: { uid: 'test-user-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(vault.createVaultFolder.run(mockRequest))
@@ -716,8 +740,10 @@ describe('Vault Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'test-user-id' } as any,
+        auth: { uid: 'test-user-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await vault.createVaultFolder.run(mockRequest);
@@ -766,8 +792,10 @@ describe('Vault Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'test-user-id' } as any,
+        auth: { uid: 'test-user-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await vault.addVaultFile.run(mockRequest);
@@ -803,8 +831,10 @@ describe('Vault Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'test-user-id' } as any,
+        auth: { uid: 'test-user-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(vault.addVaultFile.run(mockRequest))
@@ -835,8 +865,10 @@ describe('Vault Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'test-user-id' } as any,
+        auth: { uid: 'test-user-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await vault.addVaultFile.run(mockRequest);
@@ -890,8 +922,10 @@ describe('Vault Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'test-user-id' } as any,
+        auth: { uid: 'test-user-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await vault.addVaultFile.run(mockRequest);
@@ -930,8 +964,10 @@ describe('Vault Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'owner-id' } as any,
+        auth: { uid: 'owner-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       // This would be tested through renameVaultItem or similar functions
@@ -991,8 +1027,10 @@ describe('Vault Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'test-user-id' } as any,
+        auth: { uid: 'test-user-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       // Simulate concurrent requests
@@ -1022,8 +1060,10 @@ describe('Vault Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'test-user-id' } as any,
+        auth: { uid: 'test-user-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await vault.createVaultFolder.run(mockRequest);
@@ -1048,9 +1088,11 @@ describe('Vault Module Comprehensive Tests', () => {
       });
 
       const mockRequest: CallableRequest<any> = {
-        data: { fileName: '../../etc/passwd' },
+        data: { fileName: '../../etc/passwd' ,
+    acceptsStreaming: false},
         auth: { uid: 'test-user-id' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(vault.getVaultUploadSignedUrl.run(mockRequest))

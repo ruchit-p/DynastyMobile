@@ -100,9 +100,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
   describe('requireAuth', () => {
     it('should return uid for authenticated user', () => {
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'test-user-id' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const uid = authMiddleware.requireAuth(mockRequest);
@@ -111,9 +113,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
 
     it('should throw error for unauthenticated user', () => {
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       expect(() => authMiddleware.requireAuth(mockRequest))
@@ -122,9 +126,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
 
     it('should throw error for missing auth object', () => {
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: undefined as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       expect(() => authMiddleware.requireAuth(mockRequest))
@@ -144,9 +150,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       mockDb.collection().doc().get.mockResolvedValue(mockUserDoc);
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'verified-user-id' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const uid = await authMiddleware.requireVerifiedUser(mockRequest);
@@ -164,9 +172,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       mockDb.collection().doc().get.mockResolvedValue(mockUserDoc);
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'unverified-user-id' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(authMiddleware.requireVerifiedUser(mockRequest))
@@ -179,9 +189,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       });
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'non-existent-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(authMiddleware.requireVerifiedUser(mockRequest))
@@ -190,9 +202,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
 
     it('should throw error for unauthenticated user', async () => {
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(authMiddleware.requireVerifiedUser(mockRequest))
@@ -213,9 +227,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       mockDb.collection().doc().get.mockResolvedValue(mockUserDoc);
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'onboarded-user-id' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const uid = await authMiddleware.requireOnboardedUser(mockRequest);
@@ -234,9 +250,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       mockDb.collection().doc().get.mockResolvedValue(mockUserDoc);
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'not-onboarded-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(authMiddleware.requireOnboardedUser(mockRequest))
@@ -255,9 +273,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       mockDb.collection().doc().get.mockResolvedValue(mockUserDoc);
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'unverified-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(authMiddleware.requireOnboardedUser(mockRequest))
@@ -279,9 +299,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       mockDb.collection().doc().get.mockResolvedValue(mockResourceDoc);
 
       const mockRequest: CallableRequest<any> = {
-        data: { eventId: 'event-123' },
+        data: { eventId: 'event-123' ,
+    acceptsStreaming: false},
         auth: { uid: 'test-user-id' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const config: authMiddleware.ResourceAccessConfig = {
@@ -317,9 +339,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
         .mockResolvedValueOnce(mockUserDoc);
 
       const mockRequest: CallableRequest<any> = {
-        data: { storyId: 'story-123' },
+        data: { storyId: 'story-123' ,
+    acceptsStreaming: false},
         auth: { uid: 'family-member-id' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const config: authMiddleware.ResourceAccessConfig = {
@@ -354,9 +378,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
         .mockResolvedValueOnce(mockTreeDoc);
 
       const mockRequest: CallableRequest<any> = {
-        data: { family_treeId: 'resource-123' },
+        data: { family_treeId: 'resource-123' ,
+    acceptsStreaming: false},
         auth: { uid: 'tree-owner-id' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const config: authMiddleware.ResourceAccessConfig = {
@@ -382,9 +408,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       mockDb.collection().doc().get.mockResolvedValue(mockResourceDoc);
 
       const mockRequest: CallableRequest<any> = {
-        data: { eventId: 'event-123' },
+        data: { eventId: 'event-123' ,
+    acceptsStreaming: false},
         auth: { uid: 'invited-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const config: authMiddleware.ResourceAccessConfig = {
@@ -411,9 +439,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       mockDb.collection().doc().get.mockResolvedValue(mockResourceDoc);
 
       const mockRequest: CallableRequest<any> = {
-        data: { resourceId: 'resource-123' },
+        data: { resourceId: 'resource-123' ,
+    acceptsStreaming: false},
         auth: { uid: 'special-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const config: authMiddleware.ResourceAccessConfig = {
@@ -443,9 +473,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       mockDb.collection().doc().get.mockResolvedValue(mockResourceDoc);
 
       const mockRequest: CallableRequest<any> = {
-        data: { eventId: 'event-123' },
+        data: { eventId: 'event-123' ,
+    acceptsStreaming: false},
         auth: { uid: 'unauthorized-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const config: authMiddleware.ResourceAccessConfig = {
@@ -459,9 +491,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
 
     it('should throw error for missing resource ID', async () => {
       const mockRequest: CallableRequest<any> = {
-        data: {}, // Missing eventId
+        data: {,
+    acceptsStreaming: false}, // Missing eventId
         auth: { uid: 'test-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const config: authMiddleware.ResourceAccessConfig = {
@@ -479,9 +513,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       });
 
       const mockRequest: CallableRequest<any> = {
-        data: { eventId: 'non-existent' },
+        data: { eventId: 'non-existent' ,
+    acceptsStreaming: false},
         auth: { uid: 'test-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const config: authMiddleware.ResourceAccessConfig = {
@@ -505,9 +541,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       mockDb.collection().doc().get.mockResolvedValue(mockResourceDoc);
 
       const mockRequest: CallableRequest<any> = {
-        data: { resourceId: 'public-resource' },
+        data: { resourceId: 'public-resource' ,
+    acceptsStreaming: false},
         auth: { uid: 'any-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const config: authMiddleware.ResourceAccessConfig = {
@@ -544,9 +582,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
         .mockResolvedValueOnce(mockUserDoc);
 
       const mockRequest: CallableRequest<any> = {
-        data: { storyId: 'story-123' },
+        data: { storyId: 'story-123' ,
+    acceptsStreaming: false},
         auth: { uid: 'family-member' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const config: authMiddleware.ResourceAccessConfig = {
@@ -569,9 +609,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       (checkRateLimit as jest.Mock).mockResolvedValue(undefined);
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'test-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const uid = await authMiddleware.checkRateLimit(mockRequest);
@@ -598,9 +640,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       (checkRateLimit as jest.Mock).mockResolvedValue(undefined);
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'admin-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const config: authMiddleware.RateLimitConfig = {
@@ -626,9 +670,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       (checkRateLimit as jest.Mock).mockRejectedValue(rateLimitError);
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'rate-limited-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(authMiddleware.checkRateLimit(mockRequest))
@@ -640,9 +686,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       (checkRateLimit as jest.Mock).mockRejectedValue(new Error('Service unavailable'));
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'test-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       // Should not throw, just log and continue
@@ -657,7 +705,8 @@ describe('Auth Middleware Comprehensive Tests', () => {
       (checkRateLimit as jest.Mock).mockResolvedValue(undefined);
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {
           ip: '192.168.1.1',
@@ -679,7 +728,8 @@ describe('Auth Middleware Comprehensive Tests', () => {
       (checkRateLimit as jest.Mock).mockResolvedValue(undefined);
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {
           headers: {
@@ -701,9 +751,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       const { checkRateLimit } = require('../services/rateLimitService');
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await authMiddleware.checkRateLimitByIP(mockRequest);
@@ -720,7 +772,8 @@ describe('Auth Middleware Comprehensive Tests', () => {
       (checkRateLimit as jest.Mock).mockRejectedValue(rateLimitError);
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {
           ip: '192.168.1.1',
@@ -743,9 +796,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       );
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'test-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await wrappedHandler(mockRequest);
@@ -764,9 +819,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       );
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await wrappedHandler(mockRequest);
@@ -794,9 +851,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       );
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'verified-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await wrappedHandler(mockRequest);
@@ -824,9 +883,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       );
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'onboarded-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await wrappedHandler(mockRequest);
@@ -850,9 +911,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       );
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'test-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await wrappedHandler(mockRequest);
@@ -877,9 +940,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       );
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'test-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await wrappedHandler(mockRequest);
@@ -907,9 +972,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       );
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'test-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await wrappedHandler(mockRequest);
@@ -947,9 +1014,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       );
 
       const mockRequest: CallableRequest<any> = {
-        data: { eventId: 'event-123' },
+        data: { eventId: 'event-123' ,
+    acceptsStreaming: false},
         auth: { uid: 'test-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await wrappedHandler(mockRequest);
@@ -989,9 +1058,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       );
 
       const mockRequest: CallableRequest<any> = {
-        data: { storyId: 'story-123' },
+        data: { storyId: 'story-123' ,
+    acceptsStreaming: false},
         auth: { uid: 'test-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await wrappedHandler(mockRequest);
@@ -1030,9 +1101,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       );
 
       const mockRequest: CallableRequest<any> = {
-        data: { resourceId: 'resource-123' },
+        data: { resourceId: 'resource-123' ,
+    acceptsStreaming: false},
         auth: { uid: 'test-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await wrappedHandler(mockRequest);
@@ -1054,9 +1127,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       );
 
       const mockRequest: CallableRequest<any> = {
-        data: {},
+        data: {,
+    acceptsStreaming: false},
         auth: { uid: 'test-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const uid = await rateLimiter(mockRequest);
@@ -1074,8 +1149,10 @@ describe('Auth Middleware Comprehensive Tests', () => {
     it('should handle missing data in request', async () => {
       const mockRequest: CallableRequest<any> = {
         data: null,
-        auth: { uid: 'test-user' } as any,
+        auth: { uid: 'test-user' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const config: authMiddleware.ResourceAccessConfig = {
@@ -1099,9 +1176,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       mockDb.collection().doc().get.mockResolvedValue(mockResourceDoc);
 
       const mockRequest: CallableRequest<any> = {
-        data: { customResourceId: 'custom-123' },
+        data: { customResourceId: 'custom-123' ,
+    acceptsStreaming: false},
         auth: { uid: 'test-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const config: authMiddleware.ResourceAccessConfig = {
@@ -1136,9 +1215,11 @@ describe('Auth Middleware Comprehensive Tests', () => {
       mockDb.collection = mockCollectionFn;
 
       const mockRequest: CallableRequest<any> = {
-        data: { itemId: 'item-123' },
+        data: { itemId: 'item-123' ,
+    acceptsStreaming: false},
         auth: { uid: 'test-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const config: authMiddleware.ResourceAccessConfig = {

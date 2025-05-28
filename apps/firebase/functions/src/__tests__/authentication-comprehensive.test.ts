@@ -164,7 +164,9 @@ describe('Authentication Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       // Execute the handler directly since we mocked withAuth
@@ -219,7 +221,9 @@ describe('Authentication Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       // Execute and expect error
@@ -246,7 +250,9 @@ describe('Authentication Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       const handler = (authentication.handleSignUp as any).runWith().handler;
@@ -286,7 +292,9 @@ describe('Authentication Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       const handler = (authentication.handleSignUp as any).runWith().handler;
@@ -348,8 +356,10 @@ describe('Authentication Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: testData.userId } as any,
+        auth: { uid: testData.userId ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await authentication.completeOnboarding.run(mockRequest);
@@ -506,8 +516,10 @@ describe('Authentication Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: testData.userId } as any,
+        auth: { uid: testData.userId ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await authentication.completeOnboarding.run(mockRequest);
@@ -534,9 +546,11 @@ describe('Authentication Module Comprehensive Tests', () => {
 
     it('should handle missing userId error', async () => {
       const mockRequest: CallableRequest<any> = {
-        data: { firstName: 'John', lastName: 'Doe' },
+        data: { firstName: 'John', lastName: 'Doe' ,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(authentication.completeOnboarding.run(mockRequest))
@@ -554,8 +568,10 @@ describe('Authentication Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: testData.userId } as any,
+        auth: { uid: testData.userId ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(authentication.completeOnboarding.run(mockRequest))
@@ -608,8 +624,10 @@ describe('Authentication Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: testData.userId } as any,
+        auth: { uid: testData.userId ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await authentication.completeOnboarding.run(mockRequest);
@@ -669,8 +687,10 @@ describe('Authentication Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: testData.uid } as any,
+        auth: { uid: testData.uid ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await authentication.handlePhoneSignIn.run(mockRequest);
@@ -719,8 +739,10 @@ describe('Authentication Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: testData.uid } as any,
+        auth: { uid: testData.uid ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await authentication.handlePhoneSignIn.run(mockRequest);
@@ -753,8 +775,10 @@ describe('Authentication Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: testData.uid } as any,
+        auth: { uid: testData.uid ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(authentication.handlePhoneSignIn.run(mockRequest))
@@ -765,9 +789,11 @@ describe('Authentication Module Comprehensive Tests', () => {
   describe('Phone Auth Placeholder Functions', () => {
     it('signInWithPhoneNumber should throw unimplemented error', async () => {
       const mockRequest: CallableRequest<any> = {
-        data: { phoneNumber: '+1234567890' },
+        data: { phoneNumber: '+1234567890' ,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const handler = (authentication.signInWithPhoneNumber as any).runWith().handler;
@@ -777,9 +803,11 @@ describe('Authentication Module Comprehensive Tests', () => {
 
     it('verifyPhoneNumber should throw unimplemented error', async () => {
       const mockRequest: CallableRequest<any> = {
-        data: { verificationId: '123', verificationCode: '456789' },
+        data: { verificationId: '123', verificationCode: '456789' ,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const handler = (authentication.verifyPhoneNumber as any).runWith().handler;
@@ -789,9 +817,11 @@ describe('Authentication Module Comprehensive Tests', () => {
 
     it('resendPhoneNumberVerification should throw unimplemented error', async () => {
       const mockRequest: CallableRequest<any> = {
-        data: { phoneNumber: '+1234567890' },
+        data: { phoneNumber: '+1234567890' ,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const handler = (authentication.resendPhoneNumberVerification as any).runWith().handler;
@@ -815,7 +845,9 @@ describe('Authentication Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       const handler = (authentication.handleSignUp as any).runWith().handler;
@@ -850,8 +882,10 @@ describe('Authentication Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: testData.userId } as any,
+        auth: { uid: testData.userId ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(authentication.completeOnboarding.run(mockRequest))
@@ -884,7 +918,9 @@ describe('Authentication Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       const handler = (authentication.handleSignUp as any).runWith().handler;
@@ -923,7 +959,9 @@ describe('Authentication Module Comprehensive Tests', () => {
       const signupRequest: CallableRequest<any> = {
         data: signupData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       const signupHandler = (authentication.handleSignUp as any).runWith().handler;
@@ -969,8 +1007,10 @@ describe('Authentication Module Comprehensive Tests', () => {
 
       const onboardingRequest: CallableRequest<any> = {
         data: onboardingData,
-        auth: { uid: onboardingData.userId } as any,
+        auth: { uid: onboardingData.userId ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const onboardingResult = await authentication.completeOnboarding.run(onboardingRequest);
