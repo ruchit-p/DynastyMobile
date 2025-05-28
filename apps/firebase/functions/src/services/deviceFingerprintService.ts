@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import {FingerprintJsServerApiClient, Region} from "@fingerprintjs/fingerprintjs-pro-server-api";
 import {HttpsError} from "firebase-functions/v2/https";
 import {FINGERPRINT_SERVER_API_KEY} from "../auth/config/secrets";
+import * as crypto from "crypto";
 
 // Initialize FingerprintJS Pro Server API client lazily
 let fingerprintClient: FingerprintJsServerApiClient | null = null;
@@ -94,9 +95,24 @@ export interface TrustedDevice {
 
 class DeviceFingerprintService {
   private db: admin.firestore.Firestore;
+  private readonly ipHashSalt = "dynasty-ip-hash-2024"; // Should be in secrets in production
 
   constructor() {
     this.db = admin.firestore();
+  }
+
+  /**
+   * Hash IP address for privacy
+   */
+  private hashIpAddress(ip: string | undefined): string | undefined {
+    if (!ip) return undefined;
+    
+    // Create a hash of the IP address for privacy
+    return crypto
+      .createHash("sha256")
+      .update(ip + this.ipHashSalt)
+      .digest("base64")
+      .substring(0, 16); // Use only first 16 chars for storage efficiency
   }
 
   /**
@@ -190,7 +206,7 @@ class DeviceFingerprintService {
       platform: deviceInfo?.platform || fingerprint.browserDetails?.os || "Unknown",
       browserDetails: fingerprint.browserDetails,
       lastUsed: now,
-      lastIpAddress: fingerprint.ipAddress || undefined, // Store actual IP address
+      lastIpAddress: this.hashIpAddress(fingerprint.ipAddress), // Store hashed IP for privacy
       lastLocation: fingerprint.ipLocation ? {
         city: fingerprint.ipLocation.city,
         country: fingerprint.ipLocation.country,

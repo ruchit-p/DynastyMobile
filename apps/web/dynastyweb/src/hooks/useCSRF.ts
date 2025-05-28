@@ -29,7 +29,7 @@ export interface UseCSRFReturn {
  * @param functions Firebase Functions instance
  * @returns CSRF token management interface
  */
-export function useCSRF(functions: Functions): UseCSRFReturn {
+export function useCSRF(functions: Functions | null | undefined): UseCSRFReturn {
   const [csrfToken, setCSRFToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -42,6 +42,11 @@ export function useCSRF(functions: Functions): UseCSRFReturn {
   const fetchCSRFToken = useCallback(async (): Promise<string> => {
     try {
       setError(null);
+      
+      // Check if functions is defined
+      if (!functions) {
+        throw new Error('Firebase Functions not initialized');
+      }
       
       const generateToken = httpsCallable<void, CSRFTokenResponse>(
         functions,
@@ -113,6 +118,13 @@ export function useCSRF(functions: Functions): UseCSRFReturn {
   useEffect(() => {
     isMountedRef.current = true;
     
+    // If functions is not available, set loading to false and return
+    if (!functions) {
+      setIsLoading(false);
+      setError(new Error('Firebase Functions not initialized'));
+      return;
+    }
+    
     // Check for existing token in cookie
     const existingToken = Cookies.get('csrf-token');
     const existingSessionId = sessionStorage.getItem('csrf-session-id');
@@ -140,7 +152,7 @@ export function useCSRF(functions: Functions): UseCSRFReturn {
         clearTimeout(refreshTimeoutRef.current);
       }
     };
-  }, [fetchCSRFToken]);
+  }, [fetchCSRFToken, functions]);
 
   /**
    * Handle visibility change - refresh token when tab becomes visible

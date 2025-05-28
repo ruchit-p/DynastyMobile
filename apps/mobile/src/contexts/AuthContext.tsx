@@ -22,6 +22,7 @@ import { getNotificationService } from '../services/NotificationService';
 import { fingerprintService } from '../services/FingerprintService';
 import * as Device from 'expo-device';
 import { logger } from '../services/LoggingService';
+import { GOOGLE_OAUTH_WEB_CLIENT_ID } from '../config/environment';
 // Add MFA specific imports
 import {
   PhoneAuthProvider,
@@ -57,10 +58,13 @@ const CACHE_KEYS = {
 } as const;
 
 // Configure Google Sign-In
-// IMPORTANT: Replace with your WEB CLIENT ID from Google Cloud Console / Firebase Project settings
-// This is typically the OAuth 2.0 client ID of type "Web application".
+// The webClientId is loaded from environment variables for security
+if (!GOOGLE_OAUTH_WEB_CLIENT_ID) {
+  logger.error('AuthContext: GOOGLE_OAUTH_WEB_CLIENT_ID is not set in environment variables');
+}
+
 GoogleSignin.configure({
-  webClientId: '613996380558-8u6sub7prcm6e0dh4q5hc2pkpk1vaefp.apps.googleusercontent.com', 
+  webClientId: GOOGLE_OAUTH_WEB_CLIENT_ID,
   offlineAccess: false, // set to true if you want to access Google API on behalf of user offline
 } as ConfigureParams); // Added type assertion for configure
 

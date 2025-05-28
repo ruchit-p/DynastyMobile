@@ -676,9 +676,9 @@ export const validateTokensScheduled = onSchedule({
 export const onStoryLiked = onDocumentCreated({
   document: "storyLikes/{likeId}",
   region: DEFAULT_REGION,
-}, async (event) => {
+}, async (_event) => {
   try {
-    const snapshot = event.data;
+    const snapshot = _event.data;
     if (!snapshot) {
       logger.error("No data associated with the event");
       return;
@@ -736,9 +736,9 @@ export const onStoryLiked = onDocumentCreated({
 export const onCommentAdded = onDocumentCreated({
   document: "comments/{commentId}",
   region: DEFAULT_REGION,
-}, async (event) => {
+}, async (_event) => {
   try {
-    const snapshot = event.data;
+    const snapshot = _event.data;
     if (!snapshot) {
       logger.error("No data associated with the event");
       return;
@@ -834,9 +834,9 @@ export const onCommentAdded = onDocumentCreated({
 export const onEventInvitationCreated = onDocumentCreated({
   document: "eventInvitations/{invitationId}",
   region: DEFAULT_REGION,
-}, async (event) => {
+}, async (_event) => {
   try {
-    const snapshot = event.data;
+    const snapshot = _event.data;
     if (!snapshot) {
       logger.error("No data associated with the event");
       return;
@@ -965,9 +965,9 @@ export const sendEventReminders = onSchedule({
 export const onMessageCreated = onDocumentCreated({
   document: "messages/{messageId}",
   region: DEFAULT_REGION,
-}, async (event) => {
+}, async (_event) => {
   try {
-    const snapshot = event.data;
+    const snapshot = _event.data;
     if (!snapshot) {
       logger.error("No data associated with the event");
       return;
@@ -1040,9 +1040,9 @@ export const onMessageCreated = onDocumentCreated({
 export const onStoryCreatedOrUpdated = onDocumentCreated({
   document: "stories/{storyId}",
   region: DEFAULT_REGION,
-}, async (event) => {
+}, async (_event) => {
   try {
-    const snapshot = event.data;
+    const snapshot = _event.data;
     if (!snapshot) {
       logger.error("No data associated with the event");
       return;
@@ -1098,7 +1098,7 @@ export const onStoryCreatedOrUpdated = onDocumentCreated({
 export const onStoryUpdated = onDocumentUpdated({
   document: "stories/{storyId}",
   region: DEFAULT_REGION,
-}, async (event) => {
+}, async (_event) => {
   // For now, we'll skip update notifications to avoid duplicate notifications
   // In a production system, you'd compare before/after to only notify newly tagged people
   return;
@@ -1110,9 +1110,9 @@ export const onStoryUpdated = onDocumentUpdated({
 export const onEventRsvpUpdated = onDocumentUpdated({
   document: "eventInvitations/{invitationId}",
   region: DEFAULT_REGION,
-}, async (event) => {
+}, async (_event) => {
   try {
-    const snapshot = event.data;
+    const snapshot = _event.data;
     if (!snapshot) {
       logger.error("No data associated with the event");
       return;
@@ -1195,9 +1195,9 @@ export const onEventRsvpUpdated = onDocumentUpdated({
 export const onEventUpdated = onDocumentUpdated({
   document: "events/{eventId}",
   region: DEFAULT_REGION,
-}, async (event) => {
+}, async (_event) => {
   try {
-    const snapshot = event.data;
+    const snapshot = _event.data;
     if (!snapshot) {
       logger.error("No data associated with the event");
       return;

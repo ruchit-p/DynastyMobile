@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { useCSRFClient } from '@/context/CSRFContext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -71,6 +70,7 @@ export default function FamilyManagementPage() {
   const { currentUser, firestoreUser } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
+  const { csrfClient } = useCSRFClient();
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,15 +94,13 @@ export default function FamilyManagementPage() {
     setLoading(true);
     try {
       // Load family members
-      const getFamilyMembers = httpsCallable(functions, 'getFamilyTreeMembers');
-      const membersResult = await getFamilyMembers({
+      const membersResult = await csrfClient.callFunction('getFamilyTreeMembers', {
         familyTreeId: firestoreUser.familyTreeId,
       });
       setMembers((membersResult.data as { members: FamilyMember[] }).members || []);
 
       // Load pending invitations
-      const getPendingInvitations = httpsCallable(functions, 'getPendingInvitations');
-      const invitationsResult = await getPendingInvitations({
+      const invitationsResult = await csrfClient.callFunction('getPendingInvitations', {
         familyTreeId: firestoreUser.familyTreeId,
       });
       setInvitations((invitationsResult.data as { invitations: PendingInvitation[] }).invitations || []);
@@ -116,7 +114,7 @@ export default function FamilyManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, [firestoreUser?.familyTreeId, toast]);
+  }, [firestoreUser?.familyTreeId, toast, csrfClient]);
 
   useEffect(() => {
     loadFamilyData();
@@ -134,8 +132,7 @@ export default function FamilyManagementPage() {
 
     setProcessing(true);
     try {
-      const sendFamilyInvitation = httpsCallable(functions, 'sendFamilyInvitation');
-      await sendFamilyInvitation({
+      await csrfClient.callFunction('sendFamilyInvitation', {
         email: inviteForm.email,
         firstName: inviteForm.firstName,
         lastName: inviteForm.lastName,
@@ -167,8 +164,7 @@ export default function FamilyManagementPage() {
 
     setProcessing(true);
     try {
-      const removeFamilyMember = httpsCallable(functions, 'removeFamilyMember');
-      await removeFamilyMember({
+      await csrfClient.callFunction('removeFamilyMember', {
         userId: selectedMember.id,
         familyTreeId: firestoreUser?.familyTreeId,
       });
@@ -195,8 +191,7 @@ export default function FamilyManagementPage() {
 
   const handleUpdateMemberRole = async (member: FamilyMember, role: 'admin' | 'member') => {
     try {
-      const updateFamilyMemberRole = httpsCallable(functions, 'updateFamilyMemberRole');
-      await updateFamilyMemberRole({
+      await csrfClient.callFunction('updateFamilyMemberRole', {
         userId: member.id,
         familyTreeId: firestoreUser?.familyTreeId,
         role,
@@ -224,8 +219,7 @@ export default function FamilyManagementPage() {
 
   const handleCancelInvitation = async (invitationId: string) => {
     try {
-      const cancelInvitation = httpsCallable(functions, 'cancelFamilyInvitation');
-      await cancelInvitation({ invitationId });
+      await csrfClient.callFunction('cancelFamilyInvitation', { invitationId });
 
       toast({
         title: 'Invitation cancelled',

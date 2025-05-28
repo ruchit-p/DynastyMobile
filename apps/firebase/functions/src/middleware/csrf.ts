@@ -1,5 +1,6 @@
 import {CallableRequest, onCall} from "firebase-functions/v2/https";
 import {logger} from "firebase-functions/v2";
+import * as crypto from "crypto";
 import {CSRFService} from "../services/csrfService";
 import {createError, ErrorCode, withErrorHandling} from "../utils/errors";
 import {requireAuth} from "./auth";
@@ -92,10 +93,16 @@ export function requireCSRFToken<T = any, R = any>(
       );
     }
 
-    // Get session ID from auth token or generate default
+    // Get session ID from auth token
     const sessionId = request.auth?.token?.sessionId ||
-                     request.auth?.token?.session_id ||
-                     "default";
+                     request.auth?.token?.session_id;
+
+    if (!sessionId) {
+      throw createError(
+        ErrorCode.UNAUTHENTICATED,
+        "No valid session found for CSRF validation"
+      );
+    }
 
     // Validate encrypted token
     const userId = request.auth?.uid || "";
@@ -157,7 +164,7 @@ export const generateCSRFToken = onCall(
     // Get or generate session ID
     const sessionId = request.auth?.token?.sessionId ||
                      request.auth?.token?.session_id ||
-                     `session_${Date.now()}_${crypto.randomBytes(8).toString("hex")}`;
+                     crypto.randomBytes(16).toString("hex");
 
     // Generate new CSRF token
     const token = CSRFService.generateToken(uid, sessionId);
@@ -195,6 +202,3 @@ export const validateCSRFToken = onCall(
     };
   })
 );
-
-// Import crypto for session ID generation
-import * as crypto from "crypto";

@@ -8,6 +8,7 @@ import { AlertCircle } from 'lucide-react';
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
+  screenName?: string;
 }
 
 interface State {
@@ -27,6 +28,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error:', error, errorInfo);
+    
+    // Send to analytics or error tracking service if needed
+    if (typeof window !== 'undefined' && window.Sentry) {
+      window.Sentry.captureException(error);
+    }
   }
 
   private handleReset = () => {
@@ -53,8 +59,8 @@ export class ErrorBoundary extends Component<Props, State> {
             </CardHeader>
             <CardContent className="space-y-4">
               {this.state.error && (
-                <div className="p-3 bg-muted rounded-md">
-                  <p className="text-sm font-mono text-muted-foreground">
+                <div className="p-3 bg-muted rounded-md overflow-hidden">
+                  <p className="text-sm font-mono text-muted-foreground break-words overflow-wrap-anywhere whitespace-pre-wrap">
                     {this.state.error.message}
                   </p>
                 </div>
@@ -76,3 +82,5 @@ export class ErrorBoundary extends Component<Props, State> {
     return this.props.children;
   }
 }
+
+export default ErrorBoundary;

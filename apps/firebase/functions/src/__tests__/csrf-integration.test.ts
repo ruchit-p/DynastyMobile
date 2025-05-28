@@ -63,6 +63,7 @@ describe('CSRF Integration Tests', () => {
           'x-csrf-token': 'test-csrf-token',
         },
       } as any,
+      acceptsStreaming: false,
     } as CallableRequest;
 
     // Setup default mocks

@@ -3,10 +3,10 @@
 
 import React from 'react';
 import { getMessaging, getToken, onMessage, Messaging } from 'firebase/messaging';
-import { httpsCallable } from 'firebase/functions';
-import { app, functions } from '@/lib/firebase';
+import { app } from '@/lib/firebase';
 import { errorHandler, ErrorSeverity } from './ErrorHandlingService';
 import { cacheService, cacheKeys } from './CacheService';
+import { CSRFProtectedClient } from '@/lib/csrf-client';
 
 export interface NotificationPreferences {
   enabled: boolean;
@@ -36,6 +36,7 @@ class NotificationService {
   private userId?: string;
   private isInitialized = false;
   private messageListeners: Set<(notification: DynastyNotification) => void> = new Set();
+  private csrfClient: CSRFProtectedClient | null = null;
 
   private constructor() {}
 
@@ -44,6 +45,19 @@ class NotificationService {
       NotificationService.instance = new NotificationService();
     }
     return NotificationService.instance;
+  }
+
+  // Set the CSRF client (should be called when the app initializes)
+  setCSRFClient(client: CSRFProtectedClient) {
+    this.csrfClient = client;
+  }
+
+  // Get CSRF client with error if not set
+  private getCSRFClient(): CSRFProtectedClient {
+    if (!this.csrfClient) {
+      throw new Error('CSRF client not initialized. Please ensure CSRFProvider is set up.');
+    }
+    return this.csrfClient;
   }
 
   async initialize(userId: string) {
@@ -96,8 +110,7 @@ class NotificationService {
         this.currentToken = token;
 
         // Register token with backend
-        const registerToken = httpsCallable(functions, 'registerDeviceToken');
-        await registerToken({
+        await this.getCSRFClient().callFunction('registerDeviceToken', {
           token,
           platform: 'web',
           deviceInfo: {
@@ -221,8 +234,7 @@ class NotificationService {
       return await cacheService.getOrSet(
         cacheKey,
         async () => {
-          const getNotifications = httpsCallable(functions, 'getNotifications');
-          const result = await getNotifications({ page, limit });
+          const result = await this.getCSRFClient().callFunction('getNotifications', { page, limit });
           const data = result.data as { notifications?: DynastyNotification[] };
           return data.notifications || [];
         },
@@ -238,8 +250,7 @@ class NotificationService {
 
   async markAsRead(notificationIds: string[]): Promise<void> {
     try {
-      const markNotificationsRead = httpsCallable(functions, 'markNotificationsRead');
-      await markNotificationsRead({ notificationIds });
+      await this.getCSRFClient().callFunction('markNotificationsRead', { notificationIds });
 
       // Invalidate cache
       if (this.userId) {
@@ -254,11 +265,7 @@ class NotificationService {
 
   async updatePreferences(preferences: NotificationPreferences): Promise<void> {
     try {
-      const updateNotificationPreferences = httpsCallable(
-        functions,
-        'updateNotificationPreferences'
-      );
-      await updateNotificationPreferences({ preferences });
+      await this.getCSRFClient().callFunction('updateNotificationPreferences', { preferences });
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
         action: 'update-notification-preferences'
@@ -269,11 +276,7 @@ class NotificationService {
 
   async getPreferences(): Promise<NotificationPreferences> {
     try {
-      const getNotificationPreferences = httpsCallable(
-        functions,
-        'getNotificationPreferences'
-      );
-      const result = await getNotificationPreferences();
+      const result = await this.getCSRFClient().callFunction('getNotificationPreferences', {});
       const data = result.data as { preferences: NotificationPreferences };
       return data.preferences;
     } catch (error) {
@@ -302,8 +305,7 @@ class NotificationService {
   async cleanup() {
     if (this.currentToken && this.userId) {
       try {
-        const unregisterToken = httpsCallable(functions, 'unregisterDeviceToken');
-        await unregisterToken({ token: this.currentToken });
+        await this.getCSRFClient().callFunction('unregisterDeviceToken', { token: this.currentToken });
       } catch (error) {
         console.error('Failed to unregister token:', error);
       }
