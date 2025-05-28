@@ -8,6 +8,7 @@ import {
 } from "../utils/errors";
 import {requireCSRFToken, CSRFValidatedRequest} from "./csrf";
 import {createLogContext, formatErrorForLogging} from "../utils/sanitization";
+import {checkRateLimit as checkRedisRateLimit, RateLimitType as RedisRateLimitType} from "../services/rateLimitService";
 
 // Lazy-load Firestore to avoid initialization issues in tests
 let db: FirebaseFirestore.Firestore | null = null;
@@ -306,18 +307,20 @@ export async function checkRateLimit(
 
   const {
     type = RateLimitType.GENERAL,
-    maxRequests = DEFAULT_MAX_REQUESTS_PER_WINDOW,
-    windowSeconds = RATE_LIMIT_WINDOW_SECONDS,
     ignoreAdmin = true,
   } = config;
 
+  // Map our RateLimitType to Redis RateLimitType
+  const redisType = type.toLowerCase() as RedisRateLimitType;
+  
   // Check if user is admin and admin bypass is enabled
+  let skipForAdmin = false;
   if (ignoreAdmin) {
     try {
       const userDoc = await getDb().collection("users").doc(uid).get();
       if (userDoc.exists && userDoc.data()?.isAdmin) {
         logger.debug("Rate limit bypassed for admin user", createLogContext({uid}));
-        return uid; // Admin bypass
+        skipForAdmin = true;
       }
     } catch (error) {
       logger.warn("Failed to check admin status for rate limiting", formatErrorForLogging(error, {uid}));
@@ -325,63 +328,26 @@ export async function checkRateLimit(
     }
   }
 
-  const now = new Date();
-  const rateLimitRef = getDb().collection("rateLimits").doc(`${uid}_${type}`);
-
   try {
-    // Use transaction to ensure atomic read and update
-    await getDb().runTransaction(async (transaction) => {
-      const rateLimitDoc = await transaction.get(rateLimitRef);
-
-      if (!rateLimitDoc.exists) {
-        // First request in window
-        transaction.set(rateLimitRef, {
-          userId: uid,
-          type: type,
-          requestCount: 1,
-          windowStart: Timestamp.fromDate(now),
-          lastRequestTime: Timestamp.fromDate(now),
-        });
-        return;
-      }
-
-      const data = rateLimitDoc.data() as RateLimitData;
-      const windowStartTime = data.windowStart.toDate();
-      const windowEndTime = new Date(windowStartTime.getTime() + (windowSeconds * 1000));
-
-      if (now > windowEndTime) {
-        // Window has expired, start new window
-        transaction.update(rateLimitRef, {
-          requestCount: 1,
-          windowStart: Timestamp.fromDate(now),
-          lastRequestTime: Timestamp.fromDate(now),
-        });
-      } else {
-        // Still in window
-        if (data.requestCount >= maxRequests) {
-          // Rate limit exceeded
-          throw createError(
-            ErrorCode.RESOURCE_EXHAUSTED,
-            `Rate limit exceeded. Please try again in ${Math.ceil((windowEndTime.getTime() - now.getTime()) / 1000)} seconds.`
-          );
-        }
-
-        // Increment request count
-        transaction.update(rateLimitRef, {
-          requestCount: data.requestCount + 1,
-          lastRequestTime: Timestamp.fromDate(now),
-        });
-      }
+    // Use Redis rate limiting
+    await checkRedisRateLimit({
+      type: redisType,
+      identifier: `user:${uid}`,
+      skipForAdmin,
     });
 
     return uid;
   } catch (error: any) {
-    // Rethrow rate limit errors
-    if (error.code === ErrorCode.RESOURCE_EXHAUSTED) {
-      throw error;
+    // If it's a SecurityError (rate limit exceeded), convert to Firebase error
+    if (error.code === 'RATE_LIMIT_EXCEEDED') {
+      throw createError(
+        ErrorCode.RESOURCE_EXHAUSTED,
+        error.message,
+        error.details
+      );
     }
 
-    // Log other transaction errors but don't block the request
+    // Log other errors but don't block the request
     logger.error("Rate limit check failed", formatErrorForLogging(error, {uid}));
     return uid;
   }
@@ -399,8 +365,6 @@ export async function checkRateLimitByIP(
 ): Promise<void> {
   const {
     type = RateLimitType.AUTH,
-    maxRequests = 5, // Much stricter for unauthenticated requests
-    windowSeconds = 300, // 5 minutes
   } = config;
 
   // Get IP address from request
@@ -414,55 +378,15 @@ export async function checkRateLimitByIP(
     return; // Don't block if we can't determine IP
   }
 
-  const now = new Date();
-  const rateLimitRef = getDb().collection("rateLimits").doc(`ip_${ip}_${type}`);
+  // Map our RateLimitType to Redis RateLimitType
+  const redisType = type.toLowerCase() as RedisRateLimitType;
 
   try {
-    await getDb().runTransaction(async (transaction) => {
-      const rateLimitDoc = await transaction.get(rateLimitRef);
-
-      if (!rateLimitDoc.exists) {
-        // First request in window
-        transaction.set(rateLimitRef, {
-          ip: ip,
-          type: type,
-          requestCount: 1,
-          windowStart: Timestamp.fromDate(now),
-          lastRequestTime: Timestamp.fromDate(now),
-        });
-        return;
-      }
-
-      const data = rateLimitDoc.data();
-      if (!data) {
-        throw new Error("Rate limit data is missing");
-      }
-      const windowStartTime = data.windowStart.toDate();
-      const windowEndTime = new Date(windowStartTime.getTime() + (windowSeconds * 1000));
-
-      if (now > windowEndTime) {
-        // Window has expired, start new window
-        transaction.update(rateLimitRef, {
-          requestCount: 1,
-          windowStart: Timestamp.fromDate(now),
-          lastRequestTime: Timestamp.fromDate(now),
-        });
-      } else {
-        // Still in window
-        if (data.requestCount >= maxRequests) {
-          // Rate limit exceeded
-          throw createError(
-            ErrorCode.RESOURCE_EXHAUSTED,
-            `Too many attempts. Please try again in ${Math.ceil((windowEndTime.getTime() - now.getTime()) / 60)} minutes.`
-          );
-        }
-
-        // Increment request count
-        transaction.update(rateLimitRef, {
-          requestCount: data.requestCount + 1,
-          lastRequestTime: Timestamp.fromDate(now),
-        });
-      }
+    // Use Redis rate limiting with IP identifier
+    await checkRedisRateLimit({
+      type: redisType,
+      identifier: `ip:${ip}`,
+      skipForAdmin: false, // Never skip for IP-based rate limiting
     });
 
     logger.debug("IP rate limit check passed", createLogContext({
@@ -470,16 +394,20 @@ export async function checkRateLimitByIP(
       type,
     }));
   } catch (error: any) {
-    // Rethrow rate limit errors
-    if (error.code === ErrorCode.RESOURCE_EXHAUSTED) {
+    // If it's a SecurityError (rate limit exceeded), convert to Firebase error
+    if (error.code === 'RATE_LIMIT_EXCEEDED') {
       logger.warn("IP rate limit exceeded", createLogContext({
         ip: ip.substring(0, 8) + "...",
         type,
       }));
-      throw error;
+      throw createError(
+        ErrorCode.RESOURCE_EXHAUSTED,
+        error.message,
+        error.details
+      );
     }
 
-    // Log other transaction errors but don't block the request
+    // Log other errors but don't block the request
     logger.error("IP rate limit check failed", formatErrorForLogging(error, {ip}));
   }
 }
