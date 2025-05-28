@@ -21,8 +21,6 @@ import { auth, functions, db } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { doc, getDoc } from 'firebase/firestore';
 import type { InvitedSignupFormData } from "@/lib/validation";
-import { useCSRF } from '@/hooks/useCSRF';
-import { createCSRFClient } from '@/lib/csrf-client';
 
 // Add global type declarations for window properties
 declare global {
@@ -175,10 +173,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [firestoreUser, setFirestoreUser] = useState<FirestoreUser | null>(null);
   const [loading, setLoading] = useState(true);
-  
-  // Initialize CSRF protection with lazy loading
-  const { isReady: csrfReady, getCSRFToken } = useCSRF(functions);
-  const csrfClient = createCSRFClient(functions, getCSRFToken);
 
   const refreshFirestoreUser = async () => {
     if (user?.uid) {
@@ -209,13 +203,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     password: string,
   ): Promise<void> => {
     try {
-      // Wait for CSRF token to be ready
-      if (!csrfReady) {
-        throw new Error('Authentication system is initializing. Please try again in a moment.');
-      }
-      
-      // Use CSRF-protected client for signup
-      await csrfClient.callFunction<SignUpRequest, SignUpResult>('handleSignUp', {
+      // Signup is CSRF-exempt, call directly
+      const handleSignUp = httpsCallable<SignUpRequest, SignUpResult>(functions, 'handleSignUp');
+      await handleSignUp({
         email,
         password,
       });
@@ -257,12 +247,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         if (!userDoc.exists()) {
           console.log("This is a new Google user, creating Firestore document");
-          // Wait for CSRF token to be ready
-          if (!csrfReady) {
-            throw new Error('Authentication system is initializing. Please try again in a moment.');
-          }
-          // Create a new user document in Firestore using CSRF-protected client
-          await csrfClient.callFunction('handleGoogleSignIn', {
+          // Create a new user document in Firestore (Google sign-in is CSRF-exempt)
+          const handleGoogleSignIn = httpsCallable(functions, 'handleGoogleSignIn');
+          await handleGoogleSignIn({
             userId: result.user.uid,
             email: result.user.email,
             displayName: result.user.displayName || '',
@@ -334,15 +321,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signUpWithInvitation = async (data: InvitedSignupFormData) => {
-    // Wait for CSRF token to be ready
-    if (!csrfReady) {
-      throw new Error('Authentication system is initializing. Please try again in a moment.');
-    }
-    // Use CSRF-protected client for invited signup
-    const result = await csrfClient.callFunction<InvitedSignupFormData, { success: boolean; userId: string; familyTreeId: string }>(
-      "handleInvitedSignUp",
-      data
+    // Invited signup is CSRF-exempt
+    const handleInvitedSignUp = httpsCallable<InvitedSignupFormData, { success: boolean; userId: string; familyTreeId: string }>(
+      functions,
+      "handleInvitedSignUp"
     );
+    const result = await handleInvitedSignUp(data);
     
     // Sign in the user after successful signup and wait for auth state to update
     await signInWithEmailAndPassword(auth, data.email, data.password);
@@ -352,8 +336,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const verifyInvitation = async (token: string, invitationId: string) => {
-    // Use CSRF-protected client for invitation verification
-    const result = await csrfClient.callFunction<
+    // Invitation verification is CSRF-exempt (public endpoint)
+    const verifyInvitationToken = httpsCallable<
       { token: string; invitationId: string },
       {
         prefillData: {
@@ -366,7 +350,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         };
         inviteeEmail: string;
       }
-    >("verifyInvitationToken", { token, invitationId });
+    >(functions, "verifyInvitationToken");
+    const result = await verifyInvitationToken({ token, invitationId });
     return result.data;
   };
 
@@ -414,18 +399,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const confirmPhoneSignIn = async (verificationId: string, code: string): Promise<boolean> => {
+  const confirmPhoneSignIn = async (_verificationId: string, code: string): Promise<boolean> => {
     try {
       // Sign in with the verification code
       const result = await window.confirmationResult.confirm(code);
       const user = result.user;
       
       // Wait for CSRF token to be ready
-      if (!csrfReady) {
-        throw new Error('Authentication system is initializing. Please try again in a moment.');
-      }
-      // Call the Firebase function to handle phone sign-in with CSRF protection
-      const response = await csrfClient.callFunction('handlePhoneSignIn', {
+      // Phone sign-in is CSRF-exempt
+      const handlePhoneSignInFn = httpsCallable(functions, 'handlePhoneSignIn');
+      const response = await handlePhoneSignInFn({
         phoneNumber: user.phoneNumber,
         uid: user.uid,
       });
