@@ -98,6 +98,8 @@ const Navbar = () => {
               width={40} 
               height={40} 
               className="mr-2"
+              priority
+              style={{ height: 'auto' }}
             />
             <span className="font-serif text-2xl font-bold text-dynasty-green">Dynasty</span>
           </Link>
