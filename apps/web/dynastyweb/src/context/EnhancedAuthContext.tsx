@@ -658,8 +658,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!user) throw new Error('No user logged in');
     
     try {
-      const session = await multiFactor(user).getSession();
-      const totpSecret = await TotpMultiFactorGenerator.generateSecret(session);
+      const mfaSession = await multiFactor(user).getSession();
+      const totpSecret = await TotpMultiFactorGenerator.generateSecret(mfaSession);
       
       const qrCodeUrl = totpSecret.generateQrCodeUrl(
         user.email || 'Dynasty User',

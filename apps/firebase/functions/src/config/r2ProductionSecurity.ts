@@ -60,6 +60,7 @@ export const R2_PRODUCTION_SECURITY = {
     alertOnLargeUploads: 40 * 1024 * 1024, // Alert on files > 40MB
     suspiciousPatterns: [
       /(\.\w+){2,}$/, // Double extensions like .pdf.exe
+      // eslint-disable-next-line no-control-regex
       /[\x00-\x1F]/, // Control characters in filenames
     ],
   },

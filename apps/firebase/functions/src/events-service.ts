@@ -145,7 +145,7 @@ function validateTimeFormat(timeString: string): boolean {
  */
 function validateTimezone(timezone: string): boolean {
   try {
-    Intl.DateTimeFormat(undefined, {timeZone: timezone});
+    new Intl.DateTimeFormat(undefined, {timeZone: timezone});
     return true;
   } catch {
     return false;
@@ -465,7 +465,7 @@ export const createEvent = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
   withAuth(async (request) => {
-    const uid = request.auth?.uid!;
+    const uid = request.auth?.uid || "";
 
     // Validate and sanitize input using centralized validator
     const validatedData = validateRequest(
@@ -701,7 +701,7 @@ export const updateEvent = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
   withAuth(async (request) => {
-    const uid = request.auth?.uid!;
+    const uid = request.auth?.uid || "";
 
     // Validate and sanitize input using centralized validator
     const validatedData = validateRequest(
@@ -796,7 +796,7 @@ export const updateEvent = onCall(
           if (updates.startTime && updates.startTime !== currentEventData.startTime) {
             changes.push(`new time ${updates.startTime}`);
           }
-          if (updates.location && updates.location.address !== currentEventData.location?.address) {
+          if (updates.location && currentEventData.location && updates.location.address !== currentEventData.location.address) {
             changes.push("location changed");
           }
           if (updates.isVirtual !== undefined && updates.isVirtual !== currentEventData.isVirtual) {
@@ -853,7 +853,7 @@ export const deleteEvent = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
   withAuth(async (request) => {
-    const uid = request.auth?.uid!;
+    const uid = request.auth?.uid || "";
     const {eventId} = request.data;
     if (!eventId || typeof eventId !== "string") {
       throw createError(ErrorCode.MISSING_PARAMETERS, "Event ID is required.");
@@ -909,7 +909,7 @@ export const rsvpToEvent = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(async (request) => {
-    const uid = request.auth?.uid!;
+    const uid = request.auth?.uid || "";
 
     const {eventId, status, plusOne, plusOneName} = request.data as {
       eventId: string;
@@ -1091,7 +1091,7 @@ export const addCommentToEvent = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(async (request) => {
-    const uid = request.auth?.uid!;
+    const uid = request.auth?.uid || "";
 
     const {eventId, text, parentId} = request.data as {
       eventId: string;
@@ -1228,7 +1228,7 @@ export const deleteEventComment = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(async (request) => {
-    const uid = request.auth?.uid!;
+    const uid = request.auth?.uid || "";
     const {eventId, commentId} = request.data;
     if (!eventId || typeof eventId !== "string" || !commentId || typeof commentId !== "string") {
       throw createError(ErrorCode.MISSING_PARAMETERS, "Event ID and Comment ID are required.");
@@ -1810,7 +1810,7 @@ export const sendEventInvitations = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
   withAuth(async (request) => {
-    const uid = request.auth?.uid!;
+    const uid = request.auth?.uid || "";
 
     const {eventId, userIds, message} = request.data as {
       eventId: string;
@@ -2049,7 +2049,7 @@ export const respondToInvitation = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(async (request) => {
-    const uid = request.auth?.uid!;
+    const uid = request.auth?.uid || "";
 
     const {eventId, status, plusOne, plusOneName} = request.data as {
       eventId: string;
@@ -2223,7 +2223,7 @@ export const updateEventRsvpApi = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(async (request) => {
-    const uid = request.auth?.uid!;
+    const uid = request.auth?.uid || "";
 
     const {eventId, status} = request.data as {
       eventId: string;
@@ -2433,7 +2433,7 @@ export const completeEventCoverPhotoUpload = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(async (request) => {
-    const uid = request.auth?.uid!;
+    const uid = request.auth?.uid || "";
 
     const {eventId, storagePath} = request.data as {
       eventId: string;

@@ -42,7 +42,7 @@ jobs:
       - name: Run linter
         run: |
           cd apps/web/dynastyweb
-          yarn lint
+          yarn lint:ci
 
       - name: Run TypeScript check
         run: |
