@@ -176,9 +176,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [firestoreUser, setFirestoreUser] = useState<FirestoreUser | null>(null);
   const [loading, setLoading] = useState(true);
   
-  // Initialize CSRF protection
-  const { csrfToken, isReady: csrfReady } = useCSRF(functions);
-  const csrfClient = createCSRFClient(functions, () => csrfToken);
+  // Initialize CSRF protection with lazy loading
+  const { isReady: csrfReady, getCSRFToken } = useCSRF(functions);
+  const csrfClient = createCSRFClient(functions, getCSRFToken);
 
   const refreshFirestoreUser = async () => {
     if (user?.uid) {

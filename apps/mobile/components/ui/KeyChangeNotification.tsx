@@ -87,7 +87,7 @@ const KeyChangeNotification: React.FC<KeyChangeNotificationProps> = ({
           </Text>
           
           <Text style={[styles.message, { color: colors.text.secondary }]}>
-            {userName}'s safety number has changed. This could mean:
+            {userName}&apos;s safety number has changed. This could mean:
           </Text>
 
           <View style={styles.reasonsList}>

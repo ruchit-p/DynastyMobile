@@ -245,11 +245,12 @@ export const sendEventSms = onCall({
           rsvpLink
         );
         break;
-      case "reminder":
+      case "reminder": {
         const hoursUntil = Math.floor((event.startDate.toDate().getTime() - Date.now()) / (1000 * 60 * 60));
         const timeUntil = hoursUntil > 24 ? `${Math.floor(hoursUntil / 24)} days` : `${hoursUntil} hours`;
         messageBody = SMS_TEMPLATES.eventReminder(event.title, timeUntil);
         break;
+      }
       case "update":
         messageBody = SMS_TEMPLATES.eventUpdate(
           event.title,
