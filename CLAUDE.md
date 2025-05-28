@@ -8,12 +8,23 @@ When implementing new features, use the automated workflow to ensure proper test
 
 ### Quick Start
 ```bash
-# For simple features
-./scripts/claude-feature-workflow.sh "feature-name" "feat: your commit message"
+# Standard feature development
+yarn feature "feature-name" "feat: your commit message"
 
-# For TypeScript assistant
-npx ts-node scripts/claude-dev-assistant.ts "feature-name" "feat: your commit message"
+# Skip local tests (useful for CI/CD setup PRs)
+yarn feature:quick "feature-name" "feat: your commit message"
+
+# Force continue even with test failures
+yarn feature:force "feature-name" "feat: your commit message"
+
+# TypeScript assistant with options
+yarn feature:ts "feature-name" "feat: your commit message" --skip-local-tests
 ```
+
+### Options
+- `--skip-local-tests` - Skip local test validation (useful for setup/config changes)
+- `--no-verify` - Skip git hooks during commit
+- `--force` - Continue even if tests fail locally
 
 ### Workflow Steps (Automated)
 1. **Branch Creation**: Automatically creates feature branch from dev

@@ -10,7 +10,7 @@ import { Workbox } from 'workbox-window';
 // MARK: - Types
 export interface OfflineAction {
   id: string;
-  type: 'media_upload' | 'profile_update' | 'vault_update';
+  type: 'message' | 'reaction' | 'media_upload' | 'profile_update' | 'vault_update';
   data: any;
   timestamp: number;
   retryCount: number;
@@ -313,14 +313,15 @@ export class OfflineService {
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // Update message status in offline messages
-    if (this.db && action.data.messageId) {
-      const message = await this.db.get('messages', action.data.messageId);
-      if (message) {
-        message.status = 'sent';
-        await this.db.put('messages', message);
-      }
-    }
+    // TODO: Implement message status updates
+    // The database schema doesn't include a 'messages' store yet
+    // if (this.db && action.data.messageId) {
+    //   const message = await this.db.get('messages', action.data.messageId);
+    //   if (message) {
+    //     message.status = 'sent';
+    //     await this.db.put('messages', message);
+    //   }
+    // }
   }
 
   private async syncReaction(action: OfflineAction): Promise<void> {
@@ -599,11 +600,10 @@ export class OfflineService {
         return;
       }
 
-      const tx = this.db.transaction(['actions', 'messages', 'cache', 'media'], 'readwrite');
+      const tx = this.db.transaction(['actions', 'cache', 'media'], 'readwrite');
       
       await Promise.all([
         tx.objectStore('actions').clear(),
-        tx.objectStore('messages').clear(),
         tx.objectStore('cache').clear(),
         tx.objectStore('media').clear()
       ]);

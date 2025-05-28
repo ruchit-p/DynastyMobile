@@ -34,7 +34,7 @@ export interface DeviceTrustResult {
 }
 
 class FingerprintService {
-  private fpjsClient: FingerprintJSPro | null = null;
+  private fpjsClient: any | null = null;
   private initPromise: Promise<void> | null = null;
   private isInitialized = false;
 

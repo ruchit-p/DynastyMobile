@@ -37,6 +37,9 @@ class FontSizeService {
 
   private loadFromLocalStorage() {
     try {
+      if (typeof window === 'undefined') {
+        return; // Skip localStorage on server
+      }
       const stored = localStorage.getItem('fontSettings');
       if (stored) {
         const settings: FontSizeSettings = JSON.parse(stored);
@@ -50,6 +53,9 @@ class FontSizeService {
 
   private saveToLocalStorage() {
     try {
+      if (typeof window === 'undefined') {
+        return; // Skip localStorage on server
+      }
       const settings: FontSizeSettings = {
         fontScale: this.currentScale,
         useDeviceSettings: this.useDeviceSettings,
@@ -72,7 +78,7 @@ class FontSizeService {
 
       // First check local storage with user-specific key
       const userKey = `fontSettings_${this.userId}`;
-      const cachedSettings = localStorage.getItem(userKey);
+      const cachedSettings = typeof window !== 'undefined' ? localStorage.getItem(userKey) : null;
       
       if (cachedSettings) {
         const settings: FontSizeSettings = JSON.parse(cachedSettings);
@@ -97,11 +103,13 @@ class FontSizeService {
         this.useDeviceSettings = useDeviceSettings ?? true;
         
         // Update local storage
-        localStorage.setItem(userKey, JSON.stringify({
-          fontScale: this.currentScale,
-          useDeviceSettings: this.useDeviceSettings,
-          lastUpdated: Date.now(),
-        }));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(userKey, JSON.stringify({
+            fontScale: this.currentScale,
+            useDeviceSettings: this.useDeviceSettings,
+            lastUpdated: Date.now(),
+          }));
+        }
         
         this.notifyListeners();
         this.applyScale();
@@ -121,11 +129,13 @@ class FontSizeService {
     if (this.userId && auth.currentUser) {
       try {
         const userKey = `fontSettings_${this.userId}`;
-        localStorage.setItem(userKey, JSON.stringify({
-          fontScale: this.currentScale,
-          useDeviceSettings: this.useDeviceSettings,
-          lastUpdated: Date.now(),
-        }));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(userKey, JSON.stringify({
+            fontScale: this.currentScale,
+            useDeviceSettings: this.useDeviceSettings,
+            lastUpdated: Date.now(),
+          }));
+        }
 
         const updateUserSettings = httpsCallable(functions, 'updateUserSettings');
         await updateUserSettings({

@@ -195,7 +195,7 @@ class SyncQueueService {
       return {
         success: data.results?.[0]?.success || false,
         error: data.results?.[0]?.error,
-        conflictResolution: data.results?.[0]?.conflictResolution
+        conflictResolution: data.results?.[0]?.conflictResolution as 'client_wins' | 'server_wins' | 'merged' | undefined
       };
     } catch (error) {
       return {
@@ -267,6 +267,10 @@ class SyncQueueService {
     return operations.length;
   }
 
+  getIsProcessing(): boolean {
+    return this.isProcessing;
+  }
+
   destroy() {
     if (this.syncInterval) {
       clearInterval(this.syncInterval);
@@ -291,7 +295,7 @@ export function useSyncQueue() {
     const updateStatus = async () => {
       const size = await syncQueue.getQueueSize();
       setQueueSize(size);
-      setIsProcessing(syncQueue.isProcessing);
+      setIsProcessing(syncQueue.getIsProcessing());
     };
 
     // Update status initially

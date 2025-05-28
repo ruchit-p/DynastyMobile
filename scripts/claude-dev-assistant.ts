@@ -21,15 +21,23 @@ const colors = {
   cyan: '\x1b[36m',
 };
 
+interface Options {
+  skipLocalTests?: boolean;
+  noVerify?: boolean;
+  force?: boolean;
+}
+
 class ClaudeDevAssistant {
   private featureName: string;
   private commitMessage: string;
   private branchName: string;
+  private options: Options;
 
-  constructor(featureName: string, commitMessage?: string) {
+  constructor(featureName: string, commitMessage?: string, options: Options = {}) {
     this.featureName = featureName;
     this.commitMessage = commitMessage || `feat: implement ${featureName}`;
     this.branchName = `feature/${featureName.toLowerCase().replace(/\s+/g, '-')}`;
+    this.options = options;
   }
 
   private log(message: string, color: keyof typeof colors = 'reset') {
@@ -154,25 +162,35 @@ class ClaudeDevAssistant {
       this.log('Creating feature branch...', 'blue');
       this.exec(`git checkout -b ${this.branchName}`);
 
-      // Step 4: Run tests
-      let testResult = await this.runTests();
-      
-      // Step 5: Attempt to fix failures
-      if (!testResult.passed) {
-        this.log('Tests failed, attempting fixes...', 'yellow');
-        const fixed = await this.fixTestFailures(testResult.failures);
-        if (!fixed) {
-          this.log('Could not automatically fix all test failures', 'red');
-          this.log('Please fix the following issues:', 'red');
-          testResult.failures.forEach(f => console.log(`  - ${f}`));
-          return false;
+      // Step 4: Run tests (unless skipped)
+      if (!this.options.skipLocalTests) {
+        let testResult = await this.runTests();
+        
+        // Step 5: Attempt to fix failures
+        if (!testResult.passed) {
+          this.log('Tests failed, attempting fixes...', 'yellow');
+          const fixed = await this.fixTestFailures(testResult.failures);
+          if (!fixed) {
+            if (this.options.force) {
+              this.log('Tests failed but continuing due to --force flag', 'yellow');
+            } else {
+              this.log('Could not automatically fix all test failures', 'red');
+              this.log('Please fix the following issues:', 'red');
+              testResult.failures.forEach(f => console.log(`  - ${f}`));
+              this.log('Use --force to continue anyway or --skip-local-tests to skip', 'yellow');
+              return false;
+            }
+          }
         }
+      } else {
+        this.log('Skipping local tests as requested', 'yellow');
       }
 
       // Step 6: Commit and push
       this.log('Committing changes...', 'blue');
       this.exec('git add .');
-      this.exec(`git commit -m "${this.commitMessage}"`);
+      const noVerifyFlag = this.options.noVerify ? '--no-verify' : '';
+      this.exec(`git commit ${noVerifyFlag} -m "${this.commitMessage}"`);
       
       this.log('Pushing to remote...', 'blue');
       this.exec(`git push -u origin ${this.branchName}`);
@@ -220,21 +238,54 @@ This PR will trigger automated tests via GitHub Actions.
 // CLI Interface
 async function main() {
   const args = process.argv.slice(2);
+  const options: Options = {};
+  let featureName = '';
+  let commitMessage = '';
   
-  if (args.length === 0) {
+  // Parse arguments
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg.startsWith('--')) {
+      switch (arg) {
+        case '--skip-local-tests':
+          options.skipLocalTests = true;
+          break;
+        case '--no-verify':
+          options.noVerify = true;
+          break;
+        case '--force':
+          options.force = true;
+          break;
+      }
+    } else {
+      if (!featureName) {
+        featureName = arg;
+      } else if (!commitMessage) {
+        commitMessage = arg;
+      }
+    }
+  }
+  
+  if (!featureName) {
     console.log(`
 Claude Code Development Assistant
 
 Usage: 
-  npx ts-node scripts/claude-dev-assistant.ts <feature-name> [commit-message]
+  npx ts-node scripts/claude-dev-assistant.ts <feature-name> [commit-message] [options]
+
+Options:
+  --skip-local-tests    Skip local test validation
+  --no-verify          Skip git hooks
+  --force              Continue even if tests fail
 
 Example:
   npx ts-node scripts/claude-dev-assistant.ts "user-profile" "feat: add user profile page"
+  npx ts-node scripts/claude-dev-assistant.ts "hotfix" "fix: critical bug" --skip-local-tests
     `);
     process.exit(1);
   }
 
-  const assistant = new ClaudeDevAssistant(args[0], args[1]);
+  const assistant = new ClaudeDevAssistant(featureName, commitMessage, options);
   const success = await assistant.execute();
   
   process.exit(success ? 0 : 1);
