@@ -1,330 +1,471 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
-import LoginPage from '@/app/login/page';
 import { useAuth } from '@/context/AuthContext';
-import { useToast } from '@/components/ui/use-toast';
+import LoginPage from '@/app/login/page';
+import { createMockAuthContext, createMockCSRFContext, createMockFirebaseUser, createMockFirestoreUser } from '../test-utils';
 
 // Mock dependencies
 jest.mock('next/navigation');
 jest.mock('@/context/AuthContext');
-jest.mock('@/components/ui/use-toast');
-jest.mock('next/image', () => ({
-  __esModule: true,
-  default: (props: React.ImgHTMLAttributes<HTMLImageElement>) => {
-    // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
-    return <img {...props} />;
-  },
+jest.mock('@/context/CSRFContext');
+jest.mock('@/hooks/useCSRF', () => ({
+  useCSRF: () => ({ csrfToken: 'test-csrf-token' }),
 }));
 
-describe('LoginPage', () => {
+// Mock Firebase
+jest.mock('firebase/auth', () => ({
+  signInWithEmailAndPassword: jest.fn(),
+  signInWithPopup: jest.fn(),
+  GoogleAuthProvider: jest.fn(),
+  RecaptchaVerifier: jest.fn(),
+}));
+
+describe('Login Page - Real-world Scenarios', () => {
   const mockRouter = {
     push: jest.fn(),
     replace: jest.fn(),
+    back: jest.fn(),
   };
-  
-  const mockToast = jest.fn();
-  const mockSignIn = jest.fn();
-  const mockSignInWithGoogle = jest.fn();
-  const mockSignInWithPhone = jest.fn();
-  const mockConfirmPhoneSignIn = jest.fn();
-  
+
+  const mockUseAuth = useAuth as jest.Mock;
+  const mockUseRouter = useRouter as jest.Mock;
+
   beforeEach(() => {
     jest.clearAllMocks();
-    
-    (useRouter as jest.Mock).mockReturnValue(mockRouter);
-    (useToast as jest.Mock).mockReturnValue({ toast: mockToast });
-    (useAuth as jest.Mock).mockReturnValue({
-      signIn: mockSignIn,
-      signInWithGoogle: mockSignInWithGoogle,
-      signInWithPhone: mockSignInWithPhone,
-      confirmPhoneSignIn: mockConfirmPhoneSignIn,
-      currentUser: null,
-      firestoreUser: null,
+    mockUseRouter.mockReturnValue(mockRouter);
+    mockUseAuth.mockReturnValue(createMockAuthContext());
+  });
+
+  describe('Form Validation', () => {
+    it('should validate email format', async () => {
+      const user = userEvent.setup();
+      render(<LoginPage />);
+
+      const emailInput = screen.getByLabelText(/email/i);
+      const submitButton = screen.getByRole('button', { name: /sign in/i });
+
+      // Invalid email
+      await user.type(emailInput, 'invalid-email');
+      await user.click(submitButton);
+
+      expect(await screen.findByText(/please enter a valid email/i)).toBeInTheDocument();
+    });
+
+    it('should require password', async () => {
+      const user = userEvent.setup();
+      render(<LoginPage />);
+
+      const emailInput = screen.getByLabelText(/email/i);
+      const submitButton = screen.getByRole('button', { name: /sign in/i });
+
+      await user.type(emailInput, 'test@example.com');
+      await user.click(submitButton);
+
+      expect(await screen.findByText(/password is required/i)).toBeInTheDocument();
+    });
+
+    it('should show password strength feedback', async () => {
+      const user = userEvent.setup();
+      render(<LoginPage />);
+
+      const passwordInput = screen.getByLabelText(/password/i);
+      
+      // Weak password
+      await user.type(passwordInput, '123');
+      expect(screen.queryByText(/password too short/i)).toBeInTheDocument();
+
+      // Clear and type strong password
+      await user.clear(passwordInput);
+      await user.type(passwordInput, 'StrongP@ssw0rd123');
+      expect(screen.queryByText(/password too short/i)).not.toBeInTheDocument();
     });
   });
 
-  describe('Email/Password Login', () => {
-    it('renders login form with email and password fields', () => {
-      render(<LoginPage />);
+  describe('Authentication Flow', () => {
+    it('should handle successful login', async () => {
+      const user = userEvent.setup();
+      const mockSignIn = jest.fn().mockResolvedValue(undefined);
       
-      expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
-    });
+      mockUseAuth.mockReturnValue(
+        createMockAuthContext({ 
+          signIn: mockSignIn,
+          currentUser: createMockFirebaseUser(),
+          firestoreUser: createMockFirestoreUser(),
+        })
+      );
 
-    it('validates email format', async () => {
       render(<LoginPage />);
-      
-      const emailInput = screen.getByLabelText(/email/i);
-      const form = screen.getByTestId('login-form');
-      
-      fireEvent.change(emailInput, { target: { value: 'invalid-email' } });
-      fireEvent.submit(form);
-      
-      await waitFor(() => {
-        expect(screen.getByText(/invalid email address/i)).toBeInTheDocument();
-      });
-      
-      expect(mockSignIn).not.toHaveBeenCalled();
-    });
 
-    it('validates password requirements', async () => {
-      render(<LoginPage />);
-      
-      const passwordInput = screen.getByLabelText(/password/i);
-      const form = screen.getByTestId('login-form');
-      
-      fireEvent.change(passwordInput, { target: { value: '123' } });
-      fireEvent.submit(form);
-      
-      await waitFor(() => {
-        expect(screen.getByText(/password must be at least/i)).toBeInTheDocument();
-      });
-      
-      expect(mockSignIn).not.toHaveBeenCalled();
-    });
-
-    it('handles successful login', async () => {
-      mockSignIn.mockResolvedValue({ user: { uid: '123', emailVerified: true } });
-      
-      (useAuth as jest.Mock).mockReturnValue({
-        signIn: mockSignIn,
-        signInWithGoogle: mockSignInWithGoogle,
-        signInWithPhone: mockSignInWithPhone,
-        confirmPhoneSignIn: mockConfirmPhoneSignIn,
-        currentUser: { uid: '123', emailVerified: true },
-        firestoreUser: null,
-      });
-      
-      render(<LoginPage />);
-      
       const emailInput = screen.getByLabelText(/email/i);
       const passwordInput = screen.getByLabelText(/password/i);
       const submitButton = screen.getByRole('button', { name: /sign in/i });
-      
-      fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
-      fireEvent.change(passwordInput, { target: { value: 'ValidPassword123!' } });
-      fireEvent.click(submitButton);
+
+      await user.type(emailInput, 'test@example.com');
+      await user.type(passwordInput, 'password123');
+      await user.click(submitButton);
+
+      expect(mockSignIn).toHaveBeenCalledWith('test@example.com', 'password123');
       
       await waitFor(() => {
-        expect(mockSignIn).toHaveBeenCalledWith('test@example.com', 'ValidPassword123!');
-        expect(mockRouter.push).toHaveBeenCalledWith('/family-tree');
+        expect(mockRouter.push).toHaveBeenCalledWith('/feed');
       });
     });
 
-    it('handles login errors', async () => {
-      const errorMessage = 'Invalid credentials';
-      mockSignIn.mockRejectedValue(new Error(errorMessage));
+    it('should handle login with remember me', async () => {
+      const user = userEvent.setup();
+      const mockSignIn = jest.fn().mockResolvedValue(undefined);
       
+      mockUseAuth.mockReturnValue(
+        createMockAuthContext({ signIn: mockSignIn })
+      );
+
       render(<LoginPage />);
-      
+
+      const rememberCheckbox = screen.getByLabelText(/remember me/i);
+      await user.click(rememberCheckbox);
+
       const emailInput = screen.getByLabelText(/email/i);
       const passwordInput = screen.getByLabelText(/password/i);
       const submitButton = screen.getByRole('button', { name: /sign in/i });
+
+      await user.type(emailInput, 'test@example.com');
+      await user.type(passwordInput, 'password123');
+      await user.click(submitButton);
+
+      // Check that email is saved to localStorage when remember me is checked
+      expect(localStorage.getItem('rememberedEmail')).toBe('test@example.com');
+    });
+
+    it('should handle invalid credentials', async () => {
+      const user = userEvent.setup();
+      const mockSignIn = jest.fn().mockRejectedValue(
+        new Error('Invalid email or password')
+      );
       
-      fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
-      fireEvent.change(passwordInput, { target: { value: 'ValidPassword123!' } });
-      fireEvent.click(submitButton);
+      mockUseAuth.mockReturnValue(
+        createMockAuthContext({ signIn: mockSignIn })
+      );
+
+      render(<LoginPage />);
+
+      const emailInput = screen.getByLabelText(/email/i);
+      const passwordInput = screen.getByLabelText(/password/i);
+      const submitButton = screen.getByRole('button', { name: /sign in/i });
+
+      await user.type(emailInput, 'wrong@example.com');
+      await user.type(passwordInput, 'wrongpassword');
+      await user.click(submitButton);
+
+      expect(await screen.findByText(/invalid email or password/i)).toBeInTheDocument();
+      expect(mockRouter.push).not.toHaveBeenCalled();
+    });
+
+    it('should handle account lockout', async () => {
+      const user = userEvent.setup();
+      const mockSignIn = jest.fn()
+        .mockRejectedValueOnce(new Error('Invalid credentials'))
+        .mockRejectedValueOnce(new Error('Invalid credentials'))
+        .mockRejectedValueOnce(new Error('Account locked due to too many failed attempts'));
+      
+      mockUseAuth.mockReturnValue(
+        createMockAuthContext({ signIn: mockSignIn })
+      );
+
+      render(<LoginPage />);
+
+      const emailInput = screen.getByLabelText(/email/i);
+      const passwordInput = screen.getByLabelText(/password/i);
+      const submitButton = screen.getByRole('button', { name: /sign in/i });
+
+      // Multiple failed attempts
+      for (let i = 0; i < 3; i++) {
+        await user.clear(emailInput);
+        await user.clear(passwordInput);
+        await user.type(emailInput, 'test@example.com');
+        await user.type(passwordInput, 'wrongpassword');
+        await user.click(submitButton);
+      }
+
+      expect(await screen.findByText(/account locked/i)).toBeInTheDocument();
+      expect(screen.getByText(/too many failed attempts/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('Social Authentication', () => {
+    it('should handle Google sign-in', async () => {
+      const user = userEvent.setup();
+      const mockSignInWithGoogle = jest.fn().mockResolvedValue(true);
+      
+      mockUseAuth.mockReturnValue(
+        createMockAuthContext({ 
+          signInWithGoogle: mockSignInWithGoogle,
+          currentUser: createMockFirebaseUser(),
+        })
+      );
+
+      render(<LoginPage />);
+
+      const googleButton = screen.getByRole('button', { name: /sign in with google/i });
+      await user.click(googleButton);
+
+      expect(mockSignInWithGoogle).toHaveBeenCalled();
       
       await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-          title: 'Login failed',
-          description: errorMessage,
-          variant: 'destructive',
-        }));
+        expect(mockRouter.push).toHaveBeenCalledWith('/feed');
       });
     });
 
-    it('shows loading state during login', async () => {
-      mockSignIn.mockImplementation(() => new Promise(resolve => setTimeout(resolve, 100)));
+    it('should handle Google sign-in cancellation', async () => {
+      const user = userEvent.setup();
+      const mockSignInWithGoogle = jest.fn().mockResolvedValue(false);
       
+      mockUseAuth.mockReturnValue(
+        createMockAuthContext({ signInWithGoogle: mockSignInWithGoogle })
+      );
+
       render(<LoginPage />);
+
+      const googleButton = screen.getByRole('button', { name: /sign in with google/i });
+      await user.click(googleButton);
+
+      expect(mockSignInWithGoogle).toHaveBeenCalled();
+      expect(mockRouter.push).not.toHaveBeenCalled();
+    });
+
+    it('should handle social auth errors', async () => {
+      const user = userEvent.setup();
+      const mockSignInWithGoogle = jest.fn().mockRejectedValue(
+        new Error('Popup blocked by browser')
+      );
       
+      mockUseAuth.mockReturnValue(
+        createMockAuthContext({ signInWithGoogle: mockSignInWithGoogle })
+      );
+
+      render(<LoginPage />);
+
+      const googleButton = screen.getByRole('button', { name: /sign in with google/i });
+      await user.click(googleButton);
+
+      expect(await screen.findByText(/popup blocked/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('Loading States', () => {
+    it('should show loading state during authentication', async () => {
+      const user = userEvent.setup();
+      let resolveSignIn: () => void;
+      const signInPromise = new Promise<void>(resolve => {
+        resolveSignIn = resolve;
+      });
+      const mockSignIn = jest.fn().mockReturnValue(signInPromise);
+      
+      mockUseAuth.mockReturnValue(
+        createMockAuthContext({ signIn: mockSignIn })
+      );
+
+      render(<LoginPage />);
+
       const emailInput = screen.getByLabelText(/email/i);
       const passwordInput = screen.getByLabelText(/password/i);
       const submitButton = screen.getByRole('button', { name: /sign in/i });
-      
-      fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
-      fireEvent.change(passwordInput, { target: { value: 'ValidPassword123!' } });
-      fireEvent.click(submitButton);
-      
-      expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
+
+      await user.type(emailInput, 'test@example.com');
+      await user.type(passwordInput, 'password123');
+      await user.click(submitButton);
+
+      // Should show loading state
+      expect(screen.getByText(/signing in/i)).toBeInTheDocument();
       expect(submitButton).toBeDisabled();
-    });
-  });
+      expect(emailInput).toBeDisabled();
+      expect(passwordInput).toBeDisabled();
 
-  describe('Google Sign In', () => {
-    it('handles Google sign in', async () => {
-      mockSignInWithGoogle.mockResolvedValue({ user: { uid: '123' } });
-      
-      render(<LoginPage />);
-      
-      const googleButton = screen.getByRole('button', { name: /continue with google/i });
-      fireEvent.click(googleButton);
-      
+      resolveSignIn!();
+
       await waitFor(() => {
-        expect(mockSignInWithGoogle).toHaveBeenCalled();
+        expect(screen.queryByText(/signing in/i)).not.toBeInTheDocument();
       });
     });
 
-    it('handles Google sign in errors', async () => {
-      const errorMessage = 'Google sign in failed';
-      mockSignInWithGoogle.mockRejectedValue(new Error(errorMessage));
+    it('should disable form during submission', async () => {
+      const user = userEvent.setup();
+      const mockSignIn = jest.fn().mockImplementation(
+        () => new Promise(resolve => setTimeout(resolve, 100))
+      );
       
-      render(<LoginPage />);
-      
-      const googleButton = screen.getByRole('button', { name: /continue with google/i });
-      fireEvent.click(googleButton);
-      
-      await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-          title: 'Google sign-in failed',
-          description: errorMessage,
-          variant: 'destructive',
-        }));
-      });
-    });
-  });
+      mockUseAuth.mockReturnValue(
+        createMockAuthContext({ signIn: mockSignIn })
+      );
 
-  describe('Phone Authentication', () => {
-    it('renders phone authentication tab', () => {
       render(<LoginPage />);
-      
-      const phoneTab = screen.getByRole('tab', { name: /phone/i });
-      fireEvent.click(phoneTab);
-      
-      expect(screen.getByLabelText(/phone number/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /send code/i })).toBeInTheDocument();
-    });
 
-    it('validates phone number format', async () => {
-      render(<LoginPage />);
-      
-      const phoneTab = screen.getByRole('tab', { name: /phone/i });
-      fireEvent.click(phoneTab);
-      
-      const phoneInput = screen.getByLabelText(/phone number/i);
-      const sendButton = screen.getByRole('button', { name: /send code/i });
-      
-      fireEvent.change(phoneInput, { target: { value: '123' } });
-      fireEvent.click(sendButton);
-      
-      await waitFor(() => {
-        expect(screen.getByText(/invalid phone number/i)).toBeInTheDocument();
-      });
-    });
+      const emailInput = screen.getByLabelText(/email/i);
+      const passwordInput = screen.getByLabelText(/password/i);
+      const submitButton = screen.getByRole('button', { name: /sign in/i });
 
-    it('handles successful phone verification code send', async () => {
-      mockSignInWithPhone.mockResolvedValue({ verificationId: 'test-id' });
-      
-      render(<LoginPage />);
-      
-      const phoneTab = screen.getByRole('tab', { name: /phone/i });
-      fireEvent.click(phoneTab);
-      
-      const phoneInput = screen.getByLabelText(/phone number/i);
-      const sendButton = screen.getByRole('button', { name: /send code/i });
-      
-      fireEvent.change(phoneInput, { target: { value: '+1234567890' } });
-      fireEvent.click(sendButton);
-      
-      await waitFor(() => {
-        expect(mockSignInWithPhone).toHaveBeenCalledWith('+1234567890');
-        expect(screen.getByLabelText(/verification code/i)).toBeInTheDocument();
-        expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-          title: 'Verification code sent',
-        }));
-      });
-    });
+      await user.type(emailInput, 'test@example.com');
+      await user.type(passwordInput, 'password123');
+      await user.click(submitButton);
 
-    it('handles verification code confirmation', async () => {
-      mockSignInWithPhone.mockResolvedValue({ verificationId: 'test-id' });
-      mockConfirmPhoneSignIn.mockResolvedValue({ user: { uid: '123' } });
-      
-      render(<LoginPage />);
-      
-      // First send the code
-      const phoneTab = screen.getByRole('tab', { name: /phone/i });
-      fireEvent.click(phoneTab);
-      
-      const phoneInput = screen.getByLabelText(/phone number/i);
-      const sendButton = screen.getByRole('button', { name: /send code/i });
-      
-      fireEvent.change(phoneInput, { target: { value: '+1234567890' } });
-      fireEvent.click(sendButton);
-      
-      await waitFor(() => {
-        expect(screen.getByLabelText(/verification code/i)).toBeInTheDocument();
-      });
-      
-      // Then verify the code
-      const codeInput = screen.getByLabelText(/verification code/i);
-      const verifyButton = screen.getByRole('button', { name: /verify.*sign in/i });
-      
-      fireEvent.change(codeInput, { target: { value: '123456' } });
-      fireEvent.click(verifyButton);
-      
-      await waitFor(() => {
-        expect(mockConfirmPhoneSignIn).toHaveBeenCalledWith('test-id', '123456');
-      });
+      // All form elements should be disabled
+      expect(emailInput).toBeDisabled();
+      expect(passwordInput).toBeDisabled();
+      expect(submitButton).toBeDisabled();
+      expect(screen.getByRole('button', { name: /sign in with google/i })).toBeDisabled();
     });
   });
 
   describe('Navigation', () => {
-    it('redirects to family tree on successful login with verified email', async () => {
-      const mockUser = { uid: '123', emailVerified: true };
-      
-      (useAuth as jest.Mock).mockReturnValue({
-        signIn: mockSignIn,
-        signInWithGoogle: mockSignInWithGoogle,
-        signInWithPhone: mockSignInWithPhone,
-        confirmPhoneSignIn: mockConfirmPhoneSignIn,
-        currentUser: mockUser,
-        firestoreUser: null,
-      });
-      
+    it('should navigate to signup page', async () => {
+      const user = userEvent.setup();
       render(<LoginPage />);
+
+      const signupLink = screen.getByText(/don't have an account/i).closest('a');
+      expect(signupLink).toHaveAttribute('href', '/signup');
+    });
+
+    it('should navigate to forgot password', async () => {
+      const user = userEvent.setup();
+      render(<LoginPage />);
+
+      const forgotLink = screen.getByText(/forgot password/i);
+      expect(forgotLink).toHaveAttribute('href', '/forgot-password');
+    });
+
+    it('should redirect authenticated users', () => {
+      mockUseAuth.mockReturnValue(
+        createMockAuthContext({
+          currentUser: createMockFirebaseUser(),
+          firestoreUser: createMockFirestoreUser(),
+          loading: false,
+        })
+      );
+
+      render(<LoginPage />);
+
+      expect(mockRouter.replace).toHaveBeenCalledWith('/feed');
+    });
+  });
+
+  describe('Security Features', () => {
+    it('should include CSRF token in requests', async () => {
+      const user = userEvent.setup();
+      const mockSignIn = jest.fn().mockResolvedValue(undefined);
       
+      mockUseAuth.mockReturnValue(
+        createMockAuthContext({ signIn: mockSignIn })
+      );
+
+      render(<LoginPage />);
+
+      const form = screen.getByRole('form');
+      const csrfInput = form.querySelector('input[name="csrf_token"]');
+      expect(csrfInput).toHaveValue('test-csrf-token');
+    });
+
+    it('should mask password input', () => {
+      render(<LoginPage />);
+
+      const passwordInput = screen.getByLabelText(/password/i);
+      expect(passwordInput).toHaveAttribute('type', 'password');
+    });
+
+    it('should have toggle password visibility', async () => {
+      const user = userEvent.setup();
+      render(<LoginPage />);
+
+      const passwordInput = screen.getByLabelText(/password/i);
+      const toggleButton = screen.getByRole('button', { name: /show password/i });
+
+      expect(passwordInput).toHaveAttribute('type', 'password');
+
+      await user.click(toggleButton);
+      expect(passwordInput).toHaveAttribute('type', 'text');
+
+      await user.click(toggleButton);
+      expect(passwordInput).toHaveAttribute('type', 'password');
+    });
+  });
+
+  describe('Accessibility', () => {
+    it('should have proper form labels', () => {
+      render(<LoginPage />);
+
+      expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+    });
+
+    it('should be keyboard navigable', async () => {
+      const user = userEvent.setup();
+      render(<LoginPage />);
+
+      await user.tab();
+      expect(screen.getByLabelText(/email/i)).toHaveFocus();
+
+      await user.tab();
+      expect(screen.getByLabelText(/password/i)).toHaveFocus();
+
+      await user.tab();
+      expect(screen.getByLabelText(/remember me/i)).toHaveFocus();
+
+      await user.tab();
+      expect(screen.getByRole('button', { name: /sign in/i })).toHaveFocus();
+    });
+
+    it('should announce errors to screen readers', async () => {
+      const user = userEvent.setup();
+      const mockSignIn = jest.fn().mockRejectedValue(
+        new Error('Invalid credentials')
+      );
+      
+      mockUseAuth.mockReturnValue(
+        createMockAuthContext({ signIn: mockSignIn })
+      );
+
+      render(<LoginPage />);
+
+      const submitButton = screen.getByRole('button', { name: /sign in/i });
+      await user.click(submitButton);
+
+      const errorAlert = await screen.findByRole('alert');
+      expect(errorAlert).toHaveTextContent(/invalid credentials/i);
+    });
+  });
+
+  describe('Error Recovery', () => {
+    it('should clear errors on new submission', async () => {
+      const user = userEvent.setup();
+      const mockSignIn = jest.fn()
+        .mockRejectedValueOnce(new Error('Invalid credentials'))
+        .mockResolvedValueOnce(undefined);
+      
+      mockUseAuth.mockReturnValue(
+        createMockAuthContext({ signIn: mockSignIn })
+      );
+
+      render(<LoginPage />);
+
+      const emailInput = screen.getByLabelText(/email/i);
+      const passwordInput = screen.getByLabelText(/password/i);
+      const submitButton = screen.getByRole('button', { name: /sign in/i });
+
+      // First attempt - fail
+      await user.type(emailInput, 'test@example.com');
+      await user.type(passwordInput, 'wrong');
+      await user.click(submitButton);
+
+      expect(await screen.findByText(/invalid credentials/i)).toBeInTheDocument();
+
+      // Second attempt - should clear error
+      await user.clear(passwordInput);
+      await user.type(passwordInput, 'correct');
+      await user.click(submitButton);
+
       await waitFor(() => {
-        expect(mockRouter.push).toHaveBeenCalledWith('/family-tree');
+        expect(screen.queryByText(/invalid credentials/i)).not.toBeInTheDocument();
       });
-    });
-
-    it('redirects to email verification for unverified users', async () => {
-      const mockUser = { uid: '123', emailVerified: false };
-      
-      (useAuth as jest.Mock).mockReturnValue({
-        signIn: mockSignIn,
-        signInWithGoogle: mockSignInWithGoogle,
-        signInWithPhone: mockSignInWithPhone,
-        confirmPhoneSignIn: mockConfirmPhoneSignIn,
-        currentUser: mockUser,
-        firestoreUser: { phoneNumberVerified: false },
-      });
-      
-      render(<LoginPage />);
-      
-      await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-          title: 'Email verification required',
-        }));
-        expect(mockRouter.push).toHaveBeenCalledWith('/verify-email');
-      });
-    });
-
-    it('has link to sign up page', () => {
-      render(<LoginPage />);
-      
-      const signUpLink = screen.getByRole('link', { name: /sign up/i });
-      expect(signUpLink).toHaveAttribute('href', '/signup');
-    });
-
-    it('has link to forgot password page', () => {
-      render(<LoginPage />);
-      
-      const forgotPasswordLink = screen.getByRole('link', { name: /forgot password/i });
-      expect(forgotPasswordLink).toHaveAttribute('href', '/forgot-password');
     });
   });
 });

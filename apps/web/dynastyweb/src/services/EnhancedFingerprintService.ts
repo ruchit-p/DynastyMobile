@@ -7,6 +7,22 @@
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
 import CryptoJS from 'crypto-js';
 
+// Type definitions for Battery API
+interface Battery {
+  charging: boolean;
+  chargingTime: number;
+  dischargingTime: number;
+  level: number;
+}
+
+// Type definitions for Network Information API
+interface NetworkInformation {
+  effectiveType?: string;
+  downlink?: number;
+  rtt?: number;
+  saveData?: boolean;
+}
+
 // MARK: - Types
 export interface DeviceFingerprint {
   deviceId: string;
@@ -171,7 +187,7 @@ export class EnhancedFingerprintService {
         localStorage: this.isStorageSupported('localStorage'),
         sessionStorage: this.isStorageSupported('sessionStorage'),
         indexedDB: this.isStorageSupported('indexedDB'),
-        cpuClass: (navigator as any).cpuClass,
+        cpuClass: (navigator as unknown as { cpuClass?: string }).cpuClass,
         hardwareConcurrency: navigator.hardwareConcurrency || 0,
         colorDepth: screen.colorDepth,
         colorGamut: this.getColorGamut(),
@@ -277,7 +293,7 @@ export class EnhancedFingerprintService {
   private async generateAudioFingerprint(): Promise<string> {
     return new Promise((resolve) => {
       try {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
         const context = new AudioContextClass();
         
         // Create oscillator for audio fingerprinting
@@ -415,7 +431,7 @@ export class EnhancedFingerprintService {
   private generateHardwareFingerprint(): string {
     const data = {
       cores: navigator.hardwareConcurrency,
-      memory: (navigator as any).deviceMemory || 0,
+      memory: (navigator as unknown as { deviceMemory?: number }).deviceMemory || 0,
       platform: navigator.platform,
       maxTouchPoints: navigator.maxTouchPoints,
       screen: {
@@ -436,7 +452,7 @@ export class EnhancedFingerprintService {
       languages: navigator.languages,
       cookieEnabled: navigator.cookieEnabled,
       onLine: navigator.onLine,
-      buildID: (navigator as any).buildID || '',
+      buildID: (navigator as unknown as { buildID?: string }).buildID || '',
       product: navigator.product,
       productSub: navigator.productSub,
       vendor: navigator.vendor,
@@ -464,7 +480,7 @@ export class EnhancedFingerprintService {
 
   private isStorageSupported(storageType: string): boolean {
     try {
-      const storage = (window as any)[storageType] as Storage;
+      const storage = (window as unknown as Record<string, Storage | undefined>)[storageType] as Storage;
       const testKey = '__storage_test__';
       storage.setItem(testKey, 'test');
       storage.removeItem(testKey);
@@ -548,7 +564,7 @@ export class EnhancedFingerprintService {
 
   private async getBatteryInfo(): Promise<BatteryInfo | undefined> {
     try {
-      const battery = await (navigator as any).getBattery?.() as any;
+      const battery = await (navigator as unknown as { getBattery?: () => Promise<Battery> }).getBattery?.();
       
       if (battery) {
         return {
@@ -566,9 +582,9 @@ export class EnhancedFingerprintService {
   }
 
   private getNetworkInfo(): NetworkInfo | undefined {
-    const connection = (navigator as any).connection || 
-                      (navigator as any).mozConnection || 
-                      (navigator as any).webkitConnection as any;
+    const connection = (navigator as unknown as { connection?: NetworkInformation; mozConnection?: NetworkInformation; webkitConnection?: NetworkInformation }).connection || 
+                      (navigator as unknown as { connection?: NetworkInformation; mozConnection?: NetworkInformation; webkitConnection?: NetworkInformation }).mozConnection || 
+                      (navigator as unknown as { connection?: NetworkInformation; mozConnection?: NetworkInformation; webkitConnection?: NetworkInformation }).webkitConnection;
     
     if (connection) {
       return {

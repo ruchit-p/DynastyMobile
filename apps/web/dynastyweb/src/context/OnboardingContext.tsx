@@ -3,11 +3,11 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from './AuthContext'
 import OnboardingForm from '@/components/OnboardingForm'
-import { functions, db } from '@/lib/firebase'
+import { db } from '@/lib/firebase'
 import { usePathname } from 'next/navigation'
 import { useToast } from '@/components/ui/use-toast'
-import { httpsCallable } from 'firebase/functions'
 import { doc, getDoc } from 'firebase/firestore'
+import { useCSRFClient } from './CSRFContext'
 
 type PrefillData = {
   firstName?: string
@@ -39,6 +39,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const lastCheckedUserIdRef = useRef<string | null>(null)
   const pathname = usePathname()
   const { toast } = useToast()
+  const { csrfClient } = useCSRFClient()
   
   // Debugging log for initial state
   useEffect(() => {
@@ -144,7 +145,9 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       }
       
       // Use Cloud Function to get user data as fallback
-      const getUserData = httpsCallable<{ userId: string }, { 
+      console.log("Calling getUserData cloud function for user:", currentUser.uid);
+      const result = await csrfClient.callFunction('getUserData', { userId: currentUser.uid });
+      const data = result.data as { 
         userData: {
           onboardingCompleted: boolean;
           firstName?: string;
@@ -155,10 +158,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         };
         success: boolean;
         message?: string;
-      }>(functions, 'getUserData');
-      
-      console.log("Calling getUserData cloud function for user:", currentUser.uid);
-      const { data } = await getUserData({ userId: currentUser.uid });
+      };
       console.log("getUserData response:", data);
       
       if (!data.success) {
@@ -246,7 +246,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     } finally {
       isCheckingRef.current = false
     }
-  }, [currentUser, hasCompletedOnboarding, shouldSkip, toast, isOnboardingRedirectPage]);
+  }, [currentUser, hasCompletedOnboarding, shouldSkip, toast, isOnboardingRedirectPage, csrfClient]);
 
   useEffect(() => {
     // Only check onboarding status if:
@@ -295,8 +295,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
       // Call the Cloud Function to complete onboarding
       // This will handle all database operations in one call
-      const completeOnboardingFunction = httpsCallable(functions, 'completeOnboarding')
-      await completeOnboardingFunction({
+      await csrfClient.callFunction('completeOnboarding', {
         userId: currentUser.uid,
         firstName: userData.firstName,
         lastName: userData.lastName,

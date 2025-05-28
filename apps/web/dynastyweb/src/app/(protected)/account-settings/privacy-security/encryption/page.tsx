@@ -31,8 +31,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Spinner } from '@/components/ui/spinner';
 import { e2eeService } from '@/services/encryption/E2EEService';
 import { keyBackupService } from '@/services/encryption/KeyBackupService';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { useCSRFClient } from '@/context/CSRFContext';
 
 interface EncryptionStatus {
   keysGenerated: boolean;
@@ -45,6 +44,7 @@ interface EncryptionStatus {
 export default function EncryptionSettingsPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { csrfClient } = useCSRFClient();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<EncryptionStatus>({
     keysGenerated: false,
@@ -63,8 +63,7 @@ export default function EncryptionSettingsPage() {
       const backupIds = keyBackupService.getStoredBackupIds();
 
       // Check server status
-      const checkEncryptionStatus = httpsCallable(functions, 'checkEncryptionStatus');
-      const result = await checkEncryptionStatus();
+      const result = await csrfClient.callFunction('checkEncryptionStatus', {});
       const serverStatus = result.data as {
         publicKeyExists: boolean;
         backupExists: boolean;
@@ -93,7 +92,7 @@ export default function EncryptionSettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, csrfClient]);
 
   useEffect(() => {
     checkEncryptionStatus();
@@ -107,8 +106,7 @@ export default function EncryptionSettingsPage() {
       const exportedKeyPair = await e2eeService.exportKeyPair(keyPair);
 
       // Upload public key to server
-      const uploadEncryptionKeys = httpsCallable(functions, 'uploadEncryptionKeys');
-      await uploadEncryptionKeys({
+      await csrfClient.callFunction('uploadEncryptionKeys', {
         publicKey: exportedKeyPair.publicKey,
       });
 
@@ -138,8 +136,7 @@ export default function EncryptionSettingsPage() {
       const exportedKeyPair = await e2eeService.exportKeyPair(newKeyPair);
 
       // Rotate keys on server
-      const rotateEncryptionKeys = httpsCallable(functions, 'rotateEncryptionKeys');
-      await rotateEncryptionKeys({
+      await csrfClient.callFunction('rotateEncryptionKeys', {
         newPublicKey: exportedKeyPair.publicKey,
       });
 

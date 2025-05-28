@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { useCSRFClient } from '@/context/CSRFContext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,6 +51,7 @@ export default function AddFamilyMemberPage() {
   const { firestoreUser } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
+  const { csrfClient } = useCSRFClient();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<AddMemberForm>({
     firstName: '',
@@ -87,8 +87,7 @@ export default function AddFamilyMemberPage() {
 
     setLoading(true);
     try {
-      const addFamilyMember = httpsCallable(functions, 'addFamilyMember');
-      const result = await addFamilyMember({
+      const result = await csrfClient.callFunction('addFamilyMember', {
         firstName: form.firstName,
         lastName: form.lastName,
         email: form.email,
