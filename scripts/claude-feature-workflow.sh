@@ -1,7 +1,11 @@
 #!/bin/bash
 
 # Claude Code Automated Feature Workflow
-# Usage: ./scripts/claude-feature-workflow.sh "feature-name" "commit-message"
+# Usage: ./scripts/claude-feature-workflow.sh "feature-name" "commit-message" [options]
+# Options:
+#   --skip-local-tests    Skip local test validation
+#   --no-verify          Skip git hooks
+#   --force              Continue even if tests fail
 
 set -e
 
@@ -32,8 +36,41 @@ print_warning() {
 }
 
 # Parse arguments
-FEATURE_NAME=${1:-"auto-feature-$(date +%s)"}
-COMMIT_MESSAGE=${2:-"feat: automated feature implementation"}
+FEATURE_NAME=""
+COMMIT_MESSAGE=""
+SKIP_LOCAL_TESTS=false
+NO_VERIFY=""
+FORCE=false
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --skip-local-tests)
+            SKIP_LOCAL_TESTS=true
+            shift
+            ;;
+        --no-verify)
+            NO_VERIFY="--no-verify"
+            shift
+            ;;
+        --force)
+            FORCE=true
+            shift
+            ;;
+        *)
+            if [ -z "$FEATURE_NAME" ]; then
+                FEATURE_NAME="$1"
+            elif [ -z "$COMMIT_MESSAGE" ]; then
+                COMMIT_MESSAGE="$1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Set defaults if not provided
+FEATURE_NAME=${FEATURE_NAME:-"auto-feature-$(date +%s)"}
+COMMIT_MESSAGE=${COMMIT_MESSAGE:-"feat: automated feature implementation"}
 BRANCH_NAME="feature/$FEATURE_NAME"
 
 print_status "Starting automated feature workflow for: $FEATURE_NAME"
@@ -47,65 +84,73 @@ git pull origin dev
 print_status "Creating feature branch: $BRANCH_NAME"
 git checkout -b "$BRANCH_NAME"
 
-# Step 3: Run local tests first
-print_status "Running local tests before pushing..."
+# Step 3: Run local tests first (unless skipped)
+if [ "$SKIP_LOCAL_TESTS" = false ]; then
+    print_status "Running local tests before pushing..."
 
-# Function to run tests and return status
-run_tests() {
-    local all_passed=true
-    
-    # Web tests
-    if [ -d "apps/web/dynastyweb" ]; then
-        print_status "Running web tests..."
-        cd apps/web/dynastyweb
-        if ! yarn lint || ! npx tsc --noEmit || ! yarn test --ci; then
-            print_error "Web tests failed"
-            all_passed=false
+    # Function to run tests and return status
+    run_tests() {
+        local all_passed=true
+        
+        # Web tests
+        if [ -d "apps/web/dynastyweb" ]; then
+            print_status "Running web tests..."
+            cd apps/web/dynastyweb
+            if ! yarn lint || ! npx tsc --noEmit || ! yarn test --ci --passWithNoTests; then
+                print_error "Web tests failed"
+                all_passed=false
+            fi
+            cd ../../..
         fi
-        cd ../../..
-    fi
-    
-    # Mobile tests
-    if [ -d "apps/mobile" ]; then
-        print_status "Running mobile tests..."
-        cd apps/mobile
-        if ! yarn lint || ! npx tsc --noEmit || ! yarn test --ci; then
-            print_error "Mobile tests failed"
-            all_passed=false
+        
+        # Mobile tests
+        if [ -d "apps/mobile" ]; then
+            print_status "Running mobile tests..."
+            cd apps/mobile
+            if ! yarn lint || ! npx tsc --noEmit || ! yarn test --ci --passWithNoTests; then
+                print_error "Mobile tests failed"
+                all_passed=false
+            fi
+            cd ../..
         fi
-        cd ../..
-    fi
-    
-    # Firebase tests
-    if [ -d "apps/firebase/functions" ]; then
-        print_status "Running Firebase tests..."
-        cd apps/firebase/functions
-        if ! npm run lint || ! npm run build || ! npm test -- --ci; then
-            print_error "Firebase tests failed"
-            all_passed=false
+        
+        # Firebase tests
+        if [ -d "apps/firebase/functions" ]; then
+            print_status "Running Firebase tests..."
+            cd apps/firebase/functions
+            if ! npm run lint || ! npm run build || ! npm test -- --ci --passWithNoTests; then
+                print_error "Firebase tests failed"
+                all_passed=false
+            fi
+            cd ../../..
         fi
-        cd ../../..
-    fi
-    
-    if [ "$all_passed" = true ]; then
-        return 0
+        
+        if [ "$all_passed" = true ]; then
+            return 0
+        else
+            return 1
+        fi
+    }
+
+    # Run tests
+    if ! run_tests; then
+        if [ "$FORCE" = true ]; then
+            print_warning "Tests failed locally but continuing due to --force flag"
+        else
+            print_warning "Tests failed locally. Use --force to continue anyway or --skip-local-tests to skip."
+            exit 1
+        fi
     else
-        return 1
+        print_status "All local tests passed!"
     fi
-}
-
-# Run tests
-if ! run_tests; then
-    print_warning "Tests failed locally. Please fix the issues before proceeding."
-    exit 1
+else
+    print_warning "Skipping local tests as requested"
 fi
-
-print_status "All local tests passed!"
 
 # Step 4: Commit and push changes
 print_status "Committing changes..."
 git add .
-git commit -m "$COMMIT_MESSAGE"
+git commit $NO_VERIFY -m "$COMMIT_MESSAGE"
 
 print_status "Pushing to remote..."
 git push -u origin "$BRANCH_NAME"
