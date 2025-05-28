@@ -43,6 +43,10 @@ module.exports = {
     "valid-jsdoc": "off",
     "require-jsdoc": "off",
     "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-unused-vars": ["error", {
+      "argsIgnorePattern": "^_",
+      "varsIgnorePattern": "^_"
+    }],
     "object-curly-spacing": ["error", "never"],
     "comma-dangle": ["error", "always-multiline"],
   },
