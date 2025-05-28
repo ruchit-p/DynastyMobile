@@ -54,6 +54,21 @@ Infrastructure setup and configuration.
 - [Cloudflare R2](./infrastructure/cloudflare-r2.md) - Object storage setup
 - [Monitoring](./infrastructure/monitoring.md) - Logging and monitoring
 
+### [Implementations](./implementations/)
+Completed implementation documentation.
+
+- [Signal Protocol](./implementations/SIGNAL_PROTOCOL_IMPLEMENTATION_COMPLETE.md) - Signal Protocol implementation
+- [E2EE](./implementations/E2EE_IMPLEMENTATION_COMPLETE_SUMMARY.md) - End-to-end encryption
+- [Libsignal Native](./implementations/LIBSIGNAL_NATIVE_IMPLEMENTATION.md) - Native libsignal implementation
+- [Fingerprint](./implementations/FINGERPRINT_IMPLEMENTATION_SUMMARY.md) - Device fingerprinting
+
+### [Summaries](./summaries/)
+Feature analyses and test coverage summaries.
+
+- [Dynasty Feature Parity](./summaries/DYNASTY_FEATURE_PARITY_ANALYSIS.md) - Feature parity analysis
+- [Messaging Feature Parity](./summaries/MESSAGING_FEATURE_PARITY_ANALYSIS.md) - Messaging parity analysis
+- [Test Coverage](./summaries/TEST_COVERAGE_SUMMARY.md) - Test coverage summary
+
 ## 🚀 Quick Links
 
 - [CHANGELOG](../CHANGELOG.md) - Version history and updates

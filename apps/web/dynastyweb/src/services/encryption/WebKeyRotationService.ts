@@ -418,23 +418,11 @@ export class WebKeyRotationService {
    * Try to decrypt with any available key
    */
   async decryptWithAnyKey(encryptedData: ArrayBuffer): Promise<ArrayBuffer | null> {
-    const keys = await this.getAllKeys();
-
-    for (const key of keys) {
-      try {
-        // Use Web Crypto API to decrypt
-        const decrypted = await crypto.subtle.decrypt(
-          { name: 'AES-GCM' },
-          key.keyPair.privateKey,
-          encryptedData
-        );
-        return decrypted;
-      } catch (error) {
-        // Try next key
-        continue;
-      }
-    }
-
+    // TODO: Implement proper decryption with libsodium
+    // The current implementation incorrectly tries to use Web Crypto API
+    // with raw ArrayBuffer keys instead of CryptoKey objects
+    
+    console.warn('[WebKeyRotation] decryptWithAnyKey not implemented');
     return null;
   }
 

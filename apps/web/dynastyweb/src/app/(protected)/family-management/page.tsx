@@ -88,10 +88,6 @@ export default function FamilyManagementPage() {
     relationship: '',
   });
 
-  useEffect(() => {
-    loadFamilyData();
-  }, [firestoreUser?.familyTreeId, loadFamilyData]);
-
   const loadFamilyData = useCallback(async () => {
     if (!firestoreUser?.familyTreeId) return;
 
@@ -121,6 +117,10 @@ export default function FamilyManagementPage() {
       setLoading(false);
     }
   }, [firestoreUser?.familyTreeId, toast]);
+
+  useEffect(() => {
+    loadFamilyData();
+  }, [loadFamilyData]);
 
   const handleInviteMember = async () => {
     if (!inviteForm.email || !inviteForm.firstName || !inviteForm.lastName) {

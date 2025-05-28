@@ -10,6 +10,7 @@ import {UserDocument} from "../types/user";
 import {MAX_OPERATIONS_PER_BATCH} from "../config/constants";
 import {validateRequest} from "../../utils/request-validator";
 import {VALIDATION_SCHEMAS} from "../../config/validation-schemas";
+import {SECURITY_CONFIG} from "../../config/security-config";
 
 /**
  * Handles cleanup when a user deletes their account.
@@ -200,15 +201,19 @@ export const handleAccountDeletion = onCall(
     },
     "handleAccountDeletion",
     {
-      resourceType: "user",
-      resourceIdField: "userId",
-      requiredLevel: PermissionLevel.PROFILE_OWNER,
-      // Allow admins to delete any account as alternative permission
-      additionalPermissionCheck: async (resource, uid) => {
-        const db = getFirestore();
-        const userDoc = await db.collection("users").doc(uid).get();
-        return userDoc.exists && userDoc.data()?.isAdmin === true;
+      resourceConfig: {
+        resourceType: "user",
+        resourceIdField: "userId",
+        requiredLevel: PermissionLevel.PROFILE_OWNER,
+        // Allow admins to delete any account as alternative permission
+        additionalPermissionCheck: async (resource, uid) => {
+          const db = getFirestore();
+          const userDoc = await db.collection("users").doc(uid).get();
+          return userDoc.exists && userDoc.data()?.isAdmin === true;
+        },
       },
+      enableCSRF: true,
+      rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
     }
   )
 );
@@ -296,9 +301,13 @@ export const updateUserProfile = onCall(
     },
     "updateUserProfile",
     {
-      resourceType: "user",
-      resourceIdField: "uid",
-      requiredLevel: [PermissionLevel.PROFILE_OWNER, PermissionLevel.ADMIN],
+      resourceConfig: {
+        resourceType: "user",
+        resourceIdField: "uid",
+        requiredLevel: [PermissionLevel.PROFILE_OWNER, PermissionLevel.ADMIN],
+      },
+      enableCSRF: true,
+      rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
     }
   )
 );
@@ -401,4 +410,84 @@ export const getFamilyMembers = onCall(
       requiredLevel: PermissionLevel.FAMILY_MEMBER,
     }
   )
+);
+
+/**
+ * Get user settings including font preferences
+ */
+export const getUserSettings = onCall(
+  {
+    region: DEFAULT_REGION,
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  async (request) => {
+    const userId = request.auth?.uid;
+    if (!userId) {
+      throw createError(ErrorCode.UNAUTHENTICATED, "User not authenticated");
+    }
+
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(userId);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      throw createError(ErrorCode.NOT_FOUND, "User not found");
+    }
+
+    const userData = userDoc.data() as UserDocument;
+
+    return {
+      fontSettings: userData.fontSettings || {
+        fontScale: 1.0,
+        useDeviceSettings: true,
+      },
+      notificationSettings: userData.notificationSettings,
+      privacySettings: userData.privacySettings,
+    };
+  }
+);
+
+/**
+ * Update user settings including font preferences
+ */
+export const updateUserSettings = onCall(
+  {
+    region: DEFAULT_REGION,
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  async (request) => {
+    const userId = request.auth?.uid;
+    if (!userId) {
+      throw createError(ErrorCode.UNAUTHENTICATED, "User not authenticated");
+    }
+
+    const {fontSettings, notificationSettings, privacySettings} = request.data;
+
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(userId);
+
+    const updates: Partial<UserDocument> = {
+      updatedAt: Timestamp.now().toDate(),
+    };
+
+    if (fontSettings) {
+      updates.fontSettings = {
+        fontScale: fontSettings.fontScale || 1.0,
+        useDeviceSettings: fontSettings.useDeviceSettings ?? true,
+      };
+    }
+
+    if (notificationSettings) {
+      updates.notificationSettings = notificationSettings;
+    }
+
+    if (privacySettings) {
+      updates.privacySettings = privacySettings;
+    }
+
+    await userRef.update(updates);
+
+    logger.info(`Updated settings for user ${userId}`);
+    return {success: true};
+  }
 );

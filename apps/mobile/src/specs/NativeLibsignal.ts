@@ -142,6 +142,27 @@ export interface Spec extends TurboModule {
   
   // Utilities
   generateKeyPair(): Promise<IdentityKeyPair>;
+  
+  // Attachment Encryption (AES-256-CBC)
+  encryptAttachment(
+    data: string, // base64
+    key: string, // base64 (32 bytes)
+    iv: string // base64 (16 bytes)
+  ): Promise<string>; // base64 encrypted data
+  
+  decryptAttachment(
+    encryptedData: string, // base64
+    key: string, // base64 (32 bytes)
+    iv: string // base64 (16 bytes)
+  ): Promise<string>; // base64 decrypted data
+  
+  generateAttachmentKey(): Promise<string>; // base64 (64 bytes: 32 AES + 32 HMAC)
+  generateIV(): Promise<string>; // base64 (16 bytes)
+  
+  calculateHMAC(
+    data: string, // base64
+    key: string // base64 (32 bytes)
+  ): Promise<string>; // base64 HMAC
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('Libsignal');

@@ -1,8 +1,7 @@
 import { randomBytes, createCipheriv, createDecipheriv, createHash } from 'react-native-quick-crypto';
 import { Buffer } from '@craftzdog/react-native-buffer';
-import { getFirebaseDb } from '../../lib/firebase';
+import { getFirebaseDb , getFirebaseAuth } from '../../lib/firebase';
 import { callFirebaseFunction } from '../../lib/errorUtils';
-import { getFirebaseAuth } from '../../lib/firebase';
 import { AuditLogService } from './AuditLogService';
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import { logger } from '../LoggingService';

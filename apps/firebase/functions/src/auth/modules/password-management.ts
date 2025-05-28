@@ -9,6 +9,7 @@ import {SENDGRID_CONFIG} from "../config/secrets";
 import {sanitizeUserId, sanitizeEmail, createLogContext} from "../../utils/sanitization";
 import {validateRequest} from "../../utils/request-validator";
 import {VALIDATION_SCHEMAS} from "../../config/validation-schemas";
+import {SECURITY_CONFIG} from "../../config/security-config";
 
 /**
  * Updates user password
@@ -51,7 +52,11 @@ export const updateUserPassword = onCall(
       }
     },
     "updateUserPassword",
-    "auth"
+    {
+      authLevel: "auth",
+      enableCSRF: true,
+      rateLimitConfig: SECURITY_CONFIG.rateLimits.passwordReset,
+    }
   )
 );
 
@@ -65,49 +70,57 @@ export const initiatePasswordReset = onCall({
   memory: "512MiB",
   timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   secrets: [SENDGRID_CONFIG],
-}, async (request) => {
+}, withAuth(
+  async (request) => {
   // Validate and sanitize input using centralized validator
-  const validatedData = validateRequest(
-    request.data,
-    VALIDATION_SCHEMAS.initiatePasswordReset,
-    request.auth?.uid
-  );
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.initiatePasswordReset,
+      request.auth?.uid
+    );
 
-  const {email} = validatedData;
-  try {
-    logger.info("Initiating password reset", createLogContext({email}));
+    const {email} = validatedData;
+    try {
+      logger.info("Initiating password reset", createLogContext({email}));
 
-    // Initialize SendGrid
-    initSendGrid();
+      // Initialize SendGrid
+      initSendGrid();
 
-    const auth = getAuth();
+      const auth = getAuth();
 
-    // Generate the password reset link
-    const resetLink = await auth.generatePasswordResetLink(email);
+      // Generate the password reset link
+      const resetLink = await auth.generatePasswordResetLink(email);
 
-    // Get user details for the email template
-    const userRecord = await auth.getUserByEmail(email);
-    const displayName = userRecord.displayName || "User";
+      // Get user details for the email template
+      const userRecord = await auth.getUserByEmail(email);
+      const displayName = userRecord.displayName || "User";
 
-    // Send email using helper
-    const {sendEmail} = await import("../utils/sendgridHelper");
-    await sendEmail({
-      to: email,
-      templateType: "passwordReset",
-      dynamicTemplateData: {
-        username: displayName,
-        resetLink: resetLink,
-      },
-    });
-    logger.info("Password reset email sent successfully", createLogContext({email}));
+      // Send email using helper
+      const {sendEmail} = await import("../utils/sendgridHelper");
+      await sendEmail({
+        to: email,
+        templateType: "passwordReset",
+        dynamicTemplateData: {
+          username: displayName,
+          resetLink: resetLink,
+        },
+      });
+      logger.info("Password reset email sent successfully", createLogContext({email}));
 
-    return {success: true};
-  } catch (error) {
-    logger.error("Error in initiatePasswordReset", createLogContext({
-      error: error instanceof Error ? error.message : String(error),
-      email: sanitizeEmail(email),
-    }));
-    throw new Error(error instanceof Error ? error.message : "Failed to initiate password reset");
+      return {success: true};
+    } catch (error) {
+      logger.error("Error in initiatePasswordReset", createLogContext({
+        error: error instanceof Error ? error.message : String(error),
+        email: sanitizeEmail(email),
+      }));
+      throw new Error(error instanceof Error ? error.message : "Failed to initiate password reset");
+    }
+  },
+  "initiatePasswordReset",
+  {
+    authLevel: "none", // No auth required for password reset
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.passwordReset,
   }
-});
+));
 

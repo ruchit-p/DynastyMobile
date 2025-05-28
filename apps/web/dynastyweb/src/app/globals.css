@@ -5,86 +5,76 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 210 5% 12%; /* #1E1D1E - Eerie black */
+    --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
-    --card-foreground: 210 5% 12%; /* #1E1D1E - Eerie black */
+    --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 210 5% 12%; /* #1E1D1E - Eerie black */
+    --popover-foreground: 222.2 84% 4.9%;
     
     /* Dynasty theme colors */
-    --dynasty-green-dark: 155 42% 17%; /* #163D21 - British racing green */
-    --dynasty-green: 148 62% 21%; /* #14562D - Cal Poly green (Primary) */
-    --dynasty-green-light: 125 33% 58%; /* #6DBC74 - Mantis */
-    --dynasty-green-extra-light: 121 36% 81%; /* #B0EDB1 - Celadon */
-    --dynasty-gold-light: 37 100% 56%; /* #FFB81F - Selective yellow */
-    --dynasty-gold-dark: 48 51% 57%; /* #D4AF4A - Gold metallic */
-    --dynasty-bg-light: 0 0% 97%; /* #F8F8F8 - Seasalt */
+    --dynasty-green: 145 78% 20%; /* #0A5C36 - Deep Forest Green */
+    --dynasty-gold: #ffb81f; /* #ffb81f - Gold/Amber */
+    --dynasty-bg-light: 220 14% 98%; /* #F9FAFB - Light gray background */
     
     /* Updated primary colors to match Dynasty theme */
-    --primary: 148 62% 21%; /* #14562D - Cal Poly green */
+    --primary: 145 78% 20%; /* #0A5C36 - Deep Forest Green */
     --primary-foreground: 0 0% 100%; /* White text on primary */
-    --secondary: 37 100% 56%; /* #FFB81F - Selective yellow */
-    --secondary-foreground: 155 42% 17%; /* Dark text on secondary */
-    --accent: 48 51% 57%; /* #D4AF4A - Gold metallic accent */
+    --secondary-foreground: 0 0% 20%; /* Dark text on secondary */
     
-    --muted: 0 0% 97%; /* #F8F8F8 - Seasalt */
-    --muted-foreground: 212 5% 38%; /* #595E65 - Davy's gray */
-    --accent-foreground: 210 5% 12%; /* #1E1D1E - Eerie black */
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent-foreground: 0 0% 20%;
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 87%; /* #DFDFDF - Platinum */
-    --input: 0 0% 87%; /* #DFDFDF - Platinum */
-    --ring: 148 62% 21%; /* #14562D - Cal Poly green for focus rings */
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 145 78% 20%; /* Deep Forest Green for focus rings */
     --radius: 0.5rem;
-    --sidebar-background: 0 0% 97%; /* #F8F8F8 - Seasalt */
-    --sidebar-foreground: 210 5% 12%; /* #1E1D1E - Eerie black */
-    --sidebar-primary: 148 62% 21%; /* #14562D - Cal Poly green for sidebar primary */
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 97%; /* #F8F8F8 - Seasalt */
-    --sidebar-accent-foreground: 210 5% 12%; /* #1E1D1E - Eerie black */
-    --sidebar-border: 0 0% 87%; /* #DFDFDF - Platinum */
-    --sidebar-ring: 148 62% 21%; /* #14562D - Cal Poly green for sidebar ring */
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 145 78% 20%; /* Deep Forest Green for sidebar primary */
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 145 78% 20%; /* Deep Forest Green for sidebar ring */
   }
 
   .dark {
-    --background: 210 5% 12%; /* #1E1D1E - Eerie black */
-    --foreground: 0 0% 97%; /* #F8F8F8 - Seasalt */
-    --card: 210 5% 12%; /* #1E1D1E - Eerie black */
-    --card-foreground: 0 0% 97%; /* #F8F8F8 - Seasalt */
-    --popover: 210 5% 12%; /* #1E1D1E - Eerie black */
-    --popover-foreground: 0 0% 97%; /* #F8F8F8 - Seasalt */
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
     
     /* Dynasty theme colors - dark mode adjustments */
-    --dynasty-green-dark: 155 42% 17%; /* #163D21 - British racing green */
-    --dynasty-green: 148 62% 21%; /* #14562D - Cal Poly green (Primary) */
-    --dynasty-green-light: 125 33% 58%; /* #6DBC74 - Mantis */
-    --dynasty-green-extra-light: 121 36% 81%; /* #B0EDB1 - Celadon */
-    --dynasty-gold-light: 37 100% 56%; /* #FFB81F - Selective yellow */
-    --dynasty-gold-dark: 48 51% 57%; /* #D4AF4A - Gold metallic */
-    --dynasty-bg-light: 210 5% 12%; /* #1E1D1E - Dark background */
+    --dynasty-green: 145 65% 15%; /* Darker Deep Forest Green for dark mode */
+    --dynasty-gold: 42 38% 46%; /* Darker Gold/Amber for dark mode */
+    --dynasty-bg-light: 220 14% 10%; /* Dark background */
     
-    --primary: 125 33% 58%; /* #6DBC74 - Mantis for dark mode */
-    --primary-foreground: 210 5% 12%; /* #1E1D1E - Eerie black */
-    --secondary: 48 51% 57%; /* #D4AF4A - Gold metallic for dark mode */
-    --secondary-foreground: 210 5% 12%; /* #1E1D1E - Eerie black */
+    --primary: 145 65% 15%; /* Darker Deep Forest Green for dark mode */
+    --primary-foreground: 0 0% 98%;
+    --secondary: 42 38% 46%; /* Darker Gold/Amber for dark mode */
+    --secondary-foreground: 0 0% 98%;
     
-    --muted: 212 5% 38%; /* #595E65 - Davy's gray */
-    --muted-foreground: 0 0% 87%; /* #DFDFDF - Platinum */
-    --accent: 37 100% 56%; /* #FFB81F - Selective yellow accent */
-    --accent-foreground: 210 5% 12%; /* #1E1D1E - Eerie black */
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 42 38% 46%; /* Dark Gold accent */
+    --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 97%;
-    --border: 212 5% 38%; /* #595E65 - Davy's gray */
-    --input: 212 5% 38%; /* #595E65 - Davy's gray */
-    --ring: 125 33% 58%; /* #6DBC74 - Mantis for dark mode */
-    --sidebar-background: 210 5% 12%; /* #1E1D1E - Eerie black */
-    --sidebar-foreground: 0 0% 87%; /* #DFDFDF - Platinum */
-    --sidebar-primary: 125 33% 58%; /* #6DBC74 - Mantis for dark mode */
-    --sidebar-primary-foreground: 210 5% 12%; /* #1E1D1E - Eerie black */
-    --sidebar-accent: 212 5% 38%; /* #595E65 - Davy's gray */
-    --sidebar-accent-foreground: 0 0% 87%; /* #DFDFDF - Platinum */
-    --sidebar-border: 212 5% 38%; /* #595E65 - Davy's gray */
-    --sidebar-ring: 125 33% 58%; /* #6DBC74 - Mantis for dark mode */
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 145 60% 25%; /* Adjusted ring color for dark mode */
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 145 60% 25%; /* Adjusted sidebar primary for dark mode */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 145 60% 25%; /* Adjusted sidebar ring for dark mode */
   }
 }
 
@@ -101,8 +91,8 @@ body {
   overflow-x: hidden;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  color: hsl(var(--foreground));
-  background: hsl(var(--background));
+  color: var(--text-color);
+  background: var(--background-color);
 }
 
 /* MARK: - Typography */
@@ -119,9 +109,9 @@ p {
 
 /* MARK: - Links */
 a {
-  color: hsl(var(--primary));
+  color: var(--primary-color);
   text-decoration: none;
-  transition: color 200ms ease;
+  transition: color var(--transition-speed) ease;
 }
 
 a:hover {
@@ -173,7 +163,7 @@ a:hover {
 }
 
 .transition {
-  transition: all 200ms ease;
+  transition: all var(--transition-speed) ease;
 }
 
 /* MARK: - Custom Family Tree Styles */
@@ -213,7 +203,7 @@ a:hover {
 .family-node {
   position: absolute;
   cursor: pointer;
-  transition: all 200ms ease;
+  transition: all var(--transition-speed) ease;
 }
 
 .node-card {
@@ -223,7 +213,7 @@ a:hover {
   border-radius: 4px;
   background: white;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  transition: all 200ms ease;
+  transition: all var(--transition-speed) ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -252,17 +242,17 @@ a:hover {
 .node-id {
   font-weight: 500;
   font-size: 0.875rem;
-  color: hsl(var(--foreground));
+  color: var(--text-color);
 }
 
 .node-gender {
   font-size: 0.75rem;
-  color: hsl(var(--secondary));
+  color: var(--secondary-color);
 }
 
 .node-subtree-indicator {
   font-size: 0.75rem;
-  color: hsl(var(--primary));
+  color: var(--primary-color);
   font-weight: 500;
 }
 
@@ -403,79 +393,55 @@ div[style*="position: fixed"][style*="bottom: 0"] {
 
 /* Dynasty custom color classes */
 .text-dynasty-green {
-  color: #14562D;
+  color: #0A5C36;
 }
 
 .bg-dynasty-green {
-  background-color: #14562D;
-}
-
-.text-dynasty-green-dark {
-  color: #163D21;
-}
-
-.bg-dynasty-green-dark {
-  background-color: #163D21;
-}
-
-.text-dynasty-green-light {
-  color: #6DBC74;
-}
-
-.bg-dynasty-green-light {
-  background-color: #6DBC74;
-}
-
-.text-dynasty-green-extra-light {
-  color: #B0EDB1;
-}
-
-.bg-dynasty-green-extra-light {
-  background-color: #B0EDB1;
+  background-color: #0A5C36;
 }
 
 .text-dynasty-gold {
-  color: #FFB81F;
+  color: #C4A55C;
 }
 
 .bg-dynasty-gold {
-  background-color: #FFB81F;
-}
-
-.text-dynasty-gold-dark {
-  color: #D4AF4A;
-}
-
-.bg-dynasty-gold-dark {
-  background-color: #D4AF4A;
+  background-color: #C4A55C;
 }
 
 .text-dynasty-neutral-dark {
-  color: #595E65;
+  color: #4B5563;
 }
 
 .text-dynasty-neutral-light {
-  color: #DFDFDF;
+  color: #E5E7EB;
 }
 
 .bg-dynasty-neutral-lightest {
-  background-color: #F8F8F8;
+  background-color: #F9FAFB;
 }
 
 .bg-dynasty-neutral-darkest {
-  background-color: #1E1D1E;
+  background-color: #111827;
 }
 
 .border-dynasty-neutral {
-  border-color: #DFDFDF;
+  border-color: #E5E7EB;
 }
 
 .text-dynasty-neutral-darkest {
-  color: #1E1D1E;
+  color: #111827;
 }
 
 .text-dynasty-neutral {
-  color: #595E65;
+  color: #9CA3AF;
+}
+
+.bg-dynasty-green-light {
+  background-color: rgba(10, 92, 54, 0.05);
+}
+
+.text-dynasty-green-dark {
+  color: #074326;
 }
 
 .text-balance {
@@ -483,11 +449,11 @@ div[style*="position: fixed"][style*="bottom: 0"] {
 }
 
 .bg-dynasty-gold-light {
-  background-color: rgba(255, 184, 31, 0.1);
+  background-color: rgba(196, 165, 92, 0.1);
 }
 
-.bg-dynasty-green-light-transparent {
-  background-color: rgba(109, 188, 116, 0.1);
+.text-dynasty-gold-dark {
+  color: #A38449;
 }
 
 /* Message area custom scrollbar */

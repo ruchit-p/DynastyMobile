@@ -1,45 +1,41 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/context/EnhancedAuthContext"
+import { auth } from "@/lib/firebase"
+import { User } from "firebase/auth"
 import Navbar from "@/components/Navbar"
 import { OnboardingProvider } from "@/context/OnboardingContext"
-import { OfflineIndicator } from "@/components/ui/OfflineIndicator"
-import { Spinner } from "@/components/ui/spinner"
 
 export default function ProtectedLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const { currentUser, loading } = useAuth()
+  const [user, setUser] = useState<User | null>(null)
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading && !currentUser) {
-      router.push("/login")
-    }
-  }, [currentUser, loading, router])
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        setUser(user)
+      } else {
+        router.push("/login")
+      }
+    })
 
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <Spinner className="h-8 w-8" />
-      </div>
-    )
-  }
+    return () => unsubscribe()
+  }, [router])
 
-  if (!currentUser) {
-    return null
+  if (!user) {
+    return null // or a loading spinner
   }
 
   return (
     <OnboardingProvider>
       <div className="min-h-screen bg-gray-50 pt-16">
-        <Navbar user={currentUser} />
+        <Navbar user={user} />
         {children}
-        <OfflineIndicator />
       </div>
     </OnboardingProvider>
   )

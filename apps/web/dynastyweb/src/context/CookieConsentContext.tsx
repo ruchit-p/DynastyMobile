@@ -149,7 +149,7 @@ export function CookieConsentProvider({ children }: CookieConsentProviderProps) 
 // Extend Window interface for TypeScript
 declare global {
   interface Window {
-    gtag?: (...args: any[]) => void;
+    gtag?: (...args: unknown[]) => void;
     firebase?: {
       analytics: () => {
         setAnalyticsCollectionEnabled: (enabled: boolean) => void;

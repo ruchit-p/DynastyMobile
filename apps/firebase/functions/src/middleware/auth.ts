@@ -9,8 +9,14 @@ import {
 import {requireCSRFToken, CSRFValidatedRequest} from "./csrf";
 import {createLogContext, formatErrorForLogging} from "../utils/sanitization";
 
-// Firestore DB reference for reuse
-const db = getFirestore();
+// Lazy-load Firestore to avoid initialization issues in tests
+let db: FirebaseFirestore.Firestore | null = null;
+const getDb = () => {
+  if (!db) {
+    db = getFirestore();
+  }
+  return db;
+};
 
 // Rate limit configuration
 const RATE_LIMIT_WINDOW_SECONDS = 60; // 1 minute
@@ -124,7 +130,7 @@ export function requireAuth(request: CallableRequest): string {
 export async function requireVerifiedUser(request: CallableRequest): Promise<string> {
   const uid = requireAuth(request);
 
-  const userDoc = await db.collection("users").doc(uid).get();
+  const userDoc = await getDb().collection("users").doc(uid).get();
 
   if (!userDoc.exists) {
     throw createError(
@@ -153,7 +159,7 @@ export async function requireVerifiedUser(request: CallableRequest): Promise<str
 export async function requireOnboardedUser(request: CallableRequest): Promise<string> {
   const uid = await requireVerifiedUser(request);
 
-  const userDoc = await db.collection("users").doc(uid).get();
+  const userDoc = await getDb().collection("users").doc(uid).get();
   const userData = userDoc.data();
 
   if (!userData?.onboardingCompleted) {
@@ -200,7 +206,7 @@ export async function checkResourceAccess(
   const collection = collectionPath || resourceType + "s";
 
   // Fetch the resource document
-  const resourceRef = db.collection(collection).doc(resourceId);
+  const resourceRef = getDb().collection(collection).doc(resourceId);
   const resourceDoc = await resourceRef.get();
 
   if (!resourceDoc.exists) {
@@ -250,7 +256,7 @@ export async function checkResourceAccess(
 
   // Check for FAMILY_MEMBER level permission
   if (requiredLevels.includes(PermissionLevel.FAMILY_MEMBER) && resource!.familyTreeId) {
-    const userDoc = await db.collection("users").doc(uid).get();
+    const userDoc = await getDb().collection("users").doc(uid).get();
 
     if (userDoc.exists && userDoc.data()?.familyTreeId === resource!.familyTreeId) {
       return {uid, resource};
@@ -259,7 +265,7 @@ export async function checkResourceAccess(
 
   // Check for TREE_OWNER level
   if (requiredLevels.includes(PermissionLevel.TREE_OWNER) && resource!.familyTreeId) {
-    const treeDoc = await db.collection("familyTrees").doc(resource!.familyTreeId).get();
+    const treeDoc = await getDb().collection("familyTrees").doc(resource!.familyTreeId).get();
 
     if (treeDoc.exists && treeDoc.data()?.ownerUserId === uid) {
       return {uid, resource};
@@ -308,7 +314,7 @@ export async function checkRateLimit(
   // Check if user is admin and admin bypass is enabled
   if (ignoreAdmin) {
     try {
-      const userDoc = await db.collection("users").doc(uid).get();
+      const userDoc = await getDb().collection("users").doc(uid).get();
       if (userDoc.exists && userDoc.data()?.isAdmin) {
         logger.debug("Rate limit bypassed for admin user", createLogContext({uid}));
         return uid; // Admin bypass
@@ -320,11 +326,11 @@ export async function checkRateLimit(
   }
 
   const now = new Date();
-  const rateLimitRef = db.collection("rateLimits").doc(`${uid}_${type}`);
+  const rateLimitRef = getDb().collection("rateLimits").doc(`${uid}_${type}`);
 
   try {
     // Use transaction to ensure atomic read and update
-    await db.runTransaction(async (transaction) => {
+    await getDb().runTransaction(async (transaction) => {
       const rateLimitDoc = await transaction.get(rateLimitRef);
 
       if (!rateLimitDoc.exists) {
@@ -398,20 +404,21 @@ export async function checkRateLimitByIP(
   } = config;
 
   // Get IP address from request
-  const ip = request.rawRequest?.ip || 
-             request.rawRequest?.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || 
-             'unknown';
-  
-  if (ip === 'unknown') {
+  const xForwardedFor = request.rawRequest?.headers?.["x-forwarded-for"];
+  const ip = request.rawRequest?.ip ||
+             (typeof xForwardedFor === "string" ? xForwardedFor.split(",")[0]?.trim() : undefined) ||
+             "unknown";
+
+  if (ip === "unknown") {
     logger.warn("Unable to determine IP address for rate limiting");
     return; // Don't block if we can't determine IP
   }
 
   const now = new Date();
-  const rateLimitRef = db.collection("rateLimits").doc(`ip_${ip}_${type}`);
+  const rateLimitRef = getDb().collection("rateLimits").doc(`ip_${ip}_${type}`);
 
   try {
-    await db.runTransaction(async (transaction) => {
+    await getDb().runTransaction(async (transaction) => {
       const rateLimitDoc = await transaction.get(rateLimitRef);
 
       if (!rateLimitDoc.exists) {
@@ -427,6 +434,9 @@ export async function checkRateLimitByIP(
       }
 
       const data = rateLimitDoc.data();
+      if (!data) {
+        throw new Error("Rate limit data is missing");
+      }
       const windowStartTime = data.windowStart.toDate();
       const windowEndTime = new Date(windowStartTime.getTime() + (windowSeconds * 1000));
 
@@ -456,14 +466,14 @@ export async function checkRateLimitByIP(
     });
 
     logger.debug("IP rate limit check passed", createLogContext({
-      ip: ip.substring(0, 8) + '...', // Log partial IP for debugging
+      ip: ip.substring(0, 8) + "...", // Log partial IP for debugging
       type,
     }));
   } catch (error: any) {
     // Rethrow rate limit errors
     if (error.code === ErrorCode.RESOURCE_EXHAUSTED) {
       logger.warn("IP rate limit exceeded", createLogContext({
-        ip: ip.substring(0, 8) + '...',
+        ip: ip.substring(0, 8) + "...",
         type,
       }));
       throw error;
