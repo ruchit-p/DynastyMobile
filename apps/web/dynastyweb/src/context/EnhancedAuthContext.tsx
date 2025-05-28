@@ -437,7 +437,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Check if this is an MFA error
       if ((error as MultiFactorError).code === 'auth/multi-factor-auth-required') {
         const mfaError = error as MultiFactorError;
-        const resolver = (mfaError as any).resolver;
+        const resolver = (mfaError as { resolver?: MultiFactorResolver }).resolver;
         
         setMfaSignInState({
           isRequired: true,
@@ -647,7 +647,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       factorId: factor.uid,
       displayName: factor.displayName || 'Unknown Factor',
       enrollmentTime: factor.enrollmentTime,
-      phoneNumber: factor.factorId === 'phone' ? (factor as any).phoneNumber : undefined,
+      phoneNumber: factor.factorId === 'phone' ? (factor as { phoneNumber?: string }).phoneNumber : undefined,
     }));
   }, [user]);
 
@@ -709,10 +709,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         });
       }
       
-      const phoneInfoOptions = {
-        phoneNumber,
-        session,
-      };
+      // phoneInfoOptions prepared for future use
+      // const phoneInfoOptions = {
+      //   phoneNumber,
+      //   session,
+      // };
       
       const provider = new PhoneAuthProvider(auth);
       const verificationId = await provider.verifyPhoneNumber(
@@ -799,7 +800,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         const provider = new PhoneAuthProvider(auth);
         const verificationId = await provider.verifyPhoneNumber(
-          phoneInfoOptions as any,
+          phoneInfoOptions,
           window.mfaRecaptchaVerifier
         );
         
