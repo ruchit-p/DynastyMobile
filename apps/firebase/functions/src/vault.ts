@@ -2043,3 +2043,245 @@ export const getVaultStorageInfo = onCall(
     };
   }, "getVaultStorageInfo")
 );
+
+/**
+ * Update an existing vault file (e.g., replace content)
+ */
+export const updateVaultFile = onCall(
+  {
+    region: DEFAULT_REGION,
+    memory: "512MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.LONG,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    // Validate and sanitize input
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.updateVaultFile,
+      uid
+    );
+
+    const {itemId, fileData, fileName} = validatedData;
+
+    const db = getFirestore();
+    const itemRef = db.collection("vaultItems").doc(itemId);
+    const doc = await itemRef.get();
+
+    if (!doc.exists) {
+      throw createError(ErrorCode.NOT_FOUND, "Vault item not found");
+    }
+
+    const item = doc.data() as VaultItem;
+    if (item.userId !== uid && !item.sharedWith?.includes(uid)) {
+      throw createError(ErrorCode.PERMISSION_DENIED, "You don't have permission to update this file");
+    }
+
+    if (item.type !== "file") {
+      throw createError(ErrorCode.INVALID_ARGUMENT, "Can only update files, not folders");
+    }
+
+    // Update file in storage
+    if (item.storagePath) {
+      const storageAdapter = new StorageAdapter();
+      const r2Service = await storageAdapter.getR2Service();
+      
+      // Delete old file
+      await r2Service.deleteObject(item.storagePath);
+      
+      // Upload new file
+      const buffer = Buffer.from(fileData, "base64");
+      const newStoragePath = `vault/${uid}/${itemId}/${sanitizeFilename(fileName)}`;
+      
+      await r2Service.uploadObject(newStoragePath, buffer, {
+        contentType: item.mimeType,
+        metadata: {
+          userId: uid,
+          vaultItemId: itemId,
+        },
+      });
+
+      // Update database
+      await itemRef.update({
+        storagePath: newStoragePath,
+        updatedAt: FieldValue.serverTimestamp(),
+        size: buffer.length,
+      });
+    }
+
+    return {success: true, itemId};
+  }, "updateVaultFile", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.upload,
+  })
+);
+
+/**
+ * Complete a multipart file upload
+ */
+export const completeVaultFileUpload = onCall(
+  {
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.completeVaultFileUpload,
+      uid
+    );
+
+    const {uploadId, itemId, parts} = validatedData;
+
+    const db = getFirestore();
+    const uploadRef = db.collection("vaultUploads").doc(uploadId);
+    const uploadDoc = await uploadRef.get();
+
+    if (!uploadDoc.exists) {
+      throw createError(ErrorCode.NOT_FOUND, "Upload session not found");
+    }
+
+    const uploadData = uploadDoc.data();
+    if (uploadData.userId !== uid) {
+      throw createError(ErrorCode.PERMISSION_DENIED, "Not authorized for this upload");
+    }
+
+    if (uploadData.status === "completed") {
+      throw createError(ErrorCode.ALREADY_EXISTS, "Upload already completed");
+    }
+
+    // Complete multipart upload in R2
+    const storageAdapter = new StorageAdapter();
+    const r2Service = await storageAdapter.getR2Service();
+    
+    await r2Service.completeMultipartUpload(
+      uploadData.storagePath,
+      uploadData.uploadId,
+      parts
+    );
+
+    // Update upload status
+    await uploadRef.update({
+      status: "completed",
+      completedAt: FieldValue.serverTimestamp(),
+    });
+
+    // Update vault item
+    await db.collection("vaultItems").doc(itemId).update({
+      uploadStatus: "completed",
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return {success: true};
+  }, "completeVaultFileUpload", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+  })
+);
+
+/**
+ * Permanently delete a vault item (hard delete)
+ */
+export const permanentlyDeleteVaultItem = onCall(
+  {
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.permanentlyDeleteVaultItem,
+      uid
+    );
+
+    const {itemId, confirmDelete} = validatedData;
+
+    if (!confirmDelete) {
+      throw createError(ErrorCode.INVALID_ARGUMENT, "Must confirm permanent deletion");
+    }
+
+    const db = getFirestore();
+    const itemRef = db.collection("vaultItems").doc(itemId);
+    const doc = await itemRef.get();
+
+    if (!doc.exists) {
+      throw createError(ErrorCode.NOT_FOUND, "Vault item not found");
+    }
+
+    const item = doc.data() as VaultItem;
+    if (item.userId !== uid) {
+      throw createError(ErrorCode.PERMISSION_DENIED, "You don't have permission to delete this item");
+    }
+
+    // Ensure item is already soft-deleted
+    if (!item.isDeleted) {
+      throw createError(ErrorCode.FAILED_PRECONDITION, "Item must be in trash before permanent deletion");
+    }
+
+    // Delete from storage if it's a file
+    if (item.type === "file" && item.storagePath) {
+      try {
+        const storageAdapter = new StorageAdapter();
+        const r2Service = await storageAdapter.getR2Service();
+        await r2Service.deleteObject(item.storagePath);
+      } catch (error) {
+        logger.warn("Failed to delete file from storage", {
+          error,
+          itemId,
+          storagePath: item.storagePath,
+        });
+        // Continue with database deletion even if storage deletion fails
+      }
+    }
+
+    // Delete all child items if it's a folder
+    if (item.type === "folder") {
+      const childrenSnapshot = await db.collection("vaultItems")
+        .where("path", ">=", item.path)
+        .where("path", "<", item.path + "\uffff")
+        .get();
+
+      const batch = db.batch();
+      childrenSnapshot.forEach((childDoc) => {
+        batch.delete(childDoc.ref);
+      });
+      await batch.commit();
+    }
+
+    // Delete the item
+    await itemRef.delete();
+
+    // Create audit log
+    await db.collection("vaultAuditLogs").add({
+      itemId,
+      userId: uid,
+      action: "permanent_delete",
+      timestamp: FieldValue.serverTimestamp(),
+      metadata: {
+        itemName: item.name,
+        itemType: item.type,
+        itemPath: item.path,
+      },
+    });
+
+    logger.info("Permanently deleted vault item", createLogContext({
+      itemId,
+      userId: uid,
+      itemType: item.type,
+    }));
+
+    return {success: true};
+  }, "permanentlyDeleteVaultItem", {
+    authLevel: "onboarded",
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
+  })
+);

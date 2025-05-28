@@ -14,7 +14,7 @@ export class KeyCacheService {
   private cache = new Map<string, CachedKey>();
   private readonly TTL = 30 * 60 * 1000; // 30 minutes
   private readonly MAX_CACHE_SIZE = 10; // Maximum number of cached keys
-  private cleanupTimer: NodeJS.Timeout | null = null;
+  private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   private constructor() {
     // Start periodic cleanup

@@ -1,3 +1,53 @@
+// Mock dependencies first, before imports
+jest.mock('@react-native-community/netinfo', () => ({
+  default: {
+    addEventListener: jest.fn(() => jest.fn()), // Return unsubscribe function
+    fetch: jest.fn(() => Promise.resolve({ isConnected: true })),
+    configure: jest.fn(),
+    refresh: jest.fn(() => Promise.resolve()),
+  }
+}));
+
+jest.mock('../OfflineQueueService', () => ({
+  OfflineQueueService: {
+    getInstance: jest.fn(() => ({
+      enqueueMessage: jest.fn(),
+      processQueue: jest.fn(),
+      getQueuedMessages: jest.fn(() => []),
+      clearQueue: jest.fn(),
+      isOnline: true,
+    })),
+  },
+}));
+
+jest.mock('../libsignal/LibsignalService', () => ({
+  LibsignalService: {
+    initialize: jest.fn(),
+    getInstance: jest.fn(),
+    encryptMessage: jest.fn(),
+    decryptMessage: jest.fn(),
+    getIdentityKeyPair: jest.fn(),
+  },
+}));
+jest.mock('../MediaEncryptionService', () => ({
+  MediaEncryptionService: jest.fn().mockImplementation(() => ({
+    encryptAndUploadFile: jest.fn(),
+    decryptFileUrl: jest.fn(),
+    validateFile: jest.fn(),
+  })),
+}));
+jest.mock('../../../lib/firebase');
+jest.mock('../../../lib/errorUtils');
+jest.mock('../MetadataEncryptionService');
+jest.mock('../EncryptedSearchService', () => ({
+  EncryptedSearchService: jest.fn().mockImplementation(() => ({
+    searchMessages: jest.fn(),
+    indexMessage: jest.fn(),
+  })),
+}));
+jest.mock('../AuditLogService');
+
+// Now import after mocks are set up
 import { ChatEncryptionService } from '../ChatEncryptionService';
 import { LibsignalService } from '../libsignal/LibsignalService';
 import { MediaEncryptionService } from '../MediaEncryptionService';
@@ -7,21 +57,6 @@ import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import NetInfo from '@react-native-community/netinfo';
 import { OfflineQueueService } from '../OfflineQueueService';
 import { EncryptedSearchService } from '../EncryptedSearchService';
-
-// Mock dependencies
-jest.mock('../libsignal/LibsignalService');
-jest.mock('../MediaEncryptionService');
-jest.mock('../../../lib/firebase');
-jest.mock('../../../lib/errorUtils');
-jest.mock('../OfflineQueueService');
-jest.mock('../MetadataEncryptionService');
-jest.mock('../EncryptedSearchService');
-jest.mock('../AuditLogService');
-jest.mock('@react-native-community/netinfo', () => ({
-  default: {
-    fetch: jest.fn(() => Promise.resolve({ isConnected: true }))
-  }
-}));
 
 describe('ChatEncryptionService', () => {
   const mockUserId = 'test-user-id';

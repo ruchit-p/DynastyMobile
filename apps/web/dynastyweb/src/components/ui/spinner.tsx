@@ -18,8 +18,8 @@ function Spinner({
   };
 
   const variantClasses = {
-    primary: 'border-[#0A5C36] border-r-transparent',
-    secondary: 'border-[#C4A55C] border-r-transparent',
+    primary: 'border-[#14562D] border-r-transparent',
+    secondary: 'border-[#FFB81F] border-r-transparent',
     white: 'border-white border-r-transparent',
   };
   

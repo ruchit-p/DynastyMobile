@@ -51,7 +51,7 @@ const Calendar = React.forwardRef<HTMLDivElement, CalendarProps>(
           components={{
             IconLeft: () => <ChevronLeft className="h-4 w-4" />,
             IconRight: () => <ChevronRight className="h-4 w-4" />,
-          }}
+          } as any}
           {...props}
         />
       </div>

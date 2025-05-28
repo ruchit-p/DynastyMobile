@@ -114,7 +114,7 @@ function EnhancedCalendar({
         ...classNames,
       }}
       components={{
-        Caption: ({ displayMonth }) => {
+        Caption: ({ displayMonth }: any) => {
           return (
             <div className="flex justify-center items-center gap-2">
               <Select
@@ -163,7 +163,7 @@ function EnhancedCalendar({
             </div>
           );
         },
-      }}
+      } as any}
       onMonthChange={setMonth}
       {...props}
     />
