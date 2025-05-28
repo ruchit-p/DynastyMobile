@@ -2,6 +2,21 @@
 
 ## Version 2.8.0 - May 2025
 
+### 🏗️ Monorepo Consolidation
+
+**Repository Architecture Migration**
+- ✅ **Consolidated Web Repository**: Merged separate `dynastyweb` repo into monorepo
+  - Removed nested git repository from `apps/web/dynastyweb/`
+  - Updated Vercel project to connect to main `DynastyMobile` repo
+  - Preserved all commit history and configurations
+  - Updated CI/CD workflows to handle consolidated structure
+- ✅ **Unified Structure Benefits**:
+  - Single CI/CD pipeline for all platforms
+  - Atomic commits across mobile/web/backend
+  - Shared dependencies without version conflicts
+  - Cross-platform feature coordination
+  - Simplified repository management
+
 ### 🚀 CI/CD Pipeline & Automation
 
 **CI/CD Pipeline Setup**
@@ -55,6 +70,37 @@
   - Updated `package.json` with new commands
 
 ## Version 2.7.0 - May 2025
+
+### 🔐 Signal Protocol Native Implementation
+
+**iOS Native Modules** (`/apps/mobile/ios/RNLibsignal/`)
+- ✅ **RNLibsignal**: Main Signal Protocol native module
+- ✅ **RNLibsignalKeychain**: iOS Keychain secure storage
+- ✅ **RNLibsignalBiometric**: Face ID/Touch ID integration
+- ✅ **RNLibsignalMigration**: Data migration system
+- ✅ **RNLibsignalKeyRotation**: Automatic key rotation policies
+- ✅ **Store Implementations**: SessionStore, PreKeyStore, SignedPreKeyStore, IdentityStore
+
+**Android Native Modules** (`/apps/mobile/android/.../libsignal/`)
+- ✅ **LibsignalModule**: Main Signal Protocol native module with coroutines
+- ✅ **LibsignalKeystore**: Android Keystore secure storage with EncryptedSharedPreferences
+- ✅ **LibsignalBiometric**: Fingerprint/Face authentication with BiometricPrompt
+- ✅ **LibsignalMigration**: Data migration from in-memory to persistent storage
+- ✅ **LibsignalKeyRotation**: Automatic key rotation with configurable intervals
+- ✅ **Persistent Stores**: All Signal Protocol stores with secure persistence
+- ✅ **SenderKeyStore**: Group messaging support
+
+**Signal Protocol Implementation** (`/apps/mobile/src/lib/signal-protocol/`)
+- ✅ **Protocol Buffers**: Complete Signal Protocol message format (signal.proto)
+- ✅ **SignalProtobuf.ts**: TypeScript message encoding/decoding
+- ✅ **SignalMessageHandler.ts**: High-level API bridging protobuf with native modules
+- ✅ **Cross-platform compatibility**: iOS/Android message interoperability
+
+**Security Achievements**
+- ✅ **Security Audit Passed**: PRODUCTION READY rating with LOW risk level 🟢
+- ✅ **Hardware Security Integration**: iOS Keychain & Android Keystore with biometric protection
+- ✅ **Group Messaging**: SenderKeyStore implementation for efficient group chats
+- ✅ **Comprehensive Integration Tests**: Cross-platform compatibility verified
 
 ### 🎨 Design System Standardization
 
