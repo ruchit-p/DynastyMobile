@@ -176,6 +176,8 @@ export default function InvitedSignupPage() {
             width={60}
             height={60}
             className="mx-auto"
+            priority
+            style={{ height: 'auto' }}
           />
         </Link>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
