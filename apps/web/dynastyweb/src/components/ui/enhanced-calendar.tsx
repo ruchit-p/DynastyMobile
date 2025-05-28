@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { DayPicker } from 'react-day-picker';
+import { DayPicker, Components } from 'react-day-picker';
 import type { DayPickerSingleProps } from 'react-day-picker';
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
@@ -114,7 +114,7 @@ function EnhancedCalendar({
         ...classNames,
       }}
       components={{
-        Caption: ({ displayMonth }: any) => {
+        Caption: ({ displayMonth }: { displayMonth: Date }) => {
           return (
             <div className="flex justify-center items-center gap-2">
               <Select
@@ -163,7 +163,7 @@ function EnhancedCalendar({
             </div>
           );
         },
-      } as any}
+      } as Partial<Components>}
       onMonthChange={setMonth}
       {...props}
     />
