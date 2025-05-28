@@ -1,4 +1,4 @@
-import {getFirestore, Timestamp} from "firebase-admin/firestore";
+import {getFirestore} from "firebase-admin/firestore";
 import {logger} from "firebase-functions/v2";
 import {CallableRequest} from "firebase-functions/v2/https";
 import {
@@ -20,8 +20,8 @@ const getDb = () => {
 };
 
 // Rate limit configuration
-const RATE_LIMIT_WINDOW_SECONDS = 60; // 1 minute
-const DEFAULT_MAX_REQUESTS_PER_WINDOW = 20; // 20 requests per minute by default
+const _RATE_LIMIT_WINDOW_SECONDS = 60; // 1 minute
+const _DEFAULT_MAX_REQUESTS_PER_WINDOW = 20; // 20 requests per minute by default
 
 /**
  * Resource types that can be accessed
@@ -97,7 +97,7 @@ export interface RateLimitConfig {
 /**
  * Rate limit tracking data in Firestore
  */
-interface RateLimitData {
+interface _RateLimitData {
   userId: string;
   type: RateLimitType;
   requestCount: number;
@@ -312,7 +312,7 @@ export async function checkRateLimit(
 
   // Map our RateLimitType to Redis RateLimitType
   const redisType = type.toLowerCase() as RedisRateLimitType;
-  
+
   // Check if user is admin and admin bypass is enabled
   let skipForAdmin = false;
   if (ignoreAdmin) {
@@ -339,7 +339,7 @@ export async function checkRateLimit(
     return uid;
   } catch (error: any) {
     // If it's a SecurityError (rate limit exceeded), convert to Firebase error
-    if (error.code === 'RATE_LIMIT_EXCEEDED') {
+    if (error.code === "RATE_LIMIT_EXCEEDED") {
       throw createError(
         ErrorCode.RESOURCE_EXHAUSTED,
         error.message,
@@ -395,7 +395,7 @@ export async function checkRateLimitByIP(
     }));
   } catch (error: any) {
     // If it's a SecurityError (rate limit exceeded), convert to Firebase error
-    if (error.code === 'RATE_LIMIT_EXCEEDED') {
+    if (error.code === "RATE_LIMIT_EXCEEDED") {
       logger.warn("IP rate limit exceeded", createLogContext({
         ip: ip.substring(0, 8) + "...",
         type,

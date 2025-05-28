@@ -95,7 +95,7 @@ export function requireCSRFToken<T = any, R = any>(
     // Get session ID from auth token
     const sessionId = request.auth?.token?.sessionId ||
                      request.auth?.token?.session_id;
-    
+
     if (!sessionId) {
       throw new HttpsError(
         "unauthenticated",

@@ -39,57 +39,61 @@ jest.mock('firebase/app', () => ({
 
 jest.mock('firebase/auth', () => ({
   getAuth: jest.fn(() => ({})),
-  onAuthStateChanged: jest.fn(),
-  signInWithEmailAndPassword: jest.fn(),
-  createUserWithEmailAndPassword: jest.fn(),
-  signOut: jest.fn(),
-  sendEmailVerification: jest.fn(),
-  sendPasswordResetEmail: jest.fn(),
-  updateProfile: jest.fn(),
-  updateEmail: jest.fn(),
-  updatePassword: jest.fn(),
+  onAuthStateChanged: jest.fn((auth, callback) => {
+    callback(null); // No user by default
+    return jest.fn(); // Unsubscribe function
+  }),
+  signInWithEmailAndPassword: jest.fn(() => Promise.resolve({ user: { uid: 'test-uid' } })),
+  createUserWithEmailAndPassword: jest.fn(() => Promise.resolve({ user: { uid: 'test-uid' } })),
+  signOut: jest.fn(() => Promise.resolve()),
+  sendEmailVerification: jest.fn(() => Promise.resolve()),
+  sendPasswordResetEmail: jest.fn(() => Promise.resolve()),
+  updateProfile: jest.fn(() => Promise.resolve()),
+  updateEmail: jest.fn(() => Promise.resolve()),
+  updatePassword: jest.fn(() => Promise.resolve()),
   EmailAuthProvider: {
     credential: jest.fn(),
   },
-  reauthenticateWithCredential: jest.fn(),
+  reauthenticateWithCredential: jest.fn(() => Promise.resolve()),
   setPersistence: jest.fn(() => Promise.resolve()),
   browserLocalPersistence: {},
-  GoogleAuthProvider: jest.fn(),
-  signInWithPopup: jest.fn(),
-  RecaptchaVerifier: jest.fn(),
+  GoogleAuthProvider: jest.fn(() => ({})),
+  signInWithPopup: jest.fn(() => Promise.resolve({ user: { uid: 'test-uid' } })),
+  RecaptchaVerifier: jest.fn(() => ({ verify: jest.fn() })),
 }))
 
 jest.mock('firebase/firestore', () => ({
-  getFirestore: jest.fn(),
-  collection: jest.fn(),
-  doc: jest.fn(),
-  getDoc: jest.fn(),
-  getDocs: jest.fn(),
-  setDoc: jest.fn(),
-  updateDoc: jest.fn(),
-  deleteDoc: jest.fn(),
-  query: jest.fn(),
-  where: jest.fn(),
-  orderBy: jest.fn(),
-  limit: jest.fn(),
-  serverTimestamp: jest.fn(),
+  getFirestore: jest.fn(() => ({})),
+  collection: jest.fn(() => ({})),
+  doc: jest.fn(() => ({})),
+  getDoc: jest.fn(() => Promise.resolve({ exists: () => true, data: () => ({}) })),
+  getDocs: jest.fn(() => Promise.resolve({ docs: [] })),
+  setDoc: jest.fn(() => Promise.resolve()),
+  updateDoc: jest.fn(() => Promise.resolve()),
+  deleteDoc: jest.fn(() => Promise.resolve()),
+  query: jest.fn(() => ({})),
+  where: jest.fn(() => ({})),
+  orderBy: jest.fn(() => ({})),
+  limit: jest.fn(() => ({})),
+  serverTimestamp: jest.fn(() => ({ _seconds: Date.now() / 1000, _nanoseconds: 0 })),
+  addDoc: jest.fn(() => Promise.resolve({ id: 'test-doc-id' })),
   Timestamp: {
-    now: jest.fn(),
-    fromDate: jest.fn(),
+    now: jest.fn(() => ({ seconds: Date.now() / 1000, nanoseconds: 0 })),
+    fromDate: jest.fn((date) => ({ seconds: date.getTime() / 1000, nanoseconds: 0 })),
   },
 }))
 
 jest.mock('firebase/storage', () => ({
-  getStorage: jest.fn(),
-  ref: jest.fn(),
-  uploadBytes: jest.fn(),
-  getDownloadURL: jest.fn(),
-  deleteObject: jest.fn(),
+  getStorage: jest.fn(() => ({})),
+  ref: jest.fn(() => ({})),
+  uploadBytes: jest.fn(() => Promise.resolve({ ref: {} })),
+  getDownloadURL: jest.fn(() => Promise.resolve('https://example.com/file.jpg')),
+  deleteObject: jest.fn(() => Promise.resolve()),
 }))
 
 jest.mock('firebase/functions', () => ({
   getFunctions: jest.fn(() => ({})),
-  httpsCallable: jest.fn(),
+  httpsCallable: jest.fn(() => jest.fn(() => Promise.resolve({ data: {} }))),
   connectFunctionsEmulator: jest.fn(),
 }))
 
@@ -122,11 +126,20 @@ jest.mock('isomorphic-dompurify', () => ({
           const regex = new RegExp(`<${tag}[^>]*>.*?</${tag}>|<${tag}[^>]*/>`, 'gi');
           result = result.replace(regex, '');
         });
-      } else if (config?.ALLOWED_TAGS) {
+      } else if (config?.ALLOWED_TAGS && config.ALLOWED_TAGS.length > 0) {
         // When specific tags are allowed, remove all others
         const allowedTagsPattern = config.ALLOWED_TAGS.join('|');
-        const regex = new RegExp(`<(?!\/?(?:${allowedTagsPattern})[\s>])[^>]+>`, 'gi');
+        const regex = new RegExp(`<(?!\/?(?:${allowedTagsPattern})(?:[\s>]|$))[^>]*>`, 'gi');
         result = result.replace(regex, '');
+        
+        // Also remove content of forbidden tags like script
+        const forbiddenTags = ['script', 'style', 'iframe', 'object', 'embed'];
+        forbiddenTags.forEach(tag => {
+          if (!config.ALLOWED_TAGS.includes(tag)) {
+            const regex = new RegExp(`<${tag}[^>]*>.*?</${tag}>`, 'gi');
+            result = result.replace(regex, '');
+          }
+        });
       }
       
       // Remove event handlers
