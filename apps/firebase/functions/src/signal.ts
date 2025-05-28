@@ -418,7 +418,7 @@ export const notifyKeyChange = onDocumentUpdated("signalKeys/{userId}", async (e
 /**
  * Clean up old prekeys (scheduled function)
  */
-export const cleanupOldPreKeys = onSchedule("every 24 hours", async (event) => {
+export const cleanupOldPreKeys = onSchedule("every 24 hours", async (_event) => {
   try {
     // Get all users
     const usersSnapshot = await db.collection("users").get();
