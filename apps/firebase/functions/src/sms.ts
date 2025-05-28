@@ -340,24 +340,24 @@ export const twilioWebhook = onRequest({
     }
 
     // Verify webhook signature - CRITICAL for security
-    const twilioSignature = req.headers['x-twilio-signature'] as string;
-    
+    const twilioSignature = req.headers["x-twilio-signature"] as string;
+
     if (!twilioSignature) {
-      logger.warn('Twilio webhook called without signature');
-      res.status(403).send('Forbidden: Missing signature');
+      logger.warn("Twilio webhook called without signature");
+      res.status(403).send("Forbidden: Missing signature");
       return;
     }
 
     // Construct the full URL for signature validation
-    const protocol = req.headers['x-forwarded-proto'] || 'https';
+    const protocol = req.headers["x-forwarded-proto"] || "https";
     const host = req.headers.host;
     const url = `${protocol}://${host}${req.originalUrl}`;
-    
+
     // Get Twilio auth token for validation
     const authToken = twilioAuthToken.value();
-    
+
     // Validate the request signature
-    const twilio = await import('twilio');
+    const twilio = await import("twilio");
     const isValid = twilio.validateRequest(
       authToken,
       twilioSignature,
@@ -366,11 +366,11 @@ export const twilioWebhook = onRequest({
     );
 
     if (!isValid) {
-      logger.warn('Invalid Twilio webhook signature', {
+      logger.warn("Invalid Twilio webhook signature", {
         url,
-        signatureReceived: twilioSignature.substring(0, 10) + '...',
+        signatureReceived: twilioSignature.substring(0, 10) + "...",
       });
-      res.status(403).send('Forbidden: Invalid signature');
+      res.status(403).send("Forbidden: Invalid signature");
       return;
     }
 
