@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next();
-  const isDevelopment = process.env.NODE_ENV === 'development';
+  // In middleware, we check the host to determine if it's development
+  const isDevelopment = request.headers.get('host')?.includes('localhost') || 
+                       request.headers.get('host')?.includes('127.0.0.1');
   
   // Generate nonce for CSP
-  const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
+  const nonce = Buffer.from(globalThis.crypto.randomUUID()).toString('base64');
   
   // CSP configuration
   const cspDirectives = isDevelopment ? [
@@ -53,12 +55,19 @@ export async function middleware(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
   
-  return NextResponse.next({
+  // Create a new response with the modified request
+  const modifiedResponse = NextResponse.next({
     request: {
       headers: requestHeaders,
     },
-    headers: response.headers,
   });
+  
+  // Copy all the security headers from the original response
+  response.headers.forEach((value, key) => {
+    modifiedResponse.headers.set(key, value);
+  });
+  
+  return modifiedResponse;
 }
 
 export const config = {
