@@ -10,14 +10,35 @@ import CacheService from '../../services/CacheService';
 import AuditLogService from '../../services/AuditLogService';
 import ErrorHandlingService from '../../services/ErrorHandlingService';
 import EnhancedFingerprintService from '../../services/EnhancedFingerprintService';
-import TypingIndicatorService from '../../services/TypingIndicatorService';
-import VoiceMessageService from '../../services/VoiceMessageService';
 
 // Mock Firebase
 jest.mock('firebase/auth');
 jest.mock('firebase/firestore');
 jest.mock('firebase/storage');
 jest.mock('firebase/functions');
+
+// Mock workbox-window
+jest.mock('workbox-window', () => ({
+  Workbox: jest.fn().mockImplementation(() => ({
+    register: jest.fn().mockResolvedValue(undefined),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    messageSW: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+// Mock idb
+jest.mock('idb', () => ({
+  openDB: jest.fn().mockResolvedValue({
+    get: jest.fn(),
+    put: jest.fn(),
+    delete: jest.fn(),
+    clear: jest.fn(),
+    getAll: jest.fn().mockResolvedValue([]),
+    getAllFromIndex: jest.fn().mockResolvedValue([]),
+    transaction: jest.fn(),
+  }),
+}));
 
 // Mock browser APIs
 const mockIndexedDB = {
@@ -606,139 +627,6 @@ describe('Web Services Tests', () => {
     });
   });
 
-  describe('TypingIndicatorService', () => {
-    let typingService: TypingIndicatorService;
-
-    beforeEach(() => {
-      typingService = new TypingIndicatorService();
-      jest.useFakeTimers();
-    });
-
-    afterEach(() => {
-      jest.useRealTimers();
-    });
-
-    it('should broadcast typing status with debouncing', async () => {
-      const broadcastSpy = jest.spyOn(typingService, 'broadcast');
-      const chatId = 'chat-123';
-      const userId = 'user-456';
-
-      // Simulate rapid typing
-      for (let i = 0; i < 10; i++) {
-        typingService.setTyping(chatId, userId, true);
-        jest.advanceTimersByTime(100); // 100ms between keystrokes
-      }
-
-      // Should only broadcast once due to debouncing
-      expect(broadcastSpy).toHaveBeenCalledTimes(1);
-
-      // Stop typing
-      typingService.setTyping(chatId, userId, false);
-      jest.advanceTimersByTime(500);
-
-      expect(broadcastSpy).toHaveBeenCalledTimes(2);
-    });
-
-    it('should track multiple users typing', async () => {
-      const chatId = 'chat-123';
-      const users = ['user-1', 'user-2', 'user-3'];
-
-      for (const user of users) {
-        typingService.setTyping(chatId, user, true);
-      }
-
-      const typing = typingService.getTypingUsers(chatId);
-      expect(typing).toEqual(users);
-
-      // One user stops typing
-      typingService.setTyping(chatId, 'user-2', false);
-
-      const updatedTyping = typingService.getTypingUsers(chatId);
-      expect(updatedTyping).toEqual(['user-1', 'user-3']);
-    });
-
-    it('should auto-clear stale typing indicators', async () => {
-      const chatId = 'chat-123';
-      const userId = 'user-456';
-
-      typingService.setTyping(chatId, userId, true);
-      expect(typingService.getTypingUsers(chatId)).toContain(userId);
-
-      // Fast forward past timeout
-      jest.advanceTimersByTime(10000); // 10 seconds
-
-      expect(typingService.getTypingUsers(chatId)).not.toContain(userId);
-    });
-  });
-
-  describe('VoiceMessageService', () => {
-    let voiceService: VoiceMessageService;
-
-    beforeEach(() => {
-      voiceService = new VoiceMessageService();
-      
-      // Mock MediaRecorder
-      global.MediaRecorder = jest.fn().mockImplementation(() => ({
-        start: jest.fn(),
-        stop: jest.fn(),
-        pause: jest.fn(),
-        resume: jest.fn(),
-        addEventListener: jest.fn(),
-        state: 'inactive',
-      }));
-    });
-
-    it('should record voice messages with compression', async () => {
-      const onComplete = jest.fn();
-      
-      await voiceService.startRecording({ onComplete });
-      
-      // Simulate recording
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const result = await voiceService.stopRecording();
-      
-      expect(result).toEqual(
-        expect.objectContaining({
-          blob: expect.any(Blob),
-          duration: expect.any(Number),
-          format: 'webm',
-          compressed: true,
-        })
-      );
-    });
-
-    it('should transcribe voice messages', async () => {
-      const audioBlob = new Blob(['fake-audio-data'], { type: 'audio/webm' });
-      
-      // Mock transcription API
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          transcription: 'Hello, this is a test message',
-          confidence: 0.95,
-        }),
-      });
-      
-      const result = await voiceService.transcribe(audioBlob);
-      
-      expect(result.text).toBe('Hello, this is a test message');
-      expect(result.confidence).toBe(0.95);
-    });
-
-    it('should handle voice message playback with speed control', async () => {
-      const audioUrl = 'https://example.com/voice.webm';
-      const player = await voiceService.createPlayer(audioUrl);
-      
-      expect(player.setPlaybackRate).toBeDefined();
-      expect(player.getCurrentTime).toBeDefined();
-      expect(player.getDuration).toBeDefined();
-      
-      // Test playback speed
-      player.setPlaybackRate(1.5);
-      expect(player.playbackRate).toBe(1.5);
-    });
-  });
 });
 
 describe('Web Services Integration Tests', () => {

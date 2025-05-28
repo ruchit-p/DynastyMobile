@@ -20,17 +20,19 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { DateSelector } from "@/components/date-selector"
 import { DateRangePicker, SimpleDate } from "@/components/date-range-picker"
 import { LocationSearch } from "@/components/location-search"
-import { functions } from "@/lib/firebase"
-import { httpsCallable } from "firebase/functions"
 import { useAuth } from "@/context/AuthContext"
 import { useToast } from "@/components/ui/use-toast"
 import { uploadMedia } from "@/utils/mediaUtils"
+import { useCSRFClient } from "@/context/CSRFContext"
+import { functions } from "@/lib/firebase"
+import { httpsCallable } from "firebase/functions"
 
 export default function CreateEventPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const { currentUser } = useAuth()
   const { toast } = useToast()
+  const { csrfClient } = useCSRFClient()
   
   // Use refs for tracking state that shouldn't trigger re-renders
   const formStateTracker = useRef({
@@ -213,27 +215,23 @@ export default function CreateEventPage() {
         setLoadingMembers(true)
         setMembersError(null)
         
-        const getFamilyManagementData = httpsCallable<object, { members: Array<{ id: string; displayName: string; profilePicture: string | null }> }>(
-          functions, 
-          'getFamilyManagementData'
-        )
-        
-        const result = await getFamilyManagementData({})
+        const result = await csrfClient.callFunction('getFamilyManagementData', {})
         
         // Validate and transform the data
-        if (result.data && Array.isArray(result.data.members)) {
+        const data = result.data as { members?: Array<{id: string, displayName: string, profilePicture?: string}> }
+        if (data && Array.isArray(data.members)) {
           // Filter out the current user from the family members list
-          const filteredMembers = result.data.members
+          const filteredMembers = data.members
             .filter(member => member.id !== currentUser?.uid)
             .map(member => ({
               id: member.id || '',
               displayName: member.displayName || 'Unnamed Family Member',
-              profilePicture: member.profilePicture
+              profilePicture: member.profilePicture || null
             }));
           
           setFamilyMembers(filteredMembers)
         } else {
-          console.error('Invalid family members data structure:', result.data)
+          console.error('Invalid family members data structure:', data)
           setMembersError('Received invalid data format from server.')
         }
       } catch (error) {
@@ -245,7 +243,7 @@ export default function CreateEventPage() {
     }
     
     fetchFamilyMembers()
-  }, [currentUser?.uid])
+  }, [currentUser?.uid, csrfClient])
 
   // Handle photo upload
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -415,8 +413,7 @@ export default function CreateEventPage() {
       console.log("Submitting event data to Firebase...");
       
       // Call the createEvent Firebase callable function
-      const createEvent = httpsCallable(functions, 'createEvent');
-      const result = await createEvent(eventData);
+      const result = await csrfClient.callFunction('createEvent', eventData);
       
       console.log("Event created successfully:", result.data);
       

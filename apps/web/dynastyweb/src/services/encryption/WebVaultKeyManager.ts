@@ -287,7 +287,8 @@ export class WebVaultKeyManager {
       );
 
       return this.cryptoService.fromBase64(decryptedBase64);
-    } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_error) {
       throw new Error('Invalid password or corrupted key data');
     }
   }
@@ -479,7 +480,8 @@ export class WebVaultKeyManager {
       if (!keyBase64) return null;
       
       return this.cryptoService.fromBase64(keyBase64);
-    } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_error) {
       return null;
     }
   }
@@ -490,7 +492,8 @@ export class WebVaultKeyManager {
   clearSessionKey(userId: string): void {
     try {
       sessionStorage.removeItem(`${SESSION_STORAGE_PREFIX}${userId}`);
-    } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_error) {
       // Ignore errors
     }
   }
@@ -505,7 +508,8 @@ export class WebVaultKeyManager {
           sessionStorage.removeItem(key);
         }
       });
-    } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_error) {
       // Ignore errors
     }
   }
@@ -556,6 +560,7 @@ export class WebVaultKeyManager {
         request.onsuccess = () => {
           const result = request.result;
           if (result) {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { userId: _, ...config } = result;
             resolve(config as VaultConfiguration);
           } else {
@@ -582,7 +587,8 @@ export class WebVaultKeyManager {
     try {
       const keyInfo = await this.getActiveKeyInfo(userId);
       return keyInfo !== null;
-    } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_error) {
       return false;
     }
   }
@@ -717,9 +723,10 @@ export class WebVaultKeyManager {
       
       return new Promise<void>((resolve, reject) => {
         request.onsuccess = () => {
-          const deletePromises = request.result.map((item: any) =>
+          const deletePromises = request.result.map((item: {[key: string]: unknown}) =>
             new Promise<void>((res, rej) => {
-              const deleteRequest = store.delete(item[store.keyPath as string]);
+              const keyValue = item[store.keyPath as string] as IDBValidKey;
+              const deleteRequest = store.delete(keyValue);
               deleteRequest.onsuccess = () => res();
               deleteRequest.onerror = () => rej(deleteRequest.error);
             })

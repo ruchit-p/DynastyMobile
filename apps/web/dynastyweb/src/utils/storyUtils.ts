@@ -1,11 +1,22 @@
 import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { db, app } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { toast } from '@/components/ui/use-toast';
 import eventManager, { LikeEventData } from "./eventUtils";
+import { CSRFProtectedClient } from '@/lib/csrf-client';
 
-// Initialize Firebase Functions
-const functions = getFunctions(app, 'us-central1');
+// CSRF client for API calls
+let csrfClient: CSRFProtectedClient | null = null;
+
+export function setStoryUtilsCSRFClient(client: CSRFProtectedClient) {
+  csrfClient = client;
+}
+
+function getCSRFClient(): CSRFProtectedClient {
+  if (!csrfClient) {
+    throw new Error('CSRF client not initialized for storyUtils. Please ensure CSRFProvider is set up.');
+  }
+  return csrfClient;
+}
 
 export interface Story {
   id: string;
@@ -171,8 +182,7 @@ export const toggleStoryLike = async (
     }
     
     // Call Firebase Function
-    const likeStoryFunction = httpsCallable(functions, 'likeStory');
-    const result = await likeStoryFunction({ storyId });
+    const result = await getCSRFClient().callFunction('likeStory', { storyId });
     const data = result.data as { success: boolean; liked: boolean };
     
     if (!data.success) {
@@ -222,8 +232,7 @@ export const toggleStoryLike = async (
 export const checkStoryLikeStatus = async (storyId: string): Promise<boolean> => {
   try {
     // Use the cloud function instead of direct Firestore access to avoid security rule issues
-    const checkLikeFunction = httpsCallable(functions, 'checkStoryLikeStatus');
-    const result = await checkLikeFunction({ storyId });
+    const result = await getCSRFClient().callFunction('checkStoryLikeStatus', { storyId });
     const data = result.data as { isLiked: boolean };
     return data.isLiked;
   } catch (error) {
@@ -241,8 +250,7 @@ export const checkStoryLikeStatus = async (storyId: string): Promise<boolean> =>
  */
 export const getStoryLikes = async (storyId: string): Promise<CommentUser[]> => {
   try {
-    const getLikesFunction = httpsCallable(functions, 'getStoryLikes');
-    const result = await getLikesFunction({ storyId });
+    const result = await getCSRFClient().callFunction('getStoryLikes', { storyId });
     const data = result.data as { likes: Array<{ userId: string; user: CommentUser }> };
     return data.likes.map(like => like.user);
   } catch (error) {
@@ -278,8 +286,7 @@ export const toggleCommentLike = async (
     }
     
     // Call Firebase Function
-    const likeCommentFunction = httpsCallable(functions, 'likeComment');
-    const result = await likeCommentFunction({ commentId });
+    const result = await getCSRFClient().callFunction('likeComment', { commentId });
     const data = result.data as { success: boolean; liked: boolean };
     
     if (!data.success) {
@@ -324,8 +331,7 @@ export const toggleCommentLike = async (
  */
 export const getCommentLikes = async (commentId: string): Promise<CommentUser[]> => {
   try {
-    const getLikesFunction = httpsCallable(functions, 'getCommentLikes');
-    const result = await getLikesFunction({ commentId });
+    const result = await getCSRFClient().callFunction('getCommentLikes', { commentId });
     const data = result.data as { likes: Array<{ userId: string; user: CommentUser }> };
     return data.likes.map(like => like.user);
   } catch (error) {
@@ -350,8 +356,7 @@ export const getCommentLikes = async (commentId: string): Promise<CommentUser[]>
 export const getStoryComments = async (storyId: string): Promise<Comment[]> => {
   try {
     console.log(`Fetching comments for story: ${storyId}`);
-    const getCommentsFunction = httpsCallable(functions, 'getStoryComments');
-    const result = await getCommentsFunction({ storyId });
+    const result = await getCSRFClient().callFunction('getStoryComments', { storyId });
     const data = result.data as { 
       status: 'success' | 'error',
       message?: string,
@@ -441,8 +446,7 @@ export const addComment = async (
       ...(parentId && { parentId }),
     };
     
-    const commentFunction = httpsCallable(functions, 'commentOnStory');
-    const result = await commentFunction(commentData);
+    const result = await getCSRFClient().callFunction('commentOnStory', commentData);
     const data = result.data as { success: boolean; comment: Comment };
     
     if (data.success) {

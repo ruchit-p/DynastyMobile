@@ -60,7 +60,8 @@ export async function checkRateLimit(
   const { type, skipForAdmin = false } = options
   
   // Get identifier from IP or user session
-  const ip = request.ip ?? '127.0.0.1'
+  const forwarded = request.headers.get('x-forwarded-for')
+  const ip = forwarded ? forwarded.split(',')[0] : '127.0.0.1'
   const sessionCookie = request.cookies.get('session')
   const identifier = sessionCookie?.value ? `user:${sessionCookie.value}` : `ip:${ip}`
   
@@ -123,7 +124,8 @@ export function withRateLimit(
     
     // Add rate limit headers to successful responses
     try {
-      const ip = req.ip ?? '127.0.0.1'
+      const forwarded = req.headers.get('x-forwarded-for')
+      const ip = forwarded ? forwarded.split(',')[0] : '127.0.0.1'
       const sessionCookie = req.cookies.get('session')
       const identifier = sessionCookie?.value ? `user:${sessionCookie.value}` : `ip:${ip}`
       

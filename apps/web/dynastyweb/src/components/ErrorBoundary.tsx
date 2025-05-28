@@ -59,8 +59,8 @@ export class ErrorBoundary extends Component<Props, State> {
             </CardHeader>
             <CardContent className="space-y-4">
               {this.state.error && (
-                <div className="p-3 bg-muted rounded-md">
-                  <p className="text-sm font-mono text-muted-foreground">
+                <div className="p-3 bg-muted rounded-md overflow-hidden">
+                  <p className="text-sm font-mono text-muted-foreground break-words overflow-wrap-anywhere whitespace-pre-wrap">
                     {this.state.error.message}
                   </p>
                 </div>
@@ -80,15 +80,6 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 
     return this.props.children;
-  }
-}
-
-// Add this type declaration to fix the Sentry error
-declare global {
-  interface Window {
-    Sentry?: {
-      captureException: (error: Error) => void;
-    };
   }
 }
 

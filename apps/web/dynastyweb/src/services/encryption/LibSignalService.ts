@@ -258,10 +258,7 @@ export class LibSignalService {
         bundle.signedPreKeyId,
         signedPreKeyPublic,
         Buffer.from(bundle.signedPreKeySignature),
-        identityKey,
-        0, // kyber_prekey_id - not implemented yet
-        null as any, // kyber_prekey - not implemented yet
-        Buffer.alloc(0) // kyber_prekey_signature - not implemented yet
+        identityKey
       );
 
       // Process bundle to create session
@@ -332,9 +329,12 @@ export class LibSignalService {
       }
       
       async isTrustedIdentity(
-        address: SignalClient.ProtocolAddress, 
-        key: PublicKey, 
-        direction: SignalClient.Direction
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        _address: SignalClient.ProtocolAddress, 
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        _key: PublicKey, 
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        _direction: SignalClient.Direction
       ): Promise<boolean> {
         // For now, trust all identities
         return true;
@@ -402,7 +402,10 @@ export class LibSignalService {
         return kyberPreKey;
       }
       
-      async markKyberPreKeyUsed(id: number): Promise<void> {
+      async markKyberPreKeyUsed(
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        _id: number
+      ): Promise<void> {
         // Mark as used (could implement tracking here)
       }
     }

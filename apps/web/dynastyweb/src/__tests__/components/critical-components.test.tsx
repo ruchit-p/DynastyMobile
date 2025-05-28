@@ -10,8 +10,8 @@ import MediaUpload from '../../components/MediaUpload';
 import LocationPicker from '../../components/LocationPicker';
 import NotificationBell from '../../components/NotificationBell';
 import OnboardingForm from '../../components/OnboardingForm';
-import EventCard from '../../components/EventCard';
-import Story from '../../components/Story';
+import { EventCard } from '../../components/EventCard';
+import { StoryCard as Story } from '../../components/Story';
 import AudioRecorder from '../../components/AudioRecorder';
 import ProtectedRoute from '../../components/ProtectedRoute';
 
@@ -31,10 +31,10 @@ jest.mock('next/navigation', () => ({
   usePathname: () => '/test',
 }));
 
-jest.mock('react-firebase-hooks/auth');
 jest.mock('firebase/auth');
 jest.mock('firebase/firestore');
 jest.mock('firebase/storage');
+jest.mock('@/lib/firebase');
 
 // Helper function to create mock contexts
 const createMockAuthContext = (overrides = {}) => ({

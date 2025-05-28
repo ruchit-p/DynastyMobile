@@ -131,7 +131,8 @@ export class WebKeyRotationService {
         const parsedConfig = JSON.parse(storedConfig);
         this.config = { ...this.config, ...parsedConfig };
       }
-    } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_error) {
       console.warn('[WebKeyRotation] Failed to load configuration, using defaults');
     }
   }
@@ -142,7 +143,8 @@ export class WebKeyRotationService {
   private async saveConfiguration(): Promise<void> {
     try {
       localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(this.config));
-    } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_error) {
       console.warn('[WebKeyRotation] Failed to save configuration');
     }
   }
@@ -417,7 +419,8 @@ export class WebKeyRotationService {
   /**
    * Try to decrypt with any available key
    */
-  async decryptWithAnyKey(encryptedData: ArrayBuffer): Promise<ArrayBuffer | null> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async decryptWithAnyKey(_encryptedData: ArrayBuffer): Promise<ArrayBuffer | null> {
     // TODO: Implement proper decryption with libsodium
     // The current implementation incorrectly tries to use Web Crypto API
     // with raw ArrayBuffer keys instead of CryptoKey objects
@@ -670,7 +673,7 @@ export class WebKeyRotationService {
    */
   destroy(): void {
     this.cleanup();
-    WebKeyRotationService.instance = null as any;
+    WebKeyRotationService.instance = null as unknown as WebKeyRotationService;
   }
 }
 
