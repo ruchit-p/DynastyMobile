@@ -61,6 +61,63 @@ gh pr checks --watch
 
 The automated workflow is now fully configured and ready to use!
 
+## CI/CD Error Auto-Fix Workflow
+
+When CI/CD tests fail, use the automated error fixing workflow:
+
+### Quick Fix Commands
+```bash
+# Fix errors for a specific PR
+yarn fix:pr 123
+
+# Fix errors on current branch
+yarn fix:ci --branch feature/my-feature
+
+# Use TypeScript version with advanced fixes
+yarn fix:ci:ts --pr 123 --auto-commit true
+
+# Manual fix workflow
+yarn fix:ci
+```
+
+### How It Works
+1. **Analyzes CI Failures** - Detects what tests are failing
+2. **Applies Auto-Fixes**:
+   - ESLint errors (`--fix`)
+   - TypeScript common issues
+   - Import path problems
+   - Unused variables
+   - React Hook dependencies
+3. **Intelligent Pattern Matching** - Recognizes error patterns and applies appropriate fixes
+4. **Multiple Attempts** - Retries fixes up to 3 times
+5. **Optional Auto-Commit** - Can automatically commit and push fixes
+
+### Common Fixes Applied
+- **ESLint**: Auto-fixable style issues, formatting
+- **TypeScript**: Replace `any` with `unknown`, add type assertions
+- **React**: Add missing useEffect dependencies
+- **Imports**: Fix relative import paths
+- **Variables**: Prefix unused vars with underscore
+
+### GitHub Action Integration
+The repo includes an auto-fix workflow that triggers when CI fails on a PR:
+- Automatically attempts to fix errors
+- Creates a commit with fixes
+- Comments on the PR with changes made
+
+### Manual Usage Examples
+```bash
+# When PR #42 has failing tests
+yarn fix:pr 42
+
+# Fix and auto-commit
+yarn fix:ci:ts --pr 42 --auto-commit true
+
+# Fix current branch without PR
+git checkout feature/broken-tests
+yarn fix:ci --branch feature/broken-tests
+```
+
 ## Project Overview
 
 Dynasty is a cross-platform application for documenting, sharing, and preserving family history across generations:
