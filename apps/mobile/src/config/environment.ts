@@ -16,3 +16,6 @@ export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || '';
 
 // Other configs
 export const APP_ENV = process.env.EXPO_PUBLIC_APP_ENV || (__DEV__ ? 'development' : 'production');
+
+// Google OAuth Configuration
+export const GOOGLE_OAUTH_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_OAUTH_WEB_CLIENT_ID || '';

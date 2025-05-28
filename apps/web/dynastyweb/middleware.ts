@@ -1,6 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRateLimit } from './src/lib/rate-limit';
 
 export async function middleware(request: NextRequest) {
+  // Rate limiting for API routes
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    // Determine rate limit type based on the API endpoint
+    let rateLimitType: 'auth' | 'api' | 'media' | 'write' | 'sensitive' = 'api';
+    
+    if (request.nextUrl.pathname.includes('/auth/')) {
+      rateLimitType = 'auth';
+    } else if (request.nextUrl.pathname.includes('/upload/') || request.nextUrl.pathname.includes('/media/')) {
+      rateLimitType = 'media';
+    } else if (request.method !== 'GET') {
+      rateLimitType = 'write';
+    } else if (request.nextUrl.pathname.includes('/password/') || request.nextUrl.pathname.includes('/reset/')) {
+      rateLimitType = 'sensitive';
+    }
+    
+    const rateLimitResponse = await checkRateLimit(request, {
+      type: rateLimitType,
+      skipForAdmin: false, // We'll implement admin detection later
+    });
+    
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+  }
+  
   const response = NextResponse.next();
   // In middleware, we check the host to determine if it's development
   const isDevelopment = request.headers.get('host')?.includes('localhost') || 
@@ -74,11 +100,11 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
-     * - api (API routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * Now includes API routes for rate limiting
      */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };
