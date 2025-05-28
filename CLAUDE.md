@@ -61,6 +61,40 @@ gh pr checks --watch
 
 The automated workflow is now fully configured and ready to use!
 
+## Repository Architecture - Monorepo Setup
+
+Dynasty uses a **consolidated monorepo architecture** for all platforms:
+
+### Repository Structure
+```
+DynastyMobile/                    # Main monorepo
+├── apps/
+│   ├── mobile/                   # React Native (Expo) app
+│   ├── web/dynastyweb/          # Next.js web application  
+│   └── firebase/                # Firebase Functions backend
+├── docs/                        # Shared documentation
+└── scripts/                     # Automation scripts
+```
+
+### Key Benefits of Monorepo
+- ✅ **Single CI/CD Pipeline** - All platforms tested together
+- ✅ **Atomic Commits** - Update mobile/web/backend in sync
+- ✅ **Shared Dependencies** - No version conflicts between platforms
+- ✅ **Cross-Platform Coordination** - Features stay consistent
+- ✅ **Simplified Management** - One repo, one source of truth
+
+### Deployment Integration
+- **Web (Vercel)**: Connected to `DynastyMobile` repo, builds from `apps/web/dynastyweb/`
+- **Mobile (EAS)**: Builds from `apps/mobile/` with shared configurations
+- **Backend (Firebase)**: Deploys from `apps/firebase/functions/`
+
+### Migration Notes
+**May 2025**: Successfully consolidated separate `dynastyweb` repository into monorepo:
+- Removed nested git repository from `apps/web/dynastyweb/`
+- Updated Vercel project to connect to main `DynastyMobile` repo
+- Preserved all commit history and configurations
+- Updated CI/CD workflows to handle consolidated structure
+
 ## CI/CD Error Auto-Fix Workflow
 
 When CI/CD tests fail, use the automated error fixing workflow:
@@ -142,6 +176,7 @@ cd apps/web/dynastyweb
 npm run dev      # Start Next.js dev server
 npm run build    # Build for production
 npm run lint     # Run linting
+yarn test        # Run Jest tests
 ```
 
 ### Firebase Functions
@@ -483,3 +518,28 @@ When working with Dynasty code:
 
 For detailed implementation history and technical specifications, see [CHANGELOG.md](./CHANGELOG.md).
 For complete documentation navigation, see [Documentation README](/docs/README.md).
+
+## CI/CD Pipeline Architecture
+
+The monorepo uses a unified CI/CD pipeline with separate workflows for each platform:
+
+### GitHub Actions Workflows
+- **`dev-checks.yml`** - Runs on all PRs to dev branch
+- **`mobile-ci-cd.yml`** - Mobile app testing and EAS builds
+- **`web-ci-cd.yml`** - Web app testing and Vercel deployments
+- **`firebase-ci-cd.yml`** - Firebase Functions testing and deployment
+- **`security-scan.yml`** - Security scanning across all platforms
+- **`auto-fix-ci.yml`** - Automatic error fixing when CI fails
+
+### Deployment Status
+- **Web**: Deployed to Vercel from monorepo `apps/web/dynastyweb/`
+- **Mobile**: Built with EAS from `apps/mobile/`
+- **Backend**: Deployed to Firebase from `apps/firebase/functions/`
+
+### Path-Based Triggers
+CI workflows are optimized to only run when relevant files change:
+- Web CI triggers on `apps/web/**` changes
+- Mobile CI triggers on `apps/mobile/**` changes  
+- Firebase CI triggers on `apps/firebase/**` changes
+
+This ensures efficient resource usage and faster CI feedback.
