@@ -145,7 +145,7 @@ export class VaultSecurityService {
       // Content validation (magic bytes)
       const contentValidation = this.validateFileContent(fileData, mimeType);
       if (!contentValidation.isValid) {
-        errors.push('File content doesn't match declared MIME type');
+        errors.push('File content does not match declared MIME type');
       }
 
       // Malware scanning (basic)

@@ -2,6 +2,54 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Automated Feature Development Workflow
+
+When implementing new features, use the automated workflow to ensure proper testing and CI/CD integration:
+
+### Quick Start
+```bash
+# For simple features
+./scripts/claude-feature-workflow.sh "feature-name" "feat: your commit message"
+
+# For TypeScript assistant
+npx ts-node scripts/claude-dev-assistant.ts "feature-name" "feat: your commit message"
+```
+
+### Workflow Steps (Automated)
+1. **Branch Creation**: Automatically creates feature branch from dev
+2. **Local Testing**: Runs all tests before pushing
+3. **Auto-fix**: Attempts to fix linting issues
+4. **Git Operations**: Commits and pushes changes
+5. **PR Creation**: Creates PR with proper description
+6. **CI Monitoring**: Watches GitHub Actions status
+
+### Manual Commands if Needed
+```bash
+# 1. Start from dev branch
+git checkout dev && git pull origin dev
+
+# 2. Create feature branch
+git checkout -b feature/your-feature
+
+# 3. Run tests locally
+cd apps/web/dynastyweb && yarn test
+cd apps/mobile && yarn test
+cd apps/firebase/functions && npm test
+
+# 4. Create PR
+gh pr create --base dev --title "feat: your feature"
+
+# 5. Monitor CI
+gh pr checks --watch
+```
+
+### Prerequisites Status
+✅ **GitHub CLI**: Installed and authenticated as `ruchit-p`
+✅ **ts-node**: Installed globally at `/Users/ruchitpatel/.nvm/versions/node/v20.18.3/bin/ts-node`
+✅ **Automation Scripts**: Ready at `/scripts/claude-feature-workflow.sh` and `/scripts/claude-dev-assistant.ts`
+
+The automated workflow is now fully configured and ready to use!
+
 ## Project Overview
 
 Dynasty is a cross-platform application for documenting, sharing, and preserving family history across generations:
@@ -105,25 +153,74 @@ await AsyncStorage.setItem('key', JSON.stringify({
 
 ## Design System
 
-### Colors
+### Colors (Updated May 2025)
+Dynasty uses a consistent color palette across mobile and web:
+
+**Primary Greens:**
+- Dark Green: `#163D21` (British racing green)
+- Primary: `#14562D` (Cal Poly green) - Main brand color
+- Light: `#6DBC74` (Mantis)
+- Extra Light: `#B0EDB1` (Celadon)
+
+**Gold Colors:**
+- Light Gold: `#FFB81F` (Selective yellow)
+- Dark Gold: `#D4AF4A` (Gold metallic)
+
+**Neutral Colors:**
+- Black: `#1E1D1E` (Eerie black)
+- Gray: `#595E65` (Davy's gray)
+- Light Gray: `#DFDFDF` (Platinum)
+- Off-White: `#F8F8F8` (Seasalt)
+- White: `#FFFFFF`
+
 ```typescript
+// Mobile
 import { Colors } from '../constants/Colors';
-const textColor = Colors.light.text.primary;
-const bgColor = Colors.dark.background.primary;
+const primary = Colors.dynastyGreen; // #14562D
+const gold = Colors.dynastyGoldLight; // #FFB81F
+
+// Web - uses CSS variables
+// --primary: 148 62% 21%; /* #14562D */
+// --secondary: 37 100% 56%; /* #FFB81F */
 ```
 
 ### Typography
+Font family is standardized across platforms:
+- Primary: `'Helvetica Neue'`
+- Fallbacks: System fonts (San Francisco on iOS, Roboto on Android)
+
 ```typescript
+// Mobile
 import Typography from '../constants/Typography';
 const heading = Typography.styles.heading1;
 const body = Typography.styles.bodyMedium;
+
+// Web
+font-family: 'Helvetica Neue', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', sans-serif;
 ```
 
 ### Spacing
 ```typescript
 import { Spacing, BorderRadius } from '../constants/Spacing';
-const padding = Spacing.md;
-const radius = BorderRadius.lg;
+const padding = Spacing.md; // 16px
+const radius = BorderRadius.lg; // 12px
+```
+
+### Accessibility & Font Scaling
+```typescript
+// Mobile - Use the font scale hook
+import { useFontScale } from '../src/hooks/useFontScale';
+const { fontScale, getScaledFontSize } = useFontScale();
+
+// Apply scaled font size
+<Text style={{ fontSize: getScaledFontSize(16) }}>
+
+// Web - Use CSS utilities
+<p className="text-scale-lg">Scaled text</p>
+
+// Or inline styles with hook
+const { getScaledRem } = useFontScale();
+<p style={{ fontSize: getScaledRem(1.125) }}>
 ```
 
 ## Current Features
@@ -135,6 +232,7 @@ const radius = BorderRadius.lg;
 - **Events**: Calendar view, RSVP management
 - **Chat**: E2E encrypted messaging (in development)
 - **Vault**: Secure file storage
+- **Accessibility**: Dynamic font sizing with device settings integration
 
 ### Offline Support
 - Firebase offline persistence (50MB cache)
@@ -213,6 +311,7 @@ npm run build     # TypeScript check (functions)
 - **VaultService** - Secure file storage with sharing
 - **E2EEService** - Client-side encryption
 - **SyncService** - Offline queue management
+- **FontSizeService** - Dynamic font scaling with accessibility support
 
 ### iOS Native Modules (`/apps/mobile/ios/RNLibsignal/`)
 - **RNLibsignal** - Main Signal Protocol native module
@@ -245,6 +344,7 @@ yarn test:coverage     # Coverage report
 ```
 
 ### Recent Major Updates
+- **Dynamic Font Sizing** ✅ - Accessibility-first font scaling for mobile & web (May 2025)
 - **Signal Protocol PRODUCTION READY** ✅ - Complete E2EE implementation passed security audit (May 2025)
 - **iOS & Android Group Messaging** - SenderKeyStore implementation for efficient group chats on both platforms
 - **Comprehensive Integration Tests** - Cross-platform compatibility verified with full test coverage

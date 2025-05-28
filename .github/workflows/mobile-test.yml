@@ -1,16 +1,10 @@
-name: Mobile App Tests
+# This workflow has been replaced by mobile-ci-cd.yml
+# Please use the new comprehensive workflow instead
+
+name: Mobile App Tests (Deprecated)
 
 on:
-  push:
-    branches: [main, develop]
-    paths:
-      - 'apps/mobile/**'
-      - '.github/workflows/mobile-test.yml'
-  pull_request:
-    branches: [main, develop]
-    paths:
-      - 'apps/mobile/**'
-      - '.github/workflows/mobile-test.yml'
+  workflow_dispatch: # Manual trigger only
 
 jobs:
   test:

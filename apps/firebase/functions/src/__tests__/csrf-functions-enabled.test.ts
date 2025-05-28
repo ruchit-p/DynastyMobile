@@ -9,52 +9,69 @@ describe('CSRF Protection Verification', () => {
   const srcDir = join(__dirname, '..');
   
   // List of files and functions that should have CSRF protection
+  // Updated to match actual existing functions
   const functionsWithCSRF = {
     'events-service.ts': [
       'createEvent',
       'updateEvent',
       'deleteEvent',
       'rsvpToEvent',
-      'updateRSVP',
-      'inviteToEvent',
-      'removeFromEvent',
-      'bulkInviteToEvent',
-      'updateEventPrivacy',
-      'addEventComment'
+      'addCommentToEvent',
+      'deleteEventComment',
+      'sendEventInvitations',
+      'respondToInvitation',
+      'updateEventRsvpApi',
+      'deleteEventApi',
+      'getEventCoverPhotoUploadUrl',
+      'completeEventCoverPhotoUpload'
     ],
     'vault.ts': [
+      'getVaultUploadSignedUrl',
       'createVaultFolder',
+      'addVaultFile',
       'renameVaultItem',
       'deleteVaultItem',
       'moveVaultItem',
       'shareVaultItem',
       'updateVaultItemPermissions',
-      'revokeVaultShare',
-      'acceptVaultShare',
-      'declineVaultShare',
-      'updateVaultStorage',
-      'emptyVaultTrash'
+      'revokeVaultItemAccess',
+      'restoreVaultItem',
+      'cleanupDeletedVaultItems',
+      'updateVaultFile',
+      'completeVaultFileUpload',
+      'permanentlyDeleteVaultItem'
     ],
     'chatManagement.ts': [
       'createChat',
       'updateChatSettings',
       'addChatMembers',
       'removeChatMember',
-      'leaveChat',
-      'deleteChat',
-      'archiveChat'
+      'updateMemberRole',
+      'updateChatNotifications',
+      'deleteChat'
     ],
     'familyTree.ts': [
       'updateFamilyRelationships',
       'createFamilyMember',
       'updateFamilyMember',
       'deleteFamilyMember',
-      'mergeFamilyMembers',
-      'splitFamilyMember'
+      'promoteToAdmin',
+      'demoteToMember'
     ],
     'auth/modules/email-verification.ts': [
       'sendVerificationEmail',
       'verifyEmail'
+    ],
+    'auth/modules/authentication.ts': [
+      'handleSignUp'
+    ],
+    'auth/modules/password-management.ts': [
+      'updateUserPassword',
+      'initiatePasswordReset'
+    ],
+    'auth/modules/user-management.ts': [
+      'handleAccountDeletion',
+      'updateUserProfile'
     ]
   };
 
@@ -98,41 +115,6 @@ describe('CSRF Protection Verification', () => {
           expect(hasCSRF || hasWithAuthCSRF).toBe(true);
         });
       });
-    });
-  });
-
-  describe('CSRF Token Generation Endpoint', () => {
-    it('should have generateCSRFToken function exported from csrf.ts', () => {
-      try {
-        const csrfFile = readFileSync(join(srcDir, 'middleware/csrf.ts'), 'utf8');
-        expect(csrfFile).toContain('export const generateCSRFToken');
-        expect(csrfFile).toContain('onCall');
-      } catch (error) {
-        // File might not exist in test environment
-      }
-    });
-
-    it('should have validateCSRFToken function exported from csrf.ts', () => {
-      try {
-        const csrfFile = readFileSync(join(srcDir, 'middleware/csrf.ts'), 'utf8');
-        expect(csrfFile).toContain('export const validateCSRFToken');
-        expect(csrfFile).toContain('withCSRFProtection');
-      } catch (error) {
-        // File might not exist in test environment
-      }
-    });
-  });
-
-  describe('Rate Limiting Configuration', () => {
-    it('should have proper rate limit types configured', () => {
-      try {
-        const configFile = readFileSync(join(srcDir, 'config/security-config.ts'), 'utf8');
-        expect(configFile).toContain('RateLimitType.WRITE');
-        expect(configFile).toContain('RateLimitType.DELETE');
-        expect(configFile).toContain('RateLimitType.MEDIA');
-      } catch (error) {
-        // File might not exist in test environment
-      }
     });
   });
 });

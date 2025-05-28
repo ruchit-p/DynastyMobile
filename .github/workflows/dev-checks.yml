@@ -1,0 +1,167 @@
+name: Dev Branch CI
+
+on:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [dev]
+
+jobs:
+  # Web App Tests
+  web-test:
+    name: Web App Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: |
+          cd apps/web/dynastyweb
+          yarn install --frozen-lockfile
+
+      - name: Run linter
+        run: |
+          cd apps/web/dynastyweb
+          yarn lint
+
+      - name: Run TypeScript check
+        run: |
+          cd apps/web/dynastyweb
+          npx tsc --noEmit
+
+      - name: Run tests
+        run: |
+          cd apps/web/dynastyweb
+          yarn test --ci --coverage --maxWorkers=2
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          directory: ./apps/web/dynastyweb/coverage
+          flags: web
+          name: web-coverage
+          fail_ci_if_error: false
+
+  # Mobile App Tests
+  mobile-test:
+    name: Mobile App Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: |
+          cd apps/mobile
+          yarn install --frozen-lockfile
+
+      - name: Run linter
+        run: |
+          cd apps/mobile
+          yarn lint
+
+      - name: Run TypeScript check
+        run: |
+          cd apps/mobile
+          npx tsc --noEmit
+
+      - name: Run tests
+        run: |
+          cd apps/mobile
+          yarn test --ci --coverage --maxWorkers=2
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          directory: ./apps/mobile/coverage
+          flags: mobile
+          name: mobile-coverage
+          fail_ci_if_error: false
+
+  # Firebase Functions Tests
+  firebase-test:
+    name: Firebase Functions Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: "npm"
+
+      - name: Install dependencies
+        run: |
+          cd apps/firebase/functions
+          npm ci
+
+      - name: Run linter
+        run: |
+          cd apps/firebase/functions
+          npm run lint
+
+      - name: Run TypeScript check
+        run: |
+          cd apps/firebase/functions
+          npm run build
+
+      - name: Run tests
+        run: |
+          cd apps/firebase/functions
+          npm test -- --ci --coverage --maxWorkers=2
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          directory: ./apps/firebase/functions/coverage
+          flags: functions
+          name: functions-coverage
+          fail_ci_if_error: false
+
+  # Security Scan
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --all-projects --severity-threshold=high
+
+  # Check if all tests pass
+  all-checks:
+    name: All Checks Pass
+    runs-on: ubuntu-latest
+    needs: [web-test, mobile-test, firebase-test, security-scan]
+    
+    steps:
+      - name: All checks passed
+        run: echo "All CI checks passed successfully!"

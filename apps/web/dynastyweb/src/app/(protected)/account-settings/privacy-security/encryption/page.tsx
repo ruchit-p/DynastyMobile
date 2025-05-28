@@ -55,10 +55,6 @@ export default function EncryptionSettingsPage() {
   const [showFingerprint, setShowFingerprint] = useState(false);
   const [processing, setProcessing] = useState(false);
 
-  useEffect(() => {
-    checkEncryptionStatus();
-  }, [checkEncryptionStatus]);
-
   const checkEncryptionStatus = useCallback(async () => {
     setLoading(true);
     try {
@@ -98,6 +94,10 @@ export default function EncryptionSettingsPage() {
       setLoading(false);
     }
   }, [toast]);
+
+  useEffect(() => {
+    checkEncryptionStatus();
+  }, [checkEncryptionStatus]);
 
   const handleGenerateKeys = async () => {
     setProcessing(true);

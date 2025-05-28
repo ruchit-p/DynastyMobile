@@ -66,7 +66,7 @@ export default function MfaSignInModal({ open, onClose }: MfaSignInModalProps) {
     if (factor.factorId === TotpMultiFactorGenerator.FACTOR_ID) {
       return 'Authenticator App';
     } else if (factor.factorId === PhoneMultiFactorGenerator.FACTOR_ID) {
-      return `SMS to ${factor.phoneNumber || 'phone number'}`;
+      return `SMS to ${(factor as any).phoneNumber || 'phone number'}`;
     }
     return 'Unknown method';
   };
@@ -75,7 +75,7 @@ export default function MfaSignInModal({ open, onClose }: MfaSignInModalProps) {
     if (factor.factorId === TotpMultiFactorGenerator.FACTOR_ID) {
       return 'Open your authenticator app and enter the 6-digit code for Dynasty Family App.';
     } else if (factor.factorId === PhoneMultiFactorGenerator.FACTOR_ID) {
-      return `We&apos;ll send a verification code to ${factor.phoneNumber || 'your phone number'}.`;
+      return `We&apos;ll send a verification code to ${(factor as any).phoneNumber || 'your phone number'}.`;
     }
     return 'Follow the instructions for your security method.';
   };

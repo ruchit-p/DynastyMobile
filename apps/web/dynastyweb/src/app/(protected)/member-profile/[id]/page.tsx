@@ -74,10 +74,6 @@ export default function MemberProfilePage() {
   const isOwnProfile = memberId === currentUser?.uid;
   const canEdit = isOwnProfile || firestoreUser?.isAdmin || firestoreUser?.canEdit;
 
-  useEffect(() => {
-    loadMemberProfile();
-  }, [memberId, loadMemberProfile]);
-
   const loadMemberProfile = useCallback(async () => {
     setLoading(true);
     try {
@@ -103,6 +99,9 @@ export default function MemberProfilePage() {
     }
   }, [memberId, toast, router]);
 
+  useEffect(() => {
+    loadMemberProfile();
+  }, [loadMemberProfile]);
 
   if (loading) {
     return (

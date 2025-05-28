@@ -42,11 +42,6 @@ export default function MfaManagement({ className }: MfaManagementProps) {
   const [phoneCode, setPhoneCode] = useState('');
   const [isPhoneCodeSent, setIsPhoneCodeSent] = useState(false);
 
-  // MARK: - Effects
-  useEffect(() => {
-    loadEnrolledFactors();
-  }, [loadEnrolledFactors]);
-
   // MARK: - Helper Functions
   const loadEnrolledFactors = useCallback(() => {
     try {
@@ -61,6 +56,11 @@ export default function MfaManagement({ className }: MfaManagementProps) {
       });
     }
   }, [getMfaEnrollmentInfo, toast]);
+
+  // MARK: - Effects
+  useEffect(() => {
+    loadEnrolledFactors();
+  }, [loadEnrolledFactors]);
 
   const resetTotpSetup = () => {
     setTotpSetupInfo(null);
@@ -341,6 +341,7 @@ export default function MfaManagement({ className }: MfaManagementProps) {
                       </Alert>
                       
                       <div className="bg-white p-4 rounded-lg border text-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img 
                           src={totpSetupInfo.qrCodeUrl} 
                           alt="QR Code for TOTP setup"

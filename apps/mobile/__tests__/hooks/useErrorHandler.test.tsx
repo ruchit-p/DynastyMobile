@@ -1,9 +1,29 @@
 import { renderHook, act } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 
 // Mock Alert
 jest.spyOn(Alert, 'alert');
+
+// Mock ErrorHandlingService
+jest.mock('../../src/lib/ErrorHandlingService', () => ({
+  ErrorSeverity: {
+    LOW: 'low',
+    MEDIUM: 'medium',
+    HIGH: 'high',
+    CRITICAL: 'critical'
+  },
+  errorHandler: {
+    handleError: jest.fn((error) => ({
+      message: error.message || 'Unknown error',
+      severity: 'medium',
+      timestamp: Date.now(),
+      id: 'test-error-id'
+    })),
+    setCurrentScreen: jest.fn(),
+  }
+}));
 
 describe('useErrorHandler', () => {
   beforeEach(() => {
@@ -12,7 +32,11 @@ describe('useErrorHandler', () => {
   });
 
   it('provides error handling functions', () => {
-    const { result } = renderHook(() => useErrorHandler());
+    const { result } = renderHook(() => useErrorHandler({
+      title: 'Test Screen',
+      severity: ErrorSeverity.MEDIUM,
+      trackCurrentScreen: false
+    }));
 
     expect(result.current.handleError).toBeDefined();
     expect(result.current.withErrorHandling).toBeDefined();
@@ -20,7 +44,9 @@ describe('useErrorHandler', () => {
 
   it('handles errors with custom title', () => {
     const { result } = renderHook(() => useErrorHandler({
-      title: 'Custom Error Title'
+      title: 'Custom Error Title',
+      severity: ErrorSeverity.HIGH,
+      trackCurrentScreen: false
     }));
 
     act(() => {

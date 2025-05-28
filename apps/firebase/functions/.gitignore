@@ -12,9 +12,14 @@ node_modules/
 .env
 .env.development
 .env.production
+.env.staging
 .env.local
 .env.*.local
 .secret.local
+
+# Firebase configuration files with secrets
+firebase-functions-config.json
+.runtimeconfig.json
 
 # Log files
 npm-debug.log*
