@@ -6,7 +6,6 @@
 
 import { 
   collection, 
-  doc, 
   addDoc, 
   query, 
   where, 
@@ -30,7 +29,7 @@ export interface AuditEvent {
   deviceId: string;
   timestamp: Timestamp;
   description: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, string | number | boolean | null | undefined>;
   ipAddress?: string;
   userAgent?: string;
   location?: {
@@ -142,7 +141,7 @@ export class AuditLogService {
   async logEvent(
     eventType: AuditEventType,
     description: string,
-    metadata: Record<string, any> = {},
+    metadata: Record<string, string | number | boolean | null | undefined> = {},
     options: {
       category?: AuditCategory;
       severity?: AuditSeverity;
@@ -203,7 +202,7 @@ export class AuditLogService {
   async logAuthentication(
     action: 'login' | 'logout' | 'failed_login' | 'mfa_required' | 'mfa_success' | 'mfa_failed',
     userId: string,
-    metadata: Record<string, any> = {}
+    metadata: Record<string, string | number | boolean | null | undefined> = {}
   ): Promise<string> {
     const riskScore = action.includes('failed') ? 70 : action === 'login' ? 30 : 10;
     const severity: AuditSeverity = action.includes('failed') ? 'high' : 'medium';
@@ -223,7 +222,7 @@ export class AuditLogService {
     action: 'open' | 'create' | 'edit' | 'delete' | 'share' | 'download',
     vaultId: string,
     userId: string,
-    metadata: Record<string, any> = {}
+    metadata: Record<string, string | number | boolean | null | undefined> = {}
   ): Promise<string> {
     const riskScore = action === 'delete' ? 80 : action === 'download' ? 60 : 40;
 
@@ -242,7 +241,7 @@ export class AuditLogService {
     operation: 'generate' | 'backup' | 'recover' | 'rotate' | 'export',
     keyType: string,
     userId: string,
-    metadata: Record<string, any> = {}
+    metadata: Record<string, string | number | boolean | null | undefined> = {}
   ): Promise<string> {
     const riskScore = operation === 'export' ? 90 : operation === 'backup' ? 50 : 70;
 
@@ -259,7 +258,7 @@ export class AuditLogService {
    */
   async logSecurityIncident(
     incident: string,
-    details: Record<string, any>,
+    details: Record<string, string | number | boolean | null | undefined>,
     userId?: string
   ): Promise<string> {
     return this.logEvent(
@@ -275,7 +274,7 @@ export class AuditLogService {
    */
   async logDeviceActivity(
     action: 'register' | 'trust' | 'revoke' | 'suspicious_activity',
-    deviceInfo: Record<string, any>,
+    deviceInfo: Record<string, string | number | boolean | null | undefined>,
     userId: string
   ): Promise<string> {
     const riskScore = action === 'suspicious_activity' ? 85 : action === 'register' ? 60 : 40;
@@ -293,7 +292,7 @@ export class AuditLogService {
    */
   async logPrivacyAction(
     action: 'data_export' | 'data_deletion' | 'consent_change' | 'privacy_setting_update',
-    details: Record<string, any>,
+    details: Record<string, string | number | boolean | null | undefined>,
     userId: string
   ): Promise<string> {
     return this.logEvent(
@@ -406,7 +405,7 @@ export class AuditLogService {
   // MARK: - Risk Assessment
   private calculateRiskScore(
     eventType: AuditEventType,
-    metadata: Record<string, any>
+    metadata: Record<string, string | number | boolean | null | undefined>
   ): number {
     let baseScore = 30;
 
@@ -442,7 +441,7 @@ export class AuditLogService {
 
   private calculateSeverity(
     eventType: AuditEventType,
-    metadata: Record<string, any>
+    metadata: Record<string, string | number | boolean | null | undefined>
   ): AuditSeverity {
     const criticalEvents: AuditEventType[] = [
       'security_incident',
@@ -512,7 +511,7 @@ export class AuditLogService {
     return sensitiveTypes.includes(event.eventType) || event.riskScore >= 70;
   }
 
-  private async encryptMetadata(metadata: Record<string, any>): Promise<Record<string, any>> {
+  private async encryptMetadata(metadata: Record<string, string | number | boolean | null | undefined>): Promise<Record<string, string | number | boolean | null | undefined>> {
     if (!this.config.encryptionKey) {
       return metadata;
     }
@@ -527,13 +526,14 @@ export class AuditLogService {
     }
   }
 
-  private async decryptMetadata(metadata: Record<string, any>): Promise<Record<string, any>> {
+  private async decryptMetadata(metadata: Record<string, string | number | boolean | null | undefined>): Promise<Record<string, string | number | boolean | null | undefined>> {
     if (!this.config.encryptionKey || !metadata.encrypted) {
       return metadata;
     }
 
     try {
-      const decrypted = CryptoJS.AES.decrypt(metadata.encrypted, this.config.encryptionKey);
+      const encryptedString = metadata.encrypted as string;
+      const decrypted = CryptoJS.AES.decrypt(encryptedString, this.config.encryptionKey);
       const jsonString = decrypted.toString(CryptoJS.enc.Utf8);
       return JSON.parse(jsonString);
     } catch (error) {
@@ -561,8 +561,8 @@ export class AuditLogService {
   }
 
   // MARK: - Utility Functions
-  private async sanitizeMetadata(metadata: Record<string, any>): Promise<Record<string, any>> {
-    const sanitized: Record<string, any> = {};
+  private async sanitizeMetadata(metadata: Record<string, string | number | boolean | null | undefined>): Promise<Record<string, string | number | boolean | null | undefined>> {
+    const sanitized: Record<string, string | number | boolean | null | undefined> = {};
 
     for (const [key, value] of Object.entries(metadata)) {
       // Remove sensitive fields
@@ -639,7 +639,8 @@ export class AuditLogService {
       .slice(0, 10);
   }
 
-  private calculateRiskTrends(events: AuditEvent[], days: number): { date: string; riskScore: number }[] {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private calculateRiskTrends(events: AuditEvent[], _days: number): { date: string; riskScore: number }[] {
     const dailyRisks: Record<string, { total: number; count: number }> = {};
     
     events.forEach(event => {

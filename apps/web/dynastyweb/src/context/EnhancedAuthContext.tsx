@@ -442,7 +442,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setMfaSignInState({
           isRequired: true,
           availableFactors: resolver?.hints || [],
-          resolver,
+          resolver: resolver || null,
           selectedFactor: null,
         });
         
@@ -658,8 +658,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!user) throw new Error('No user logged in');
     
     try {
-      const session = await multiFactor(user).getSession();
-      const totpSecret = await TotpMultiFactorGenerator.generateSecret(session);
+      const mfaSession = await multiFactor(user).getSession();
+      const totpSecret = await TotpMultiFactorGenerator.generateSecret(mfaSession);
       
       const qrCodeUrl = totpSecret.generateQrCodeUrl(
         user.email || 'Dynasty User',
@@ -700,7 +700,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!user) throw new Error('No user logged in');
     
     try {
-      const session = await multiFactor(user).getSession();
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _session = await multiFactor(user).getSession();
       
       // Create or reuse recaptcha verifier
       if (!window.mfaRecaptchaVerifier) {

@@ -134,14 +134,16 @@ describe('Authentication Integration Tests', () => {
   describe('User Registration Flow', () => {
     it('should handle signup and create auth account', async () => {
       const request = {
-        data: {
+      data: {
           email: 'test@example.com',
           password: 'SecurePassword123!',
           firstName: 'John',
           lastName: 'Doe',
         },
         auth: null,
-        rawRequest: { ip: '127.0.0.1' },
+        rawRequest: { ip: '127.0.0.1' ,
+      acceptsStreaming: false
+    },
       };
 
       const result = await (handleSignUp as jest.MockedFunction<any>)(request);
@@ -160,14 +162,16 @@ describe('Authentication Integration Tests', () => {
       );
 
       const request = {
-        data: {
+      data: {
           email: 'existing@example.com',
           password: 'SecurePassword123!',
           firstName: 'Jane',
           lastName: 'Doe',
         },
         auth: null,
-        rawRequest: { ip: '127.0.0.1' },
+        rawRequest: { ip: '127.0.0.1' ,
+      acceptsStreaming: false
+    },
       };
 
       await expect((handleSignUp as jest.MockedFunction<any>)(request)).rejects.toThrow(HttpsError);

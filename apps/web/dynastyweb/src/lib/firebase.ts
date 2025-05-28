@@ -35,13 +35,51 @@ if (typeof window !== 'undefined') {
   }
 }
 
-// Connect to emulators in development
-if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
-  console.log('Using Firebase Emulators');
-  connectAuthEmulator(auth, 'http://127.0.0.1:9099');
-  connectFirestoreEmulator(db, '127.0.0.1', 8080);
-  connectStorageEmulator(storage, '127.0.0.1', 9199);
-  connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+// Connect to emulators in development - only on client side
+if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
+  console.log('🔧 FIREBASE DEBUG: Starting emulator connections...');
+  console.log('🔧 FIREBASE DEBUG: Environment flag:', process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR);
+  
+  let connectionsAttempted = false;
+  
+  // Check if already connected to prevent duplicate connections
+  if (!(auth as unknown as { _canInitEmulator?: boolean })._canInitEmulator) {
+    connectionsAttempted = true;
+  }
+  
+  if (!connectionsAttempted) {
+    try {
+      console.log('🔧 FIREBASE DEBUG: Connecting to Auth Emulator at http://127.0.0.1:9099');
+      connectAuthEmulator(auth, 'http://127.0.0.1:9099');
+      console.log('✅ FIREBASE DEBUG: Auth Emulator connected successfully');
+    } catch (error) {
+      console.error('❌ FIREBASE DEBUG: Auth Emulator connection failed:', error);
+    }
+    
+    try {
+      console.log('🔧 FIREBASE DEBUG: Connecting to Firestore Emulator at 127.0.0.1:8080');
+      connectFirestoreEmulator(db, '127.0.0.1', 8080);
+      console.log('✅ FIREBASE DEBUG: Firestore Emulator connected successfully');
+    } catch (error) {
+      console.error('❌ FIREBASE DEBUG: Firestore Emulator connection failed:', error);
+    }
+    
+    try {
+      console.log('🔧 FIREBASE DEBUG: Connecting to Storage Emulator at 127.0.0.1:9199');
+      connectStorageEmulator(storage, '127.0.0.1', 9199);
+      console.log('✅ FIREBASE DEBUG: Storage Emulator connected successfully');
+    } catch (error) {
+      console.error('❌ FIREBASE DEBUG: Storage Emulator connection failed:', error);
+    }
+    
+    try {
+      console.log('🔧 FIREBASE DEBUG: Connecting to Functions Emulator at 127.0.0.1:8693');
+      connectFunctionsEmulator(functions, '127.0.0.1', 8693);
+      console.log('✅ FIREBASE DEBUG: Functions Emulator connected successfully');
+    } catch (error) {
+      console.error('❌ FIREBASE DEBUG: Functions Emulator connection failed:', error);
+    }
+  }
 }
 
 // Initialize Analytics and catch if not supported (e.g. in SSR)

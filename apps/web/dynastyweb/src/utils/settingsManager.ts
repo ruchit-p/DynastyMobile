@@ -37,7 +37,7 @@ const defaultSettings: UserSettings = {
 
 export class SettingsManager {
   private static instance: SettingsManager
-  private debounceTimeout: NodeJS.Timeout | null = null
+  private debounceTimeout: ReturnType<typeof setTimeout> | null = null
   private readonly debounceInterval = 500 // 500ms
 
   private constructor() {}

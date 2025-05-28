@@ -1,11 +1,11 @@
 // Vault Service for Dynasty Web App
 // Manages secure file storage with encryption support
 
-import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { functions, storage } from '@/lib/firebase';
+import { storage } from '@/lib/firebase';
 import { errorHandler, ErrorSeverity } from './ErrorHandlingService';
 import { cacheService, cacheKeys } from './CacheService';
+import { CSRFProtectedClient } from '@/lib/csrf-client';
 
 export interface VaultItem {
   id: string;
@@ -65,6 +65,7 @@ class VaultService {
   private uploadTasks = new Map<string, ReturnType<typeof uploadBytesResumable>>();
   private downloadCache = new Map<string, Blob>();
   private maxFileSize = 100 * 1024 * 1024; // 100MB
+  private csrfClient: CSRFProtectedClient | null = null;
 
   private constructor() {}
 
@@ -73,6 +74,19 @@ class VaultService {
       VaultService.instance = new VaultService();
     }
     return VaultService.instance;
+  }
+
+  // Set the CSRF client (should be called when the app initializes)
+  setCSRFClient(client: CSRFProtectedClient) {
+    this.csrfClient = client;
+  }
+
+  // Get CSRF client with error if not set
+  private getCSRFClient(): CSRFProtectedClient {
+    if (!this.csrfClient) {
+      throw new Error('CSRF client not initialized. Please ensure CSRFProvider is set up.');
+    }
+    return this.csrfClient;
   }
 
   // File Operations
@@ -90,9 +104,8 @@ class VaultService {
     const uploadId = `upload-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     try {
-      // Get upload URL from backend
-      const getUploadUrl = httpsCallable(functions, 'getVaultUploadUrl');
-      const { data } = await getUploadUrl({
+      // Get upload URL from backend using CSRF-protected client
+      const { data } = await this.getCSRFClient().callFunction('getVaultUploadUrl', {
         fileName: file.name,
         fileType: file.type,
         fileSize: file.size,
@@ -140,8 +153,7 @@ class VaultService {
               const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
 
               // Create vault item in backend
-              const createVaultItem = httpsCallable(functions, 'createVaultItem');
-              const result = await createVaultItem({
+              const result = await this.getCSRFClient().callFunction('createVaultItem', {
                 fileId,
                 name: file.name,
                 mimeType: file.type,
@@ -207,8 +219,7 @@ class VaultService {
 
   async deleteFile(itemId: string, permanent = false): Promise<void> {
     try {
-      const deleteVaultItem = httpsCallable(functions, 'deleteVaultItem');
-      await deleteVaultItem({ itemId, permanent });
+      await this.getCSRFClient().callFunction('deleteVaultItem', { itemId, permanent });
       
       this.invalidateCache();
     } catch (error) {
@@ -222,8 +233,7 @@ class VaultService {
 
   async restoreFile(itemId: string): Promise<void> {
     try {
-      const restoreVaultItem = httpsCallable(functions, 'restoreVaultItem');
-      await restoreVaultItem({ itemId });
+      await this.getCSRFClient().callFunction('restoreVaultItem', { itemId });
       
       this.invalidateCache();
     } catch (error) {
@@ -239,8 +249,7 @@ class VaultService {
 
   async createFolder(name: string, parentId: string | null = null): Promise<VaultFolder> {
     try {
-      const createFolder = httpsCallable(functions, 'createVaultFolder');
-      const result = await createFolder({ name, parentId });
+      const result = await this.getCSRFClient().callFunction('createVaultFolder', { name, parentId });
       
       this.invalidateCache();
       const data = result.data as { folder: VaultFolder };
@@ -256,8 +265,7 @@ class VaultService {
 
   async moveItem(itemId: string, newParentId: string | null): Promise<void> {
     try {
-      const moveVaultItem = httpsCallable(functions, 'moveVaultItem');
-      await moveVaultItem({ itemId, newParentId });
+      await this.getCSRFClient().callFunction('moveVaultItem', { itemId, newParentId });
       
       this.invalidateCache();
     } catch (error) {
@@ -271,8 +279,7 @@ class VaultService {
 
   async renameItem(itemId: string, newName: string): Promise<void> {
     try {
-      const renameVaultItem = httpsCallable(functions, 'renameVaultItem');
-      await renameVaultItem({ itemId, newName });
+      await this.getCSRFClient().callFunction('renameVaultItem', { itemId, newName });
       
       this.invalidateCache();
     } catch (error) {
@@ -299,8 +306,7 @@ class VaultService {
       return await cacheService.getOrSet(
         cacheKey,
         async () => {
-          const getVaultItems = httpsCallable(functions, 'getVaultItems');
-          const result = await getVaultItems({ parentId, includeDeleted });
+          const result = await this.getCSRFClient().callFunction('getVaultItems', { parentId, includeDeleted });
           const data = result.data as { items: VaultItem[]; folders: VaultFolder[] };
           return data;
         },
@@ -323,8 +329,7 @@ class VaultService {
     tags?: string[];
   }): Promise<VaultItem[]> {
     try {
-      const searchVaultItems = httpsCallable(functions, 'searchVaultItems');
-      const result = await searchVaultItems({ query, filters });
+      const result = await this.getCSRFClient().callFunction('searchVaultItems', { query, filters });
       const data = result.data as { items?: VaultItem[] };
       return data.items || [];
     } catch (error) {
@@ -338,8 +343,7 @@ class VaultService {
 
   async getDeletedItems(): Promise<VaultItem[]> {
     try {
-      const getDeletedVaultItems = httpsCallable(functions, 'getDeletedVaultItems');
-      const result = await getDeletedVaultItems();
+      const result = await this.getCSRFClient().callFunction('getDeletedVaultItems', {});
       const data = result.data as { items?: VaultItem[] };
       return data.items || [];
     } catch (error) {
@@ -359,8 +363,7 @@ class VaultService {
     password?: string;
   }): Promise<{ shareLink: string; shareId: string }> {
     try {
-      const shareVaultItem = httpsCallable(functions, 'shareVaultItem');
-      const result = await shareVaultItem({
+      const result = await this.getCSRFClient().callFunction('shareVaultItem', {
         itemId,
         ...options,
         expiresAt: options.expiresAt?.toISOString()
@@ -379,8 +382,7 @@ class VaultService {
 
   async revokeShare(shareId: string): Promise<void> {
     try {
-      const revokeVaultShare = httpsCallable(functions, 'revokeVaultShare');
-      await revokeVaultShare({ shareId });
+      await this.getCSRFClient().callFunction('revokeVaultShare', { shareId });
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.LOW, {
         action: 'vault-revoke-share',
@@ -394,8 +396,7 @@ class VaultService {
 
   async getStorageInfo(): Promise<VaultStorageInfo> {
     try {
-      const getVaultStorageInfo = httpsCallable(functions, 'getVaultStorageInfo');
-      const result = await getVaultStorageInfo();
+      const result = await this.getCSRFClient().callFunction('getVaultStorageInfo', {});
       return result.data as VaultStorageInfo;
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.LOW, {
@@ -407,8 +408,7 @@ class VaultService {
 
   async cleanupDeletedItems(olderThanDays = 30): Promise<{ deletedCount: number }> {
     try {
-      const cleanupDeletedVaultItems = httpsCallable(functions, 'cleanupDeletedVaultItems');
-      const result = await cleanupDeletedVaultItems({ olderThanDays });
+      const result = await this.getCSRFClient().callFunction('cleanupDeletedVaultItems', { olderThanDays });
       
       this.invalidateCache();
       const data = result.data as { deletedCount: number };

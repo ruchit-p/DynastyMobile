@@ -67,7 +67,6 @@ export const registerBiometricCredential = onCall(
       const {
         credentialId,
         publicKey,
-        attestationObject,
         clientDataJSON,
         deviceInfo,
       } = validatedData;

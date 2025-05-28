@@ -7,10 +7,27 @@ import {logger} from "firebase-functions/v2";
 const db = getFirestore();
 
 /**
- * Sanitize input to prevent XSS
+ * Validate and sanitize cryptographic keys
  */
-function sanitizeInput(input: string): string {
-  return input.trim().replace(/<[^>]*>?/gm, "");
+function validateCryptoKey(input: string, keyType: string): string {
+  // Remove whitespace
+  const trimmed = input.trim();
+  
+  // Check if it's base64 encoded
+  const base64Regex = /^[A-Za-z0-9+/]+=*$/;
+  if (!base64Regex.test(trimmed)) {
+    throw new HttpsError("invalid-argument", `Invalid ${keyType} format - must be base64 encoded`);
+  }
+  
+  // Validate length (Signal keys should be specific sizes)
+  const minLength = 32; // Minimum for most crypto keys
+  const maxLength = 10000; // Maximum reasonable size
+  
+  if (trimmed.length < minLength || trimmed.length > maxLength) {
+    throw new HttpsError("invalid-argument", `Invalid ${keyType} length`);
+  }
+  
+  return trimmed;
 }
 
 /**
@@ -50,7 +67,7 @@ export const publishSignalKeys = onCall(async (request) => {
     const identityRef = db.collection("signalKeys").doc(userId);
     batch.set(identityRef, {
       userId,
-      identityKey: sanitizeInput(identityKey),
+      identityKey: validateCryptoKey(identityKey, "identity key"),
       registrationId,
       lastUpdated: FieldValue.serverTimestamp(),
     }, {merge: true});
@@ -61,8 +78,8 @@ export const publishSignalKeys = onCall(async (request) => {
       deviceId,
       signedPreKey: {
         keyId: signedPreKey.id,
-        publicKey: sanitizeInput(signedPreKey.publicKey),
-        signature: sanitizeInput(signedPreKey.signature),
+        publicKey: validateCryptoKey(signedPreKey.publicKey, "signed prekey"),
+        signature: validateCryptoKey(signedPreKey.signature, "signature"),
         timestamp: signedPreKey.timestamp,
       },
       lastUpdated: FieldValue.serverTimestamp(),
@@ -80,7 +97,7 @@ export const publishSignalKeys = onCall(async (request) => {
         userId,
         deviceId,
         keyId: preKey.id,
-        publicKey: sanitizeInput(preKey.publicKey),
+        publicKey: validateCryptoKey(preKey.publicKey, "prekey"),
         createdAt: FieldValue.serverTimestamp(),
       });
     }
@@ -103,12 +120,38 @@ export const publishSignalKeys = onCall(async (request) => {
  */
 export const getUserSignalBundle = onCall(async (request) => {
   try {
-    validateAuth(request);
+    const requesterId = validateAuth(request);
 
     const {userId, deviceId = 1} = request.data;
 
     if (!userId) {
       throw new HttpsError("invalid-argument", "User ID is required");
+    }
+
+    // Rate limit prekey requests (max 10 per hour per requester)
+    const rateLimitRef = db.collection("rateLimits")
+      .doc(`prekey_${requesterId}_${userId}`);
+    
+    const now = Date.now();
+    const hourAgo = now - (60 * 60 * 1000);
+    
+    const rateLimitDoc = await rateLimitRef.get();
+    if (rateLimitDoc.exists) {
+      const data = rateLimitDoc.data()!;
+      const requests = data.requests || [];
+      const recentRequests = requests.filter((timestamp: number) => timestamp > hourAgo);
+      
+      if (recentRequests.length >= 10) {
+        throw new HttpsError("resource-exhausted", "Too many prekey requests. Please try again later.");
+      }
+      
+      await rateLimitRef.update({
+        requests: [...recentRequests, now]
+      });
+    } else {
+      await rateLimitRef.set({
+        requests: [now]
+      });
     }
 
     // Get identity key
@@ -150,6 +193,30 @@ export const getUserSignalBundle = onCall(async (request) => {
 
       // Delete the used prekey
       await preKeyDoc.ref.delete();
+      
+      // Check remaining prekey count and notify if low
+      const remainingPrekeys = await db
+        .collection("users")
+        .doc(userId)
+        .collection("prekeys")
+        .where("deviceId", "==", deviceId)
+        .count()
+        .get();
+      
+      const prekeyCount = remainingPrekeys.data().count;
+      if (prekeyCount < 10) {
+        // Create notification for user to upload more prekeys
+        await db.collection("notifications").add({
+          userId,
+          type: "low_prekeys",
+          deviceId,
+          prekeyCount,
+          createdAt: FieldValue.serverTimestamp(),
+          read: false
+        });
+        
+        logger.warn(`User ${userId} device ${deviceId} has only ${prekeyCount} prekeys remaining`);
+      }
     }
 
     return {
@@ -191,8 +258,8 @@ export const publishSignedPreKey = onCall(async (request) => {
     await deviceRef.update({
       signedPreKey: {
         keyId: signedPreKey.id,
-        publicKey: sanitizeInput(signedPreKey.publicKey),
-        signature: sanitizeInput(signedPreKey.signature),
+        publicKey: validateCryptoKey(signedPreKey.publicKey, "signed prekey"),
+        signature: validateCryptoKey(signedPreKey.signature, "signature"),
         timestamp: signedPreKey.timestamp,
       },
       lastUpdated: FieldValue.serverTimestamp(),
@@ -235,7 +302,7 @@ export const publishPreKeys = onCall(async (request) => {
         userId,
         deviceId,
         keyId: preKey.id,
-        publicKey: sanitizeInput(preKey.publicKey),
+        publicKey: validateCryptoKey(preKey.publicKey, "prekey"),
         createdAt: FieldValue.serverTimestamp(),
       });
     }
@@ -392,7 +459,7 @@ export const notifyKeyChange = onDocumentUpdated("signalKeys/{userId}", async (e
       });
     });
 
-    // Create key change notifications
+    // Create key change notifications and invalidate sessions
     const batch = db.batch();
     const notificationId = `keychange_${userId}_${Date.now()}`;
 
@@ -409,6 +476,34 @@ export const notifyKeyChange = onDocumentUpdated("signalKeys/{userId}", async (e
       notification
     );
 
+    // Invalidate all active sessions with this user
+    for (const affectedUserId of affectedUserIds) {
+      // Mark any existing trusted identities as untrusted
+      const trustedIdentityRef = db
+        .collection("users")
+        .doc(affectedUserId)
+        .collection("trustedIdentities")
+        .doc(userId);
+      
+      batch.update(trustedIdentityRef, {
+        trusted: false,
+        untrustedAt: FieldValue.serverTimestamp(),
+        reason: "key_changed"
+      });
+
+      // Create a notification for each affected user
+      const userNotificationRef = db.collection("notifications").doc();
+      batch.set(userNotificationRef, {
+        userId: affectedUserId,
+        type: "identity_key_changed",
+        affectedUserId: userId,
+        message: `Security alert: ${userId}'s encryption keys have changed. Please verify their identity before continuing.`,
+        createdAt: FieldValue.serverTimestamp(),
+        read: false,
+        priority: "high"
+      });
+    }
+
     await batch.commit();
 
     logger.info(`Created key change notification for ${affectedUserIds.size} users`);
@@ -418,7 +513,7 @@ export const notifyKeyChange = onDocumentUpdated("signalKeys/{userId}", async (e
 /**
  * Clean up old prekeys (scheduled function)
  */
-export const cleanupOldPreKeys = onSchedule("every 24 hours", async (event) => {
+export const cleanupOldPreKeys = onSchedule("every 24 hours", async (_event) => {
   try {
     // Get all users
     const usersSnapshot = await db.collection("users").get();
@@ -428,20 +523,58 @@ export const cleanupOldPreKeys = onSchedule("every 24 hours", async (event) => {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     for (const userDoc of usersSnapshot.docs) {
-      // Get old prekeys
-      const oldPrekeysSnapshot = await userDoc.ref
+      const userId = userDoc.id;
+      
+      // Get all prekeys grouped by device
+      const allPrekeysSnapshot = await userDoc.ref
         .collection("prekeys")
-        .where("createdAt", "<", thirtyDaysAgo)
+        .orderBy("createdAt", "asc")
         .get();
 
-      if (!oldPrekeysSnapshot.empty) {
-        const batch = db.batch();
-        oldPrekeysSnapshot.forEach((doc) => {
-          batch.delete(doc.ref);
-        });
-        await batch.commit();
+      if (allPrekeysSnapshot.empty) continue;
 
-        totalDeleted += oldPrekeysSnapshot.size;
+      // Group prekeys by device
+      const prekeysByDevice = new Map<number, any[]>();
+      allPrekeysSnapshot.forEach((doc) => {
+        const data = doc.data();
+        const deviceId = data.deviceId || 1;
+        if (!prekeysByDevice.has(deviceId)) {
+          prekeysByDevice.set(deviceId, []);
+        }
+        prekeysByDevice.get(deviceId)!.push({doc, data});
+      });
+
+      // Process each device
+      for (const [deviceId, prekeys] of prekeysByDevice) {
+        // Keep at least 20 prekeys per device
+        const minPrekeys = 20;
+        
+        if (prekeys.length <= minPrekeys) {
+          // Not enough prekeys, notify user
+          await db.collection("notifications").add({
+            userId,
+            type: "low_prekeys",
+            deviceId,
+            prekeyCount: prekeys.length,
+            createdAt: FieldValue.serverTimestamp(),
+            read: false
+          });
+          continue;
+        }
+
+        // Find old prekeys to delete (keep newest minPrekeys)
+        const oldPrekeys = prekeys
+          .filter(pk => pk.data.createdAt.toDate() < thirtyDaysAgo)
+          .slice(0, prekeys.length - minPrekeys);
+
+        if (oldPrekeys.length > 0) {
+          const batch = db.batch();
+          oldPrekeys.forEach(({doc}) => {
+            batch.delete(doc.ref);
+          });
+          await batch.commit();
+          totalDeleted += oldPrekeys.length;
+        }
       }
     }
 
