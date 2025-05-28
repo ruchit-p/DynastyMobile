@@ -276,6 +276,3 @@ export const validateCSRFToken = onCall(
     };
   })
 );
-
-// Import crypto for session ID generation
-import * as crypto from "crypto";
