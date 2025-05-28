@@ -12,7 +12,8 @@ import {SENDGRID_CONFIG, FRONTEND_URL} from "../config/secrets";
 import {generateSecureToken, hashToken} from "../utils/tokens";
 import {validateRequest} from "../../utils/request-validator";
 import {VALIDATION_SCHEMAS} from "../../config/validation-schemas";
-import {checkRateLimitByIP, RateLimitType} from "../../middleware/auth";
+import {checkRateLimitByIP, RateLimitType, withAuth} from "../../middleware/auth";
+import {SECURITY_CONFIG} from "../../config/security-config";
 
 /**
  * Handles the signup process, which now only:
@@ -25,13 +26,9 @@ export const handleSignUp = onCall({
   memory: "512MiB",
   timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   secrets: [SENDGRID_CONFIG, FRONTEND_URL],
-}, async (request) => {
-  // Apply rate limiting for signup attempts
-  await checkRateLimitByIP(request, {
-    type: RateLimitType.AUTH,
-    maxRequests: 5, // Max 5 signup attempts per IP
-    windowSeconds: 900, // 15 minutes
-  });
+}, withAuth(
+  async (request) => {
+    // Note: IP rate limiting is now handled in withAuth
 
   // Validate and sanitize input using centralized validator
   const validatedData = validateRequest(
@@ -171,7 +168,14 @@ export const handleSignUp = onCall({
     const message = error?.message || "Failed to complete signup process";
     throw new HttpsError("internal", message, error);
   }
-});
+},
+  "handleSignUp",
+  {
+    authLevel: "none", // No auth required for signup
+    enableCSRF: true, // Enable CSRF protection
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.auth
+  }
+));
 
 /**
  * Handles the onboarding process, which:

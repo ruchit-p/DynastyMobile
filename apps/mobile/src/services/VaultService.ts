@@ -1768,6 +1768,72 @@ export class VaultService {
     return { success, failed, paths };
   }
 
+  // Resume interrupted upload
+  async resumeUpload(uploadInfo: {
+    uploadUrl: string;
+    startByte: number;
+    fileUri: string;
+    totalSize: number;
+  }): Promise<{ url: string }> {
+    try {
+      logger.info('[VaultService] Resuming upload from byte:', uploadInfo.startByte);
+      
+      // Read the remaining part of the file
+      const fileInfo = await FileSystem.getInfoAsync(uploadInfo.fileUri);
+      if (!fileInfo.exists) {
+        throw new AppError(
+          ErrorCode.NOT_FOUND,
+          'File no longer exists'
+        );
+      }
+      
+      // For large files, use streaming
+      if (uploadInfo.totalSize > STREAMING_THRESHOLD) {
+        const streamService = VaultStreamService.getInstance();
+        
+        // Resume streaming upload
+        const result = await streamService.resumeStreamingUpload(
+          uploadInfo.fileUri,
+          uploadInfo.uploadUrl,
+          uploadInfo.startByte,
+          uploadInfo.totalSize,
+          (progress) => {
+            logger.debug('[VaultService] Resume upload progress:', progress);
+          }
+        );
+        
+        return { url: result.url };
+      } else {
+        // For smaller files, read and upload the remaining part
+        const base64Content = await FileSystem.readAsStringAsync(uploadInfo.fileUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        
+        // Calculate the remaining content
+        const totalBytes = Math.ceil((base64Content.length * 3) / 4);
+        const remainingBytes = totalBytes - uploadInfo.startByte;
+        
+        if (remainingBytes <= 0) {
+          // Upload already complete
+          return { url: uploadInfo.uploadUrl };
+        }
+        
+        // Resume upload via Firebase function
+        const result = await callFirebaseFunction('vault-resumeUpload', {
+          uploadUrl: uploadInfo.uploadUrl,
+          startByte: uploadInfo.startByte,
+          data: base64Content,
+          totalSize: uploadInfo.totalSize,
+        });
+        
+        return { url: result.downloadUrl };
+      }
+    } catch (error) {
+      logger.error('[VaultService] Resume upload failed:', error);
+      throw normalizeError(error);
+    }
+  }
+
   // Cleanup method
   async cleanup(): Promise<void> {
     this.uploadQueue.clear();

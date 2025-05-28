@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Shield, BarChart3, Wrench, Cookie as CookieIcon, Check, X } from 'lucide-react';
+import { Shield, BarChart3, Wrench, Cookie as CookieIcon, Check } from 'lucide-react';
 import { useCookieConsent } from '@/context/CookieConsentContext';
 
 export default function CookieSettings() {

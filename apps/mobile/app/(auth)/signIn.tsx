@@ -29,6 +29,9 @@ import { Colors } from '../../constants/Colors';
 import { Typography } from '../../constants/Typography';
 import { Spacing, BorderRadius } from '../../constants/Spacing';
 
+// Import feature flags
+import { useFeatureFlags, useFeatureEnabled } from '../../hooks/useFeatureFlags';
+
 const dynastyLogo = require('../../assets/images/dynasty.png');
 
 export default function SignInScreen() {
@@ -40,6 +43,19 @@ export default function SignInScreen() {
     trackCurrentScreen: true
   });
   
+  // Feature flags for authentication methods
+  const { getFlag, isLoading: flagsLoading } = useFeatureFlags([
+    'ENABLE_GOOGLE_SIGNIN',
+    'ENABLE_APPLE_SIGNIN',
+    'ENABLE_PHONE_AUTH',
+    'ENABLE_BIOMETRIC_AUTH',
+  ]);
+  
+  const googleSignInEnabled = useFeatureEnabled('ENABLE_GOOGLE_SIGNIN');
+  const appleSignInEnabled = useFeatureEnabled('ENABLE_APPLE_SIGNIN');
+  const phoneAuthEnabled = useFeatureEnabled('ENABLE_PHONE_AUTH');
+  const biometricAuthEnabled = useFeatureEnabled('ENABLE_BIOMETRIC_AUTH');
+  
   // Use sanitized input hooks
   const emailInput = useSanitizedInput('', 'email');
   const passwordInput = useSanitizedInput('', 'password');
@@ -49,6 +65,13 @@ export default function SignInScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const insets = useSafeAreaInsets();
   const isAppleSignInAvailable = useAppleSignInAvailable();
+
+  // Calculate available auth methods
+  const availableAuthMethods = [
+    googleSignInEnabled && 'google',
+    appleSignInEnabled && isAppleSignInAvailable && 'apple',
+    phoneAuthEnabled && 'phone',
+  ].filter(Boolean);
 
   useEffect(() => {
     if (!isError) {
@@ -61,7 +84,7 @@ export default function SignInScreen() {
     const xssErrors = [
       emailInput.xssDetected && 'Email contains potentially harmful content',
       passwordInput.xssDetected && 'Password contains potentially harmful content'
-    ].filter(Boolean);
+    ].filter((error): error is string => Boolean(error));
     
     if (xssErrors.length > 0) {
       setError(xssErrors[0]);
@@ -106,6 +129,11 @@ export default function SignInScreen() {
   });
 
   const handleGoogleSignIn = async () => {
+    if (!googleSignInEnabled) {
+      setError('Google Sign-In is currently unavailable');
+      return;
+    }
+
     reset();
     setError(null);
     setGoogleLoading(true);
@@ -132,6 +160,11 @@ export default function SignInScreen() {
   };
 
   const handleAppleSignIn = async () => {
+    if (!appleSignInEnabled) {
+      setError('Apple Sign-In is currently unavailable');
+      return;
+    }
+
     reset();
     setError(null);
     try {
@@ -150,7 +183,11 @@ export default function SignInScreen() {
   };
 
   const handlePhoneSignIn = () => {
-    router.push('/(auth)/phoneSignIn'); // Example, create this screen later
+    if (!phoneAuthEnabled) {
+      setError('Phone authentication is currently unavailable');
+      return;
+    }
+    router.push('/(auth)/phoneSignIn');
   };
 
   const handleBack = () => {
@@ -160,6 +197,18 @@ export default function SignInScreen() {
       router.replace('/'); // Fallback to landing page
     }
   };
+
+  // Show loading if feature flags are still loading
+  if (flagsLoading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={[styles.container, styles.loadingContainer]}>
+          <ActivityIndicator size="large" color={Colors.dynastyGreen} />
+          <Text style={styles.loadingText}>Loading sign-in options...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <ErrorBoundary screenName="SignInScreen">
@@ -221,49 +270,64 @@ export default function SignInScreen() {
             )}
           </TouchableOpacity>
 
-          <Text style={styles.orText}>OR</Text>
+          {/* Show alternative auth methods only if any are available */}
+          {availableAuthMethods.length > 0 && (
+            <>
+              <Text style={styles.orText}>OR</Text>
 
-          <TouchableOpacity 
-            style={[styles.socialButton, styles.googleButton, googleLoading && styles.buttonDisabled]} 
-            onPress={handleGoogleSignIn}
-            disabled={isLoading || googleLoading} // Disable if main loading or google loading
-          >
-            {googleLoading ? (
-              <ActivityIndicator size="small" color="#DB4437" />
-            ) : (
-              <>
-                <Ionicons name="logo-google" size={20} color="#DB4437" style={styles.socialIcon} />
-                <Text style={[styles.socialButtonText, styles.googleButtonText]}>Sign In with Google</Text>
-              </>
-            )}
-          </TouchableOpacity>
+              {googleSignInEnabled && (
+                <TouchableOpacity 
+                  style={[styles.socialButton, styles.googleButton, googleLoading && styles.buttonDisabled]} 
+                  onPress={handleGoogleSignIn}
+                  disabled={isLoading || googleLoading} // Disable if main loading or google loading
+                >
+                  {googleLoading ? (
+                    <ActivityIndicator size="small" color="#DB4437" />
+                  ) : (
+                    <>
+                      <Ionicons name="logo-google" size={20} color="#DB4437" style={styles.socialIcon} />
+                      <Text style={[styles.socialButtonText, styles.googleButtonText]}>Sign In with Google</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
 
-          {isAppleSignInAvailable && (
-            <AppleSignInButton 
-              style={styles.appleButton}
-              onPress={handleAppleSignIn}
-              disabled={isLoading}
-            />
+              {appleSignInEnabled && isAppleSignInAvailable && (
+                <AppleSignInButton 
+                  style={styles.appleButton}
+                  onPress={handleAppleSignIn}
+                  disabled={isLoading}
+                />
+              )}
+
+              {phoneAuthEnabled && (
+                <TouchableOpacity style={[styles.socialButton, styles.phoneButton]} onPress={handlePhoneSignIn}>
+                  <Ionicons name="call-outline" size={20} color="#1A4B44" style={styles.socialIcon} />
+                  <Text style={[styles.socialButtonText, styles.phoneButtonText]}>Sign In with Phone</Text>
+                </TouchableOpacity>
+              )}
+            </>
           )}
 
-          <TouchableOpacity style={[styles.socialButton, styles.phoneButton]} onPress={handlePhoneSignIn}>
-            <Ionicons name="call-outline" size={20} color="#1A4B44" style={styles.socialIcon} />
-            <Text style={[styles.socialButtonText, styles.phoneButtonText]}>Sign In with Phone</Text>
-          </TouchableOpacity>
+          {/* Feature flag debug info in development */}
+          {__DEV__ && (
+            <View style={styles.debugInfo}>
+              <Text style={styles.debugTitle}>Available Auth Methods:</Text>
+              <Text style={styles.debugText}>Google: {googleSignInEnabled ? '✅' : '❌'}</Text>
+              <Text style={styles.debugText}>Apple: {appleSignInEnabled && isAppleSignInAvailable ? '✅' : '❌'}</Text>
+              <Text style={styles.debugText}>Phone: {phoneAuthEnabled ? '✅' : '❌'}</Text>
+              <Text style={styles.debugText}>Biometric: {biometricAuthEnabled ? '✅' : '❌'}</Text>
+            </View>
+          )}
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Don&apos;t have an account? </Text>
+            <Text style={styles.footerText}>Don't have an account? </Text>
             <Link href="/(auth)/signUp" asChild>
               <TouchableOpacity>
                 <Text style={styles.linkText}>Sign Up</Text>
               </TouchableOpacity>
             </Link>
           </View>
-
-          <TouchableOpacity onPress={() => router.push('/(auth)/forgotPassword')} style={styles.movedForgotPasswordButton}>
-            <Text style={styles.linkText}>Forgot Password?</Text>
-          </TouchableOpacity>
-
         </View>
       </SafeAreaView>
     </ErrorBoundary>
@@ -280,6 +344,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg + Spacing.xs,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    ...Typography.styles.bodyMedium,
+    color: Colors.light.text.secondary,
+    marginTop: Spacing.md,
+    textAlign: 'center',
   },
   logo: {
     width: 120, 
@@ -350,7 +424,10 @@ const styles = StyleSheet.create({
     borderColor: '#DB4437', // Keep Google's brand color
   },
   googleButtonText: {
-    color: '#DB4437', // Keep Google's brand color
+    color: '#DB4437',
+  },
+  appleButton: {
+    marginBottom: Spacing.md,
   },
   phoneButton: {
     backgroundColor: Colors.light.background.primary,
@@ -359,38 +436,54 @@ const styles = StyleSheet.create({
   phoneButtonText: {
     color: Colors.dynastyGreen,
   },
-  appleButton: {
-    width: '100%',
-    marginBottom: Spacing.md,
-  },
-  footer: {
-    flexDirection: 'row',
-    marginTop: Spacing['2xl'],
-  },
-  footerText: {
-    ...Typography.styles.bodySmall,
-    color: Colors.light.text.tertiary,
-  },
-  linkText: {
-    ...Typography.styles.bodySmall,
-    color: Colors.dynastyGreen,
-    fontWeight: Typography.weight.bold,
-  },
   errorText: {
     color: Colors.light.text.error,
-    marginBottom: Spacing.sm,
+    ...Typography.styles.bodySmall,
     textAlign: 'center',
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   buttonDisabled: {
-    backgroundColor: Colors.light.border.secondary,
+    opacity: 0.6,
   },
   backButton: {
     position: 'absolute',
-    left: Spacing.md,
-    padding: Spacing.sm,
-    zIndex: 10,
+    left: 20,
+    padding: 10,
+    zIndex: 1,
   },
-  movedForgotPasswordButton: {
-    marginTop: Spacing.md,
+  footer: {
+    flexDirection: 'row',
+    marginTop: Spacing.lg,
+  },
+  footerText: {
+    ...Typography.styles.bodyMedium,
+    color: Colors.light.text.tertiary,
+  },
+  linkText: {
+    ...Typography.styles.bodyMedium,
+    color: Colors.dynastyGreen,
+    fontWeight: Typography.weight.semiBold,
+  },
+  // Debug styles (only shown in development)
+  debugInfo: {
+    marginTop: Spacing.xl,
+    padding: Spacing.md,
+    backgroundColor: Colors.light.background.secondary,
+    borderRadius: BorderRadius.sm,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: Colors.light.text.warning,
+  },
+  debugTitle: {
+    ...Typography.styles.bodyMedium,
+    fontWeight: Typography.weight.semiBold,
+    color: Colors.light.text.warning,
+    marginBottom: Spacing.xs,
+  },
+  debugText: {
+    ...Typography.styles.bodySmall,
+    color: Colors.light.text.secondary,
+    marginBottom: Spacing.xs,
   },
 }); 

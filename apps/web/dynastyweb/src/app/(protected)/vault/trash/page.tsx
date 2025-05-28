@@ -36,10 +36,6 @@ export default function VaultTrashPage() {
   const [showEmptyDialog, setShowEmptyDialog] = useState(false);
   const [processingAction, setProcessingAction] = useState(false);
 
-  useEffect(() => {
-    loadDeletedItems();
-  }, [loadDeletedItems]);
-
   const loadDeletedItems = useCallback(async () => {
     setLoading(true);
     try {
@@ -56,6 +52,10 @@ export default function VaultTrashPage() {
       setLoading(false);
     }
   }, [toast]);
+
+  useEffect(() => {
+    loadDeletedItems();
+  }, [loadDeletedItems]);
 
   const handleRestore = async (item: VaultItem) => {
     setProcessingAction(true);

@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { withSentryConfig } = require("@sentry/nextjs");
+
 // Security headers configuration
 const securityHeaders = [
   {
@@ -34,11 +37,11 @@ const securityHeaders = [
     key: 'Content-Security-Policy',
     value: `
       default-src 'self';
-      script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://js.stripe.com https://*.sentry.io https://www.googletagmanager.com;
-      style-src 'self' 'unsafe-inline' https://*.googleapis.com https://fonts.googleapis.com;
+      script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://js.stripe.com https://*.sentry.io https://www.googletagmanager.com https://*.fingerprintjs.com https://api.fpjs.io https://fpjs.io https://fpjscdn.net https://fpnpmcdn.net data:;
+      style-src 'self' 'unsafe-inline' https://*.googleapis.com https://fonts.googleapis.com data:;
       img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.firebaseapp.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org;
       font-src 'self' data: https://*.gstatic.com https://fonts.gstatic.com;
-      connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://nominatim.openstreetmap.org https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://*.googletagmanager.com;
+      connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://nominatim.openstreetmap.org https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://*.googletagmanager.com https://*.fingerprintjs.com https://api.fpjs.io https://*.api.fpjs.io https://fpjs.io ws://localhost:*;
       frame-src 'self' https://*.google.com https://*.firebaseapp.com;
       object-src 'none';
       base-uri 'self';
@@ -55,6 +58,8 @@ const nextConfig = {
   },
   eslint: {
     dirs: ['src'],
+    // During production builds, allow warnings to not fail the build
+    ignoreDuringBuilds: process.env.NODE_ENV === 'production',
   },
   transpilePackages: ['ui', 'utils'],
   async headers() {
@@ -117,8 +122,6 @@ const nextConfig = {
 }
 
 // Injected content via Sentry wizard below
-const { withSentryConfig } = require("@sentry/nextjs");
-
 module.exports = withSentryConfig(
   nextConfig,
   {

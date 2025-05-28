@@ -283,8 +283,11 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 // Mock NetInfo
 jest.mock('@react-native-community/netinfo', () => ({
   default: {
-    addEventListener: jest.fn(),
+    addEventListener: jest.fn(() => jest.fn()), // Return unsubscribe function
     fetch: jest.fn(() => Promise.resolve({ isConnected: true })),
+    configure: jest.fn(),
+    refresh: jest.fn(() => Promise.resolve()),
+    useNetInfo: jest.fn(() => ({ isConnected: true, type: 'wifi' })),
   },
 }));
 

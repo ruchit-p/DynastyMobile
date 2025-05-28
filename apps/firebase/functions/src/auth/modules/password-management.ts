@@ -9,6 +9,7 @@ import {SENDGRID_CONFIG} from "../config/secrets";
 import {sanitizeUserId, sanitizeEmail, createLogContext} from "../../utils/sanitization";
 import {validateRequest} from "../../utils/request-validator";
 import {VALIDATION_SCHEMAS} from "../../config/validation-schemas";
+import {SECURITY_CONFIG} from "../../config/security-config";
 
 /**
  * Updates user password
@@ -51,7 +52,11 @@ export const updateUserPassword = onCall(
       }
     },
     "updateUserPassword",
-    "auth"
+    {
+      authLevel: "auth",
+      enableCSRF: true,
+      rateLimitConfig: SECURITY_CONFIG.rateLimits.passwordReset
+    }
   )
 );
 
@@ -65,7 +70,8 @@ export const initiatePasswordReset = onCall({
   memory: "512MiB",
   timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   secrets: [SENDGRID_CONFIG],
-}, async (request) => {
+}, withAuth(
+  async (request) => {
   // Validate and sanitize input using centralized validator
   const validatedData = validateRequest(
     request.data,
@@ -109,5 +115,12 @@ export const initiatePasswordReset = onCall({
     }));
     throw new Error(error instanceof Error ? error.message : "Failed to initiate password reset");
   }
-});
+},
+  "initiatePasswordReset",
+  {
+    authLevel: "none", // No auth required for password reset
+    enableCSRF: true,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.passwordReset
+  }
+));
 

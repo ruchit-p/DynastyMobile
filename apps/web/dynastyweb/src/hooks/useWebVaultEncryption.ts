@@ -2,7 +2,7 @@
 // Provides React integration for vault encryption operations
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { WebVaultCryptoService } from '../services/encryption/VaultCryptoService';
+import { WebVaultCryptoService, EncryptedFileMetadata } from '../services/encryption/VaultCryptoService';
 import { WebVaultKeyManager } from '../services/encryption/WebVaultKeyManager';
 import { errorHandler, ErrorSeverity } from '../services/ErrorHandlingService';
 
@@ -27,7 +27,7 @@ export interface EncryptionProgress {
 export interface WebVaultEncryptionResult {
   success: boolean;
   encryptedFile?: Uint8Array;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   header?: Uint8Array;
   error?: string;
 }
@@ -122,7 +122,7 @@ export function useWebVaultEncryption(userId: string) {
       const masterKey = await cryptoService.current.deriveVaultMasterKey(password, salt);
 
       // Store master key
-      const keyInfo = await keyManager.current.storeVaultMasterKey(
+      await keyManager.current.storeVaultMasterKey(
         userId,
         masterKey,
         password,
@@ -285,7 +285,7 @@ export function useWebVaultEncryption(userId: string) {
       return {
         success: true,
         encryptedFile: result.encryptedFile,
-        metadata: result.metadata,
+        metadata: result.metadata as unknown as Record<string, unknown>,
         header: result.header
       };
     } catch (error) {
@@ -309,7 +309,7 @@ export function useWebVaultEncryption(userId: string) {
   const decryptFile = useCallback(async (
     encryptedFile: Uint8Array,
     header: Uint8Array,
-    metadata: any,
+    metadata: Record<string, unknown>,
     fileId: string
   ): Promise<WebVaultEncryptionResult> => {
     if (!currentMasterKey.current) {
@@ -320,7 +320,7 @@ export function useWebVaultEncryption(userId: string) {
       setProgress({
         progress: 0,
         status: 'decrypting',
-        currentFile: metadata.originalName
+        currentFile: metadata.originalName as string
       });
 
       // Derive file-specific key
@@ -336,13 +336,13 @@ export function useWebVaultEncryption(userId: string) {
         encryptedFile,
         header,
         fileKey,
-        metadata
+        metadata as unknown as EncryptedFileMetadata
       );
 
       setProgress({
         progress: 100,
         status: 'complete',
-        currentFile: metadata.originalName
+        currentFile: metadata.originalName as string
       });
 
       // Clear file key from memory
@@ -356,7 +356,7 @@ export function useWebVaultEncryption(userId: string) {
       setProgress({
         progress: 0,
         status: 'error',
-        currentFile: metadata.originalName
+        currentFile: metadata.originalName as string
       });
 
       errorHandler.handleError(error, ErrorSeverity.HIGH, {
@@ -449,7 +449,7 @@ export function useWebVaultEncryption(userId: string) {
         isUnlocked: state.isUnlocked,
         biometricEnabled: config?.biometricEnabled || false
       };
-    } catch (error) {
+    } catch {
       return {
         hasVault: false,
         isUnlocked: false,
