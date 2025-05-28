@@ -21,10 +21,15 @@ module.exports = {
   ignorePatterns: [
     "/lib/**/*", // Ignore built files.
     "/generated/**/*", // Ignore generated files.
+    "/coverage/**/*", // Ignore coverage reports
+    "/test/**/*", // Ignore test directory
+    "/src/**/*.test.ts", // Ignore test files
+    "/src/**/*.test.js", // Ignore test files
+    "/src/__tests__/**/*", // Ignore test directories
+    "/scripts/**/*", // Ignore scripts
     "jest.config.js",
     "jest.setup.js",
     ".eslintrc.js",
-    "/scripts/**/*.js",
   ],
   plugins: [
     "@typescript-eslint",
@@ -38,6 +43,10 @@ module.exports = {
     "valid-jsdoc": "off",
     "require-jsdoc": "off",
     "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-unused-vars": ["error", {
+      "argsIgnorePattern": "^_",
+      "varsIgnorePattern": "^_"
+    }],
     "object-curly-spacing": ["error", "never"],
     "comma-dangle": ["error", "always-multiline"],
   },

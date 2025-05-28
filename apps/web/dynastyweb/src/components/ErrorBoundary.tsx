@@ -8,6 +8,7 @@ import { AlertCircle } from 'lucide-react';
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
+  screenName?: string;
 }
 
 interface State {
@@ -27,6 +28,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error:', error, errorInfo);
+    
+    // Send to analytics or error tracking service if needed
+    if (typeof window !== 'undefined' && window.Sentry) {
+      window.Sentry.captureException(error);
+    }
   }
 
   private handleReset = () => {
@@ -76,3 +82,14 @@ export class ErrorBoundary extends Component<Props, State> {
     return this.props.children;
   }
 }
+
+// Add this type declaration to fix the Sentry error
+declare global {
+  interface Window {
+    Sentry?: {
+      captureException: (error: Error) => void;
+    };
+  }
+}
+
+export default ErrorBoundary;
