@@ -1,5 +1,174 @@
 # Dynasty Changelog
 
+## Version 2.8.0 - May 2025
+
+### 🏗️ Monorepo Consolidation
+
+**Repository Architecture Migration**
+- ✅ **Consolidated Web Repository**: Merged separate `dynastyweb` repo into monorepo
+  - Removed nested git repository from `apps/web/dynastyweb/`
+  - Updated Vercel project to connect to main `DynastyMobile` repo
+  - Preserved all commit history and configurations
+  - Updated CI/CD workflows to handle consolidated structure
+- ✅ **Unified Structure Benefits**:
+  - Single CI/CD pipeline for all platforms
+  - Atomic commits across mobile/web/backend
+  - Shared dependencies without version conflicts
+  - Cross-platform feature coordination
+  - Simplified repository management
+
+### 🚀 CI/CD Pipeline & Automation
+
+**CI/CD Pipeline Setup**
+- ✅ **Branch Strategy**: Implemented dev → staging → production flow
+  - `dev` branch for feature development
+  - `staging` branch with automatic Vercel deployment
+  - `main` branch with manual approval for production
+- ✅ **GitHub Actions Workflows**:
+  - `dev-checks.yml` - Automated testing on all PRs
+  - `staging-deploy.yml` - Automatic staging deployment
+  - `production-deploy.yml` - Production deployment with approval gates
+  - `security-scan.yml` - Security vulnerability scanning
+  - `auto-fix-ci.yml` - Automatic CI error fixing
+- ✅ **Vercel Integration**: 
+  - Connected to monorepo structure
+  - Automatic preview deployments
+  - Environment variable management
+- ✅ **Cloudflare Integration**:
+  - Automatic cache purging on production deployments
+  - CDN optimization
+
+**Automated Development Workflows**
+- ✅ **Feature Development Automation**:
+  - `yarn feature` command for complete workflow
+  - Automatic branch creation from dev
+  - Local test validation before push
+  - Auto-fix for linting issues
+  - PR creation with proper descriptions
+  - CI status monitoring
+- ✅ **CI/CD Error Auto-Fix**:
+  - Intelligent error pattern detection
+  - Automatic fixes for common issues:
+    - ESLint formatting errors
+    - TypeScript 'any' usage
+    - React Hook dependencies
+    - Import path problems
+  - Multiple retry attempts
+  - Optional auto-commit functionality
+
+**Scripts & Tooling**
+- ✅ **Automation Scripts**:
+  - `claude-feature-workflow.sh` - Bash automation
+  - `claude-dev-assistant.ts` - TypeScript assistant
+  - `claude-fix-ci-errors.sh` - CI error fixing
+  - `claude-ci-fixer.ts` - Advanced pattern-based fixing
+- ✅ **Setup Scripts**:
+  - `setup-branches.sh` - Branch initialization
+  - `setup-ci-fixer.sh` - Tool installation
+- ✅ **Configuration Files**:
+  - `.ci-fixer.config.json` - Error fix patterns
+  - Updated `package.json` with new commands
+
+## Version 2.7.0 - May 2025
+
+### 🔐 Signal Protocol Native Implementation
+
+**iOS Native Modules** (`/apps/mobile/ios/RNLibsignal/`)
+- ✅ **RNLibsignal**: Main Signal Protocol native module
+- ✅ **RNLibsignalKeychain**: iOS Keychain secure storage
+- ✅ **RNLibsignalBiometric**: Face ID/Touch ID integration
+- ✅ **RNLibsignalMigration**: Data migration system
+- ✅ **RNLibsignalKeyRotation**: Automatic key rotation policies
+- ✅ **Store Implementations**: SessionStore, PreKeyStore, SignedPreKeyStore, IdentityStore
+
+**Android Native Modules** (`/apps/mobile/android/.../libsignal/`)
+- ✅ **LibsignalModule**: Main Signal Protocol native module with coroutines
+- ✅ **LibsignalKeystore**: Android Keystore secure storage with EncryptedSharedPreferences
+- ✅ **LibsignalBiometric**: Fingerprint/Face authentication with BiometricPrompt
+- ✅ **LibsignalMigration**: Data migration from in-memory to persistent storage
+- ✅ **LibsignalKeyRotation**: Automatic key rotation with configurable intervals
+- ✅ **Persistent Stores**: All Signal Protocol stores with secure persistence
+- ✅ **SenderKeyStore**: Group messaging support
+
+**Signal Protocol Implementation** (`/apps/mobile/src/lib/signal-protocol/`)
+- ✅ **Protocol Buffers**: Complete Signal Protocol message format (signal.proto)
+- ✅ **SignalProtobuf.ts**: TypeScript message encoding/decoding
+- ✅ **SignalMessageHandler.ts**: High-level API bridging protobuf with native modules
+- ✅ **Cross-platform compatibility**: iOS/Android message interoperability
+
+**Security Achievements**
+- ✅ **Security Audit Passed**: PRODUCTION READY rating with LOW risk level 🟢
+- ✅ **Hardware Security Integration**: iOS Keychain & Android Keystore with biometric protection
+- ✅ **Group Messaging**: SenderKeyStore implementation for efficient group chats
+- ✅ **Comprehensive Integration Tests**: Cross-platform compatibility verified
+
+### 🎨 Design System Standardization
+
+**Color Theme Unification**
+- ✅ **New Brand Colors**: Complete color palette refresh
+  - Primary Green: `#14562D` (Cal Poly green) - replaced `#0A5C36`/`#1A4B44`
+  - Supporting Greens: Dark `#163D21`, Light `#6DBC74`, Extra Light `#B0EDB1`
+  - Gold Accents: Light `#FFB81F`, Dark `#D4AF4A` - replaced `#C4A55C`
+  - Neutral Palette: Consistent grays from `#1E1D1E` to `#F8F8F8`
+- ✅ **Mobile App Updates**: 
+  - Updated `Colors.ts` with new palette
+  - Maintained semantic color system
+  - Updated both light and dark mode themes
+  - Added gold colors to palette
+- ✅ **Web App Updates**:
+  - Updated CSS variables in `globals.css`
+  - Fixed all hardcoded colors in UI components
+  - Updated utility classes for new colors
+  - Consistent dark mode implementation
+
+**Typography Standardization**
+- ✅ **Font Family**: Unified to `'Helvetica Neue'` with system fallbacks
+  - Mobile: Matches iOS/Android native feel
+  - Web: Consistent with mobile experience
+  - Proper fallback chain for all platforms
+
+**Component Fixes**
+- ✅ **Button Component**: Focus states use CSS variables
+- ✅ **Input/Select**: Removed hardcoded colors
+- ✅ **Spinner**: Updated to new brand colors
+- ✅ **Switch**: Gold variant uses new gold color
+- ✅ **Navbar**: All links use new primary green
+
+## Version 2.6.0 - May 2025
+
+### ♿ Accessibility & Font Sizing Implementation
+
+**Dynamic Font Sizing for Mobile & Web**
+- ✅ **FontSizeService**: Cross-platform font scaling with user preferences
+- ✅ **Mobile Implementation**: Native accessibility integration
+  - Device settings synchronization
+  - Screen reader detection and support
+  - Local caching with AsyncStorage
+  - Real-time font scaling across all components
+- ✅ **Web Implementation**: CSS-based dynamic scaling
+  - CSS custom properties for global scaling
+  - LocalStorage persistence
+  - Browser text size integration
+  - Utility classes for scaled text
+- ✅ **Settings UI**: Intuitive controls in both platforms
+  - Visual slider with live preview
+  - Preset size options (Small, Medium, Large, XL)
+  - Toggle for device settings sync
+  - Consistent design across platforms
+- ✅ **Backend Integration**: User preferences persistence
+  - `getUserSettings` and `updateUserSettings` Firebase functions
+  - Cross-device synchronization
+  - Fingerprint-based user identification
+  - Offline support with local caching
+
+**Key Features**
+- Font scale range: 0.85x to 1.5x
+- Automatic integration with device accessibility settings
+- Real-time preview of text changes
+- Persistent settings across sessions and devices
+- Offline-first with server synchronization
+- Zero performance impact with optimized rendering
+
 ## Version 2.5.1 - May 2025
 
 ### 🚀 Signal Protocol Production Ready

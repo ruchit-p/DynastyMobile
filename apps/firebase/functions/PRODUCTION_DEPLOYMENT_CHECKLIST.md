@@ -19,36 +19,47 @@
 # 2. Apply the same CORS policy
 ```
 
-### 2. Generate Security Keys
+### 2. Generate All Security Keys ✅ COMPLETED
 ```bash
-# Generate CSRF secret
-./scripts/generate-csrf-secret.sh
+# Generate all production secrets (CSRF, JWT, encryption, etc.)
+./scripts/generate-all-secrets.sh
+
+# Deployment scripts created:
+# - deploy-production-secrets.sh
+# - verify-production-config.sh  
+# - gradual-rollout-deploy.sh
 ```
 
-### 3. Set Firebase Production Environment Variables
+### 3. Set Firebase Production Environment Variables ✅ AUTOMATED
 ```bash
-firebase functions:config:set \
-  r2.account_id="YOUR_ACCOUNT_ID" \
-  r2.access_key_id="YOUR_ACCESS_KEY" \
-  r2.secret_access_key="YOUR_SECRET_KEY" \
-  r2.base_bucket="dynasty" \
-  r2.enable_migration="true" \
-  r2.migration_percentage="0" \
-  security.csrf_secret_key="YOUR_GENERATED_CSRF_KEY" \
-  security.allowed_origins="https://yourdomain.com,https://www.yourdomain.com"
+# Use automated deployment script
+./scripts/deploy-production-secrets.sh
+
+# This sets all required configuration:
+# - Core security keys (CSRF, JWT, encryption, etc.)
+# - External service keys (SendGrid, Twilio, FingerprintJS, R2)
+# - Environment configuration (URLs, feature flags)
+
+# Manual configuration (for reference):
+# firebase functions:config:set \
+#   security.csrf_secret="GENERATED_KEY" \
+#   security.jwt_secret="GENERATED_KEY" \
+#   ... (see .env.production.template for full list)
 ```
 
-### 4. Deploy Functions (Gradual Rollout)
+### 4. Deploy Functions (Gradual Rollout) ✅ AUTOMATED
 ```bash
-# Step 1: Deploy with R2 disabled (0%)
-firebase deploy --only functions --project production
+# Use automated gradual rollout script
+./scripts/gradual-rollout-deploy.sh
 
-# Step 2: Enable for 1% of users
-firebase functions:config:set r2.migration_percentage="1"
-firebase deploy --only functions --project production
+# This handles:
+# - Deploying CSRF-protected authentication functions
+# - Health checks after each deployment  
+# - Rollback capability if issues arise
+# - Progress monitoring and reporting
 
-# Step 3: Monitor and increase gradually
-# 1% → 5% → 10% → 25% → 50% → 100%
+# Manual deployment (for reference):
+# firebase deploy --only functions --project production
 ```
 
 ### 5. Monitor Performance

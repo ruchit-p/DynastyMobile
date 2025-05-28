@@ -28,14 +28,20 @@ jest.mock('expo-router', () => ({
   useSegments: () => [],
 }));
 
-// Mock firebase modules
-jest.mock('../../src/lib/firebase', () => ({
-  getFirebaseApp: jest.fn(() => ({})),
-  getFirebaseAuth: jest.fn(() => authMock),
-  getFirebaseFunctions: jest.fn(() => functionsMock),
-  getFirebaseDb: jest.fn(() => firestoreMock),
-  connectToEmulators: jest.fn(),
-}));
+// Mock firebase modules with proper scoping
+jest.mock('../../src/lib/firebase', () => {
+  const mockAuth = require('@react-native-firebase/auth').default;
+  const mockFunctions = require('@react-native-firebase/functions').default;
+  const mockFirestore = require('@react-native-firebase/firestore').default;
+  
+  return {
+    getFirebaseApp: jest.fn(() => ({})),
+    getFirebaseAuth: jest.fn(() => mockAuth),
+    getFirebaseFunctions: jest.fn(() => mockFunctions),
+    getFirebaseDb: jest.fn(() => mockFirestore),
+    connectToEmulators: jest.fn(),
+  };
+});
 
 // Mock ErrorHandlingService
 jest.mock('../../src/lib/ErrorHandlingService');

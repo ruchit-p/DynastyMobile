@@ -78,7 +78,7 @@ export class NativeSignalProtocolStore {
   /**
    * PreKey Management
    */
-  async generatePreKeys(start: number, count: number): Promise<Array<{id: number; publicKey: string}>> {
+  async generatePreKeys(start: number, count: number): Promise<{id: number; publicKey: string}[]> {
     try {
       return await NativeLibsignal.generatePreKeys(start, count);
     } catch (error) {

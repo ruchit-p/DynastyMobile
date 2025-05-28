@@ -101,7 +101,7 @@ export class SettingsManager {
           console.error("Error saving settings:", error)
           reject(error)
         }
-      }, this.debounceInterval) as unknown as NodeJS.Timeout
+      }, this.debounceInterval)
     })
   }
 

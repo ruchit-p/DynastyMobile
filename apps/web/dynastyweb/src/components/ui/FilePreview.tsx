@@ -21,15 +21,6 @@ export function FilePreview({ item, onClose, onDownload, onShare }: FilePreviewP
   const [scale, setScale] = useState(1);
   const [rotation, setRotation] = useState(0);
 
-  useEffect(() => {
-    loadPreview();
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-    };
-  }, [item.id, loadPreview, previewUrl]);
-
   const loadPreview = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -49,6 +40,15 @@ export function FilePreview({ item, onClose, onDownload, onShare }: FilePreviewP
       setLoading(false);
     }
   }, [item]);
+
+  useEffect(() => {
+    loadPreview();
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [item.id, loadPreview, previewUrl]);
 
   const canPreview = (mimeType?: string): boolean => {
     if (!mimeType) return false;

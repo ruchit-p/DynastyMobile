@@ -11,33 +11,33 @@ export const twilioPhoneNumber = defineSecret("TWILIO_PHONE_NUMBER");
 export const SMS_CONFIG = {
   // Maximum message length before splitting
   maxMessageLength: 1600, // Twilio's limit
-  
+
   // Link shortening
   useShortLinks: true,
   shortLinkDomain: "https://dyn.link", // Configure your short link domain
-  
+
   // Retry configuration
   maxRetries: 3,
   retryDelay: 1000, // milliseconds
-  
+
   // Default country code
   defaultCountryCode: "+1", // US
-  
+
   // Test mode settings
   testMode: process.env.NODE_ENV === "development",
   testPhoneNumbers: [
     "+15555551234", // Add test numbers here
   ],
-  
+
   // Character replacements for SMS
   characterReplacements: {
-    "\u2014": "-",     // em dash
-    "\u201C": "\"",    // left double quotation mark
-    "\u201D": "\"",    // right double quotation mark
-    "\u2018": "'",     // left single quotation mark
-    "\u2019": "'",     // right single quotation mark
-    "\u2026": "...",   // horizontal ellipsis
-  }
+    "\u2014": "-", // em dash
+    "\u201C": "\"", // left double quotation mark
+    "\u201D": "\"", // right double quotation mark
+    "\u2018": "'", // left single quotation mark
+    "\u2019": "'", // right single quotation mark
+    "\u2026": "...", // horizontal ellipsis
+  },
 };
 
 // SMS sending windows (in user's timezone)
@@ -52,10 +52,10 @@ export const SMS_SENDING_WINDOWS = {
 
 // Event reminder timings (in hours before event)
 export const EVENT_REMINDER_TIMINGS = [
-  { hours: 168, name: "1 week" },
-  { hours: 48, name: "2 days" },
-  { hours: 24, name: "1 day" },
-  { hours: 2, name: "2 hours" },
+  {hours: 168, name: "1 week"},
+  {hours: 48, name: "2 days"},
+  {hours: 24, name: "1 day"},
+  {hours: 2, name: "2 hours"},
 ];
 
 // SMS cost tracking

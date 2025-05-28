@@ -312,13 +312,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     [csrfToken]
   );
 
-  const refreshFirestoreUser = useCallback(async () => {
-    if (user?.uid) {
-      const userData = await fetchFirestoreUser(user.uid);
-      setFirestoreUser(userData);
-    }
-  }, [user?.uid]);
-
   // Initialize services when user logs in
   const initializeUserServices = useCallback(async (userId: string) => {
     try {
@@ -380,6 +373,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [setUserId]);
 
+  const refreshFirestoreUser = useCallback(async () => {
+    if (user?.uid) {
+      const userData = await fetchFirestoreUser(user.uid);
+      setFirestoreUser(userData);
+    }
+  }, [user?.uid]);
+
   useEffect(() => {
     setPersistence(auth, browserLocalPersistence).catch((error) => {
       handleError(error, ErrorSeverity.LOW, {
@@ -437,11 +437,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Check if this is an MFA error
       if ((error as MultiFactorError).code === 'auth/multi-factor-auth-required') {
         const mfaError = error as MultiFactorError;
-        const resolver = mfaError.resolver;
+        const resolver = (mfaError as { resolver?: MultiFactorResolver }).resolver;
         
         setMfaSignInState({
           isRequired: true,
-          availableFactors: resolver.hints,
+          availableFactors: resolver?.hints || [],
           resolver,
           selectedFactor: null,
         });
@@ -647,7 +647,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       factorId: factor.uid,
       displayName: factor.displayName || 'Unknown Factor',
       enrollmentTime: factor.enrollmentTime,
-      phoneNumber: factor.factorId === 'phone' ? factor.phoneNumber : undefined,
+      phoneNumber: factor.factorId === 'phone' ? (factor as { phoneNumber?: string }).phoneNumber : undefined,
     }));
   }, [user]);
 
@@ -686,7 +686,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     
     try {
       const credential = TotpMultiFactorGenerator.assertionForEnrollment(totpSecret, code);
-      await multiFactor(user).enroll(credential, totpSecret.hashLength.toString());
+      await multiFactor(user).enroll(credential, 'Authenticator App');
     } catch (error) {
       const message = handleFirebaseError(error, 'enroll-totp-mfa');
       throw new Error(message);
@@ -709,13 +709,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         });
       }
       
-      const phoneInfoOptions = {
-        phoneNumber,
-        session,
-      };
+      // phoneInfoOptions prepared for future use
+      // const phoneInfoOptions = {
+      //   phoneNumber,
+      //   session,
+      // };
       
-      const verificationId = await PhoneAuthProvider.verifyPhoneNumber(
-        phoneInfoOptions,
+      const provider = new PhoneAuthProvider(auth);
+      const verificationId = await provider.verifyPhoneNumber(
+        phoneNumber,
         window.mfaRecaptchaVerifier
       );
       
@@ -796,7 +798,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           session: mfaSignInState.resolver.session,
         };
         
-        const verificationId = await PhoneAuthProvider.verifyPhoneNumber(
+        const provider = new PhoneAuthProvider(auth);
+        const verificationId = await provider.verifyPhoneNumber(
           phoneInfoOptions,
           window.mfaRecaptchaVerifier
         );

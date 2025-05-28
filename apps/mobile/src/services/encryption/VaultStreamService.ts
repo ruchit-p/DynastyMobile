@@ -708,4 +708,226 @@ export class VaultStreamService {
     const remainingBytes = totalBytes - bytesProcessed;
     return remainingBytes / bytesPerSecond;
   }
+
+  /**
+   * Resume an interrupted streaming upload
+   */
+  async resumeStreamingUpload(
+    fileId: string,
+    uploadUrl: string,
+    startByte: number,
+    fileUri: string,
+    totalSize: number,
+    key: Uint8Array,
+    options?: StreamOptions
+  ): Promise<{ url: string }> {
+    try {
+      logger.info('VaultStreamService: Resuming streaming upload', {
+        fileId,
+        startByte,
+        totalSize,
+        remainingBytes: totalSize - startByte
+      });
+
+      // Check if we have resume info for this file
+      const resumeInfo = await this.getResumeInfo(fileId);
+      if (!resumeInfo) {
+        logger.warn('VaultStreamService: No resume info found, starting fresh encryption');
+      }
+
+      // Get file info
+      const fileInfo = await FileSystem.getInfoAsync(fileUri);
+      if (!fileInfo.exists || fileInfo.isDirectory) {
+        throw new Error('Source file does not exist or is a directory');
+      }
+
+      // Calculate remaining chunks
+      const remainingBytes = totalSize - startByte;
+      const chunksToUpload = Math.ceil(remainingBytes / this.getOptimalChunkSize());
+      const startChunkIndex = Math.floor(startByte / this.getOptimalChunkSize());
+
+      // Create abort controller for this upload
+      const abortController = new AbortController();
+      this.abortControllers.set(fileId, abortController);
+
+      let bytesUploaded = startByte;
+      let lastProgressUpdate = Date.now();
+      const uploadStartTime = Date.now();
+
+      // If we have resume info and existing encrypted chunks, use them
+      if (resumeInfo && resumeInfo.tempDir) {
+        const tempDirExists = await FileSystem.getInfoAsync(resumeInfo.tempDir);
+        if (tempDirExists.exists) {
+          // Upload existing encrypted chunks
+          for (let i = startChunkIndex; i < resumeInfo.lastChunkIndex + 1; i++) {
+            if (abortController.signal.aborted) {
+              throw new Error('Upload aborted');
+            }
+
+            const chunkPath = `${resumeInfo.tempDir}chunk_${i.toString().padStart(6, '0')}.enc`;
+            const chunkExists = await FileSystem.getInfoAsync(chunkPath);
+            
+            if (chunkExists.exists) {
+              const encryptedChunkBase64 = await FileSystem.readAsStringAsync(chunkPath, {
+                encoding: FileSystem.EncodingType.Base64
+              });
+              const encryptedChunk = this.sodium.from_base64(encryptedChunkBase64);
+
+              // Upload this chunk
+              const chunkUploadUrl = `${uploadUrl}&chunk=${i}&startByte=${bytesUploaded}`;
+              const response = await fetch(chunkUploadUrl, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/octet-stream',
+                  'Content-Range': `bytes ${bytesUploaded}-${bytesUploaded + encryptedChunk.length - 1}/${totalSize}`
+                },
+                body: encryptedChunk,
+                signal: abortController.signal
+              });
+
+              if (!response.ok) {
+                throw new Error(`Failed to upload chunk ${i}: ${response.statusText}`);
+              }
+
+              bytesUploaded += encryptedChunk.length;
+
+              // Update progress
+              if (options?.onProgress) {
+                const now = Date.now();
+                if (now - lastProgressUpdate > PROGRESS_UPDATE_INTERVAL) {
+                  const timeElapsed = now - uploadStartTime;
+                  const bytesPerSecond = (bytesUploaded - startByte) / (timeElapsed / 1000);
+                  
+                  options.onProgress({
+                    bytesProcessed: bytesUploaded,
+                    totalBytes: totalSize,
+                    percentage: (bytesUploaded / totalSize) * 100,
+                    chunksProcessed: i - startChunkIndex + 1,
+                    totalChunks: chunksToUpload,
+                    timeElapsed,
+                    bytesPerSecond,
+                    estimatedTimeRemaining: this.estimateTimeRemaining(bytesUploaded, totalSize, uploadStartTime)
+                  });
+                  
+                  lastProgressUpdate = now;
+                }
+              }
+            }
+          }
+
+          // Continue with remaining chunks if needed
+          if (resumeInfo.lastChunkIndex < resumeInfo.totalChunks - 1) {
+            // Encrypt and upload remaining chunks
+            const encryptResult = await this.encryptFileStream(
+              fileUri,
+              `${resumeInfo.tempDir}remaining.enc`,
+              key,
+              fileId,
+              {
+                ...options,
+                resumeFromChunk: resumeInfo.lastChunkIndex + 1,
+                onChunk: async (chunkIndex, chunkData) => {
+                  // Upload each chunk as it's encrypted
+                  const chunkUploadUrl = `${uploadUrl}&chunk=${chunkIndex}&startByte=${bytesUploaded}`;
+                  const response = await fetch(chunkUploadUrl, {
+                    method: 'PUT',
+                    headers: {
+                      'Content-Type': 'application/octet-stream',
+                      'Content-Range': `bytes ${bytesUploaded}-${bytesUploaded + chunkData.length - 1}/${totalSize}`
+                    },
+                    body: chunkData,
+                    signal: abortController.signal
+                  });
+
+                  if (!response.ok) {
+                    throw new Error(`Failed to upload chunk ${chunkIndex}: ${response.statusText}`);
+                  }
+
+                  bytesUploaded += chunkData.length;
+                }
+              }
+            );
+
+            if (!encryptResult.success) {
+              throw new Error(encryptResult.error || 'Encryption failed');
+            }
+          }
+        }
+      } else {
+        // No resume info or temp dir doesn't exist - start fresh encryption with streaming upload
+        const encryptResult = await this.encryptFileStream(
+          fileUri,
+          `${FileSystem.cacheDirectory}${TEMP_DIR_PREFIX}${fileId}/full.enc`,
+          key,
+          fileId,
+          {
+            ...options,
+            onChunk: async (chunkIndex, chunkData) => {
+              // Upload each chunk as it's encrypted
+              const chunkUploadUrl = `${uploadUrl}&chunk=${chunkIndex}&startByte=${bytesUploaded}`;
+              const response = await fetch(chunkUploadUrl, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/octet-stream',
+                  'Content-Range': `bytes ${bytesUploaded}-${bytesUploaded + chunkData.length - 1}/${totalSize}`
+                },
+                body: chunkData,
+                signal: abortController.signal
+              });
+
+              if (!response.ok) {
+                throw new Error(`Failed to upload chunk ${chunkIndex}: ${response.statusText}`);
+              }
+
+              bytesUploaded += chunkData.length;
+            }
+          }
+        );
+
+        if (!encryptResult.success) {
+          throw new Error(encryptResult.error || 'Encryption failed');
+        }
+      }
+
+      // Complete the upload
+      const completeUrl = `${uploadUrl}&complete=true`;
+      const completeResponse = await fetch(completeUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          fileId,
+          totalSize: bytesUploaded,
+          chunks: chunksToUpload
+        })
+      });
+
+      if (!completeResponse.ok) {
+        throw new Error(`Failed to complete upload: ${completeResponse.statusText}`);
+      }
+
+      const result = await completeResponse.json();
+
+      // Clean up
+      await this.deleteResumeInfo(fileId);
+      if (resumeInfo?.tempDir) {
+        await FileSystem.deleteAsync(resumeInfo.tempDir, { idempotent: true });
+      }
+
+      logger.info('VaultStreamService: Streaming upload resumed successfully', {
+        fileId,
+        bytesUploaded,
+        timeElapsed: Date.now() - uploadStartTime
+      });
+
+      return { url: result.url };
+
+    } catch (error) {
+      logger.error('VaultStreamService: Resume streaming upload failed', error);
+      throw error;
+    } finally {
+      this.abortControllers.delete(fileId);
+    }
+  }
 }

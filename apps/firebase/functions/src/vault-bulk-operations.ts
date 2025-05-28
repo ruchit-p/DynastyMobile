@@ -1,13 +1,13 @@
-import { onCall } from "firebase-functions/v2/https";
+import {onCall} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
-import { getFirestore, Timestamp, WriteBatch } from "firebase-admin/firestore";
-import { logger } from "firebase-functions/v2";
-import { createError, ErrorCode, handleError } from "./utils/errors";
-import { withAuth } from "./middleware/auth";
-import { validateRequest } from "./utils/request-validator";
-import { VALIDATION_SCHEMAS } from "./config/validation-schemas";
-import { DEFAULT_REGION, FUNCTION_TIMEOUT } from "./common";
-import { StorageAdapter } from "./utils/storage-adapter";
+import {getFirestore, Timestamp, WriteBatch} from "firebase-admin/firestore";
+import {logger} from "firebase-functions/v2";
+import {createError, ErrorCode, handleError} from "./utils/errors";
+import {withAuth} from "./middleware/auth";
+import {validateRequest} from "./utils/request-validator";
+import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
+import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
+import {StorageAdapter} from "./utils/storage-adapter";
 
 // Initialize if not already done
 if (!admin.apps.length) {
@@ -22,7 +22,7 @@ const MAX_OPERATIONS_PER_REQUEST = 100;
 
 // Types
 export interface VaultBulkOperation {
-  operation: 'encrypt' | 'decrypt' | 'share' | 'unshare' | 'delete' | 'restore' | 'move';
+  operation: "encrypt" | "decrypt" | "share" | "unshare" | "delete" | "restore" | "move";
   itemIds: string[];
   metadata?: Record<string, any>;
 }
@@ -40,7 +40,7 @@ export interface VaultBulkResult {
 
 export interface VaultShareTarget {
   userId: string;
-  permissions: 'read' | 'write' | 'admin';
+  permissions: "read" | "write" | "admin";
   expiresAt?: Timestamp;
 }
 
@@ -66,15 +66,15 @@ export const executeBulkVaultOperation = onCall(
         userId
       );
 
-      const { operation, itemIds, metadata = {} } = validatedData as VaultBulkOperation;
+      const {operation, itemIds, metadata = {}} = validatedData as VaultBulkOperation;
 
       if (itemIds.length === 0) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'No items specified');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "No items specified");
       }
 
       if (itemIds.length > MAX_OPERATIONS_PER_REQUEST) {
         throw createError(
-          ErrorCode.INVALID_ARGUMENT, 
+          ErrorCode.INVALID_ARGUMENT,
           `Too many items. Maximum ${MAX_OPERATIONS_PER_REQUEST} allowed`
         );
       }
@@ -85,36 +85,36 @@ export const executeBulkVaultOperation = onCall(
         operationId,
         operation,
         itemCount: itemIds.length,
-        userId
+        userId,
       });
 
       // Execute operation based on type
       let result: VaultBulkResult;
 
       switch (operation) {
-        case 'delete':
-          result = await executeBulkDelete(userId, itemIds, operationId);
-          break;
-        case 'restore':
-          result = await executeBulkRestore(userId, itemIds, operationId);
-          break;
-        case 'share':
-          result = await executeBulkShare(userId, itemIds, metadata.shareTargets || [], operationId);
-          break;
-        case 'unshare':
-          result = await executeBulkUnshare(userId, itemIds, metadata.targetUserIds || [], operationId);
-          break;
-        case 'move':
-          result = await executeBulkMove(userId, itemIds, metadata.targetFolderId, operationId);
-          break;
-        case 'encrypt':
-          result = await executeBulkEncrypt(userId, itemIds, operationId);
-          break;
-        case 'decrypt':
-          result = await executeBulkDecrypt(userId, itemIds, operationId);
-          break;
-        default:
-          throw createError(ErrorCode.INVALID_ARGUMENT, `Unsupported operation: ${operation}`);
+      case "delete":
+        result = await executeBulkDelete(userId, itemIds, operationId);
+        break;
+      case "restore":
+        result = await executeBulkRestore(userId, itemIds, operationId);
+        break;
+      case "share":
+        result = await executeBulkShare(userId, itemIds, metadata.shareTargets || [], operationId);
+        break;
+      case "unshare":
+        result = await executeBulkUnshare(userId, itemIds, metadata.targetUserIds || [], operationId);
+        break;
+      case "move":
+        result = await executeBulkMove(userId, itemIds, metadata.targetFolderId, operationId);
+        break;
+      case "encrypt":
+        result = await executeBulkEncrypt(userId, itemIds, operationId);
+        break;
+      case "decrypt":
+        result = await executeBulkDecrypt(userId, itemIds, operationId);
+        break;
+      default:
+        throw createError(ErrorCode.INVALID_ARGUMENT, `Unsupported operation: ${operation}`);
       }
 
       // Log operation result
@@ -123,7 +123,7 @@ export const executeBulkVaultOperation = onCall(
       logger.info(`[${functionName}] Bulk operation completed`, {
         operationId,
         successful: result.successfulItems.length,
-        failed: result.failedItems.length
+        failed: result.failedItems.length,
       });
 
       return result;
@@ -146,19 +146,19 @@ async function executeBulkDelete(
     totalItems: itemIds.length,
     successfulItems: [],
     failedItems: [],
-    operationId
+    operationId,
   };
 
   // Process in batches
   for (let i = 0; i < itemIds.length; i += MAX_BATCH_SIZE) {
     const batchIds = itemIds.slice(i, i + MAX_BATCH_SIZE);
-    
+
     try {
       // Get items to verify ownership and collect storage info
-      const itemsSnapshot = await db.collection('vaultItems')
-        .where(admin.firestore.FieldPath.documentId(), 'in', batchIds)
-        .where('ownerId', '==', userId)
-        .where('isDeleted', '==', false)
+      const itemsSnapshot = await db.collection("vaultItems")
+        .where(admin.firestore.FieldPath.documentId(), "in", batchIds)
+        .where("ownerId", "==", userId)
+        .where("isDeleted", "==", false)
         .get();
 
       const batch = db.batch();
@@ -166,23 +166,23 @@ async function executeBulkDelete(
 
       for (const doc of itemsSnapshot.docs) {
         const data = doc.data();
-        
+
         // Soft delete in Firestore
         batch.update(doc.ref, {
           isDeleted: true,
           deletedAt: Timestamp.now(),
-          updatedAt: Timestamp.now()
+          updatedAt: Timestamp.now(),
         });
 
         // Schedule storage deletion if it's a file
-        if (data.type === 'file' && data.storagePath) {
+        if (data.type === "file" && data.storagePath) {
           storageDeletePromises.push(
-            deleteFromStorage(data.storagePath, data.storageProvider || 'firebase')
-              .catch(error => {
-                logger.warn('Failed to delete from storage', {
+            deleteFromStorage(data.storagePath, data.storageProvider || "firebase")
+              .catch((error) => {
+                logger.warn("Failed to delete from storage", {
                   itemId: doc.id,
                   storagePath: data.storagePath,
-                  error: error.message
+                  error: error.message,
                 });
               })
           );
@@ -195,30 +195,29 @@ async function executeBulkDelete(
       await batch.commit();
 
       // Execute storage deletions (non-blocking)
-      Promise.all(storageDeletePromises).catch(error => {
-        logger.error('Some storage deletions failed:', error);
+      Promise.all(storageDeletePromises).catch((error) => {
+        logger.error("Some storage deletions failed:", error);
       });
 
       // Mark items that weren't found as failed
-      const foundIds = itemsSnapshot.docs.map(doc => doc.id);
-      const notFoundIds = batchIds.filter(id => !foundIds.includes(id));
-      
+      const foundIds = itemsSnapshot.docs.map((doc) => doc.id);
+      const notFoundIds = batchIds.filter((id) => !foundIds.includes(id));
+
       for (const id of notFoundIds) {
         result.failedItems.push({
           itemId: id,
-          error: 'Item not found or not owned by user'
+          error: "Item not found or not owned by user",
         });
       }
-
     } catch (error) {
-      logger.error('Batch delete failed:', error);
-      
+      logger.error("Batch delete failed:", error);
+
       // Mark all items in this batch as failed
       for (const id of batchIds) {
         if (!result.successfulItems.includes(id)) {
           result.failedItems.push({
             itemId: id,
-            error: error.message || 'Unknown error'
+            error: error.message || "Unknown error",
           });
         }
       }
@@ -242,19 +241,19 @@ async function executeBulkRestore(
     totalItems: itemIds.length,
     successfulItems: [],
     failedItems: [],
-    operationId
+    operationId,
   };
 
   // Process in batches
   for (let i = 0; i < itemIds.length; i += MAX_BATCH_SIZE) {
     const batchIds = itemIds.slice(i, i + MAX_BATCH_SIZE);
-    
+
     try {
       // Get deleted items to verify ownership
-      const itemsSnapshot = await db.collection('vaultItems')
-        .where(admin.firestore.FieldPath.documentId(), 'in', batchIds)
-        .where('ownerId', '==', userId)
-        .where('isDeleted', '==', true)
+      const itemsSnapshot = await db.collection("vaultItems")
+        .where(admin.firestore.FieldPath.documentId(), "in", batchIds)
+        .where("ownerId", "==", userId)
+        .where("isDeleted", "==", true)
         .get();
 
       const batch = db.batch();
@@ -264,7 +263,7 @@ async function executeBulkRestore(
         batch.update(doc.ref, {
           isDeleted: false,
           deletedAt: admin.firestore.FieldValue.delete(),
-          updatedAt: Timestamp.now()
+          updatedAt: Timestamp.now(),
         });
 
         result.successfulItems.push(doc.id);
@@ -274,24 +273,23 @@ async function executeBulkRestore(
       await batch.commit();
 
       // Mark items that weren't found as failed
-      const foundIds = itemsSnapshot.docs.map(doc => doc.id);
-      const notFoundIds = batchIds.filter(id => !foundIds.includes(id));
-      
+      const foundIds = itemsSnapshot.docs.map((doc) => doc.id);
+      const notFoundIds = batchIds.filter((id) => !foundIds.includes(id));
+
       for (const id of notFoundIds) {
         result.failedItems.push({
           itemId: id,
-          error: 'Item not found or not deleted'
+          error: "Item not found or not deleted",
         });
       }
-
     } catch (error) {
-      logger.error('Batch restore failed:', error);
-      
+      logger.error("Batch restore failed:", error);
+
       for (const id of batchIds) {
         if (!result.successfulItems.includes(id)) {
           result.failedItems.push({
             itemId: id,
-            error: error.message || 'Unknown error'
+            error: error.message || "Unknown error",
           });
         }
       }
@@ -316,24 +314,24 @@ async function executeBulkShare(
     totalItems: itemIds.length,
     successfulItems: [],
     failedItems: [],
-    operationId
+    operationId,
   };
 
   if (shareTargets.length === 0) {
     result.success = false;
-    result.failedItems = itemIds.map(id => ({
+    result.failedItems = itemIds.map((id) => ({
       itemId: id,
-      error: 'No share targets specified'
+      error: "No share targets specified",
     }));
     return result;
   }
 
   try {
     // Verify all items exist and are owned by user
-    const itemsSnapshot = await db.collection('vaultItems')
-      .where(admin.firestore.FieldPath.documentId(), 'in', itemIds)
-      .where('ownerId', '==', userId)
-      .where('isDeleted', '==', false)
+    const itemsSnapshot = await db.collection("vaultItems")
+      .where(admin.firestore.FieldPath.documentId(), "in", itemIds)
+      .where("ownerId", "==", userId)
+      .where("isDeleted", "==", false)
       .get();
 
     const batch = db.batch();
@@ -342,7 +340,7 @@ async function executeBulkShare(
     for (const doc of itemsSnapshot.docs) {
       for (const target of shareTargets) {
         // Create share record
-        const shareRef = db.collection('vaultShares').doc();
+        const shareRef = db.collection("vaultShares").doc();
         const shareData = {
           itemId: doc.id,
           ownerId: userId,
@@ -350,7 +348,7 @@ async function executeBulkShare(
           permissions: target.permissions,
           createdAt: Timestamp.now(),
           expiresAt: target.expiresAt || null,
-          isActive: true
+          isActive: true,
         };
 
         batch.set(shareRef, shareData);
@@ -359,8 +357,8 @@ async function executeBulkShare(
       // Update item to mark as shared
       batch.update(doc.ref, {
         isShared: true,
-        sharedWith: shareTargets.map(t => t.userId),
-        updatedAt: Timestamp.now()
+        sharedWith: shareTargets.map((t) => t.userId),
+        updatedAt: Timestamp.now(),
       });
 
       result.successfulItems.push(doc.id);
@@ -370,22 +368,21 @@ async function executeBulkShare(
     await batch.commit();
 
     // Mark items that weren't found as failed
-    const foundIds = itemsSnapshot.docs.map(doc => doc.id);
-    const notFoundIds = itemIds.filter(id => !foundIds.includes(id));
-    
+    const foundIds = itemsSnapshot.docs.map((doc) => doc.id);
+    const notFoundIds = itemIds.filter((id) => !foundIds.includes(id));
+
     for (const id of notFoundIds) {
       result.failedItems.push({
         itemId: id,
-        error: 'Item not found or not owned by user'
+        error: "Item not found or not owned by user",
       });
     }
-
   } catch (error) {
-    logger.error('Bulk share failed:', error);
+    logger.error("Bulk share failed:", error);
     result.success = false;
-    result.failedItems = itemIds.map(id => ({
+    result.failedItems = itemIds.map((id) => ({
       itemId: id,
-      error: error.message || 'Unknown error'
+      error: error.message || "Unknown error",
     }));
   }
 
@@ -407,7 +404,7 @@ async function executeBulkUnshare(
     totalItems: itemIds.length,
     successfulItems: [],
     failedItems: [],
-    operationId
+    operationId,
   };
 
   try {
@@ -416,10 +413,10 @@ async function executeBulkUnshare(
     for (const itemId of itemIds) {
       try {
         // Remove shares
-        const sharesSnapshot = await db.collection('vaultShares')
-          .where('itemId', '==', itemId)
-          .where('ownerId', '==', userId)
-          .where('sharedWithUserId', 'in', targetUserIds)
+        const sharesSnapshot = await db.collection("vaultShares")
+          .where("itemId", "==", itemId)
+          .where("ownerId", "==", userId)
+          .where("sharedWithUserId", "in", targetUserIds)
           .get();
 
         for (const shareDoc of sharesSnapshot.docs) {
@@ -427,9 +424,9 @@ async function executeBulkUnshare(
         }
 
         // Update item
-        const itemRef = db.collection('vaultItems').doc(itemId);
+        const itemRef = db.collection("vaultItems").doc(itemId);
         const itemDoc = await itemRef.get();
-        
+
         if (itemDoc.exists && itemDoc.data()?.ownerId === userId) {
           const currentSharedWith = itemDoc.data()?.sharedWith || [];
           const updatedSharedWith = currentSharedWith.filter(
@@ -439,33 +436,32 @@ async function executeBulkUnshare(
           batch.update(itemRef, {
             sharedWith: updatedSharedWith,
             isShared: updatedSharedWith.length > 0,
-            updatedAt: Timestamp.now()
+            updatedAt: Timestamp.now(),
           });
 
           result.successfulItems.push(itemId);
         } else {
           result.failedItems.push({
             itemId,
-            error: 'Item not found or not owned by user'
+            error: "Item not found or not owned by user",
           });
         }
       } catch (error) {
         result.failedItems.push({
           itemId,
-          error: error.message || 'Unknown error'
+          error: error.message || "Unknown error",
         });
       }
     }
 
     // Commit batch
     await batch.commit();
-
   } catch (error) {
-    logger.error('Bulk unshare failed:', error);
+    logger.error("Bulk unshare failed:", error);
     result.success = false;
-    result.failedItems = itemIds.map(id => ({
+    result.failedItems = itemIds.map((id) => ({
       itemId: id,
-      error: error.message || 'Unknown error'
+      error: error.message || "Unknown error",
     }));
   }
 
@@ -487,33 +483,33 @@ async function executeBulkMove(
     totalItems: itemIds.length,
     successfulItems: [],
     failedItems: [],
-    operationId
+    operationId,
   };
 
   try {
     // Verify target folder exists and is owned by user (if not null)
     if (targetFolderId) {
-      const folderDoc = await db.collection('vaultItems').doc(targetFolderId).get();
-      if (!folderDoc.exists || 
-          folderDoc.data()?.ownerId !== userId || 
-          folderDoc.data()?.type !== 'folder') {
-        throw new Error('Target folder not found or not accessible');
+      const folderDoc = await db.collection("vaultItems").doc(targetFolderId).get();
+      if (!folderDoc.exists ||
+          folderDoc.data()?.ownerId !== userId ||
+          folderDoc.data()?.type !== "folder") {
+        throw new Error("Target folder not found or not accessible");
       }
     }
 
     const batch = db.batch();
 
     // Verify and move items
-    const itemsSnapshot = await db.collection('vaultItems')
-      .where(admin.firestore.FieldPath.documentId(), 'in', itemIds)
-      .where('ownerId', '==', userId)
-      .where('isDeleted', '==', false)
+    const itemsSnapshot = await db.collection("vaultItems")
+      .where(admin.firestore.FieldPath.documentId(), "in", itemIds)
+      .where("ownerId", "==", userId)
+      .where("isDeleted", "==", false)
       .get();
 
     for (const doc of itemsSnapshot.docs) {
       batch.update(doc.ref, {
         parentId: targetFolderId,
-        updatedAt: Timestamp.now()
+        updatedAt: Timestamp.now(),
       });
 
       result.successfulItems.push(doc.id);
@@ -523,22 +519,21 @@ async function executeBulkMove(
     await batch.commit();
 
     // Mark items that weren't found as failed
-    const foundIds = itemsSnapshot.docs.map(doc => doc.id);
-    const notFoundIds = itemIds.filter(id => !foundIds.includes(id));
-    
+    const foundIds = itemsSnapshot.docs.map((doc) => doc.id);
+    const notFoundIds = itemIds.filter((id) => !foundIds.includes(id));
+
     for (const id of notFoundIds) {
       result.failedItems.push({
         itemId: id,
-        error: 'Item not found or not owned by user'
+        error: "Item not found or not owned by user",
       });
     }
-
   } catch (error) {
-    logger.error('Bulk move failed:', error);
+    logger.error("Bulk move failed:", error);
     result.success = false;
-    result.failedItems = itemIds.map(id => ({
+    result.failedItems = itemIds.map((id) => ({
       itemId: id,
-      error: error.message || 'Unknown error'
+      error: error.message || "Unknown error",
     }));
   }
 
@@ -559,11 +554,11 @@ async function executeBulkEncrypt(
     success: false,
     totalItems: itemIds.length,
     successfulItems: [],
-    failedItems: itemIds.map(id => ({
+    failedItems: itemIds.map((id) => ({
       itemId: id,
-      error: 'Bulk encryption not yet implemented'
+      error: "Bulk encryption not yet implemented",
     })),
-    operationId
+    operationId,
   };
 }
 
@@ -580,11 +575,11 @@ async function executeBulkDecrypt(
     success: false,
     totalItems: itemIds.length,
     successfulItems: [],
-    failedItems: itemIds.map(id => ({
+    failedItems: itemIds.map((id) => ({
       itemId: id,
-      error: 'Bulk decryption not yet implemented'
+      error: "Bulk decryption not yet implemented",
     })),
-    operationId
+    operationId,
   };
 }
 
@@ -597,17 +592,17 @@ async function deleteFromStorage(
 ): Promise<void> {
   try {
     const storageAdapter = new StorageAdapter();
-    
-    if (provider === 'r2') {
+
+    if (provider === "r2") {
       // Extract bucket and key from path
-      const pathParts = storagePath.split('/');
+      const pathParts = storagePath.split("/");
       const bucket = pathParts[0];
-      const key = pathParts.slice(1).join('/');
-      
+      const key = pathParts.slice(1).join("/");
+
       await storageAdapter.deleteFile({
         path: key,
         bucket,
-        provider: 'r2'
+        provider: "r2",
       });
     } else {
       // Firebase Storage
@@ -615,7 +610,7 @@ async function deleteFromStorage(
       await bucket.file(storagePath).delete();
     }
   } catch (error) {
-    logger.error('Failed to delete from storage:', error);
+    logger.error("Failed to delete from storage:", error);
     throw error;
   }
 }
@@ -629,7 +624,7 @@ async function logBulkOperation(
   result: VaultBulkResult
 ): Promise<void> {
   try {
-    await db.collection('vault_bulk_operations').add({
+    await db.collection("vault_bulk_operations").add({
       operationId: result.operationId,
       userId,
       operation,
@@ -637,10 +632,10 @@ async function logBulkOperation(
       successfulItems: result.successfulItems.length,
       failedItems: result.failedItems.length,
       timestamp: Timestamp.now(),
-      success: result.success
+      success: result.success,
     });
   } catch (error) {
-    logger.error('Failed to log bulk operation:', error);
+    logger.error("Failed to log bulk operation:", error);
   }
 }
 
@@ -658,31 +653,31 @@ export const getBulkOperationStatus = onCall(
 
     try {
       const userId = request.auth!.uid;
-      const { operationId } = request.data;
+      const {operationId} = request.data;
 
       if (!operationId) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Operation ID required');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Operation ID required");
       }
 
       const operationDoc = await db
-        .collection('vault_bulk_operations')
-        .where('operationId', '==', operationId)
-        .where('userId', '==', userId)
+        .collection("vault_bulk_operations")
+        .where("operationId", "==", operationId)
+        .where("userId", "==", userId)
         .limit(1)
         .get();
 
       if (operationDoc.empty) {
-        throw createError(ErrorCode.NOT_FOUND, 'Operation not found');
+        throw createError(ErrorCode.NOT_FOUND, "Operation not found");
       }
 
       const operationData = operationDoc.docs[0].data();
 
       return {
         success: true,
-        operation: operationData
+        operation: operationData,
       };
     } catch (error) {
       return handleError(error, functionName);
     }
   })
-); 
+);

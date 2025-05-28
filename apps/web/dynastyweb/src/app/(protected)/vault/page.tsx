@@ -60,10 +60,6 @@ export default function VaultPage() {
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
 
-  useEffect(() => {
-    loadVaultItems();
-  }, [currentFolderId, loadVaultItems]);
-
   const loadVaultItems = useCallback(async () => {
     setLoading(true);
     try {
@@ -83,6 +79,10 @@ export default function VaultPage() {
       setLoading(false);
     }
   }, [currentFolderId, toast]);
+
+  useEffect(() => {
+    loadVaultItems();
+  }, [loadVaultItems]);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;

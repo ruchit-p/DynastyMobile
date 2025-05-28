@@ -4,6 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Automated Feature Development Workflow
 
+When implementing new features, use the automated workflow to ensure proper testing and CI/CD integration:
+
+### Quick Start
 ```bash
 # Standard feature development
 yarn feature "feature-name" "feat: your commit message"
@@ -18,10 +21,51 @@ yarn feature:force "feature-name" "feat: your commit message"
 yarn feature:ts "feature-name" "feat: your commit message" --skip-local-tests
 ```
 
-**Options**: `--skip-local-tests`, `--no-verify`, `--force`
+### Options
+- `--skip-local-tests` - Skip local test validation (useful for setup/config changes)
+- `--no-verify` - Skip git hooks during commit
+- `--force` - Continue even if tests fail locally
 
-## Repository Structure
+### Workflow Steps (Automated)
+1. **Branch Creation**: Automatically creates feature branch from dev
+2. **Local Testing**: Runs all tests before pushing
+3. **Auto-fix**: Attempts to fix linting issues
+4. **Git Operations**: Commits and pushes changes
+5. **PR Creation**: Creates PR with proper description
+6. **CI Monitoring**: Watches GitHub Actions status
 
+### Manual Commands if Needed
+```bash
+# 1. Start from dev branch
+git checkout dev && git pull origin dev
+
+# 2. Create feature branch
+git checkout -b feature/your-feature
+
+# 3. Run tests locally
+cd apps/web/dynastyweb && yarn test
+cd apps/mobile && yarn test
+cd apps/firebase/functions && npm test
+
+# 4. Create PR
+gh pr create --base dev --title "feat: your feature"
+
+# 5. Monitor CI
+gh pr checks --watch
+```
+
+### Prerequisites Status
+✅ **GitHub CLI**: Installed and authenticated as `ruchit-p`
+✅ **ts-node**: Installed globally at `/Users/ruchitpatel/.nvm/versions/node/v20.18.3/bin/ts-node`
+✅ **Automation Scripts**: Ready at `/scripts/claude-feature-workflow.sh` and `/scripts/claude-dev-assistant.ts`
+
+The automated workflow is now fully configured and ready to use!
+
+## Repository Architecture - Monorepo Setup
+
+Dynasty uses a **consolidated monorepo architecture** for all platforms:
+
+### Repository Structure
 ```
 DynastyMobile/                    # Main monorepo
 ├── apps/
@@ -32,12 +76,13 @@ DynastyMobile/                    # Main monorepo
 └── scripts/                     # Automation scripts
 ```
 
+**Monorepo Benefits**: Single CI/CD pipeline, atomic commits, shared dependencies.
 **Deployment Targets**:
 - Web: Vercel from `apps/web/dynastyweb/`
 - Mobile: EAS from `apps/mobile/`
 - Backend: Firebase from `apps/firebase/functions/`
 
-## CI/CD Pipeline
+## CI/CD Pipeline Overview
 
 ### Branch Strategy
 - **dev** → Development branch (feature branches merge here)
@@ -45,18 +90,99 @@ DynastyMobile/                    # Main monorepo
 - **main** → Production branch (requires manual approval)
 
 ### Automated Workflows
-1. **Pull Request Checks** (`.github/workflows/dev-checks.yml`) - All tests on PRs
-2. **Staging Deployment** (`.github/workflows/staging-deploy.yml`) - Auto-deploy to staging
-3. **Production Deployment** (`.github/workflows/production-deploy.yml`) - Manual approval required
+1. **Pull Request Checks** (`.github/workflows/dev-checks.yml`)
+   - Runs on all PRs to dev branch
+   - Tests: Web (Jest), Mobile (Jest), Firebase (Jest), Security scan
+   - Blocks merge if tests fail
 
-### CI/CD Error Auto-Fix
+2. **Staging Deployment** (`.github/workflows/staging-deploy.yml`)
+   - Triggers when dev merges to staging
+   - Deploys to Vercel staging environment
+   - Runs integration tests
+   - Notifies team on Slack
+
+3. **Production Deployment** (`.github/workflows/production-deploy.yml`)
+   - Requires manual approval
+   - Includes Cloudflare cache purging
+   - Blue-green deployment support
+   - Rollback capabilities
+
+### Environment Variables
+Set in both GitHub Secrets and Vercel:
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+- `VERCEL_TOKEN`
+- `CLOUDFLARE_ZONE_ID`
+- `CLOUDFLARE_API_TOKEN`
+
+### CI/CD Scripts
 ```bash
-yarn fix:pr 123                           # Fix errors for PR #123
-yarn fix:ci --branch feature/my-feature   # Fix errors on branch
-yarn fix:ci:ts --pr 123 --auto-commit    # TypeScript fixer with auto-commit
+# Create and push branches
+./scripts/setup-branches.sh
+
+# Automated feature workflow
+yarn feature "feature-name" "commit message"
+
+# CI error auto-fix
+yarn fix:ci --branch dev
 ```
 
-**Auto-fixes**: ESLint, TypeScript errors, React hooks, imports, unused variables.
+## CI/CD Error Auto-Fix Workflow
+
+When CI/CD tests fail, use the automated error fixing workflow:
+
+### Quick Fix Commands
+```bash
+# Fix errors for a specific PR
+yarn fix:pr 123
+
+# Fix errors on current branch
+yarn fix:ci --branch feature/my-feature
+
+# Use TypeScript version with advanced fixes
+yarn fix:ci:ts --pr 123 --auto-commit true
+
+# Manual fix workflow
+yarn fix:ci
+```
+
+### How It Works
+1. **Analyzes CI Failures** - Detects what tests are failing
+2. **Applies Auto-Fixes**:
+   - ESLint errors (`--fix`)
+   - TypeScript common issues
+   - Import path problems
+   - Unused variables
+   - React Hook dependencies
+3. **Intelligent Pattern Matching** - Recognizes error patterns and applies appropriate fixes
+4. **Multiple Attempts** - Retries fixes up to 3 times
+5. **Optional Auto-Commit** - Can automatically commit and push fixes
+
+### Common Fixes Applied
+- **ESLint**: Auto-fixable style issues, formatting
+- **TypeScript**: Replace `any` with `unknown`, add type assertions
+- **React**: Add missing useEffect dependencies
+- **Imports**: Fix relative import paths
+- **Variables**: Prefix unused vars with underscore
+
+### GitHub Action Integration
+The repo includes an auto-fix workflow that triggers when CI fails on a PR:
+- Automatically attempts to fix errors
+- Creates a commit with fixes
+- Comments on the PR with changes made
+
+### Manual Usage Examples
+```bash
+# When PR #42 has failing tests
+yarn fix:pr 42
+
+# Fix and auto-commit
+yarn fix:ci:ts --pr 42 --auto-commit true
+
+# Fix current branch without PR
+git checkout feature/broken-tests
+yarn fix:ci --branch feature/broken-tests
+```
 
 ## Project Overview
 
@@ -149,29 +275,59 @@ Dynasty uses a consistent color palette across mobile and web:
 - Light Gold: `#FFB81F` (Selective yellow)
 - Dark Gold: `#D4AF4A` (Gold metallic)
 
+**Neutral Colors:**
+- Black: `#1E1D1E` (Eerie black)
+- Gray: `#595E65` (Davy's gray)
+- Light Gray: `#DFDFDF` (Platinum)
+- Off-White: `#F8F8F8` (Seasalt)
+- White: `#FFFFFF`
 ```typescript
 // Mobile
 import { Colors } from '../constants/Colors';
 const primary = Colors.dynastyGreen; // #14562D
+const gold = Colors.dynastyGoldLight; // #FFB81F
 
 // Web - uses CSS variables
 // --primary: 148 62% 21%; /* #14562D */
+// --secondary: 37 100% 56%; /* #FFB81F */
 ```
 
-### Typography & Spacing
+### Typography
+Font family is standardized across platforms:
+- Primary: `'Helvetica Neue'`
+- Fallbacks: System fonts (San Francisco on iOS, Roboto on Android)
 ```typescript
+// Mobile
 import Typography from '../constants/Typography';
+const heading = Typography.styles.heading1;
+const body = Typography.styles.bodyMedium;
+
+// Web
+font-family: 'Helvetica Neue', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', sans-serif;
+```
+
+### Spacing
+```typescript
 import { Spacing, BorderRadius } from '../constants/Spacing';
+const padding = Spacing.md; // 16px
+const radius = BorderRadius.lg; // 12px
 ```
 
 ### Accessibility & Font Scaling
 ```typescript
-// Mobile
+// Mobile - Use the font scale hook
 import { useFontScale } from '../src/hooks/useFontScale';
 const { fontScale, getScaledFontSize } = useFontScale();
 
-// Web
+// Apply scaled font size
+<Text style={{ fontSize: getScaledFontSize(16) }}>
+
+// Web - Use CSS utilities
+<p className="text-scale-lg">Scaled text</p>
+
+// Or inline styles with hook
 const { getScaledRem } = useFontScale();
+<p style={{ fontSize: getScaledRem(1.125) }}>
 ```
 
 ## Core Features
@@ -198,7 +354,11 @@ yarn test         # Run tests
 - **Firebase Service Files**: `GoogleService-Info.plist` (iOS), `google-services.json` (Android)
 
 ### iOS-Specific Configuration
-- **Info.plist**: Face ID usage description
+- **Info.plist Requirements**:
+  ```xml
+  <key>NSFaceIDUsageDescription</key>
+  <string>Dynasty uses Face ID to protect your encrypted messages</string>
+  ```
 - **Keychain/Biometric**: Automatic iOS security features
 - **Key Rotation**: Automatic rotation policies
 
