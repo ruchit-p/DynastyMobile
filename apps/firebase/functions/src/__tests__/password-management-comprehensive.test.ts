@@ -98,8 +98,10 @@ describe('Password Management Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: testData.userId } as any,
+        auth: { uid: testData.userId ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await passwordManagement.updateUserPassword.run(mockRequest);
@@ -122,8 +124,10 @@ describe('Password Management Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'some-other-user' } as any,
+        auth: { uid: 'some-other-user' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(passwordManagement.updateUserPassword.run(mockRequest))
@@ -140,8 +144,10 @@ describe('Password Management Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: testData.userId } as any,
+        auth: { uid: testData.userId ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(passwordManagement.updateUserPassword.run(mockRequest))
@@ -155,9 +161,11 @@ describe('Password Management Module Comprehensive Tests', () => {
       });
 
       const mockRequest: CallableRequest<any> = {
-        data: { userId: 'invalid-format' },
+        data: { userId: 'invalid-format' ,
+    acceptsStreaming: false},
         auth: { uid: 'test-user' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(passwordManagement.updateUserPassword.run(mockRequest))
@@ -202,7 +210,9 @@ describe('Password Management Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null, // No auth required for password reset
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       const result = await passwordManagement.initiatePasswordReset.run(mockRequest);
@@ -247,7 +257,9 @@ describe('Password Management Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       await passwordManagement.initiatePasswordReset.run(mockRequest);
@@ -276,7 +288,9 @@ describe('Password Management Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       await expect(passwordManagement.initiatePasswordReset.run(mockRequest))
@@ -305,7 +319,9 @@ describe('Password Management Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       await expect(passwordManagement.initiatePasswordReset.run(mockRequest))
@@ -325,7 +341,9 @@ describe('Password Management Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       await expect(passwordManagement.initiatePasswordReset.run(mockRequest))
@@ -351,9 +369,11 @@ describe('Password Management Module Comprehensive Tests', () => {
       });
 
       const mockRequest: CallableRequest<any> = {
-        data: { email: 'invalid-email' },
+        data: { email: 'invalid-email' ,
+    acceptsStreaming: false},
         auth: null,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(passwordManagement.initiatePasswordReset.run(mockRequest))
@@ -411,7 +431,9 @@ describe('Password Management Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       const result = await passwordManagement.initiatePasswordReset.run(mockRequest);
@@ -452,7 +474,9 @@ describe('Password Management Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       // Simulate concurrent requests
@@ -492,7 +516,9 @@ describe('Password Management Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       const result = await passwordManagement.initiatePasswordReset.run(mockRequest);
@@ -526,7 +552,9 @@ describe('Password Management Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       const result = await passwordManagement.initiatePasswordReset.run(mockRequest);
@@ -560,7 +588,9 @@ describe('Password Management Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       await passwordManagement.initiatePasswordReset.run(mockRequest);
@@ -585,7 +615,9 @@ describe('Password Management Module Comprehensive Tests', () => {
       const mockRequest: CallableRequest<any> = {
         data: testData,
         auth: null,
-        rawRequest: {} as any,
+        rawRequest: {,
+    acceptsStreaming: false} as any,
+        acceptsStreaming: false,
       };
 
       try {

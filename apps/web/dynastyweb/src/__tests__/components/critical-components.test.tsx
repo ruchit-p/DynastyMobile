@@ -63,7 +63,7 @@ import LocationPicker from '@/components/LocationPicker';
 import NotificationBell from '@/components/NotificationBell';
 import OnboardingForm from '@/components/OnboardingForm';
 import { EventCard } from '@/components/EventCard';
-import { StoryCard as Story } from '@/components/Story';
+import { StoryCard } from '@/components/Story';
 import AudioRecorder from '@/components/AudioRecorder';
 import ProtectedRoute from '@/components/ProtectedRoute';
 
@@ -696,7 +696,7 @@ describe('Critical Web Components Tests', () => {
         currentUserId: 'current-user-123',
       };
 
-      render(<Story {...storyProps} />);
+      render(<StoryCard {...storyProps} />);
 
       expect(screen.getByText('Summer Vacation')).toBeInTheDocument();
       expect(screen.getByText('Had a great time at the beach!')).toBeInTheDocument();
@@ -740,7 +740,7 @@ describe('Critical Web Components Tests', () => {
         currentUserId: 'current-user-123',
       };
 
-      render(<Story {...storyProps} />);
+      render(<StoryCard {...storyProps} />);
 
       // Click the like button - using the heart icon
       const likeButton = screen.getByRole('button', { name: /like/i });
@@ -780,7 +780,7 @@ describe('Critical Web Components Tests', () => {
         currentUserId: 'current-user-123', // User is the author
       };
 
-      render(<Story {...storyProps} />);
+      render(<StoryCard {...storyProps} />);
 
       // Click the more options button
       const moreButton = screen.getByRole('button', { name: /more options/i });
@@ -824,7 +824,7 @@ describe('Critical Web Components Tests', () => {
 
       render(
         <OfflineContext.Provider value={mockOffline}>
-          <Story {...storyProps} />
+          <StoryCard {...storyProps} />
         </OfflineContext.Provider>
       );
 

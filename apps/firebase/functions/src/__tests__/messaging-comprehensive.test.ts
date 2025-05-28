@@ -173,8 +173,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'sender-id' } as any,
+        auth: { uid: 'sender-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await messaging.sendMessage.run(mockRequest);
@@ -266,8 +268,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'sender-id' } as any,
+        auth: { uid: 'sender-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await messaging.sendMessage.run(mockRequest);
@@ -337,8 +341,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'sender-id' } as any,
+        auth: { uid: 'sender-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await messaging.sendMessage.run(mockRequest);
@@ -376,8 +382,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'sender-id' } as any,
+        auth: { uid: 'sender-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(messaging.sendMessage.run(mockRequest))
@@ -398,8 +406,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'sender-id' } as any,
+        auth: { uid: 'sender-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(messaging.sendMessage.run(mockRequest))
@@ -435,8 +445,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'sender-id' } as any,
+        auth: { uid: 'sender-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(messaging.sendMessage.run(mockRequest))
@@ -464,8 +476,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'sender-id' } as any,
+        auth: { uid: 'sender-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(messaging.sendMessage.run(mockRequest))
@@ -565,8 +579,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'sender-id' } as any,
+        auth: { uid: 'sender-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await messaging.sendMessageNotification.run(mockRequest);
@@ -659,8 +675,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'sender-id' } as any,
+        auth: { uid: 'sender-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await messaging.sendMessageNotification.run(mockRequest);
@@ -736,8 +754,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'sender-id' } as any,
+        auth: { uid: 'sender-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await messaging.sendMessageNotification.run(mockRequest);
@@ -796,8 +816,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'sender-id' } as any,
+        auth: { uid: 'sender-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await messaging.sendMessageNotification.run(mockRequest);
@@ -833,8 +855,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'user-123' } as any,
+        auth: { uid: 'user-123' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       const result = await messaging.updateNotificationSettings.run(mockRequest);
@@ -855,9 +879,11 @@ describe('Messaging Module Comprehensive Tests', () => {
       });
 
       const mockRequest: CallableRequest<any> = {
-        data: { settings: 'invalid' },
+        data: { settings: 'invalid' ,
+    acceptsStreaming: false},
         auth: { uid: 'user-123' } as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(messaging.updateNotificationSettings.run(mockRequest))
@@ -881,8 +907,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'user-123' } as any,
+        auth: { uid: 'user-123' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       // Test would continue with the registerFCMToken implementation
@@ -914,8 +942,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'sender-id' } as any,
+        auth: { uid: 'sender-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await expect(messaging.sendMessage.run(mockRequest))
@@ -960,8 +990,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'sender-id' } as any,
+        auth: { uid: 'sender-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await messaging.sendMessage.run(mockRequest);
@@ -1001,8 +1033,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'sender-id' } as any,
+        auth: { uid: 'sender-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       // Send multiple messages concurrently
@@ -1069,8 +1103,10 @@ describe('Messaging Module Comprehensive Tests', () => {
 
       const mockRequest: CallableRequest<any> = {
         data: testData,
-        auth: { uid: 'sender-id' } as any,
+        auth: { uid: 'sender-id' ,
+    acceptsStreaming: false} as any,
         rawRequest: {} as any,
+        acceptsStreaming: false,
       };
 
       await messaging.sendMessage.run(mockRequest);

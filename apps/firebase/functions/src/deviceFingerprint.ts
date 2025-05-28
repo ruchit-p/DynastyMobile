@@ -24,6 +24,32 @@ export const verifyDeviceFingerprint = onCall({
       );
     }
 
+    // Rate limit fingerprint verification (max 5 per minute)
+    const rateLimitRef = admin.firestore().collection("rateLimits")
+      .doc(`fingerprint_${request.auth.uid}`);
+    
+    const now = Date.now();
+    const minuteAgo = now - (60 * 1000);
+    
+    const rateLimitDoc = await rateLimitRef.get();
+    if (rateLimitDoc.exists) {
+      const data = rateLimitDoc.data()!;
+      const requests = data.requests || [];
+      const recentRequests = requests.filter((timestamp: number) => timestamp > minuteAgo);
+      
+      if (recentRequests.length >= 5) {
+        throw new HttpsError("resource-exhausted", "Too many fingerprint verification requests. Please try again later.");
+      }
+      
+      await rateLimitRef.update({
+        requests: [...recentRequests, now]
+      });
+    } else {
+      await rateLimitRef.set({
+        requests: [now]
+      });
+    }
+
     // Validate and sanitize input using centralized validator
     const validatedData = validateRequest(
       request.data,
@@ -50,7 +76,7 @@ export const verifyDeviceFingerprint = onCall({
       deviceInfo
     );
 
-    // Log authentication event
+    // Log authentication event with anonymized data
     await admin.firestore().collection("authEvents").add({
       userId,
       visitorId,
@@ -61,9 +87,16 @@ export const verifyDeviceFingerprint = onCall({
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       metadata: {
         browserDetails: fingerprint.browserDetails,
-        location: fingerprint.ipLocation,
+        location: fingerprint.ipLocation ? {
+          // Only store country and city, not exact coordinates
+          country: fingerprint.ipLocation.country,
+          city: fingerprint.ipLocation.city,
+          continent: fingerprint.ipLocation.continent,
+          // Exclude latitude/longitude for privacy
+        } : undefined,
         vpn: fingerprint.vpn?.result,
         incognito: fingerprint.incognito,
+        // IP address is NOT stored in auth events for privacy
       },
     });
 

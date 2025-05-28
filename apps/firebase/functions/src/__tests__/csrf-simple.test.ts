@@ -66,6 +66,7 @@ describe('CSRF Simple Integration Tests', () => {
           'x-csrf-token': 'test-token',
         },
       } as any,
+      acceptsStreaming: false,
     } as CallableRequest;
   });
 

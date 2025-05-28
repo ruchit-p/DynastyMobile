@@ -1,15 +1,15 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 
 // Import services to test
-import VaultService from '../../services/VaultService';
-import NotificationService from '../../services/NotificationService';
-import NetworkMonitor from '../../services/NetworkMonitor';
-import OfflineService from '../../services/OfflineService';
-import SyncQueueService from '../../services/SyncQueueService';
-import CacheService from '../../services/CacheService';
-import AuditLogService from '../../services/AuditLogService';
-import ErrorHandlingService from '../../services/ErrorHandlingService';
-import EnhancedFingerprintService from '../../services/EnhancedFingerprintService';
+import { vaultService } from '../../services/VaultService';
+import notificationService from '../../services/NotificationService';
+import networkMonitor from '../../services/NetworkMonitor';
+import offlineService from '../../services/OfflineService';
+import syncQueueService from '../../services/SyncQueueService';
+import cacheService from '../../services/CacheService';
+import auditLogService from '../../services/AuditLogService';
+import errorHandlingService from '../../services/ErrorHandlingService';
+import enhancedFingerprintService from '../../services/EnhancedFingerprintService';
 
 // Mock Firebase
 jest.mock('firebase/auth');
@@ -73,11 +73,8 @@ describe('Web Services Tests', () => {
   });
 
   describe('VaultService', () => {
-    let vaultService: VaultService;
-
-    beforeEach(() => {
-      vaultService = new VaultService();
-    });
+    // Use the imported singleton instance
+    // vaultService is already available as imported singleton
 
     it('should encrypt and store vault items', async () => {
       const vaultItem = {
@@ -180,10 +177,8 @@ describe('Web Services Tests', () => {
   });
 
   describe('NotificationService', () => {
-    let notificationService: NotificationService;
-
+    // Use the imported singleton instance
     beforeEach(() => {
-      notificationService = new NotificationService();
       // Mock Notification API
       global.Notification = {
         permission: 'default',
@@ -258,11 +253,8 @@ describe('Web Services Tests', () => {
   });
 
   describe('OfflineService', () => {
-    let offlineService: OfflineService;
-
-    beforeEach(() => {
-      offlineService = new OfflineService();
-    });
+    // Use the imported singleton instance
+    // offlineService is already available as imported singleton
 
     it('should detect online/offline status', async () => {
       const onlineHandler = jest.fn();
@@ -335,11 +327,8 @@ describe('Web Services Tests', () => {
   });
 
   describe('CacheService', () => {
-    let cacheService: CacheService;
-
-    beforeEach(() => {
-      cacheService = new CacheService();
-    });
+    // Use the imported singleton instance
+    // cacheService is already available as imported singleton
 
     it('should implement LRU cache with size limits', async () => {
       const maxSize = 100; // 100 items
@@ -392,11 +381,8 @@ describe('Web Services Tests', () => {
   });
 
   describe('AuditLogService', () => {
-    let auditService: AuditLogService;
-
-    beforeEach(() => {
-      auditService = new AuditLogService();
-    });
+    // Use the imported singleton instance
+    // auditLogService is already available as imported singleton
 
     it('should log security-relevant actions', async () => {
       const actions = [
@@ -406,10 +392,10 @@ describe('Web Services Tests', () => {
       ];
 
       for (const action of actions) {
-        await auditService.log(action);
+        await auditLogService.log(action);
       }
 
-      const logs = await auditService.query({
+      const logs = await auditLogService.query({
         userId: 'user-123',
         limit: 10,
       });
@@ -423,7 +409,7 @@ describe('Web Services Tests', () => {
 
       // Simulate multiple failed login attempts
       for (let i = 0; i < 5; i++) {
-        await auditService.log({
+        await auditLogService.log({
           type: 'login-failed',
           userId,
           ip: '192.168.1.1',
@@ -431,7 +417,7 @@ describe('Web Services Tests', () => {
         });
       }
 
-      const analysis = await auditService.analyzeUserActivity(userId);
+      const analysis = await auditLogService.analyzeUserActivity(userId);
 
       expect(analysis.suspiciousActivity).toBe(true);
       expect(analysis.alerts).toContainEqual(
@@ -448,14 +434,14 @@ describe('Web Services Tests', () => {
       const endDate = new Date('2024-01-31');
 
       for (let i = 0; i < 20; i++) {
-        await auditService.log({
+        await auditLogService.log({
           type: 'action',
           userId: `user-${i % 3}`,
           timestamp: new Date(`2024-01-${i + 1}`).getTime(),
         });
       }
 
-      const exported = await auditService.exportLogs({
+      const exported = await auditLogService.exportLogs({
         startDate,
         endDate,
         userIds: ['user-0', 'user-1'],
@@ -693,7 +679,7 @@ describe('Web Services Integration Tests', () => {
     await vaultService.shareVaultItem(encrypted.id, ['user-789']);
     
     // Verify audit trail
-    const logs = await auditService.query({ resourceId: encrypted.id });
+    const logs = await auditLogService.query({ resourceId: encrypted.id });
     
     expect(logs).toContainEqual(
       expect.objectContaining({
