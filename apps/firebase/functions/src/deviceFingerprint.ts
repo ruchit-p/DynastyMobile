@@ -267,7 +267,8 @@ export const cleanupOldDevices = onSchedule({
     const batchSize = 100;
     let lastUserId: string | undefined;
 
-    while (true) {
+    let hasMoreUsers = true;
+    while (hasMoreUsers) {
       // Get batch of users
       let query = admin.firestore().collection("users").limit(batchSize);
       if (lastUserId) {
@@ -275,7 +276,10 @@ export const cleanupOldDevices = onSchedule({
       }
 
       const usersSnapshot = await query.get();
-      if (usersSnapshot.empty) break;
+      if (usersSnapshot.empty) {
+        hasMoreUsers = false;
+        break;
+      }
 
       // Process each user
       const promises = usersSnapshot.docs.map(async (userDoc) => {

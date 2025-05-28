@@ -393,15 +393,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Phone authentication functions
   const signInWithPhone = async (phoneNumber: string): Promise<{ verificationId: string }> => {
     try {
+      console.log('🔧 PHONE AUTH DEBUG: Starting phone sign-in process for:', phoneNumber);
+      console.log('🔧 PHONE AUTH DEBUG: Auth object:', auth);
+      console.log('🔧 PHONE AUTH DEBUG: Auth app config:', auth.app.options);
+      
       // Create invisible reCAPTCHA verifier
       if (!window.recaptchaVerifier) {
+        console.log('🔧 PHONE AUTH DEBUG: Creating new RecaptchaVerifier');
         window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
           'size': 'invisible',
         });
+        console.log('🔧 PHONE AUTH DEBUG: RecaptchaVerifier created:', window.recaptchaVerifier);
+      } else {
+        console.log('🔧 PHONE AUTH DEBUG: Using existing RecaptchaVerifier:', window.recaptchaVerifier);
       }
 
       const appVerifier = window.recaptchaVerifier;
+      console.log('🔧 PHONE AUTH DEBUG: Attempting signInWithPhoneNumber with verifier:', appVerifier);
+      
       const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
+      console.log('✅ PHONE AUTH DEBUG: signInWithPhoneNumber successful, result:', confirmationResult);
       
       // Store the confirmation result for later use
       window.confirmationResult = confirmationResult;
@@ -409,7 +420,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Return the verification ID
       return { verificationId: confirmationResult.verificationId };
     } catch (error) {
-      console.error("Error sending verification code:", error);
+      console.error("❌ PHONE AUTH DEBUG: Error sending verification code:", error);
+      console.error("❌ PHONE AUTH DEBUG: Error details:", {
+        code: (error as any)?.code,
+        message: (error as any)?.message,
+        customData: (error as any)?.customData
+      });
       throw error;
     }
   };

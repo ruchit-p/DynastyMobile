@@ -4,7 +4,7 @@
 import * as sodium from "libsodium-wrappers";
 import * as winston from "winston";
 import {getFirestore} from "firebase-admin/firestore";
-import {getStorage} from "firebase-admin/storage";
+// import {getStorage} from "firebase-admin/storage";
 
 // Configure winston logger
 const logger = winston.createLogger({

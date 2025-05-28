@@ -2,6 +2,7 @@
   "name": "functions",
   "scripts": {
     "lint": "eslint --ext .js,.ts .",
+    "lint:ci": "eslint --ext .js,.ts src --ignore-pattern '**/*.test.ts' --ignore-pattern '**/__tests__/**'",
     "build": "tsc",
     "build:watch": "tsc --watch",
     "serve": "npm run build && firebase emulators:start --only functions",
