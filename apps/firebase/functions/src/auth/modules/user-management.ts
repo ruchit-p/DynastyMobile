@@ -213,7 +213,7 @@ export const handleAccountDeletion = onCall(
         },
       },
       enableCSRF: true,
-      rateLimitConfig: SECURITY_CONFIG.rateLimits.delete
+      rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
     }
   )
 );
@@ -307,7 +307,7 @@ export const updateUserProfile = onCall(
         requiredLevel: [PermissionLevel.PROFILE_OWNER, PermissionLevel.ADMIN],
       },
       enableCSRF: true,
-      rateLimitConfig: SECURITY_CONFIG.rateLimits.write
+      rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
     }
   )
 );
@@ -435,7 +435,7 @@ export const getUserSettings = onCall(
     }
 
     const userData = userDoc.data() as UserDocument;
-    
+
     return {
       fontSettings: userData.fontSettings || {
         fontScale: 1.0,
@@ -465,7 +465,7 @@ export const updateUserSettings = onCall(
 
     const db = getFirestore();
     const userRef = db.collection("users").doc(userId);
-    
+
     const updates: Partial<UserDocument> = {
       updatedAt: Timestamp.now().toDate(),
     };

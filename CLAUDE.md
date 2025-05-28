@@ -34,32 +34,7 @@ yarn feature:ts "feature-name" "feat: your commit message" --skip-local-tests
 5. **PR Creation**: Creates PR with proper description
 6. **CI Monitoring**: Watches GitHub Actions status
 
-### Manual Commands if Needed
-```bash
-# 1. Start from dev branch
-git checkout dev && git pull origin dev
-
-# 2. Create feature branch
-git checkout -b feature/your-feature
-
-# 3. Run tests locally
-cd apps/web/dynastyweb && yarn test
-cd apps/mobile && yarn test
-cd apps/firebase/functions && npm test
-
-# 4. Create PR
-gh pr create --base dev --title "feat: your feature"
-
-# 5. Monitor CI
-gh pr checks --watch
-```
-
-### Prerequisites Status
-✅ **GitHub CLI**: Installed and authenticated as `ruchit-p`
-✅ **ts-node**: Installed globally at `/Users/ruchitpatel/.nvm/versions/node/v20.18.3/bin/ts-node`
-✅ **Automation Scripts**: Ready at `/scripts/claude-feature-workflow.sh` and `/scripts/claude-dev-assistant.ts`
-
-The automated workflow is now fully configured and ready to use!
+The automated workflow handles branch creation, testing, PR creation, and CI monitoring automatically.
 
 ## Repository Architecture - Monorepo Setup
 
@@ -76,24 +51,57 @@ DynastyMobile/                    # Main monorepo
 └── scripts/                     # Automation scripts
 ```
 
-### Key Benefits of Monorepo
-- ✅ **Single CI/CD Pipeline** - All platforms tested together
-- ✅ **Atomic Commits** - Update mobile/web/backend in sync
-- ✅ **Shared Dependencies** - No version conflicts between platforms
-- ✅ **Cross-Platform Coordination** - Features stay consistent
-- ✅ **Simplified Management** - One repo, one source of truth
+**Monorepo Benefits**: Single CI/CD pipeline, atomic commits, shared dependencies.
 
-### Deployment Integration
-- **Web (Vercel)**: Connected to `DynastyMobile` repo, builds from `apps/web/dynastyweb/`
-- **Mobile (EAS)**: Builds from `apps/mobile/` with shared configurations
-- **Backend (Firebase)**: Deploys from `apps/firebase/functions/`
+**Deployment Targets**:
+- Web: Vercel from `apps/web/dynastyweb/`
+- Mobile: EAS from `apps/mobile/`
+- Backend: Firebase from `apps/firebase/functions/`
 
-### Migration Notes
-**May 2025**: Successfully consolidated separate `dynastyweb` repository into monorepo:
-- Removed nested git repository from `apps/web/dynastyweb/`
-- Updated Vercel project to connect to main `DynastyMobile` repo
-- Preserved all commit history and configurations
-- Updated CI/CD workflows to handle consolidated structure
+## CI/CD Pipeline Overview
+
+### Branch Strategy
+- **dev** → Development branch (feature branches merge here)
+- **staging** → Staging environment (automated deployment to Vercel staging)
+- **main** → Production branch (requires manual approval)
+
+### Automated Workflows
+1. **Pull Request Checks** (`.github/workflows/dev-checks.yml`)
+   - Runs on all PRs to dev branch
+   - Tests: Web (Jest), Mobile (Jest), Firebase (Jest), Security scan
+   - Blocks merge if tests fail
+
+2. **Staging Deployment** (`.github/workflows/staging-deploy.yml`)
+   - Triggers when dev merges to staging
+   - Deploys to Vercel staging environment
+   - Runs integration tests
+   - Notifies team on Slack
+
+3. **Production Deployment** (`.github/workflows/production-deploy.yml`)
+   - Requires manual approval
+   - Includes Cloudflare cache purging
+   - Blue-green deployment support
+   - Rollback capabilities
+
+### Environment Variables
+Set in both GitHub Secrets and Vercel:
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+- `VERCEL_TOKEN`
+- `CLOUDFLARE_ZONE_ID`
+- `CLOUDFLARE_API_TOKEN`
+
+### CI/CD Scripts
+```bash
+# Create and push branches
+./scripts/setup-branches.sh
+
+# Automated feature workflow
+yarn feature "feature-name" "commit message"
+
+# CI error auto-fix
+yarn fix:ci --branch dev
+```
 
 ## CI/CD Error Auto-Fix Workflow
 
@@ -256,7 +264,7 @@ await AsyncStorage.setItem('key', JSON.stringify({
 
 ## Design System
 
-### Colors (Updated May 2025)
+### Colors
 Dynasty uses a consistent color palette across mobile and web:
 
 **Primary Greens:**
@@ -416,29 +424,6 @@ npm run build     # TypeScript check (functions)
 - **SyncService** - Offline queue management
 - **FontSizeService** - Dynamic font scaling with accessibility support
 
-### iOS Native Modules (`/apps/mobile/ios/RNLibsignal/`)
-- **RNLibsignal** - Main Signal Protocol native module
-- **RNLibsignalKeychain** - iOS Keychain secure storage
-- **RNLibsignalBiometric** - Face ID/Touch ID integration
-- **RNLibsignalMigration** - Data migration system
-- **RNLibsignalKeyRotation** - Automatic key rotation policies
-- **Store Implementations** - SessionStore, PreKeyStore, SignedPreKeyStore, IdentityStore
-
-### Android Native Modules (`/apps/mobile/android/.../libsignal/`)
-- **LibsignalModule** - Main Signal Protocol native module with coroutines
-- **LibsignalKeystore** - Android Keystore secure storage with EncryptedSharedPreferences
-- **LibsignalBiometric** - Fingerprint/Face authentication with BiometricPrompt
-- **LibsignalMigration** - Data migration from in-memory to persistent storage
-- **LibsignalKeyRotation** - Automatic key rotation with configurable intervals
-- **Persistent Stores** - All Signal Protocol stores with secure persistence
-- **SenderKeyStore** - Group messaging support (not yet on iOS)
-
-### Signal Protocol Implementation (`/apps/mobile/src/lib/signal-protocol/`)
-- **Protocol Buffers** - Complete Signal Protocol message format (signal.proto)
-- **SignalProtobuf.ts** - TypeScript message encoding/decoding
-- **SignalMessageHandler.ts** - High-level API bridging protobuf with native modules
-- **Cross-platform compatibility** - Ensures iOS/Android message interoperability
-
 ### Testing
 ```bash
 yarn test              # Run all tests
@@ -446,100 +431,18 @@ yarn test:watch        # Watch mode
 yarn test:coverage     # Coverage report
 ```
 
-### Recent Major Updates
-- **Dynamic Font Sizing** ✅ - Accessibility-first font scaling for mobile & web (May 2025)
-- **Signal Protocol PRODUCTION READY** ✅ - Complete E2EE implementation passed security audit (May 2025)
-- **iOS & Android Group Messaging** - SenderKeyStore implementation for efficient group chats on both platforms
-- **Comprehensive Integration Tests** - Cross-platform compatibility verified with full test coverage
-- **Security Audit Passed** - PRODUCTION READY rating with LOW risk level 🟢
-- **Hardware Security Integration** - iOS Keychain & Android Keystore with biometric protection
-- **Protocol Buffers** - Cross-platform message serialization for iOS ↔ Android compatibility
-- **Offline-First Architecture** - SQLite queue, background sync, network monitoring
-- **Full Web/Mobile Feature Parity** - Consistent experience across platforms
-- **Comprehensive Test Infrastructure** - Jest, mocks, CI/CD pipeline
-- **Documentation Overhaul** - Reorganized with clear navigation and no duplicates
-- **Universal Links** - Deep linking support for mydynastyapp.com
-- **Production Configuration** - EAS setup, environment management, security hardening
-- **FingerprintJS Pro Integration** - Device fingerprinting, trust scoring, risk assessment
+## Documentation
 
-## Documentation Structure
+For detailed documentation, see `/docs/README.md`. Key references:
+- **Architecture**: `/docs/architecture/`
+- **API Reference**: `/docs/api-reference/`
+- **Feature Guides**: `/docs/features/`
+- **Security**: `/docs/security/`
 
-The documentation has been completely reorganized for better discoverability:
+For implementation history, see [CHANGELOG.md](./CHANGELOG.md).
 
-### Quick Reference Paths
-- **Architecture & Design**: `/docs/architecture/` - System overview, data flow, tech stack
-- **API Documentation**: `/docs/api-reference/` - Complete API specs for all endpoints
-- **Security Docs**: `/docs/security/` - Audit reports, encryption details, CSRF protection
-- **Feature Docs**: `/docs/features/` - In-depth docs for auth, messaging, vault, etc.
-- **Developer Guides**: `/docs/guides/` - Getting started, deployment, testing
-
-### How to Use Documentation Effectively
-
-1. **Finding Information**:
-   ```bash
-   # Main navigation hub
-   /docs/README.md
-   
-   # Feature-specific docs
-   /docs/features/{feature}/overview.md
-   
-   # API endpoints
-   /docs/api-reference/{service}.md
-   
-   # Security implementation
-   /docs/security/encryption.md
-   ```
-
-2. **Common Documentation Lookups**:
-   - **Authentication Flow**: `/docs/features/authentication/flows.md`
-   - **Message Schema**: `/docs/features/messaging/schema.md`
-   - **Security Audit**: `/docs/security/audit-report.md`
-   - **Getting Started**: `/docs/guides/getting-started.md`
-   - **Error Handling**: `/docs/guides/error-handling.md`
-
-3. **Implementation References**:
-   - Check feature docs before implementing new features
-   - Review API docs for endpoint specifications
-   - Consult security docs for encryption/auth patterns
-   - Use architecture docs for system-level decisions
-
-4. **Archived Documentation**:
-   - Old/deprecated docs in `/docs/archive/`
-   - Completed implementation plans archived
-   - Historical context available if needed
-
-### Documentation Best Practices
-
-When working with Dynasty code:
-1. **Always check relevant docs first** - Save time by reading existing documentation
-2. **Update docs with code changes** - Keep documentation in sync
-3. **Reference doc paths in comments** - Link to detailed docs from code
-4. **Use consistent patterns** - Follow documented architectures and patterns
-
-For detailed implementation history and technical specifications, see [CHANGELOG.md](./CHANGELOG.md).
-For complete documentation navigation, see [Documentation README](/docs/README.md).
-
-## CI/CD Pipeline Architecture
-
-The monorepo uses a unified CI/CD pipeline with separate workflows for each platform:
-
-### GitHub Actions Workflows
-- **`dev-checks.yml`** - Runs on all PRs to dev branch
-- **`mobile-ci-cd.yml`** - Mobile app testing and EAS builds
-- **`web-ci-cd.yml`** - Web app testing and Vercel deployments
-- **`firebase-ci-cd.yml`** - Firebase Functions testing and deployment
-- **`security-scan.yml`** - Security scanning across all platforms
-- **`auto-fix-ci.yml`** - Automatic error fixing when CI fails
-
-### Deployment Status
-- **Web**: Deployed to Vercel from monorepo `apps/web/dynastyweb/`
-- **Mobile**: Built with EAS from `apps/mobile/`
-- **Backend**: Deployed to Firebase from `apps/firebase/functions/`
-
-### Path-Based Triggers
-CI workflows are optimized to only run when relevant files change:
-- Web CI triggers on `apps/web/**` changes
-- Mobile CI triggers on `apps/mobile/**` changes  
-- Firebase CI triggers on `apps/firebase/**` changes
-
-This ensures efficient resource usage and faster CI feedback.
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

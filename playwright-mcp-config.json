@@ -1,24 +1,24 @@
 {
-    "browser": {
-        "browserName": "chromium",
-        "launchOptions": {
-            "channel": "chrome",
-            "headless": false,
-            "args": [
-                "--load-extension=/Users/ruchitpatel/Downloads/chrome-extension",
-                "--disable-extensions-except=/Users/ruchitpatel/Downloads/chrome-extension"
-            ]
-        }
-    },
-    "vision": true,
-    "capabilities": [
-        "core",
-        "tabs",
-        "pdf",
-        "history",
-        "wait",
-        "files",
-        "install",
-        "testing"
-    ]
+  "browser": {
+    "browserName": "chromium",
+    "launchOptions": {
+      "channel": "chrome",
+      "headless": false,
+      "args": [
+        "--load-extension=/Users/ruchitpatel/Downloads/chrome-extension",
+        "--disable-extensions-except=/Users/ruchitpatel/Downloads/chrome-extension"
+      ]
+    }
+  },
+  "vision": true,
+  "capabilities": [
+    "core",
+    "tabs",
+    "pdf",
+    "history",
+    "wait",
+    "files",
+    "install",
+    "testing"
+  ]
 }

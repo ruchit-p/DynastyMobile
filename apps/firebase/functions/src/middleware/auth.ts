@@ -404,12 +404,12 @@ export async function checkRateLimitByIP(
   } = config;
 
   // Get IP address from request
-  const xForwardedFor = request.rawRequest?.headers?.['x-forwarded-for'];
-  const ip = request.rawRequest?.ip || 
-             (typeof xForwardedFor === 'string' ? xForwardedFor.split(',')[0]?.trim() : undefined) || 
-             'unknown';
-  
-  if (ip === 'unknown') {
+  const xForwardedFor = request.rawRequest?.headers?.["x-forwarded-for"];
+  const ip = request.rawRequest?.ip ||
+             (typeof xForwardedFor === "string" ? xForwardedFor.split(",")[0]?.trim() : undefined) ||
+             "unknown";
+
+  if (ip === "unknown") {
     logger.warn("Unable to determine IP address for rate limiting");
     return; // Don't block if we can't determine IP
   }
@@ -466,14 +466,14 @@ export async function checkRateLimitByIP(
     });
 
     logger.debug("IP rate limit check passed", createLogContext({
-      ip: ip.substring(0, 8) + '...', // Log partial IP for debugging
+      ip: ip.substring(0, 8) + "...", // Log partial IP for debugging
       type,
     }));
   } catch (error: any) {
     // Rethrow rate limit errors
     if (error.code === ErrorCode.RESOURCE_EXHAUSTED) {
       logger.warn("IP rate limit exceeded", createLogContext({
-        ip: ip.substring(0, 8) + '...',
+        ip: ip.substring(0, 8) + "...",
         type,
       }));
       throw error;

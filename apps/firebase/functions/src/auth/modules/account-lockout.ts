@@ -55,14 +55,14 @@ export const recordFailedLogin = onCall(
     );
 
     const {email} = validatedData;
-    const ipAddress = request.rawRequest?.ip || 
-                     request.rawRequest?.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || 
-                     'unknown';
-    const userAgent = request.rawRequest?.headers?.['user-agent'] || 'unknown';
+    const ipAddress = request.rawRequest?.ip ||
+                     request.rawRequest?.headers?.["x-forwarded-for"]?.split(",")[0]?.trim() ||
+                     "unknown";
+    const userAgent = request.rawRequest?.headers?.["user-agent"] || "unknown";
 
     logger.info("Recording failed login attempt", createLogContext({
       email,
-      ipPartial: ipAddress.substring(0, 8) + '...',
+      ipPartial: ipAddress.substring(0, 8) + "...",
     }));
 
     const now = Timestamp.now();
@@ -165,7 +165,7 @@ export const checkAccountLockout = onCall(
     if (now >= unlockTime) {
       // Lockout has expired, remove it
       await lockoutRef.delete();
-      
+
       // Also clean up old failed attempts
       const failedAttemptsRef = db.collection("failedLoginAttempts");
       const oldAttemptsSnapshot = await failedAttemptsRef
@@ -270,7 +270,7 @@ export const beforeSignIn = beforeUserSignedIn(
   },
   async (event) => {
     const email = event.data.email;
-    
+
     if (!email) {
       // Allow sign in for non-email providers
       return;
@@ -302,7 +302,7 @@ export const beforeSignIn = beforeUserSignedIn(
 
     // Account is locked, prevent sign in
     const minutesRemaining = Math.ceil((unlockTime.getTime() - now.getTime()) / (60 * 1000));
-    
+
     logger.warn("Blocked sign in attempt for locked account", createLogContext({
       email,
       uid: event.data.uid,

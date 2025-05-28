@@ -30,150 +30,150 @@ export const handleSignUp = onCall({
   async (request) => {
     // Note: IP rate limiting is now handled in withAuth
 
-  // Validate and sanitize input using centralized validator
-  const validatedData = validateRequest(
-    request.data,
-    VALIDATION_SCHEMAS.signup,
-    undefined // No userId yet since it's signup
-  );
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.signup,
+      undefined // No userId yet since it's signup
+    );
 
-  const signupData: SignupData = validatedData;
-  logger.info("Starting simplified signup process", createLogContext({
-    email: signupData.email,
-  }));
+    const signupData: SignupData = validatedData;
+    logger.info("Starting simplified signup process", createLogContext({
+      email: signupData.email,
+    }));
 
-  try {
-    // Initialize SendGrid
-    initSendGrid();
-
-    const auth = getAuth();
-    const db = getFirestore();
-
-    // Check if email already exists
     try {
-      await auth.getUserByEmail(signupData.email);
-      throw new HttpsError(
-        "already-exists",
-        "An account with this email already exists"
-      );
-    } catch (error: any) {
-      // Proceed only if error code is auth/user-not-found
-      if (error.code !== "auth/user-not-found") {
-        if (error instanceof HttpsError) {
-          throw error;
-        }
+    // Initialize SendGrid
+      initSendGrid();
+
+      const auth = getAuth();
+      const db = getFirestore();
+
+      // Check if email already exists
+      try {
+        await auth.getUserByEmail(signupData.email);
         throw new HttpsError(
           "already-exists",
           "An account with this email already exists"
         );
+      } catch (error: any) {
+      // Proceed only if error code is auth/user-not-found
+        if (error.code !== "auth/user-not-found") {
+          if (error instanceof HttpsError) {
+            throw error;
+          }
+          throw new HttpsError(
+            "already-exists",
+            "An account with this email already exists"
+          );
+        }
       }
-    }
 
-    // Create the Firebase Auth account
-    const userRecord = await auth.createUser({
-      email: signupData.email,
-      password: signupData.password,
-      emailVerified: false,
-    });
+      // Create the Firebase Auth account
+      const userRecord = await auth.createUser({
+        email: signupData.email,
+        password: signupData.password,
+        emailVerified: false,
+      });
 
-    const userId = userRecord.uid;
+      const userId = userRecord.uid;
 
-    // Create a complete user document with all required fields initialized
-    const userRef = db.collection("users").doc(userId);
-    const newUserDoc: Partial<UserDocument> = {
+      // Create a complete user document with all required fields initialized
+      const userRef = db.collection("users").doc(userId);
+      const newUserDoc: Partial<UserDocument> = {
       // Identity fields
-      id: userId,
-      email: signupData.email,
+        id: userId,
+        email: signupData.email,
 
-      // Profile fields (undefined until onboarding)
-      displayName: undefined,
-      firstName: undefined,
-      lastName: undefined,
-      phoneNumber: undefined,
-      phoneNumberVerified: false,
-      profilePicture: undefined,
+        // Profile fields (undefined until onboarding)
+        displayName: undefined,
+        firstName: undefined,
+        lastName: undefined,
+        phoneNumber: undefined,
+        phoneNumberVerified: false,
+        profilePicture: undefined,
 
-      // Relationship fields (empty arrays)
-      parentIds: [],
-      childrenIds: [],
-      spouseIds: [],
+        // Relationship fields (empty arrays)
+        parentIds: [],
+        childrenIds: [],
+        spouseIds: [],
 
-      // Organization fields (undefined until onboarding)
-      familyTreeId: undefined,
-      historyBookId: undefined,
+        // Organization fields (undefined until onboarding)
+        familyTreeId: undefined,
+        historyBookId: undefined,
 
-      // Personal fields
-      gender: undefined,
-      dateOfBirth: undefined,
+        // Personal fields
+        gender: undefined,
+        dateOfBirth: undefined,
 
-      // Permission fields (defaults)
-      isAdmin: false,
-      canAddMembers: false,
-      canEdit: false,
+        // Permission fields (defaults)
+        isAdmin: false,
+        canAddMembers: false,
+        canEdit: false,
 
-      // Status fields
-      emailVerified: false,
-      isPendingSignUp: false,
-      onboardingCompleted: false,
+        // Status fields
+        emailVerified: false,
+        isPendingSignUp: false,
+        onboardingCompleted: false,
 
-      // System fields
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      dataRetentionPeriod: "forever",
-      dataRetentionLastUpdated: new Date(),
+        // System fields
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        dataRetentionPeriod: "forever",
+        dataRetentionLastUpdated: new Date(),
 
-      // Optional fields
-      invitationId: undefined,
-    };
+        // Optional fields
+        invitationId: undefined,
+      };
 
-    await userRef.set(newUserDoc);
+      await userRef.set(newUserDoc);
 
-    // Generate verification token and send verification email
-    const verificationToken = generateSecureToken();
-    const hashedToken = hashToken(verificationToken);
-    const expiryTime = new Date();
-    expiryTime.setMinutes(expiryTime.getMinutes() + 30); // Token expires in 30 minutes
+      // Generate verification token and send verification email
+      const verificationToken = generateSecureToken();
+      const hashedToken = hashToken(verificationToken);
+      const expiryTime = new Date();
+      expiryTime.setMinutes(expiryTime.getMinutes() + 30); // Token expires in 30 minutes
 
-    // Update user document with verification token
-    await userRef.update({
-      emailVerificationToken: hashedToken,
-      emailVerificationExpires: expiryTime,
-    });
+      // Update user document with verification token
+      await userRef.update({
+        emailVerificationToken: hashedToken,
+        emailVerificationExpires: expiryTime,
+      });
 
-    // Send verification email using helper
-    const verificationLink = `${FRONTEND_URL.value()}/verify-email/confirm?uid=${userId}&token=${verificationToken}`;
-    const {sendEmail} = await import("../utils/sendgridHelper");
-    await sendEmail({
-      to: signupData.email,
-      templateType: "verification",
-      dynamicTemplateData: {
-        username: signupData.email.split("@")[0], // Use email username as fallback since we don't have names yet
-        verificationLink: verificationLink,
-      },
-    });
-    logger.info("Successfully completed simplified signup process", createLogContext({
-      userId: userId,
-    }));
+      // Send verification email using helper
+      const verificationLink = `${FRONTEND_URL.value()}/verify-email/confirm?uid=${userId}&token=${verificationToken}`;
+      const {sendEmail} = await import("../utils/sendgridHelper");
+      await sendEmail({
+        to: signupData.email,
+        templateType: "verification",
+        dynamicTemplateData: {
+          username: signupData.email.split("@")[0], // Use email username as fallback since we don't have names yet
+          verificationLink: verificationLink,
+        },
+      });
+      logger.info("Successfully completed simplified signup process", createLogContext({
+        userId: userId,
+      }));
 
-    return {
-      success: true,
-      userId,
-    };
-  } catch (error: any) {
-    logger.error("Error in handleSignUp:", error);
-    if (error instanceof HttpsError) {
-      throw error; // Re-throw HttpsError instances as is
+      return {
+        success: true,
+        userId,
+      };
+    } catch (error: any) {
+      logger.error("Error in handleSignUp:", error);
+      if (error instanceof HttpsError) {
+        throw error; // Re-throw HttpsError instances as is
+      }
+      // For other types of errors, throw a generic HttpsError
+      const message = error?.message || "Failed to complete signup process";
+      throw new HttpsError("internal", message, error);
     }
-    // For other types of errors, throw a generic HttpsError
-    const message = error?.message || "Failed to complete signup process";
-    throw new HttpsError("internal", message, error);
-  }
-},
+  },
   "handleSignUp",
   {
     authLevel: "none", // No auth required for signup
     enableCSRF: true, // Enable CSRF protection
-    rateLimitConfig: SECURITY_CONFIG.rateLimits.auth
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.auth,
   }
 ));
 
@@ -609,7 +609,7 @@ export const signInWithPhoneNumber = onCall(
       maxRequests: 5, // Max 5 attempts per IP
       windowSeconds: 900, // 15 minutes
     });
-    
+
     // const {phoneNumber, recaptchaToken} = request.data;
     // Implementation depends on chosen verification method (e.g., reCAPTCHA, custom OTP service)
     // This is a complex flow involving client-side steps as well.

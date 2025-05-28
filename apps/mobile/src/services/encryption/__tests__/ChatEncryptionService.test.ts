@@ -1,4 +1,15 @@
 // Mock dependencies first, before imports
+// Now import after mocks are set up
+import { ChatEncryptionService } from '../ChatEncryptionService';
+import { LibsignalService } from '../libsignal/LibsignalService';
+import { MediaEncryptionService } from '../MediaEncryptionService';
+import { getFirebaseDb, getFirebaseAuth } from '../../../lib/firebase';
+import { callFirebaseFunction } from '../../../lib/errorUtils';
+import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import NetInfo from '@react-native-community/netinfo';
+import { OfflineQueueService } from '../OfflineQueueService';
+import { EncryptedSearchService } from '../EncryptedSearchService';
+
 jest.mock('@react-native-community/netinfo', () => ({
   default: {
     addEventListener: jest.fn(() => jest.fn()), // Return unsubscribe function
@@ -46,17 +57,6 @@ jest.mock('../EncryptedSearchService', () => ({
   })),
 }));
 jest.mock('../AuditLogService');
-
-// Now import after mocks are set up
-import { ChatEncryptionService } from '../ChatEncryptionService';
-import { LibsignalService } from '../libsignal/LibsignalService';
-import { MediaEncryptionService } from '../MediaEncryptionService';
-import { getFirebaseDb, getFirebaseAuth } from '../../../lib/firebase';
-import { callFirebaseFunction } from '../../../lib/errorUtils';
-import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
-import NetInfo from '@react-native-community/netinfo';
-import { OfflineQueueService } from '../OfflineQueueService';
-import { EncryptedSearchService } from '../EncryptedSearchService';
 
 describe('ChatEncryptionService', () => {
   const mockUserId = 'test-user-id';

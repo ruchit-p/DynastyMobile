@@ -578,36 +578,36 @@ export const createEvent = onCall(
       try {
         const {getTwilioService} = await import("./services/twilioService");
         const twilioService = getTwilioService();
-        
+
         // Get invited users' details
         const invitedUsersSnapshot = await db.collection("users")
           .where("__name__", "in", eventData.invitedMemberIds)
           .get();
-        
+
         // Get host details
         const hostDoc = await db.collection("users").doc(uid).get();
         const hostData = hostDoc.data();
         const hostName = hostData?.displayName || `${hostData?.firstName} ${hostData?.lastName}` || "Someone";
-        
+
         // Send SMS to each invited user who has SMS enabled
         const smsPromises = invitedUsersSnapshot.docs.map(async (userDoc) => {
           const userData = userDoc.data();
           if (userData.phoneNumber && userData.smsPreferences?.enabled && userData.smsPreferences?.eventInvites) {
             try {
               const eventDate = new Date(eventData.eventDate);
-              const dateString = eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              const dateString = eventDate.toLocaleDateString("en-US", {month: "short", day: "numeric"});
               const eventLink = `https://mydynastyapp.com/events/${newEventId}`;
-              
+
               await twilioService.sendSms(
                 {
                   to: userData.phoneNumber,
-                  body: `${hostName} invited you to "${eventData.title}" on ${dateString}. RSVP here: ${eventLink}`
+                  body: `${hostName} invited you to "${eventData.title}" on ${dateString}. RSVP here: ${eventLink}`,
                 },
                 uid,
-                'event_invite',
+                "event_invite",
                 {
                   eventId: newEventId,
-                  inviteeId: userDoc.id
+                  inviteeId: userDoc.id,
                 }
               );
               logger.info(`Sent event invitation SMS to user ${userDoc.id}`);
@@ -616,7 +616,7 @@ export const createEvent = onCall(
             }
           }
         });
-        
+
         await Promise.allSettled(smsPromises);
       } catch (error) {
         // Log error but don't fail the event creation
@@ -743,11 +743,11 @@ export const updateEvent = onCall(
     }
 
     const eventRef = db.collection("events").doc(eventId);
-    
+
     // Get current event data to compare changes
     const currentEventDoc = await eventRef.get();
     const currentEventData = currentEventDoc.data() as EventData;
-    
+
     const updatePayload: Partial<EventData> = {
       ...updates,
       updatedAt: Timestamp.now(),
@@ -758,40 +758,40 @@ export const updateEvent = onCall(
 
     await eventRef.update(updatePayload);
     logger.info(`Event ${eventId} updated by ${uid}.`, {updates: Object.keys(updates)});
-    
+
     // Send SMS notifications for significant changes
-    const significantChanges = ['eventDate', 'startTime', 'location', 'isVirtual'];
-    const hasSignificantChange = significantChanges.some(field => 
-      updates[field as keyof EventData] !== undefined && 
+    const significantChanges = ["eventDate", "startTime", "location", "isVirtual"];
+    const hasSignificantChange = significantChanges.some((field) =>
+      updates[field as keyof EventData] !== undefined &&
       updates[field as keyof EventData] !== currentEventData[field as keyof EventData]
     );
-    
+
     if (hasSignificantChange) {
       try {
         const {getTwilioService} = await import("./services/twilioService");
         const twilioService = getTwilioService();
-        
+
         // Get all RSVPed users
         const rsvpsSnapshot = await db.collection("events").doc(eventId)
           .collection("rsvps")
           .where("status", "in", ["accepted", "maybe"])
           .get();
-        
+
         if (!rsvpsSnapshot.empty) {
-          const userIds = rsvpsSnapshot.docs.map(doc => doc.data().userId);
-          
+          const userIds = rsvpsSnapshot.docs.map((doc) => doc.data().userId);
+
           // Get users with SMS enabled
           const usersSnapshot = await db.collection("users")
             .where("__name__", "in", userIds)
             .get();
-          
+
           // Build change summary
           let changeText = "Event updated: ";
           const changes: string[] = [];
-          
+
           if (updates.eventDate && updates.eventDate !== currentEventData.eventDate) {
             const newDate = new Date(updates.eventDate);
-            changes.push(`new date ${newDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`);
+            changes.push(`new date ${newDate.toLocaleDateString("en-US", {month: "short", day: "numeric"})}`);
           }
           if (updates.startTime && updates.startTime !== currentEventData.startTime) {
             changes.push(`new time ${updates.startTime}`);
@@ -802,10 +802,10 @@ export const updateEvent = onCall(
           if (updates.isVirtual !== undefined && updates.isVirtual !== currentEventData.isVirtual) {
             changes.push(updates.isVirtual ? "now virtual" : "now in-person");
           }
-          
+
           changeText += changes.join(", ");
           const eventLink = `https://mydynastyapp.com/events/${eventId}`;
-          
+
           // Send SMS to each user with SMS enabled
           const smsPromises = usersSnapshot.docs.map(async (userDoc) => {
             const userData = userDoc.data();
@@ -814,13 +814,13 @@ export const updateEvent = onCall(
                 await twilioService.sendSms(
                   {
                     to: userData.phoneNumber,
-                    body: `"${currentEventData.title}" - ${changeText}. Details: ${eventLink}`
+                    body: `"${currentEventData.title}" - ${changeText}. Details: ${eventLink}`,
                   },
                   uid,
-                  'event_update',
+                  "event_update",
                   {
                     eventId: eventId,
-                    recipientId: userDoc.id
+                    recipientId: userDoc.id,
                   }
                 );
                 logger.info(`Sent event update SMS to user ${userDoc.id}`);
@@ -829,7 +829,7 @@ export const updateEvent = onCall(
               }
             }
           });
-          
+
           await Promise.allSettled(smsPromises);
         }
       } catch (error) {
@@ -837,7 +837,7 @@ export const updateEvent = onCall(
         logger.error("Failed to send event update SMS notifications:", error);
       }
     }
-    
+
     return {success: true, eventId};
   }, "updateEvent", {
     authLevel: "onboarded",
@@ -976,14 +976,14 @@ export const rsvpToEvent = onCall(
       try {
         const userDoc = await db.collection("users").doc(uid).get();
         const userData = userDoc.data();
-        
+
         if (userData?.phoneNumber && userData?.smsPreferences?.enabled && userData?.smsPreferences?.rsvpConfirmations) {
           const {getTwilioService} = await import("./services/twilioService");
           const twilioService = getTwilioService();
-          
+
           const eventDate = new Date(eventData.eventDate);
-          const dateString = eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-          
+          const dateString = eventDate.toLocaleDateString("en-US", {month: "short", day: "numeric"});
+
           let smsBody = "";
           if (status === "accepted") {
             smsBody = `You're confirmed for "${eventData.title}" on ${dateString}`;
@@ -991,23 +991,23 @@ export const rsvpToEvent = onCall(
               smsBody += ` at ${eventData.startTime}`;
             }
             if (plusOne) {
-              smsBody += ` (+1 guest)`;
+              smsBody += " (+1 guest)";
             }
             smsBody += ". See you there!";
           } else {
             smsBody = `You've declined "${eventData.title}" on ${dateString}. We'll miss you!`;
           }
-          
+
           await twilioService.sendSms(
             {
               to: userData.phoneNumber,
-              body: smsBody
+              body: smsBody,
             },
             uid,
-            'rsvp_confirmation',
+            "rsvp_confirmation",
             {
               eventId: eventId,
-              rsvpStatus: status
+              rsvpStatus: status,
             }
           );
           logger.info(`Sent RSVP confirmation SMS to user ${uid}`);

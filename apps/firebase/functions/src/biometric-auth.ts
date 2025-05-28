@@ -1,13 +1,13 @@
-import { onCall } from "firebase-functions/v2/https";
+import {onCall} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
-import { logger } from "firebase-functions/v2";
-import { createError, ErrorCode, handleError } from "./utils/errors";
-import { withAuth } from "./middleware/auth";
-import { validateRequest } from "./utils/request-validator";
-import { VALIDATION_SCHEMAS } from "./config/validation-schemas";
-import { DEFAULT_REGION, FUNCTION_TIMEOUT } from "./common";
-import { AuditLogService } from "./audit/AuditLogService";
+import {getFirestore, Timestamp} from "firebase-admin/firestore";
+import {logger} from "firebase-functions/v2";
+import {createError, ErrorCode, handleError} from "./utils/errors";
+import {withAuth} from "./middleware/auth";
+import {validateRequest} from "./utils/request-validator";
+import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
+import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
+import {AuditLogService} from "./audit/AuditLogService";
 
 // Initialize if not already done
 if (!admin.apps.length) {
@@ -69,24 +69,24 @@ export const registerBiometricCredential = onCall(
         publicKey,
         attestationObject,
         clientDataJSON,
-        deviceInfo
+        deviceInfo,
       } = validatedData;
 
       // Verify attestation (basic implementation)
-      const clientData = JSON.parse(Buffer.from(clientDataJSON, 'base64').toString());
-      
-      if (clientData.type !== 'webauthn.create') {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid client data type');
+      const clientData = JSON.parse(Buffer.from(clientDataJSON, "base64").toString());
+
+      if (clientData.type !== "webauthn.create") {
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid client data type");
       }
 
       // Check if credential already exists
       const existingCredQuery = await db
-        .collection('biometric_credentials')
-        .where('credentialId', '==', credentialId)
+        .collection("biometric_credentials")
+        .where("credentialId", "==", credentialId)
         .get();
 
       if (!existingCredQuery.empty) {
-        throw createError(ErrorCode.ALREADY_EXISTS, 'Credential already registered');
+        throw createError(ErrorCode.ALREADY_EXISTS, "Credential already registered");
       }
 
       // Create credential record
@@ -99,31 +99,31 @@ export const registerBiometricCredential = onCall(
         createdAt: Timestamp.now(),
         lastUsed: Timestamp.now(),
         isActive: true,
-        deviceInfo
+        deviceInfo,
       };
 
       // Store credential
-      await db.collection('biometric_credentials').doc(credential.id).set(credential);
+      await db.collection("biometric_credentials").doc(credential.id).set(credential);
 
       // Log registration
       await AuditLogService.logEvent(
-        'biometric_credential_registered',
-        'New biometric credential registered',
+        "biometric_credential_registered",
+        "New biometric credential registered",
         {
           credentialId: credential.id,
           userId,
-          deviceInfo
+          deviceInfo,
         }
       );
 
       logger.info(`[${functionName}] Biometric credential registered`, {
         credentialId: credential.id,
-        userId
+        userId,
       });
 
       return {
         success: true,
-        credentialId: credential.id
+        credentialId: credential.id,
       };
     } catch (error) {
       return handleError(error, functionName);
@@ -147,9 +147,9 @@ export const createBiometricChallenge = onCall(
       const userId = request.auth!.uid;
 
       // Generate challenge
-      const challenge = Buffer.from(Array.from({ length: 32 }, () => 
+      const challenge = Buffer.from(Array.from({length: 32}, () =>
         Math.floor(Math.random() * 256)
-      )).toString('base64');
+      )).toString("base64");
 
       const challengeRecord: BiometricAuthChallenge = {
         challengeId: `challenge_${Date.now()}_${Math.random().toString(36).substring(2)}`,
@@ -157,37 +157,37 @@ export const createBiometricChallenge = onCall(
         challenge,
         createdAt: Timestamp.now(),
         expiresAt: Timestamp.fromMillis(Date.now() + 5 * 60 * 1000), // 5 minutes
-        isUsed: false
+        isUsed: false,
       };
 
       // Store challenge
-      await db.collection('biometric_challenges').doc(challengeRecord.challengeId).set(challengeRecord);
+      await db.collection("biometric_challenges").doc(challengeRecord.challengeId).set(challengeRecord);
 
       // Get user's credentials for allowCredentials
       const credentialsQuery = await db
-        .collection('biometric_credentials')
-        .where('userId', '==', userId)
-        .where('isActive', '==', true)
+        .collection("biometric_credentials")
+        .where("userId", "==", userId)
+        .where("isActive", "==", true)
         .get();
 
-      const allowCredentials = credentialsQuery.docs.map(doc => {
+      const allowCredentials = credentialsQuery.docs.map((doc) => {
         const cred = doc.data() as BiometricCredential;
         return {
           id: cred.credentialId,
-          type: 'public-key'
+          type: "public-key",
         };
       });
 
       logger.info(`[${functionName}] Biometric challenge created`, {
         challengeId: challengeRecord.challengeId,
-        userId
+        userId,
       });
 
       return {
         success: true,
         challenge: challenge,
         challengeId: challengeRecord.challengeId,
-        allowCredentials
+        allowCredentials,
       };
     } catch (error) {
       return handleError(error, functionName);
@@ -222,53 +222,53 @@ export const verifyBiometricAuthentication = onCall(
         credentialId,
         authenticatorData,
         clientDataJSON,
-        signature
+        signature,
       } = validatedData;
 
       // Get and validate challenge
-      const challengeDoc = await db.collection('biometric_challenges').doc(challengeId).get();
-      
+      const challengeDoc = await db.collection("biometric_challenges").doc(challengeId).get();
+
       if (!challengeDoc.exists) {
-        throw createError(ErrorCode.NOT_FOUND, 'Challenge not found');
+        throw createError(ErrorCode.NOT_FOUND, "Challenge not found");
       }
 
       const challenge = challengeDoc.data() as BiometricAuthChallenge;
-      
+
       if (challenge.userId !== userId) {
-        throw createError(ErrorCode.PERMISSION_DENIED, 'Challenge belongs to different user');
+        throw createError(ErrorCode.PERMISSION_DENIED, "Challenge belongs to different user");
       }
 
       if (challenge.isUsed) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Challenge already used');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Challenge already used");
       }
 
       if (challenge.expiresAt.toMillis() < Date.now()) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Challenge expired');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Challenge expired");
       }
 
       // Get credential
       const credentialQuery = await db
-        .collection('biometric_credentials')
-        .where('credentialId', '==', credentialId)
-        .where('userId', '==', userId)
-        .where('isActive', '==', true)
+        .collection("biometric_credentials")
+        .where("credentialId", "==", credentialId)
+        .where("userId", "==", userId)
+        .where("isActive", "==", true)
         .get();
 
       if (credentialQuery.empty) {
-        throw createError(ErrorCode.NOT_FOUND, 'Credential not found or inactive');
+        throw createError(ErrorCode.NOT_FOUND, "Credential not found or inactive");
       }
 
       const credentialData = credentialQuery.docs[0].data() as BiometricCredential;
 
       // Verify client data
-      const clientData = JSON.parse(Buffer.from(clientDataJSON, 'base64').toString());
-      
-      if (clientData.type !== 'webauthn.get') {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid client data type');
+      const clientData = JSON.parse(Buffer.from(clientDataJSON, "base64").toString());
+
+      if (clientData.type !== "webauthn.get") {
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid client data type");
       }
 
       if (clientData.challenge !== challenge.challenge) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Challenge mismatch');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Challenge mismatch");
       }
 
       // Basic signature verification (in production, use proper WebAuthn library)
@@ -283,48 +283,48 @@ export const verifyBiometricAuthentication = onCall(
       if (!isSignatureValid) {
         // Log failed attempt
         await AuditLogService.logEvent(
-          'biometric_auth_failed',
-          'Biometric authentication failed - invalid signature',
+          "biometric_auth_failed",
+          "Biometric authentication failed - invalid signature",
           {
             credentialId: credentialData.id,
             userId,
-            reason: 'invalid_signature'
+            reason: "invalid_signature",
           }
         );
 
-        throw createError(ErrorCode.UNAUTHENTICATED, 'Invalid signature');
+        throw createError(ErrorCode.UNAUTHENTICATED, "Invalid signature");
       }
 
       // Mark challenge as used
-      await db.collection('biometric_challenges').doc(challengeId).update({
-        isUsed: true
+      await db.collection("biometric_challenges").doc(challengeId).update({
+        isUsed: true,
       });
 
       // Update credential last used
-      await db.collection('biometric_credentials').doc(credentialQuery.docs[0].id).update({
+      await db.collection("biometric_credentials").doc(credentialQuery.docs[0].id).update({
         lastUsed: Timestamp.now(),
-        counter: admin.firestore.FieldValue.increment(1)
+        counter: admin.firestore.FieldValue.increment(1),
       });
 
       // Log successful authentication
       await AuditLogService.logEvent(
-        'biometric_auth_success',
-        'Biometric authentication successful',
+        "biometric_auth_success",
+        "Biometric authentication successful",
         {
           credentialId: credentialData.id,
-          userId
+          userId,
         }
       );
 
       logger.info(`[${functionName}] Biometric authentication verified`, {
         credentialId: credentialData.id,
-        userId
+        userId,
       });
 
       return {
         success: true,
         verified: true,
-        credentialId: credentialData.id
+        credentialId: credentialData.id,
       };
     } catch (error) {
       return handleError(error, functionName);
@@ -348,13 +348,13 @@ export const getBiometricCredentials = onCall(
       const userId = request.auth!.uid;
 
       const credentialsQuery = await db
-        .collection('biometric_credentials')
-        .where('userId', '==', userId)
-        .where('isActive', '==', true)
-        .orderBy('createdAt', 'desc')
+        .collection("biometric_credentials")
+        .where("userId", "==", userId)
+        .where("isActive", "==", true)
+        .orderBy("createdAt", "desc")
         .get();
 
-      const credentials = credentialsQuery.docs.map(doc => {
+      const credentials = credentialsQuery.docs.map((doc) => {
         const data = doc.data() as BiometricCredential;
         return {
           id: data.id,
@@ -362,13 +362,13 @@ export const getBiometricCredentials = onCall(
           createdAt: data.createdAt,
           lastUsed: data.lastUsed,
           counter: data.counter,
-          deviceInfo: data.deviceInfo
+          deviceInfo: data.deviceInfo,
         };
       });
 
       return {
         success: true,
-        credentials
+        credentials,
       };
     } catch (error) {
       return handleError(error, functionName);
@@ -397,43 +397,43 @@ export const revokeBiometricCredential = onCall(
         userId
       );
 
-      const { credentialId } = validatedData;
+      const {credentialId} = validatedData;
 
       // Find and deactivate credential
       const credentialQuery = await db
-        .collection('biometric_credentials')
-        .where('credentialId', '==', credentialId)
-        .where('userId', '==', userId)
+        .collection("biometric_credentials")
+        .where("credentialId", "==", credentialId)
+        .where("userId", "==", userId)
         .get();
 
       if (credentialQuery.empty) {
-        throw createError(ErrorCode.NOT_FOUND, 'Credential not found');
+        throw createError(ErrorCode.NOT_FOUND, "Credential not found");
       }
 
       const credentialDocRef = credentialQuery.docs[0].ref;
       await credentialDocRef.update({
         isActive: false,
-        revokedAt: Timestamp.now()
+        revokedAt: Timestamp.now(),
       });
 
       // Log revocation
       await AuditLogService.logEvent(
-        'biometric_credential_revoked',
-        'Biometric credential revoked',
+        "biometric_credential_revoked",
+        "Biometric credential revoked",
         {
           credentialId,
-          userId
+          userId,
         }
       );
 
       logger.info(`[${functionName}] Biometric credential revoked`, {
         credentialId,
-        userId
+        userId,
       });
 
       return {
         success: true,
-        revoked: true
+        revoked: true,
       };
     } catch (error) {
       return handleError(error, functionName);
@@ -451,16 +451,16 @@ async function verifySignature(
   try {
     // This is a simplified implementation
     // In production, use a proper WebAuthn library like @simplewebauthn/server
-    
+
     // For now, return true if all required fields are present
     // Real implementation would:
     // 1. Decode the public key
     // 2. Create the signed data (authenticatorData + hash(clientDataJSON))
     // 3. Verify the signature using the public key
-    
+
     return !!(publicKeyBase64 && authenticatorData && clientDataJSON && signature);
   } catch (error) {
-    logger.error('Signature verification failed:', error);
+    logger.error("Signature verification failed:", error);
     return false;
   }
 }
@@ -473,15 +473,15 @@ class AuditLogService {
     metadata: Record<string, any>
   ): Promise<void> {
     try {
-      await db.collection('audit_logs').add({
+      await db.collection("audit_logs").add({
         eventType,
         description,
         metadata,
         timestamp: Timestamp.now(),
-        severity: 'medium'
+        severity: "medium",
       });
     } catch (error) {
-      logger.error('Failed to log audit event:', error);
+      logger.error("Failed to log audit event:", error);
     }
   }
-} 
+}
