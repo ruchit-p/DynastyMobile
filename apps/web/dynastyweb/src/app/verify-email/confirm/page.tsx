@@ -100,6 +100,8 @@ export default function VerifyEmailConfirmPage() {
               width={80}
               height={80}
               className="mx-auto"
+              priority
+              style={{ height: 'auto' }}
             />
           </div>
         </div>
