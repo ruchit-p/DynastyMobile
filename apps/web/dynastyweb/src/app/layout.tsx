@@ -4,6 +4,7 @@ import { AuthProvider } from '@/context/AuthContext'
 import { EmulatorProvider } from '@/context/EmulatorContext'
 import { NotificationProvider } from '@/context/NotificationContext'
 import { Toaster } from '@/components/ui/toaster'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -24,14 +25,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <EmulatorProvider>
-          <AuthProvider>
-            <NotificationProvider>
-              {children}
-              <Toaster />
-            </NotificationProvider>
-          </AuthProvider>
-        </EmulatorProvider>
+        <ErrorBoundary>
+          <EmulatorProvider>
+            <AuthProvider>
+              <NotificationProvider>
+                {children}
+                <Toaster />
+              </NotificationProvider>
+            </AuthProvider>
+          </EmulatorProvider>
+        </ErrorBoundary>
       </body>
     </html>
   )
