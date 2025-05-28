@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, Suspense } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -9,8 +9,7 @@ import { Loader2, CheckCircle2, XCircle, Home } from "lucide-react"
 import { functions } from "@/lib/firebase"
 import { httpsCallable } from "firebase/functions"
 
-// Separate component that uses useSearchParams
-function VerifyEmailConfirmContent() {
+export default function VerifyEmailConfirmPage() {
   const [isVerifying, setIsVerifying] = useState(true)
   const [isError, setIsError] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
@@ -157,45 +156,5 @@ function VerifyEmailConfirmContent() {
         </div>
       </div>
     </div>
-  )
-}
-
-// Loading component for the suspense fallback
-function VerifyEmailConfirmLoading() {
-  return (
-    <div className="min-h-screen bg-[#F9FAFB] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md relative">
-        <div className="flex justify-center">
-          <div className="relative w-20 h-20">
-            <Image
-              src="/dynasty.png"
-              alt="Dynasty Logo"
-              width={80}
-              height={80}
-              className="mx-auto"
-            />
-          </div>
-        </div>
-        
-        <div className="mt-8 bg-white py-8 px-6 shadow-lg sm:rounded-xl border border-gray-100 relative overflow-hidden">
-          <h2 className="text-center text-2xl font-bold text-[#0A5C36]">Loading email verification</h2>
-          <div className="mt-8 flex justify-center">
-            <Loader2 className="h-10 w-10 animate-spin text-[#0A5C36]" />
-          </div>
-          <p className="mt-6 text-center text-sm text-gray-600">
-            Initializing email verification process...
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Main component that wraps the content in Suspense
-export default function VerifyEmailConfirmPage() {
-  return (
-    <Suspense fallback={<VerifyEmailConfirmLoading />}>
-      <VerifyEmailConfirmContent />
-    </Suspense>
   )
 } 
