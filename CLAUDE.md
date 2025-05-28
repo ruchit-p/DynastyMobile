@@ -334,32 +334,14 @@ const { getScaledRem } = useFontScale();
 <p style={{ fontSize: getScaledRem(1.125) }}>
 ```
 
-## Current Features
-
-### Core Functionality
+## Core Features
 - **Authentication**: Email/password, phone, social logins
-- **Family Tree**: High-performance visualization with 10k+ node support
-- **Stories**: Create, edit, offline support with media
-- **Events**: Calendar view, RSVP management
-- **Chat**: E2E encrypted messaging (in development)
+- **Family Tree**: High-performance visualization
+- **Stories & Events**: Offline support with media
+- **Chat**: E2E encrypted messaging
 - **Vault**: Secure file storage
-- **Accessibility**: Dynamic font sizing with device settings integration
-
-### Offline Support
-- Firebase offline persistence (50MB cache)
-- SQLite queue for offline operations
-- Pull-to-refresh with sync
-- Optimistic UI updates
-- Visual offline indicators
-- Cache strategies (30min - 1hr TTL)
-
-### Mobile-Exclusive Features
-- Native camera integration
-- Audio recording
-- Document picker
-- Haptic feedback
-- FlashList performance
-- Push notifications
+- **Offline Support**: 50MB cache, SQLite queue, sync operations
+- **Mobile Features**: Camera, audio, documents, haptics, push notifications
 
 ## Code Quality Checks
 ```bash
@@ -384,10 +366,8 @@ npm run build     # TypeScript check (functions)
   <key>NSFaceIDUsageDescription</key>
   <string>Dynasty uses Face ID to protect your encrypted messages</string>
   ```
-- **Keychain Entitlements**: Automatically included with React Native
-- **Signal Protocol Storage**: Uses iOS Keychain (not NSUserDefaults)
-- **Biometric Protection**: Available for identity keys and sessions
-- **Key Rotation**: Automatic rotation every 7/30/365 days for different key types
+- **Keychain/Biometric**: Automatic iOS security features
+- **Key Rotation**: Automatic rotation policies
 
 ### Universal Links / Deep Linking
 - **Domain**: `mydynastyapp.com`
@@ -399,30 +379,20 @@ npm run build     # TypeScript check (functions)
 
 ## Best Practices
 
-1. **State Management**: Use appropriate contexts (Auth, Offline)
-2. **Error Handling**: Always use error boundaries and handlers
-3. **Performance**: Implement virtualization for lists
-4. **Offline First**: Consider offline scenarios for all features
-5. **Type Safety**: Use TypeScript types consistently
-6. **Testing**: Run lint checks after changes
+- Use appropriate contexts (Auth, Offline)
+- Always use error boundaries and handlers
+- Implement virtualization for lists (FlashList)
+- Consider offline scenarios for all features
+- Use TypeScript types consistently
 
 ## Common Pitfalls
 
-1. **Firebase Imports**: Never mix JS SDK with React Native Firebase
-2. **Navigation**: Use expo-router, not React Navigation directly
-3. **Lists**: Always use FlashList with estimatedItemSize
-4. **Async Operations**: Always wrap with error handling
-5. **Offline State**: Show indicators when offline
+- **Firebase**: Never mix JS SDK with React Native Firebase
+- **Navigation**: Use expo-router only
+- **Lists**: Always use FlashList with estimatedItemSize
+- **Async**: Always wrap with error handling
+- **Offline**: Show indicators when offline
 
-## Key Services & Components
-
-### Mobile App Services
-- **MessageSyncService** - Offline-first messaging with encryption
-- **NotificationService** - FCM integration with preferences
-- **VaultService** - Secure file storage with sharing
-- **E2EEService** - Client-side encryption
-- **SyncService** - Offline queue management
-- **FontSizeService** - Dynamic font scaling with accessibility support
 
 ### Testing
 ```bash
