@@ -27,6 +27,8 @@ import { logger } from '../src/services/LoggingService';
 import crashlytics from '@react-native-firebase/crashlytics';
 // import { SessionExpiredModal } from '../components/ui/SessionExpiredModal'; // TODO: Create this component
 import MfaSignInModal from '../components/ui/MfaSignInModal';
+import FontSizeService from '../src/services/FontSizeService';
+import { featureFlagService } from '../src/services/FeatureFlagService';
 global.Buffer = Buffer as any;
 
 // Initialize Firebase as early as possible
@@ -54,7 +56,7 @@ SplashScreen.preventAutoHideAsync();
 
 // This component will render the actual UI once loading is complete
 function AppContent() {
-  const { isLoading: isAuthLoading } = useAuth(); // Get loading state from AuthContext
+  const { isLoading: isAuthLoading, user } = useAuth(); // Get loading state from AuthContext
   const [fontsLoaded, fontError] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
     // Add other fonts here if needed
@@ -74,6 +76,13 @@ function AppContent() {
       logger.error('Font loading error:', fontError);
     }
   }, [fontsLoaded, fontError, isAuthLoading]);
+
+  useEffect(() => {
+    // Load font settings when user logs in
+    if (user?.uid) {
+      FontSizeService.getInstance().setUserId(user.uid);
+    }
+  }, [user?.uid]);
 
   // If fonts are not loaded yet, or auth is still loading, return null (splash screen is visible).
   if ((!fontsLoaded && !fontError) || isAuthLoading) {
@@ -107,6 +116,18 @@ export default function RootLayout() {
       try {
         // Initialize global error handling
         errorHandler.initialize();
+        
+        // Configure text scaling defaults
+        FontSizeService.getInstance().configureTextDefaults();
+        
+        // Initialize feature flags service
+        try {
+          await featureFlagService.initialize();
+          logger.info('[App] Feature flag service initialized successfully');
+        } catch (error) {
+          logger.error('[App] Failed to initialize feature flag service:', error);
+          // Continue app initialization even if feature flags fail
+        }
         
         // Initialize background sync
         try {

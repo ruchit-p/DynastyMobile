@@ -28,6 +28,12 @@ export interface UserDocument {
   onboardingCompleted: boolean;
   isTreeOwner?: boolean;
   invitationId?: string;
+  fontSettings?: {
+    fontScale: number;
+    useDeviceSettings: boolean;
+  };
+  notificationSettings?: any;
+  privacySettings?: any;
 }
 
 export interface UserProfileUpdate {

@@ -148,7 +148,7 @@ export function withCSRFProtection<T = any, R = any>(
 export const generateCSRFToken = onCall(
   {
     ...getCorsOptions(),
-    region: "europe-west3",
+    region: "us-central1",
   },
   withErrorHandling(async (request: CallableRequest) => {
     // Require authentication
@@ -183,7 +183,7 @@ export const generateCSRFToken = onCall(
 export const validateCSRFToken = onCall(
   {
     ...getCorsOptions(),
-    region: "europe-west3",
+    region: "us-central1",
   },
   withCSRFProtection(async (request: CSRFValidatedRequest<{token: string}>) => {
     // If we reach here, the token is valid

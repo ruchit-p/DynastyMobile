@@ -33,7 +33,7 @@ export function useCSRF(functions: Functions): UseCSRFReturn {
   const [csrfToken, setCSRFToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
 
   /**

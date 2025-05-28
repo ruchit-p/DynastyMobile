@@ -73,7 +73,7 @@ export default function Navbar({ user }: NavbarProps) {
             height={32}
             style={{ width: 'auto', height: '32px' }}
           />
-          <span className="text-xl font-bold text-[#0A5C36] hidden sm:inline-block">Dynasty</span>
+          <span className="text-xl font-bold text-[#14562D] hidden sm:inline-block">Dynasty</span>
         </Link>
 
         {/* Current Page Title - Only visible on mobile */}
@@ -86,8 +86,8 @@ export default function Navbar({ user }: NavbarProps) {
           <Link
             href="/feed"
             className={cn(
-              "flex items-center gap-2 text-sm font-medium hover:text-[#0A5C36]", 
-              pathname?.includes('/feed') ? "text-[#0A5C36]" : "text-gray-600"
+              "flex items-center gap-2 text-sm font-medium hover:text-[#14562D]", 
+              pathname?.includes('/feed') ? "text-[#14562D]" : "text-gray-600"
             )}
           >
             <Home className="h-4 w-4" />
@@ -96,8 +96,8 @@ export default function Navbar({ user }: NavbarProps) {
           <Link
             href="/family-tree"
             className={cn(
-              "flex items-center gap-2 text-sm font-medium hover:text-[#0A5C36]", 
-              pathname?.includes('/family-tree') ? "text-[#0A5C36]" : "text-gray-600"
+              "flex items-center gap-2 text-sm font-medium hover:text-[#14562D]", 
+              pathname?.includes('/family-tree') ? "text-[#14562D]" : "text-gray-600"
             )}
           >
             <Users className="h-4 w-4" />
@@ -106,8 +106,8 @@ export default function Navbar({ user }: NavbarProps) {
           <Link
             href="/history-book"
             className={cn(
-              "flex items-center gap-2 text-sm font-medium hover:text-[#0A5C36]", 
-              pathname?.includes('/history-book') ? "text-[#0A5C36]" : "text-gray-600"
+              "flex items-center gap-2 text-sm font-medium hover:text-[#14562D]", 
+              pathname?.includes('/history-book') ? "text-[#14562D]" : "text-gray-600"
             )}
           >
             <BookOpen className="h-4 w-4" />
@@ -116,8 +116,8 @@ export default function Navbar({ user }: NavbarProps) {
           <Link
             href="/events"
             className={cn(
-              "flex items-center gap-2 text-sm font-medium hover:text-[#0A5C36]", 
-              pathname?.includes('/events') ? "text-[#0A5C36]" : "text-gray-600"
+              "flex items-center gap-2 text-sm font-medium hover:text-[#14562D]", 
+              pathname?.includes('/events') ? "text-[#14562D]" : "text-gray-600"
             )}
           >
             <Calendar className="h-4 w-4" />
@@ -130,7 +130,7 @@ export default function Navbar({ user }: NavbarProps) {
           {/* Create Menu Dropdown */}
           <DropdownMenu open={isCreateMenuOpen} onOpenChange={setIsCreateMenuOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-600 hover:text-[#0A5C36]">
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-600 hover:text-[#14562D]">
                 <Plus className="h-5 w-5" />
                 <span className="sr-only">Create New</span>
               </Button>

@@ -848,9 +848,13 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
 
   uploadRotatedEncryptionKey: {
     rules: [
-      {field: "newPublicKey", type: "string", required: true, maxLength: 5000},
-      {field: "oldKeyId", type: "string", required: true, maxLength: 200},
-      {field: "rotationProof", type: "string", maxLength: 1000},
+      {field: "keyId", type: "string", required: true, maxLength: 200},
+      {field: "publicKey", type: "string", required: true, maxLength: 5000},
+      {field: "keyType", type: "enum", required: true, enumValues: ["identity", "prekey", "vault_master"]},
+      {field: "version", type: "number", required: true},
+      {field: "expiresAt", type: "number", required: true},
+      {field: "rotationReason", type: "enum", enumValues: ["scheduled", "compromise", "manual"]},
+      {field: "deviceId", type: "string", maxLength: 200},
     ],
     xssCheck: false,
   },
@@ -983,6 +987,103 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
   sendTestSms: {
     rules: [
       {field: "phoneNumber", type: "phone", required: true},
+    ],
+    xssCheck: false,
+  },
+
+  // Biometric Authentication Schemas
+  registerBiometricCredential: {
+    rules: [
+      {field: "credentialId", type: "string", required: true, maxLength: 500},
+      {field: "publicKey", type: "string", required: true, maxLength: 5000},
+      {field: "attestationObject", type: "string", required: true, maxLength: 10000},
+      {field: "clientDataJSON", type: "string", required: true, maxLength: 2000},
+      {field: "deviceInfo", type: "object"},
+    ],
+    xssCheck: false,
+  },
+
+  verifyBiometricAuthentication: {
+    rules: [
+      {field: "challengeId", type: "string", required: true, maxLength: 200},
+      {field: "credentialId", type: "string", required: true, maxLength: 500},
+      {field: "authenticatorData", type: "string", required: true, maxLength: 2000},
+      {field: "clientDataJSON", type: "string", required: true, maxLength: 2000},
+      {field: "signature", type: "string", required: true, maxLength: 1000},
+    ],
+    xssCheck: false,
+  },
+
+  revokeBiometricCredential: {
+    rules: [
+      {field: "credentialId", type: "string", required: true, maxLength: 500},
+    ],
+    xssCheck: false,
+  },
+
+  // Key Rotation Schemas
+  setupKeyRotationSchedule: {
+    rules: [
+      {field: "intervalDays", type: "number"},
+      {field: "enabledKeyTypes", type: "array", maxSize: 10},
+      {field: "warningDays", type: "number"},
+    ],
+    xssCheck: false,
+  },
+
+  forceKeyRotation: {
+    rules: [
+      {field: "keyTypes", type: "array", maxSize: 10},
+      {field: "reason", type: "enum", enumValues: ["manual", "compromise", "scheduled"]},
+    ],
+    xssCheck: false,
+  },
+
+  // Vault Bulk Operations Schemas
+  executeBulkVaultOperation: {
+    rules: [
+      {field: "operation", type: "enum", required: true, 
+        enumValues: ["encrypt", "decrypt", "share", "unshare", "delete", "restore", "move"]},
+      {field: "itemIds", type: "array", required: true, maxSize: 100},
+      {field: "metadata", type: "object"},
+    ],
+    xssCheck: false,
+  },
+
+  // Additional Vault Schemas
+  updateVaultFile: {
+    rules: [
+      {field: "itemId", type: "string", required: true, maxLength: 100},
+      {field: "fileData", type: "string", required: true, maxLength: 50 * 1024 * 1024}, // 50MB base64
+      {field: "fileName", type: "string", required: true, maxLength: 255},
+    ],
+    xssCheck: true,
+  },
+
+  completeVaultFileUpload: {
+    rules: [
+      {field: "uploadId", type: "string", required: true, maxLength: 100},
+      {field: "itemId", type: "string", required: true, maxLength: 100},
+      {field: "parts", type: "array", required: true, maxSize: 10000},
+    ],
+    xssCheck: false,
+  },
+
+  permanentlyDeleteVaultItem: {
+    rules: [
+      {field: "itemId", type: "string", required: true, maxLength: 100},
+      {field: "confirmDelete", type: "boolean", required: true},
+    ],
+    xssCheck: false,
+  },
+
+  rotateEncryptionKey: {
+    rules: [
+      {field: "keyType", type: "enum", required: true, enumValues: ["user", "vault", "message"]},
+      {field: "oldKeyId", type: "string", required: true, maxLength: 100},
+      {field: "newKeyId", type: "string", required: true, maxLength: 100},
+      {field: "encryptedKey", type: "string", required: true, maxLength: 5000},
+      {field: "metadata", type: "object"},
     ],
     xssCheck: false,
   },

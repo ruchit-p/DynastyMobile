@@ -325,17 +325,30 @@ export class WebVaultKeyManager {
         authResult.credential!
       );
 
-      // Try to decrypt the master key with biometric-derived key
+      // Decrypt the master key with biometric-derived key
       const encryptedKeyData = this.cryptoService.fromBase64(keyInfo.encryptedKey);
-      const nonce = encryptedKeyData.slice(0, 24); // First 24 bytes are nonce
-      const encrypted = encryptedKeyData.slice(24); // Rest is encrypted data
+      const nonce = encryptedKeyData.slice(0, 24);
+      const encrypted = encryptedKeyData.slice(24);
 
-      const decrypted = await this.cryptoService.decryptData(
-        { encrypted, nonce },
-        biometricKey
+      // Use Web Crypto API to decrypt with derived key
+      const decryptionKey = await crypto.subtle.importKey(
+        'raw',
+        biometricKey,
+        { name: 'AES-GCM' },
+        false,
+        ['decrypt']
       );
 
-      return this.cryptoService.fromBase64(decrypted);
+      const decryptedData = await crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv: nonce
+        },
+        decryptionKey,
+        encrypted
+      );
+
+      return new Uint8Array(decryptedData);
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.HIGH, {
         action: 'retrieve-key-with-biometric',

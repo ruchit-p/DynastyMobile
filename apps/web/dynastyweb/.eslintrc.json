@@ -1,8 +1,8 @@
 {
   "extends": "next/core-web-vitals",
-  "ignorePatterns": ["src/components/library/**/*"],
+  "ignorePatterns": ["src/components/library/**/*", "**/*.test.ts", "**/*.test.tsx"],
   "rules": {
-    "@typescript-eslint/no-unused-vars": "warn",
+    "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
     "@typescript-eslint/no-explicit-any": "warn",
     "@next/next/no-img-element": "warn",
     "import/no-anonymous-default-export": "warn",

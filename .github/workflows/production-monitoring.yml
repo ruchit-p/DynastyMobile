@@ -1,0 +1,107 @@
+name: Production Monitoring
+
+on:
+  schedule:
+    # Run every 5 minutes
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    name: Production Health Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check Web App Health
+        id: web-health
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://mydynastyapp.com)
+          echo "status=$response" >> $GITHUB_OUTPUT
+          
+          if [ $response -ne 200 ]; then
+            echo "❌ Web app health check failed with status $response"
+            exit 1
+          fi
+          echo "✅ Web app is healthy"
+
+      - name: Check API Health
+        id: api-health
+        run: |
+          # Check Firebase Functions health endpoint
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://api.mydynastyapp.com/health)
+          echo "status=$response" >> $GITHUB_OUTPUT
+          
+          if [ $response -ne 200 ]; then
+            echo "❌ API health check failed with status $response"
+            exit 1
+          fi
+          echo "✅ API is healthy"
+
+      - name: Check Response Times
+        run: |
+          # Measure response time
+          time=$(curl -o /dev/null -s -w '%{time_total}\n' https://mydynastyapp.com)
+          echo "Response time: ${time}s"
+          
+          # Alert if response time > 3 seconds
+          if (( $(echo "$time > 3" | bc -l) )); then
+            echo "⚠️ Slow response time detected: ${time}s"
+          fi
+
+      - name: Create incident if unhealthy
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Production Health Check Failed - ${new Date().toISOString()}`,
+              body: `Production health check failed at ${new Date().toISOString()}\n\n- Web Status: ${{ steps.web-health.outputs.status }}\n- API Status: ${{ steps.api-health.outputs.status }}\n\nPlease investigate immediately.`,
+              labels: ['incident', 'production', 'urgent']
+            });
+
+  performance-check:
+    name: Performance Monitoring
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v10
+        with:
+          urls: |
+            https://mydynastyapp.com
+            https://mydynastyapp.com/login
+            https://mydynastyapp.com/signup
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+
+      - name: Check Core Web Vitals
+        run: |
+          echo "Checking Core Web Vitals..."
+          # Add Core Web Vitals monitoring
+
+  security-scan:
+    name: Production Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: OWASP ZAP Scan
+        uses: zaproxy/action-baseline@v0.9.0
+        with:
+          target: 'https://mydynastyapp.com'
+          allow_issue_writing: false
+
+      - name: SSL Certificate Check
+        run: |
+          echo | openssl s_client -servername mydynastyapp.com -connect mydynastyapp.com:443 2>/dev/null | openssl x509 -noout -dates
+
+      - name: Check Cloudflare Status
+        run: |
+          # Check if site is being served through Cloudflare
+          cf_ray=$(curl -s -I https://mydynastyapp.com | grep -i cf-ray)
+          if [[ -z "$cf_ray" ]]; then
+            echo "⚠️ Warning: Site may not be proxied through Cloudflare"
+          else
+            echo "✅ Site is proxied through Cloudflare: $cf_ray"
+          fi

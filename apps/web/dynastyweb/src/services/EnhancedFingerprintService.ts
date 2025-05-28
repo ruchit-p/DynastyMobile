@@ -103,7 +103,7 @@ export interface TrustedDevice {
 
 // MARK: - Enhanced Fingerprint Service Implementation
 export class EnhancedFingerprintService {
-  private fpPromise: Promise<ReturnType<typeof FingerprintJS.load>> | null = null;
+  private fpPromise: ReturnType<typeof FingerprintJS.load> | null = null;
   private trustedDevices: Map<string, TrustedDevice> = new Map();
   
   constructor() {
@@ -113,11 +113,7 @@ export class EnhancedFingerprintService {
   // MARK: - Initialization
   private async initializeFingerprinting(): Promise<void> {
     try {
-      this.fpPromise = FingerprintJS.load({
-        // Enhanced configuration for maximum accuracy
-        monitoring: false,
-        debug: false
-      });
+      this.fpPromise = FingerprintJS.load();
       
       console.log('[EnhancedFingerprint] Service initialized');
     } catch (error) {

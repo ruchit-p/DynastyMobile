@@ -1,0 +1,159 @@
+name: Mobile App CI/CD
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/mobile-ci-cd.yml"
+  pull_request:
+    branches: [dev]
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/mobile-ci-cd.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: |
+          cd apps/mobile
+          yarn install --frozen-lockfile
+
+      - name: Run linter
+        run: |
+          cd apps/mobile
+          yarn lint
+
+      - name: Run TypeScript check
+        run: |
+          cd apps/mobile
+          yarn tsc --noEmit
+
+      - name: Run tests
+        run: |
+          cd apps/mobile
+          yarn test --ci --coverage --maxWorkers=2
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          directory: ./apps/mobile/coverage
+          flags: mobile
+          name: mobile-coverage
+          fail_ci_if_error: false
+
+  test-ios:
+    runs-on: macos-latest
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18.x
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: |
+          cd apps/mobile
+          yarn install --frozen-lockfile
+
+      - name: Install Pods
+        run: |
+          cd apps/mobile/ios
+          pod install
+
+      - name: Run tests
+        run: |
+          cd apps/mobile
+          yarn test --ci
+
+  test-android:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18.x
+          cache: "yarn"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Install dependencies
+        run: |
+          cd apps/mobile
+          yarn install --frozen-lockfile
+
+      - name: Run tests
+        run: |
+          cd apps/mobile
+          yarn test --ci
+
+  build-preview:
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: "yarn"
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: |
+          cd apps/mobile
+          yarn install --frozen-lockfile
+
+      - name: Build preview for iOS
+        run: |
+          cd apps/mobile
+          eas build --platform ios --profile preview --non-interactive
+
+      - name: Build preview for Android
+        run: |
+          cd apps/mobile
+          eas build --platform android --profile preview --non-interactive
+
+  # Staging build moved to staging-deploy.yml
+  # Production build/deploy moved to production-deploy.yml
+  # EAS updates moved to respective deployment workflows
+  # This workflow now only handles dev branch CI

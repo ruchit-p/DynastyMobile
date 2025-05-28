@@ -101,7 +101,9 @@ export class WebVaultCryptoService {
     try {
       // Create deterministic subkey ID from file ID
       const fileIdHash = sodium.crypto_generichash(8, fileId);
-      const subkeyId = new Uint8Array(fileIdHash.slice(0, 8));
+      // Convert first 8 bytes to a number for subkey_id
+      const view = new DataView(fileIdHash.buffer, fileIdHash.byteOffset, 8);
+      const subkeyId = Number(view.getBigUint64(0, true) % BigInt(Number.MAX_SAFE_INTEGER));
       
       return sodium.crypto_kdf_derive_from_key(
         32, // 256-bit key
