@@ -415,7 +415,7 @@ export const createStory = onCall(
   withAuth(
     async (request) => {
       try {
-        const callerUid = request.auth?.uid!;
+        const callerUid = request.auth?.uid;
 
         // Validate and sanitize input using centralized validator
         const validatedData = validateRequest(

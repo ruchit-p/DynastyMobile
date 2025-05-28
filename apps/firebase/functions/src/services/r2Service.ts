@@ -167,7 +167,7 @@ export class R2Service {
   /**
    * Get bucket name for different content types
    */
-  static getBucketName(contentType: "vault" | "stories" | "events" | "profiles" | "temp"): string {
+  static getBucketName(_contentType: "vault" | "stories" | "events" | "profiles" | "temp"): string {
     // Use environment-specific bucket naming
     const env = process.env.NODE_ENV === "production" ? "prod" : "dev";
     const baseBucket = process.env.R2_BASE_BUCKET || "dynasty";
