@@ -520,32 +520,6 @@ export class LibsignalService {
     }
   }
 
-  /**
-   * Instance method to clear all data
-   */
-  async clearAllData(): Promise<void> {
-    try {
-      logger.info('Clearing all Signal Protocol data');
-      
-      // Stop maintenance timer
-      this.stopKeyMaintenanceTimer();
-      
-      // Clear all data from the store
-      await this.store.clearIdentity();
-      await this.store.clearAllSessions();
-      await this.store.clearAllPreKeys();
-      
-      // Reset initialized state
-      this.initialized = false;
-      this.userId = undefined;
-      this.deviceId = undefined;
-      
-      logger.info('All Signal Protocol data cleared');
-    } catch (error) {
-      logger.error('Failed to clear Signal Protocol data:', error);
-      throw error;
-    }
-  }
   
   /**
    * Encrypt data with a public key (simplified test method for key validation)

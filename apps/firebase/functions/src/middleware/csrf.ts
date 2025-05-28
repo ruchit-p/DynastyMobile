@@ -1,5 +1,6 @@
 import {CallableRequest, onCall} from "firebase-functions/v2/https";
 import {logger} from "firebase-functions/v2";
+import * as crypto from "crypto";
 import {CSRFService} from "../services/csrfService";
 import {createError, ErrorCode, withErrorHandling} from "../utils/errors";
 import {requireAuth} from "./auth";
@@ -99,6 +100,40 @@ export function requireCSRFToken<T = any, R = any>(
 
     // Validate encrypted token
     const userId = request.auth?.uid || "";
+    
+    // For session-based tokens (initial tokens), validate differently
+    if (!request.auth?.uid && sessionId.startsWith("session_")) {
+      // Recreate the session identifier
+      const clientIp = request.rawRequest.ip || "unknown";
+      const userAgent = request.rawRequest.headers["user-agent"] || "unknown";
+      const sessionIdentifier = crypto
+        .createHash("sha256")
+        .update(`${clientIp}:${userAgent}:${sessionId}`)
+        .digest("hex");
+      
+      // Validate session token
+      const isValid = CSRFService.validateToken(csrfHeader, sessionIdentifier, sessionId);
+      
+      if (!isValid) {
+        logger.warn("Invalid session CSRF token", {
+          userAgent,
+          ip: request.rawRequest.ip,
+          timestamp: new Date().toISOString(),
+        });
+        throw createError(
+          ErrorCode.PERMISSION_DENIED,
+          "Invalid or expired CSRF token"
+        );
+      }
+      
+      // Token is valid for session use
+      request.csrfToken = csrfHeader;
+      request.sessionId = sessionId;
+      
+      return handler(request);
+    }
+    
+    // For authenticated users, validate with user ID
     const isValid = CSRFService.validateToken(csrfHeader, userId, sessionId);
 
     if (!isValid) {
@@ -106,6 +141,7 @@ export function requireCSRFToken<T = any, R = any>(
         userAgent,
         ip: request.rawRequest.ip,
         timestamp: new Date().toISOString(),
+        isAuthenticated: true,
       });
       throw createError(
         ErrorCode.PERMISSION_DENIED,
@@ -142,8 +178,52 @@ export function withCSRFProtection<T = any, R = any>(
 }
 
 /**
- * Generate CSRF token endpoint
- * This endpoint is called by the web client to get a new CSRF token
+ * Generate initial CSRF token endpoint (public)
+ * This endpoint is for getting the initial CSRF token for the session
+ * It uses a session-based approach without user authentication
+ */
+export const generateInitialCSRFToken = onCall(
+  {
+    ...getCorsOptions(),
+    region: "us-central1",
+  },
+  withErrorHandling(async (request: CallableRequest) => {
+    // Get client IP and user agent for session binding
+    const clientIp = request.rawRequest.ip || "unknown";
+    const userAgent = request.rawRequest.headers["user-agent"] || "unknown";
+    
+    // Generate a unique session ID
+    const sessionId = `session_${Date.now()}_${crypto.randomBytes(16).toString("hex")}`;
+    
+    // Create a session-bound identifier (not user-specific)
+    const sessionIdentifier = crypto
+      .createHash("sha256")
+      .update(`${clientIp}:${userAgent}:${sessionId}`)
+      .digest("hex");
+
+    // Generate CSRF token bound to this session
+    const token = CSRFService.generateToken(sessionIdentifier, sessionId);
+    const expiresIn = 30 * 60 * 1000; // 30 minutes for initial tokens
+
+    // Only log in development
+    if (process.env.NODE_ENV !== "production") {
+      logger.debug("Generated initial CSRF token", {
+        sessionId,
+        ip: clientIp,
+      });
+    }
+
+    return {
+      token,
+      expiresIn,
+      sessionId,
+    };
+  }, "generateInitialCSRFToken")
+);
+
+/**
+ * Generate CSRF token endpoint (authenticated)
+ * This endpoint generates a CSRF token for authenticated users
  */
 export const generateCSRFToken = onCall(
   {
@@ -165,7 +245,7 @@ export const generateCSRFToken = onCall(
 
     // Only log in development
     if (process.env.NODE_ENV !== "production") {
-      logger.debug("Generated new CSRF token", {userId: uid});
+      logger.debug("Generated authenticated CSRF token", {userId: uid});
     }
 
     return {
@@ -175,6 +255,7 @@ export const generateCSRFToken = onCall(
     };
   }, "generateCSRFToken")
 );
+
 
 /**
  * Validate CSRF token endpoint (for testing)

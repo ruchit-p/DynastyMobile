@@ -5,12 +5,12 @@
  */
 
 import * as SignalClient from '@signalapp/libsignal-client';
-import { PublicKey, PrivateKey, IdentityKeyPair } from '@signalapp/libsignal-client/dist/EcKeys';
+import { PublicKey, PrivateKey } from '@signalapp/libsignal-client/dist/EcKeys';
 
 // MARK: - Types
 export interface LibSignalConfig {
   registrationId: number;
-  identityKeyPair: IdentityKeyPair;
+  identityKeyPair: SignalClient.IdentityKeyPair;
   deviceId: number;
   uuid: string;
 }
@@ -260,7 +260,7 @@ export class LibSignalService {
         Buffer.from(bundle.signedPreKeySignature),
         identityKey,
         0, // kyber_prekey_id - not implemented yet
-        null as any, // kyber_prekey - not implemented yet
+        null as unknown as SignalClient.KyberPreKeyRecord, // kyber_prekey - not implemented yet
         Buffer.alloc(0) // kyber_prekey_signature - not implemented yet
       );
 
@@ -332,9 +332,9 @@ export class LibSignalService {
       }
       
       async isTrustedIdentity(
-        address: SignalClient.ProtocolAddress, 
-        key: PublicKey, 
-        direction: SignalClient.Direction
+        _address: SignalClient.ProtocolAddress, 
+        _key: PublicKey, 
+        _direction: SignalClient.Direction
       ): Promise<boolean> {
         // For now, trust all identities
         return true;
@@ -402,7 +402,7 @@ export class LibSignalService {
         return kyberPreKey;
       }
       
-      async markKyberPreKeyUsed(id: number): Promise<void> {
+      async markKyberPreKeyUsed(_id: number): Promise<void> {
         // Mark as used (could implement tracking here)
       }
     }

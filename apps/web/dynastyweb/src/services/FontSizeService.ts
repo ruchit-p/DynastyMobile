@@ -93,9 +93,9 @@ class FontSizeService {
       }
 
       // Fetch from server
-      const getUserSettings = httpsCallable(functions, 'getUserSettings');
+      const getUserSettings = httpsCallable<{ userId: string }, { fontSettings?: { fontScale?: number; useDeviceSettings?: boolean } }>(functions, 'getUserSettings');
       const response = await getUserSettings({ userId: this.userId });
-      const data = response.data as any;
+      const data = response.data;
       
       if (data?.fontSettings) {
         const { fontScale, useDeviceSettings } = data.fontSettings;

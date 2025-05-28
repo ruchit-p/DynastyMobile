@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Functions, httpsCallable } from 'firebase/functions';
+import { auth } from '@/lib/firebase';
 import Cookies from 'js-cookie';
 
 /**
@@ -9,6 +10,7 @@ interface CSRFTokenResponse {
   token: string;
   expiresIn: number;
   sessionId: string;
+  isAuthenticated?: boolean;
 }
 
 /**
@@ -20,6 +22,8 @@ export interface UseCSRFReturn {
   error: Error | null;
   refreshToken: () => Promise<string>;
   isReady: boolean;
+  getCSRFToken: () => Promise<string>;
+  ensureCSRFToken: () => Promise<void>;
 }
 
 /**
@@ -31,10 +35,11 @@ export interface UseCSRFReturn {
  */
 export function useCSRF(functions: Functions): UseCSRFReturn {
   const [csrfToken, setCSRFToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
+  const hasInitialized = useRef(false);
 
   /**
    * Fetch a new CSRF token from the server
@@ -42,10 +47,19 @@ export function useCSRF(functions: Functions): UseCSRFReturn {
   const fetchCSRFToken = useCallback(async (): Promise<string> => {
     try {
       setError(null);
+      setIsLoading(true);
       
+      // Check if user is authenticated
+      const isAuthenticated = auth.currentUser != null;
+      
+      // Use different endpoints based on authentication state
+      const functionName = isAuthenticated
+        ? 'generateCSRFToken'  // Authenticated refresh
+        : 'generateInitialCSRFToken'; // Initial token
+        
       const generateToken = httpsCallable<void, CSRFTokenResponse>(
         functions,
-        'generateCSRFToken'
+        functionName
       );
       
       const result = await generateToken();
@@ -108,7 +122,7 @@ export function useCSRF(functions: Functions): UseCSRFReturn {
   }, [functions]);
 
   /**
-   * Initialize token on mount
+   * Initialize token on mount - but don't fetch automatically
    */
   useEffect(() => {
     isMountedRef.current = true;
@@ -120,17 +134,7 @@ export function useCSRF(functions: Functions): UseCSRFReturn {
     if (existingToken && existingSessionId) {
       // Verify token is still valid by checking if cookie hasn't expired
       setCSRFToken(existingToken);
-      setIsLoading(false);
-      
-      // Still schedule a refresh to ensure token stays fresh
-      fetchCSRFToken().catch(err => {
-        console.error('Failed to refresh existing CSRF token:', err);
-      });
-    } else {
-      // Fetch new token
-      fetchCSRFToken().catch(err => {
-        console.error('Failed to fetch initial CSRF token:', err);
-      });
+      hasInitialized.current = true;
     }
     
     // Cleanup on unmount
@@ -140,7 +144,7 @@ export function useCSRF(functions: Functions): UseCSRFReturn {
         clearTimeout(refreshTimeoutRef.current);
       }
     };
-  }, [fetchCSRFToken]);
+  }, []);
 
   /**
    * Handle visibility change - refresh token when tab becomes visible
@@ -165,11 +169,48 @@ export function useCSRF(functions: Functions): UseCSRFReturn {
     };
   }, [csrfToken, fetchCSRFToken]);
 
+  /**
+   * Get CSRF token - fetch if not already available
+   */
+  const getCSRFToken = useCallback(async (): Promise<string> => {
+    // If we already have a token, return it
+    if (csrfToken) {
+      return csrfToken;
+    }
+    
+    // If we're already loading, wait for it
+    if (isLoading) {
+      return new Promise((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (!isLoading) {
+            clearInterval(checkInterval);
+            resolve(csrfToken || '');
+          }
+        }, 100);
+      });
+    }
+    
+    // Otherwise, fetch a new token
+    return fetchCSRFToken();
+  }, [csrfToken, isLoading, fetchCSRFToken]);
+
+  /**
+   * Ensure CSRF token is available
+   */
+  const ensureCSRFToken = useCallback(async () => {
+    if (!csrfToken && !isLoading && !hasInitialized.current) {
+      hasInitialized.current = true;
+      await fetchCSRFToken();
+    }
+  }, [csrfToken, isLoading, fetchCSRFToken]);
+
   return {
     csrfToken,
     isLoading,
     error,
     refreshToken: fetchCSRFToken,
     isReady: !isLoading && !!csrfToken && !error,
+    getCSRFToken,
+    ensureCSRFToken,
   };
 }

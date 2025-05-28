@@ -8,6 +8,20 @@ import FingerprintJS from '@fingerprintjs/fingerprintjs';
 import CryptoJS from 'crypto-js';
 
 // MARK: - Types
+interface BatteryManager {
+  charging: boolean;
+  level: number;
+  chargingTime: number;
+  dischargingTime: number;
+}
+
+interface NetworkInformation {
+  effectiveType: string;
+  downlink: number;
+  rtt: number;
+  saveData: boolean;
+}
+
 export interface DeviceFingerprint {
   deviceId: string;
   hardwareFingerprint: string;
@@ -171,7 +185,7 @@ export class EnhancedFingerprintService {
         localStorage: this.isStorageSupported('localStorage'),
         sessionStorage: this.isStorageSupported('sessionStorage'),
         indexedDB: this.isStorageSupported('indexedDB'),
-        cpuClass: (navigator as any).cpuClass,
+        cpuClass: (navigator as Record<string, unknown>).cpuClass as string | undefined,
         hardwareConcurrency: navigator.hardwareConcurrency || 0,
         colorDepth: screen.colorDepth,
         colorGamut: this.getColorGamut(),
@@ -277,7 +291,7 @@ export class EnhancedFingerprintService {
   private async generateAudioFingerprint(): Promise<string> {
     return new Promise((resolve) => {
       try {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        const AudioContextClass = window.AudioContext || (window as Record<string, unknown>).webkitAudioContext as typeof AudioContext;
         const context = new AudioContextClass();
         
         // Create oscillator for audio fingerprinting
@@ -415,7 +429,7 @@ export class EnhancedFingerprintService {
   private generateHardwareFingerprint(): string {
     const data = {
       cores: navigator.hardwareConcurrency,
-      memory: (navigator as any).deviceMemory || 0,
+      memory: (navigator as Record<string, unknown>).deviceMemory as number || 0,
       platform: navigator.platform,
       maxTouchPoints: navigator.maxTouchPoints,
       screen: {
@@ -436,7 +450,7 @@ export class EnhancedFingerprintService {
       languages: navigator.languages,
       cookieEnabled: navigator.cookieEnabled,
       onLine: navigator.onLine,
-      buildID: (navigator as any).buildID || '',
+      buildID: (navigator as Record<string, unknown>).buildID as string || '',
       product: navigator.product,
       productSub: navigator.productSub,
       vendor: navigator.vendor,
@@ -548,7 +562,7 @@ export class EnhancedFingerprintService {
 
   private async getBatteryInfo(): Promise<BatteryInfo | undefined> {
     try {
-      const battery = await (navigator as any).getBattery?.() as any;
+      const battery = await (navigator as Record<string, unknown>).getBattery?.() as BatteryManager | undefined;
       
       if (battery) {
         return {
@@ -566,9 +580,9 @@ export class EnhancedFingerprintService {
   }
 
   private getNetworkInfo(): NetworkInfo | undefined {
-    const connection = (navigator as any).connection || 
-                      (navigator as any).mozConnection || 
-                      (navigator as any).webkitConnection as any;
+    const connection = (navigator as Record<string, unknown>).connection || 
+                      (navigator as Record<string, unknown>).mozConnection || 
+                      (navigator as Record<string, unknown>).webkitConnection as NetworkInformation | undefined;
     
     if (connection) {
       return {

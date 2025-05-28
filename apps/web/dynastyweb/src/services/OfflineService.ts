@@ -11,7 +11,7 @@ import { Workbox } from 'workbox-window';
 export interface OfflineAction {
   id: string;
   type: 'message' | 'reaction' | 'media_upload' | 'profile_update' | 'vault_update';
-  data: any;
+  data: Record<string, unknown>;
   timestamp: number;
   retryCount: number;
   maxRetries: number;
@@ -21,7 +21,7 @@ export interface OfflineAction {
 
 export interface CachedData {
   key: string;
-  data: any;
+  data: unknown;
   timestamp: number;
   expiry?: number;
   tags: string[];
@@ -49,7 +49,7 @@ interface DynastyOfflineDB extends DBSchema {
   };
   media: {
     key: string;
-    value: { id: string; blob: Blob; metadata: any; timestamp: number };
+    value: { id: string; blob: Blob; metadata: Record<string, unknown>; timestamp: number };
     indexes: { 'by-timestamp': number };
   };
 }
@@ -354,7 +354,7 @@ export class OfflineService {
   /**
    * Cache data with expiry
    */
-  async cacheData(key: string, data: any, tags: string[] = [], expiry?: number): Promise<void> {
+  async cacheData(key: string, data: unknown, tags: string[] = [], expiry?: number): Promise<void> {
     try {
       if (!this.db) {
         return;
@@ -381,7 +381,7 @@ export class OfflineService {
   /**
    * Get cached data
    */
-  async getCachedData(key: string): Promise<any | null> {
+  async getCachedData(key: string): Promise<unknown | null> {
     try {
       if (!this.db) {
         return null;
@@ -435,7 +435,7 @@ export class OfflineService {
   /**
    * Cache media file
    */
-  async cacheMedia(id: string, blob: Blob, metadata: any): Promise<void> {
+  async cacheMedia(id: string, blob: Blob, metadata: Record<string, unknown>): Promise<void> {
     try {
       if (!this.db || !this.config.enableMediaCaching) {
         return;
@@ -457,7 +457,7 @@ export class OfflineService {
   /**
    * Get cached media
    */
-  async getCachedMedia(id: string): Promise<{ blob: Blob; metadata: any } | null> {
+  async getCachedMedia(id: string): Promise<{ blob: Blob; metadata: Record<string, unknown> } | null> {
     try {
       if (!this.db) {
         return null;
@@ -472,7 +472,7 @@ export class OfflineService {
   }
 
   // MARK: - Background Sync
-  private async handleBackgroundSync(payload: any): Promise<void> {
+  private async handleBackgroundSync(payload: Record<string, unknown>): Promise<void> {
     console.log('[Offline] Handling background sync:', payload);
     
     // Process specific background sync events
