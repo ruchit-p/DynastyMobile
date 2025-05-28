@@ -1,7 +1,6 @@
 import { NativeSignalProtocolStore } from './stores/NativeSignalProtocolStore';
 import NativeLibsignal from '../../../specs/NativeLibsignal';
-import { getFirebaseAuth } from '../../../lib/firebase';
-import { getFirestore } from '../../../lib/firebase';
+import { getFirebaseAuth , getFirestore } from '../../../lib/firebase';
 import { logger } from '../../LoggingService';
 import type { SignalAddress, PreKeyBundle, SignalMessage } from '../../../specs/NativeLibsignal';
 
@@ -102,7 +101,7 @@ export class NativeLibsignalService {
    * Publish keys to Firebase
    */
   private async publishKeys(
-    preKeys: Array<{id: number; publicKey: string}>,
+    preKeys: {id: number; publicKey: string}[],
     signedPreKey: {id: number; publicKey: string; signature: string; timestamp: number}
   ): Promise<void> {
     const firestore = getFirestore();
@@ -324,7 +323,7 @@ export class NativeLibsignalService {
     }
   }
   
-  private async getRecipientDevices(recipientId: string): Promise<Array<{id: number; identityKey: string}>> {
+  private async getRecipientDevices(recipientId: string): Promise<{id: number; identityKey: string}[]> {
     const firestore = getFirestore();
     const devicesSnapshot = await firestore
       .collection('users')

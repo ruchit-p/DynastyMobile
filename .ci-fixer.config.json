@@ -1,0 +1,52 @@
+{
+  "autoFix": {
+    "eslint": true,
+    "typescript": true,
+    "prettier": true,
+    "imports": true,
+    "tests": true
+  },
+  "customFixes": {
+    "replaceAnyWithUnknown": true,
+    "addMissingDependencies": true,
+    "prefixUnusedVariables": true,
+    "updateSnapshots": true
+  },
+  "projects": [
+    {
+      "path": "apps/web/dynastyweb",
+      "packageManager": "yarn",
+      "lintCommand": "yarn lint --fix",
+      "testCommand": "yarn test",
+      "buildCommand": "yarn build"
+    },
+    {
+      "path": "apps/mobile",
+      "packageManager": "yarn",
+      "lintCommand": "yarn lint --fix",
+      "testCommand": "yarn test",
+      "buildCommand": "yarn build"
+    },
+    {
+      "path": "apps/firebase/functions",
+      "packageManager": "npm",
+      "lintCommand": "npm run lint -- --fix",
+      "testCommand": "npm test",
+      "buildCommand": "npm run build"
+    }
+  ],
+  "excludePatterns": [
+    "**/node_modules/**",
+    "**/build/**",
+    "**/dist/**",
+    "**/.next/**",
+    "**/coverage/**"
+  ],
+  "maxFileSize": 500000,
+  "maxAttempts": 3,
+  "commitMessage": "fix: automated CI/CD fixes",
+  "prComment": {
+    "enabled": true,
+    "template": "## 🤖 Automated CI Fixes Applied\n\nI've automatically fixed some CI errors in this PR:\n\n{fixes}\n\nPlease review the changes and re-run CI to see if all issues are resolved."
+  }
+}

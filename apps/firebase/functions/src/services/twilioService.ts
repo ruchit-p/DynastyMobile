@@ -4,7 +4,7 @@ import {getFirestore, FieldValue, Timestamp} from "firebase-admin/firestore";
 import {createError, ErrorCode} from "../utils/errors";
 import {logger} from "firebase-functions/v2";
 
-import twilio from 'twilio';
+import twilio from "twilio";
 
 const db = getFirestore();
 
@@ -31,7 +31,7 @@ export interface SmsLog {
   userId: string;
   phoneNumber: string;
   type: SmsType;
-  status: 'pending' | 'sent' | 'failed' | 'delivered';
+  status: "pending" | "sent" | "failed" | "delivered";
   twilioSid?: string;
   message: string;
   metadata: Record<string, any>;
@@ -41,36 +41,36 @@ export interface SmsLog {
   error?: string;
 }
 
-export type SmsType = 
-  | 'family_invite' 
-  | 'event_invite' 
-  | 'event_reminder' 
-  | 'event_update' 
-  | 'rsvp_confirmation'
-  | 'phone_verification';
+export type SmsType =
+  | "family_invite"
+  | "event_invite"
+  | "event_reminder"
+  | "event_update"
+  | "rsvp_confirmation"
+  | "phone_verification";
 
 // MARK: - SMS Templates
 
 export const SMS_TEMPLATES = {
-  familyInvite: (inviterName: string, familyName: string, inviteLink: string): string => 
+  familyInvite: (inviterName: string, familyName: string, inviteLink: string): string =>
     `${inviterName} invited you to join the ${familyName} family on Dynasty! Join here: ${inviteLink}`,
-  
+
   eventInvite: (eventName: string, date: string, location: string, rsvpLink: string): string =>
     `You're invited to ${eventName} on ${date} at ${location}. RSVP: ${rsvpLink}`,
-  
+
   eventReminder: (eventName: string, timeUntil: string): string =>
     `Reminder: ${eventName} is in ${timeUntil}. We hope to see you there!`,
-  
+
   eventUpdate: (eventName: string, changeType: string, details: string): string =>
     `${eventName} update: ${changeType}. ${details}`,
-  
+
   rsvpConfirmation: (eventName: string, rsvpStatus: string, guestCount?: number): string => {
-    const guestInfo = guestCount && guestCount > 1 ? ` for ${guestCount} guests` : '';
+    const guestInfo = guestCount && guestCount > 1 ? ` for ${guestCount} guests` : "";
     return `Your RSVP for ${eventName} is confirmed as "${rsvpStatus}"${guestInfo}.`;
   },
 
   phoneVerification: (code: string): string =>
-    `Your Dynasty verification code is: ${code}. This code expires in 10 minutes.`
+    `Your Dynasty verification code is: ${code}. This code expires in 10 minutes.`,
 };
 
 // MARK: - Configuration
@@ -91,16 +91,16 @@ function getTwilioConfig(): TwilioConfig {
   // In production, these would come from Firebase secrets
   // For now, we'll use placeholders
   const config = {
-    accountSid: process.env.TWILIO_ACCOUNT_SID || '',
-    authToken: process.env.TWILIO_AUTH_TOKEN || '',
-    phoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
-    testMode: process.env.NODE_ENV === 'development'
+    accountSid: process.env.TWILIO_ACCOUNT_SID || "",
+    authToken: process.env.TWILIO_AUTH_TOKEN || "",
+    phoneNumber: process.env.TWILIO_PHONE_NUMBER || "",
+    testMode: process.env.NODE_ENV === "development",
   };
 
   if (!config.accountSid || !config.authToken || !config.phoneNumber) {
     throw createError(
       ErrorCode.INTERNAL,
-      'Twilio configuration is incomplete. Please set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER.'
+      "Twilio configuration is incomplete. Please set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER."
     );
   }
 
@@ -112,20 +112,20 @@ function getTwilioConfig(): TwilioConfig {
  */
 export function formatPhoneNumber(phoneNumber: string): string {
   // Remove all non-numeric characters
-  const cleaned = phoneNumber.replace(/\D/g, '');
-  
+  const cleaned = phoneNumber.replace(/\D/g, "");
+
   // Add country code if not present (assuming US for now)
   if (cleaned.length === 10) {
     return `+1${cleaned}`;
-  } else if (cleaned.length === 11 && cleaned.startsWith('1')) {
+  } else if (cleaned.length === 11 && cleaned.startsWith("1")) {
     return `+${cleaned}`;
-  } else if (cleaned.startsWith('+')) {
+  } else if (cleaned.startsWith("+")) {
     return phoneNumber;
   }
-  
+
   throw createError(
     ErrorCode.INVALID_ARGUMENT,
-    'Invalid phone number format. Please provide a valid phone number.'
+    "Invalid phone number format. Please provide a valid phone number."
   );
 }
 
@@ -137,7 +137,7 @@ export function validateSmsPreferences(preferences: Partial<SmsPreferences>): vo
     if (preferences.reminderTiming < 1 || preferences.reminderTiming > 168) {
       throw createError(
         ErrorCode.INVALID_ARGUMENT,
-        'Reminder timing must be between 1 and 168 hours'
+        "Reminder timing must be between 1 and 168 hours"
       );
     }
   }
@@ -164,27 +164,27 @@ export class TwilioService {
       const formattedPhone = formatPhoneNumber(message.to);
 
       // Create SMS log entry
-      const smsLogRef = db.collection('smsLogs').doc();
+      const smsLogRef = db.collection("smsLogs").doc();
       const smsLog: SmsLog = {
         id: smsLogRef.id,
         userId,
         phoneNumber: formattedPhone,
         type,
-        status: 'pending',
+        status: "pending",
         message: message.body,
         metadata,
-        createdAt: FieldValue.serverTimestamp()
+        createdAt: FieldValue.serverTimestamp(),
       };
 
       await smsLogRef.set(smsLog);
 
       // In test mode, skip actual sending
       if (this.config.testMode) {
-        logger.info('Test mode: SMS would be sent', { to: formattedPhone, body: message.body });
+        logger.info("Test mode: SMS would be sent", {to: formattedPhone, body: message.body});
         await smsLogRef.update({
-          status: 'sent',
+          status: "sent",
           sentAt: FieldValue.serverTimestamp(),
-          twilioSid: 'TEST_' + Date.now()
+          twilioSid: "TEST_" + Date.now(),
         });
         return smsLogRef.id;
       }
@@ -194,27 +194,26 @@ export class TwilioService {
         body: message.body,
         from: this.config.phoneNumber,
         to: formattedPhone,
-        ...(message.mediaUrl && { mediaUrl: [message.mediaUrl] })
+        ...(message.mediaUrl && {mediaUrl: [message.mediaUrl]}),
       });
 
       // Update log with success
       await smsLogRef.update({
-        status: 'sent',
+        status: "sent",
         sentAt: FieldValue.serverTimestamp(),
-        twilioSid: result.sid
+        twilioSid: result.sid,
       });
 
-      logger.info('SMS sent successfully', { 
-        smsLogId: smsLogRef.id, 
+      logger.info("SMS sent successfully", {
+        smsLogId: smsLogRef.id,
         twilioSid: result.sid,
-        type 
+        type,
       });
 
       return smsLogRef.id;
-
     } catch (error) {
-      logger.error('Failed to send SMS', { error, message });
-      
+      logger.error("Failed to send SMS", {error, message});
+
       // Update log with failure if we have a log ID
       if (error instanceof Error) {
         throw createError(
@@ -233,9 +232,9 @@ export class TwilioService {
     messages: Array<SmsMessage & { userId: string; type: SmsType; metadata?: Record<string, any> }>
   ): Promise<string[]> {
     const results = await Promise.allSettled(
-      messages.map(msg => 
+      messages.map((msg) =>
         this.sendSms(
-          { to: msg.to, body: msg.body, mediaUrl: msg.mediaUrl },
+          {to: msg.to, body: msg.body, mediaUrl: msg.mediaUrl},
           msg.userId,
           msg.type,
           msg.metadata || {}
@@ -247,19 +246,19 @@ export class TwilioService {
     const errors: any[] = [];
 
     results.forEach((result, index) => {
-      if (result.status === 'fulfilled') {
+      if (result.status === "fulfilled") {
         successfulIds.push(result.value);
       } else {
         errors.push({
           index,
           phoneNumber: messages[index].to,
-          error: result.reason
+          error: result.reason,
         });
       }
     });
 
     if (errors.length > 0) {
-      logger.warn('Some SMS messages failed to send', { errors });
+      logger.warn("Some SMS messages failed to send", {errors});
     }
 
     return successfulIds;
@@ -271,28 +270,27 @@ export class TwilioService {
   async updateSmsStatus(twilioSid: string, status: string, errorCode?: string): Promise<void> {
     try {
       // Find the SMS log by Twilio SID
-      const snapshot = await db.collection('smsLogs')
-        .where('twilioSid', '==', twilioSid)
+      const snapshot = await db.collection("smsLogs")
+        .where("twilioSid", "==", twilioSid)
         .limit(1)
         .get();
 
       if (snapshot.empty) {
-        logger.warn('SMS log not found for Twilio SID', { twilioSid });
+        logger.warn("SMS log not found for Twilio SID", {twilioSid});
         return;
       }
 
       const doc = snapshot.docs[0];
       const updateData: any = {
-        status: status === 'delivered' ? 'delivered' : 'failed',
-        ...(status === 'delivered' && { deliveredAt: FieldValue.serverTimestamp() }),
-        ...(errorCode && { error: errorCode })
+        status: status === "delivered" ? "delivered" : "failed",
+        ...(status === "delivered" && {deliveredAt: FieldValue.serverTimestamp()}),
+        ...(errorCode && {error: errorCode}),
       };
 
       await doc.ref.update(updateData);
-      logger.info('SMS status updated', { twilioSid, status });
-
+      logger.info("SMS status updated", {twilioSid, status});
     } catch (error) {
-      logger.error('Failed to update SMS status', { error, twilioSid });
+      logger.error("Failed to update SMS status", {error, twilioSid});
     }
   }
 
@@ -301,16 +299,15 @@ export class TwilioService {
    */
   async getUserSmsPreferences(userId: string): Promise<SmsPreferences | null> {
     try {
-      const userDoc = await db.collection('users').doc(userId).get();
+      const userDoc = await db.collection("users").doc(userId).get();
       if (!userDoc.exists) {
         return null;
       }
 
       const userData = userDoc.data();
       return userData?.smsPreferences || null;
-
     } catch (error) {
-      logger.error('Failed to get user SMS preferences', { error, userId });
+      logger.error("Failed to get user SMS preferences", {error, userId});
       throw error;
     }
   }
@@ -325,20 +322,20 @@ export class TwilioService {
     }
 
     switch (type) {
-      case 'family_invite':
-        return preferences.familyInvites;
-      case 'event_invite':
-        return preferences.eventInvites;
-      case 'event_reminder':
-        return preferences.eventReminders;
-      case 'event_update':
-        return preferences.eventUpdates;
-      case 'rsvp_confirmation':
-        return preferences.rsvpConfirmations;
-      case 'phone_verification':
-        return true; // Always allow verification codes
-      default:
-        return false;
+    case "family_invite":
+      return preferences.familyInvites;
+    case "event_invite":
+      return preferences.eventInvites;
+    case "event_reminder":
+      return preferences.eventReminders;
+    case "event_update":
+      return preferences.eventUpdates;
+    case "rsvp_confirmation":
+      return preferences.rsvpConfirmations;
+    case "phone_verification":
+      return true; // Always allow verification codes
+    default:
+      return false;
     }
   }
 }
@@ -352,12 +349,12 @@ interface RateLimitConfig {
 }
 
 const RATE_LIMITS: Record<SmsType, RateLimitConfig> = {
-  family_invite: { maxPerHour: 5, maxPerDay: 20, maxPerMonth: 100 },
-  event_invite: { maxPerHour: 20, maxPerDay: 100, maxPerMonth: 500 },
-  event_reminder: { maxPerHour: 50, maxPerDay: 200, maxPerMonth: 1000 },
-  event_update: { maxPerHour: 20, maxPerDay: 100, maxPerMonth: 500 },
-  rsvp_confirmation: { maxPerHour: 50, maxPerDay: 200, maxPerMonth: 1000 },
-  phone_verification: { maxPerHour: 3, maxPerDay: 10, maxPerMonth: 50 }
+  family_invite: {maxPerHour: 5, maxPerDay: 20, maxPerMonth: 100},
+  event_invite: {maxPerHour: 20, maxPerDay: 100, maxPerMonth: 500},
+  event_reminder: {maxPerHour: 50, maxPerDay: 200, maxPerMonth: 1000},
+  event_update: {maxPerHour: 20, maxPerDay: 100, maxPerMonth: 500},
+  rsvp_confirmation: {maxPerHour: 50, maxPerDay: 200, maxPerMonth: 1000},
+  phone_verification: {maxPerHour: 3, maxPerDay: 10, maxPerMonth: 50},
 };
 
 /**
@@ -366,13 +363,13 @@ const RATE_LIMITS: Record<SmsType, RateLimitConfig> = {
 export async function checkRateLimit(userId: string, type: SmsType): Promise<boolean> {
   const limits = RATE_LIMITS[type];
   const now = new Date();
-  
+
   // Check hourly limit
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-  const hourlyCount = await db.collection('smsLogs')
-    .where('userId', '==', userId)
-    .where('type', '==', type)
-    .where('createdAt', '>=', oneHourAgo)
+  const hourlyCount = await db.collection("smsLogs")
+    .where("userId", "==", userId)
+    .where("type", "==", type)
+    .where("createdAt", ">=", oneHourAgo)
     .count()
     .get();
 
@@ -385,10 +382,10 @@ export async function checkRateLimit(userId: string, type: SmsType): Promise<boo
 
   // Check daily limit
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const dailyCount = await db.collection('smsLogs')
-    .where('userId', '==', userId)
-    .where('type', '==', type)
-    .where('createdAt', '>=', oneDayAgo)
+  const dailyCount = await db.collection("smsLogs")
+    .where("userId", "==", userId)
+    .where("type", "==", type)
+    .where("createdAt", ">=", oneDayAgo)
     .count()
     .get();
 

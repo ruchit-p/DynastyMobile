@@ -1,7 +1,6 @@
 // MARK: - SMS Firebase Functions
 
-import {onCall} from "firebase-functions/v2/https";
-import {onRequest} from "firebase-functions/v2/https";
+import {onCall, onRequest} from "firebase-functions/v2/https";
 import {getFirestore, FieldValue} from "firebase-admin/firestore";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
 import {createError, withErrorHandling, ErrorCode} from "./utils/errors";
@@ -13,7 +12,7 @@ import {
   checkRateLimit,
   validateSmsPreferences,
   formatPhoneNumber,
-  type SmsType
+  type SmsType,
 } from "./services/twilioService";
 
 const db = getFirestore();
@@ -23,7 +22,7 @@ const db = getFirestore();
 export const updateSmsPreferences = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-  secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"]
+  secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"],
 }, async (request) => {
   return withErrorHandling(async () => {
     // Validate request
@@ -49,17 +48,17 @@ export const updateSmsPreferences = onCall({
     }
 
     // Update user document
-    await db.collection('users').doc(auth.uid).update({
+    await db.collection("users").doc(auth.uid).update({
       smsPreferences: preferences,
       ...(formattedPhone && {phoneNumber: formattedPhone}),
-      updatedAt: FieldValue.serverTimestamp()
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     return {
       success: true,
-      message: "SMS preferences updated successfully"
+      message: "SMS preferences updated successfully",
     };
-  }, 'updateSmsPreferences')();
+  }, "updateSmsPreferences")();
 });
 
 // MARK: - Send Phone Verification
@@ -67,7 +66,7 @@ export const updateSmsPreferences = onCall({
 export const sendPhoneVerification = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-  secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"]
+  secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"],
 }, async (request) => {
   return withErrorHandling(async () => {
     const {auth} = request;
@@ -81,7 +80,7 @@ export const sendPhoneVerification = onCall({
     }
 
     // Check rate limit
-    await checkRateLimit(auth.uid, 'phone_verification');
+    await checkRateLimit(auth.uid, "phone_verification");
 
     // Generate 6-digit verification code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -90,12 +89,12 @@ export const sendPhoneVerification = onCall({
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
-    await db.collection('phoneVerifications').doc(auth.uid).set({
+    await db.collection("phoneVerifications").doc(auth.uid).set({
       phoneNumber: formatPhoneNumber(phoneNumber),
       code,
       attempts: 0,
       expiresAt,
-      createdAt: FieldValue.serverTimestamp()
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     // Send SMS
@@ -103,24 +102,24 @@ export const sendPhoneVerification = onCall({
     await twilioService.sendSms(
       {
         to: phoneNumber,
-        body: SMS_TEMPLATES.phoneVerification(code)
+        body: SMS_TEMPLATES.phoneVerification(code),
       },
       auth.uid,
-      'phone_verification'
+      "phone_verification"
     );
 
     return {
       success: true,
-      message: "Verification code sent"
+      message: "Verification code sent",
     };
-  }, 'sendPhoneVerification')();
+  }, "sendPhoneVerification")();
 });
 
 // MARK: - Verify Phone Number
 
 export const verifySmsCode = onCall({
   region: DEFAULT_REGION,
-  timeoutSeconds: FUNCTION_TIMEOUT.SHORT
+  timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
 }, async (request) => {
   return withErrorHandling(async () => {
     const {auth} = request;
@@ -134,13 +133,13 @@ export const verifySmsCode = onCall({
     }
 
     // Get verification record
-    const verificationDoc = await db.collection('phoneVerifications').doc(auth.uid).get();
+    const verificationDoc = await db.collection("phoneVerifications").doc(auth.uid).get();
     if (!verificationDoc.exists) {
       throw createError(ErrorCode.NOT_FOUND, "No verification request found");
     }
 
     const verification = verificationDoc.data()!;
-    
+
     // Check expiration
     if (verification.expiresAt.toDate() < new Date()) {
       await verificationDoc.ref.delete();
@@ -156,19 +155,19 @@ export const verifySmsCode = onCall({
     // Verify code
     if (verification.code !== code.trim()) {
       await verificationDoc.ref.update({
-        attempts: verification.attempts + 1
+        attempts: verification.attempts + 1,
       });
       return {
         verified: false,
-        attemptsRemaining: 3 - verification.attempts - 1
+        attemptsRemaining: 3 - verification.attempts - 1,
       };
     }
 
     // Success - update user document
-    await db.collection('users').doc(auth.uid).update({
+    await db.collection("users").doc(auth.uid).update({
       phoneNumber: verification.phoneNumber,
       phoneVerified: true,
-      phoneVerifiedAt: FieldValue.serverTimestamp()
+      phoneVerifiedAt: FieldValue.serverTimestamp(),
     });
 
     // Delete verification record
@@ -176,9 +175,9 @@ export const verifySmsCode = onCall({
 
     return {
       verified: true,
-      message: "Phone number verified successfully"
+      message: "Phone number verified successfully",
     };
-  }, 'verifySmsCode')();
+  }, "verifySmsCode")();
 });
 
 // MARK: - Send Event SMS
@@ -186,7 +185,7 @@ export const verifySmsCode = onCall({
 export const sendEventSms = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
-  secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"]
+  secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"],
 }, async (request) => {
   return withErrorHandling(async () => {
     const {auth} = request;
@@ -200,21 +199,21 @@ export const sendEventSms = onCall({
     }
 
     // Get event data
-    const eventDoc = await db.collection('events').doc(eventId).get();
+    const eventDoc = await db.collection("events").doc(eventId).get();
     if (!eventDoc.exists) {
       throw createError(ErrorCode.NOT_FOUND, "Event not found");
     }
 
     const event = eventDoc.data()!;
-    
+
     // Check if user is event admin
     if (event.createdBy !== auth.uid && !event.adminUserIds?.includes(auth.uid)) {
       throw createError(ErrorCode.PERMISSION_DENIED, "Only event admins can send SMS");
     }
 
     // Get recipients
-    const recipientDocs = await db.collection('users')
-      .where('__name__', 'in', recipientIds)
+    const recipientDocs = await db.collection("users")
+      .where("__name__", "in", recipientIds)
       .get();
 
     const twilioService = getTwilioService();
@@ -222,9 +221,9 @@ export const sendEventSms = onCall({
 
     for (const doc of recipientDocs.docs) {
       const recipient = doc.data();
-      
+
       // Check if user has SMS enabled
-      if (!await twilioService.canSendSmsToUser(doc.id, 'event_invite')) {
+      if (!await twilioService.canSendSmsToUser(doc.id, "event_invite")) {
         continue;
       }
 
@@ -233,44 +232,44 @@ export const sendEventSms = onCall({
       }
 
       // Prepare message based on template
-      let messageBody = '';
+      let messageBody = "";
       const eventDate = event.startDate.toDate().toLocaleDateString();
       const rsvpLink = `https://mydynastyapp.com/events/${eventId}/rsvp`;
 
       switch (template) {
-        case 'invite':
-          messageBody = SMS_TEMPLATES.eventInvite(
-            event.title,
-            eventDate,
-            event.location || 'TBD',
-            rsvpLink
-          );
-          break;
-        case 'reminder':
-          const hoursUntil = Math.floor((event.startDate.toDate().getTime() - Date.now()) / (1000 * 60 * 60));
-          const timeUntil = hoursUntil > 24 ? `${Math.floor(hoursUntil / 24)} days` : `${hoursUntil} hours`;
-          messageBody = SMS_TEMPLATES.eventReminder(event.title, timeUntil);
-          break;
-        case 'update':
-          messageBody = SMS_TEMPLATES.eventUpdate(
-            event.title,
-            'Event details updated',
-            'Check the app for details'
-          );
-          break;
-        default:
-          throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid template");
+      case "invite":
+        messageBody = SMS_TEMPLATES.eventInvite(
+          event.title,
+          eventDate,
+          event.location || "TBD",
+          rsvpLink
+        );
+        break;
+      case "reminder":
+        const hoursUntil = Math.floor((event.startDate.toDate().getTime() - Date.now()) / (1000 * 60 * 60));
+        const timeUntil = hoursUntil > 24 ? `${Math.floor(hoursUntil / 24)} days` : `${hoursUntil} hours`;
+        messageBody = SMS_TEMPLATES.eventReminder(event.title, timeUntil);
+        break;
+      case "update":
+        messageBody = SMS_TEMPLATES.eventUpdate(
+          event.title,
+          "Event details updated",
+          "Check the app for details"
+        );
+        break;
+      default:
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid template");
       }
 
       messages.push({
         to: recipient.phoneNumber,
         body: messageBody,
         userId: doc.id,
-        type: 'event_invite' as SmsType,
+        type: "event_invite" as SmsType,
         metadata: {
           eventId,
-          template
-        }
+          template,
+        },
       });
     }
 
@@ -281,9 +280,9 @@ export const sendEventSms = onCall({
       success: true,
       sent: results.length,
       total: messages.length,
-      message: `SMS sent to ${results.length} of ${messages.length} recipients`
+      message: `SMS sent to ${results.length} of ${messages.length} recipients`,
     };
-  }, 'sendEventSms')();
+  }, "sendEventSms")();
 });
 
 // MARK: - Send Test SMS
@@ -291,7 +290,7 @@ export const sendEventSms = onCall({
 export const sendTestSms = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-  secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"]
+  secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"],
 }, async (request) => {
   return withErrorHandling(async () => {
     const {auth} = request;
@@ -305,24 +304,24 @@ export const sendTestSms = onCall({
     }
 
     // Check rate limit
-    await checkRateLimit(auth.uid, 'phone_verification');
+    await checkRateLimit(auth.uid, "phone_verification");
 
     // Send test SMS
     const twilioService = getTwilioService();
     await twilioService.sendSms(
       {
         to: phoneNumber,
-        body: "This is a test message from Dynasty. If you received this, SMS is working correctly!"
+        body: "This is a test message from Dynasty. If you received this, SMS is working correctly!",
       },
       auth.uid,
-      'phone_verification'
+      "phone_verification"
     );
 
     return {
       success: true,
-      message: "Test SMS sent successfully"
+      message: "Test SMS sent successfully",
     };
-  }, 'sendTestSms')();
+  }, "sendTestSms")();
 });
 
 // MARK: - Twilio Webhook Handler
@@ -330,12 +329,12 @@ export const sendTestSms = onCall({
 export const twilioWebhook = onRequest({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-  secrets: ["TWILIO_AUTH_TOKEN"]
+  secrets: ["TWILIO_AUTH_TOKEN"],
 }, async (req, res) => {
   return withErrorHandling(async () => {
     // Only accept POST requests
-    if (req.method !== 'POST') {
-      res.status(405).send('Method Not Allowed');
+    if (req.method !== "POST") {
+      res.status(405).send("Method Not Allowed");
       return;
     }
 
@@ -344,7 +343,7 @@ export const twilioWebhook = onRequest({
     // const twilioSignature = req.headers['x-twilio-signature'] as string;
     // const url = `https://${req.headers.host}${req.originalUrl}`;
     // const isValid = twilio.validateRequest(twilioAuthToken.value(), twilioSignature, url, req.body);
-    
+
     // if (!isValid) {
     //   res.status(403).send('Forbidden');
     //   return;
@@ -358,7 +357,7 @@ export const twilioWebhook = onRequest({
     }
 
     // Respond with empty TwiML
-    res.set('Content-Type', 'text/xml');
-    res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
-  }, 'twilioWebhook')();
+    res.set("Content-Type", "text/xml");
+    res.send("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>");
+  }, "twilioWebhook")();
 });

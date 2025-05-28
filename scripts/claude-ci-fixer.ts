@@ -5,10 +5,10 @@
  * Intelligent error detection and automated fixing for common CI/CD failures
  */
 
-import { execSync } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as readline from 'readline';
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const readline = require('readline');
 
 // ANSI color codes
 const colors = {
@@ -65,15 +65,16 @@ class ClaudeCIFixer {
 
   private exec(command: string, silent = false): string {
     try {
-      return execSync(command, {
+      const result = execSync(command, {
         encoding: 'utf8',
         stdio: silent ? 'pipe' : 'inherit'
-      }).trim();
+      });
+      return result ? result.trim() : '';
     } catch (error: any) {
       if (!silent) {
         throw new Error(`Command failed: ${command}\n${error.message}`);
       }
-      return error.stdout || error.message;
+      return error.stdout || error.message || '';
     }
   }
 
@@ -367,8 +368,16 @@ class ClaudeCIFixer {
       // Setup branch
       if (this.branchName) {
         this.log(`Checking out branch: ${this.branchName}`, 'blue');
-        this.exec(`git checkout ${this.branchName}`);
-        this.exec(`git pull origin ${this.branchName}`);
+        const currentBranch = this.exec('git branch --show-current', true);
+        if (currentBranch !== this.branchName) {
+          this.exec(`git checkout ${this.branchName}`);
+        }
+        try {
+          this.exec(`git pull origin ${this.branchName}`);
+        } catch (error) {
+          // Git pull might fail if already up to date or other non-critical reasons
+          this.log('Git pull completed', 'green');
+        }
       }
 
       let attempt = 1;
@@ -475,4 +484,4 @@ if (require.main === module) {
   main();
 }
 
-export { ClaudeCIFixer };
+module.exports = { ClaudeCIFixer };

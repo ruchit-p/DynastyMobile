@@ -2086,14 +2086,14 @@ export const updateVaultFile = onCall(
     if (item.storagePath) {
       const storageAdapter = new StorageAdapter();
       const r2Service = await storageAdapter.getR2Service();
-      
+
       // Delete old file
       await r2Service.deleteObject(item.storagePath);
-      
+
       // Upload new file
       const buffer = Buffer.from(fileData, "base64");
       const newStoragePath = `vault/${uid}/${itemId}/${sanitizeFilename(fileName)}`;
-      
+
       await r2Service.uploadObject(newStoragePath, buffer, {
         contentType: item.mimeType,
         metadata: {
@@ -2158,7 +2158,7 @@ export const completeVaultFileUpload = onCall(
     // Complete multipart upload in R2
     const storageAdapter = new StorageAdapter();
     const r2Service = await storageAdapter.getR2Service();
-    
+
     await r2Service.completeMultipartUpload(
       uploadData.storagePath,
       uploadData.uploadId,

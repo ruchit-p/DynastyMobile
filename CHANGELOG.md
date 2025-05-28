@@ -1,5 +1,59 @@
 # Dynasty Changelog
 
+## Version 2.8.0 - May 2025
+
+### 🚀 CI/CD Pipeline & Automation
+
+**CI/CD Pipeline Setup**
+- ✅ **Branch Strategy**: Implemented dev → staging → production flow
+  - `dev` branch for feature development
+  - `staging` branch with automatic Vercel deployment
+  - `main` branch with manual approval for production
+- ✅ **GitHub Actions Workflows**:
+  - `dev-checks.yml` - Automated testing on all PRs
+  - `staging-deploy.yml` - Automatic staging deployment
+  - `production-deploy.yml` - Production deployment with approval gates
+  - `security-scan.yml` - Security vulnerability scanning
+  - `auto-fix-ci.yml` - Automatic CI error fixing
+- ✅ **Vercel Integration**: 
+  - Connected to monorepo structure
+  - Automatic preview deployments
+  - Environment variable management
+- ✅ **Cloudflare Integration**:
+  - Automatic cache purging on production deployments
+  - CDN optimization
+
+**Automated Development Workflows**
+- ✅ **Feature Development Automation**:
+  - `yarn feature` command for complete workflow
+  - Automatic branch creation from dev
+  - Local test validation before push
+  - Auto-fix for linting issues
+  - PR creation with proper descriptions
+  - CI status monitoring
+- ✅ **CI/CD Error Auto-Fix**:
+  - Intelligent error pattern detection
+  - Automatic fixes for common issues:
+    - ESLint formatting errors
+    - TypeScript 'any' usage
+    - React Hook dependencies
+    - Import path problems
+  - Multiple retry attempts
+  - Optional auto-commit functionality
+
+**Scripts & Tooling**
+- ✅ **Automation Scripts**:
+  - `claude-feature-workflow.sh` - Bash automation
+  - `claude-dev-assistant.ts` - TypeScript assistant
+  - `claude-fix-ci-errors.sh` - CI error fixing
+  - `claude-ci-fixer.ts` - Advanced pattern-based fixing
+- ✅ **Setup Scripts**:
+  - `setup-branches.sh` - Branch initialization
+  - `setup-ci-fixer.sh` - Tool installation
+- ✅ **Configuration Files**:
+  - `.ci-fixer.config.json` - Error fix patterns
+  - Updated `package.json` with new commands
+
 ## Version 2.7.0 - May 2025
 
 ### 🎨 Design System Standardization

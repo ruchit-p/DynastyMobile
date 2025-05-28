@@ -1042,7 +1042,7 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
   // Vault Bulk Operations Schemas
   executeBulkVaultOperation: {
     rules: [
-      {field: "operation", type: "enum", required: true, 
+      {field: "operation", type: "enum", required: true,
         enumValues: ["encrypt", "decrypt", "share", "unshare", "delete", "restore", "move"]},
       {field: "itemIds", type: "array", required: true, maxSize: 100},
       {field: "metadata", type: "object"},

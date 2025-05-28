@@ -3,7 +3,6 @@ import * as FileSystem from 'expo-file-system';
 import * as Crypto from 'expo-crypto';
 import { Buffer } from 'buffer';
 import Libsignal from '../../specs/NativeLibsignal';
-import Libsignal from '../../specs/NativeLibsignal';
 
 /**
  * Signal Protocol Attachment Encryption
