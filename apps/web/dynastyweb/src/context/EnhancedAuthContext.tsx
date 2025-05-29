@@ -700,7 +700,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!user) throw new Error('No user logged in');
     
     try {
-      const session = await multiFactor(user).getSession();
+      await multiFactor(user).getSession();
       
       // Create or reuse recaptcha verifier
       if (!window.mfaRecaptchaVerifier) {

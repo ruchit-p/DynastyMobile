@@ -71,7 +71,8 @@ export default function Navbar({ user }: NavbarProps) {
             alt="Dynasty Logo"
             width={32}
             height={32}
-            style={{ width: 'auto', height: '32px' }}
+            priority
+            style={{ width: '32px', height: 'auto' }}
           />
           <span className="text-xl font-bold text-[#0A5C36] hidden sm:inline-block">Dynasty</span>
         </Link>

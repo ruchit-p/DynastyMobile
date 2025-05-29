@@ -1,7 +1,5 @@
-import { 
-  FingerprintJSPro,
-  FpjsProvider,
-} from '@fingerprintjs/fingerprintjs-pro-react';
+import { FpjsProvider } from '@fingerprintjs/fingerprintjs-pro-react';
+import type FingerprintJSPro from '@fingerprintjs/fingerprintjs-pro';
 import { auth, functions } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 
@@ -34,7 +32,7 @@ export interface DeviceTrustResult {
 }
 
 class FingerprintService {
-  private fpjsClient: any | null = null;
+  private fpjsClient: FingerprintJSPro | null = null;
   private initPromise: Promise<void> | null = null;
   private isInitialized = false;
 
@@ -66,7 +64,7 @@ class FingerprintService {
       this.fpjsClient = await FingerprintJSPro.load({
         apiKey: FINGERPRINT_API_KEY,
         endpoint: FINGERPRINT_ENDPOINT,
-        region: FINGERPRINT_REGION as any
+        region: FINGERPRINT_REGION as FingerprintJSPro.LoadOptions['region']
       });
       
       this.isInitialized = true;
@@ -149,7 +147,7 @@ class FingerprintService {
       }
 
       // Verify with backend
-      const verifyDeviceFingerprint = httpsCallable<any, DeviceTrustResult>(
+      const verifyDeviceFingerprint = httpsCallable<{ requestId: string; visitorId: string; deviceInfo: ReturnType<FingerprintService['getWebDeviceInfo']> }, DeviceTrustResult>(
         functions,
         'verifyDeviceFingerprint'
       );
@@ -191,7 +189,7 @@ class FingerprintService {
       }
 
       // Quick check with backend
-      const checkDeviceTrust = httpsCallable<any, {
+      const checkDeviceTrust = httpsCallable<{ userId: string; visitorId: string }, {
         success: boolean;
         isTrusted: boolean;
         trustScore: number;
@@ -217,7 +215,7 @@ class FingerprintService {
     try {
       const currentFingerprint = this.getCachedFingerprint();
       
-      const removeTrustedDevice = httpsCallable<any, { success: boolean }>(
+      const removeTrustedDevice = httpsCallable<{ visitorId: string; currentVisitorId?: string }, { success: boolean }>(
         functions,
         'removeTrustedDevice'
       );

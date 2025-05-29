@@ -8,8 +8,11 @@ const createJestConfig = nextJest({
 // Add any custom config to be passed to Jest
 const customJestConfig = {
   // Add more setup options before each test is run
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  setupFiles: ['<rootDir>/jest.setup.mocks.js'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.enhanced.js'],
   testEnvironment: 'jest-environment-jsdom',
+  moduleDirectories: ['node_modules', 'src'],
+  automock: false,
   moduleNameMapper: {
     // Handle module aliases (this will be automatically configured for you soon)
     '^@/(.*)$': '<rootDir>/src/$1',
@@ -20,6 +23,8 @@ const customJestConfig = {
     '^@/hooks/(.*)$': '<rootDir>/src/hooks/$1',
     '^@/types/(.*)$': '<rootDir>/src/types/$1',
     '^@/utils/(.*)$': '<rootDir>/src/utils/$1',
+    // Mock CSS modules
+    '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
   },
   testMatch: [
     '**/__tests__/**/*.test.[jt]s?(x)',
@@ -36,8 +41,7 @@ const customJestConfig = {
     '/.next/',
   ],
   transformIgnorePatterns: [
-    '/node_modules/',
-    '^.+\\.module\\.(css|sass|scss)$',
+    'node_modules/(?!(lucide-react|nanoid|ics|uuid|firebase)/)',
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
 }

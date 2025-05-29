@@ -41,7 +41,7 @@ export class CSRFService {
 
       // Development only: use a consistent key for testing
       logger.warn("CSRF_SECRET_KEY not set, using development key (NOT FOR PRODUCTION)");
-      return Buffer.from("development-only-csrf-secret-key-do-not-use-in-production-ever", "utf8").slice(0, 32);
+      return Buffer.from("development-only-csrf-secret-key-do-not-use-in-production-ever", "utf8").subarray(0, 32);
     }
 
     return Buffer.from(secretKey, "hex");
@@ -143,9 +143,9 @@ export class CSRFService {
     const key = this.getSecretKey();
 
     // Extract components
-    const iv = buffer.slice(0, this.IV_LENGTH);
-    const authTag = buffer.slice(this.IV_LENGTH, this.IV_LENGTH + this.AUTH_TAG_LENGTH);
-    const encrypted = buffer.slice(this.IV_LENGTH + this.AUTH_TAG_LENGTH);
+    const iv = buffer.subarray(0, this.IV_LENGTH);
+    const authTag = buffer.subarray(this.IV_LENGTH, this.IV_LENGTH + this.AUTH_TAG_LENGTH);
+    const encrypted = buffer.subarray(this.IV_LENGTH + this.AUTH_TAG_LENGTH);
 
     const decipher = createDecipheriv(this.ALGORITHM, key, iv);
     decipher.setAuthTag(authTag);
@@ -174,6 +174,7 @@ export class CSRFService {
       return 0;
     }
   }
+
 }
 
 // Export an instance for convenience

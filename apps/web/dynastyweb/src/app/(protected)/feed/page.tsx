@@ -104,12 +104,15 @@ export default function FeedPage() {
         
         // Process events
         if (eventsResult && Array.isArray(eventsResult.events)) {
-          const eventItems: FeedItem[] = eventsResult.events.map(event => ({
-            id: event.id,
-            type: 'event',
-            timestamp: event.eventDate,
-            data: event
-          }));
+          const eventItems: FeedItem[] = eventsResult.events.map((event: unknown) => {
+            const eventData = event as EventData;
+            return {
+              id: eventData.id,
+              type: 'event' as const,
+              timestamp: eventData.eventDate,
+              data: eventData
+            };
+          });
           
           allFeedItems = [...allFeedItems, ...eventItems];
         }

@@ -1,6 +1,6 @@
 import {onCall} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
-import {getFirestore, Timestamp, WriteBatch} from "firebase-admin/firestore";
+import {getFirestore, Timestamp} from "firebase-admin/firestore";
 import {logger} from "firebase-functions/v2";
 import {createError, ErrorCode, handleError} from "./utils/errors";
 import {withAuth} from "./middleware/auth";
@@ -335,7 +335,7 @@ async function executeBulkShare(
       .get();
 
     const batch = db.batch();
-    const sharePromises: Promise<void>[] = [];
+    // const sharePromises: Promise<void>[] = [];
 
     for (const doc of itemsSnapshot.docs) {
       for (const target of shareTargets) {

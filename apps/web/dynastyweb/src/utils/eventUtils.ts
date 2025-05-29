@@ -1,7 +1,6 @@
-import { functions } from "@/lib/firebase"
-import { httpsCallable } from "firebase/functions"
 import { Timestamp } from "firebase/firestore"
 import { createEvents, EventAttributes } from 'ics'
+import { CSRFProtectedClient } from '@/lib/csrf-client'
 
 // Event types for the application
 export type EventType = 
@@ -125,26 +124,36 @@ class EventManager {
 const eventManager = new EventManager();
 export default eventManager;
 
+// CSRF client for API calls
+let csrfClient: CSRFProtectedClient | null = null;
+
+export function setEventUtilsCSRFClient(client: CSRFProtectedClient) {
+  csrfClient = client;
+}
+
+function getCSRFClient(): CSRFProtectedClient {
+  if (!csrfClient) {
+    throw new Error('CSRF client not initialized for eventUtils. Please ensure CSRFProvider is set up.');
+  }
+  return csrfClient;
+}
+
 /**
  * Fetch all events accessible to the current user
  */
 export async function getAllEvents() {
   try {
-    const getEvents = httpsCallable<void, { events: EventData[] }>(
-      functions, 
-      'getEventsApi'
-    );
+    const result = await getCSRFClient().callFunction('getEventsApi', {});
     
-    const result = await getEvents();
-    
-    if (!result.data || !Array.isArray(result.data.events)) {
-      console.error('Invalid events data structure:', result.data);
+    const data = result.data as { events: EventData[] };
+    if (!data || !Array.isArray(data.events)) {
+      console.error('Invalid events data structure:', data);
       return { events: [] };
     }
     
     // Format each event with the current user ID
     const currentUserId = localStorage.getItem('userId') || '';
-    const formattedEvents = result.data.events.map(event => formatEventData(event, currentUserId));
+    const formattedEvents = data.events.map(event => formatEventData(event, currentUserId));
     
     return { events: formattedEvents };
   } catch (error) {
@@ -158,21 +167,17 @@ export async function getAllEvents() {
  */
 export async function getEventDetails(eventId: string) {
   try {
-    const getEventDetails = httpsCallable<{ eventId: string }, { event: EventData }>(
-      functions, 
-      'getEventDetailsApi'
-    );
+    const result = await getCSRFClient().callFunction('getEventDetailsApi', { eventId });
     
-    const result = await getEventDetails({ eventId });
-    
-    if (!result.data || !result.data.event) {
-      console.error('Invalid event data structure:', result.data);
+    const data = result.data as { event: EventData };
+    if (!data || !data.event) {
+      console.error('Invalid event data structure:', data);
       throw new Error('Failed to fetch event details');
     }
     
     // Format the event with the current user ID
     const currentUserId = localStorage.getItem('userId') || '';
-    const formattedEvent = formatEventData(result.data.event, currentUserId);
+    const formattedEvent = formatEventData(data.event, currentUserId);
     
     return { event: formattedEvent };
   } catch (error) {
@@ -186,14 +191,9 @@ export async function getEventDetails(eventId: string) {
  */
 export async function updateEventRsvp(eventId: string, status: 'yes' | 'maybe' | 'no') {
   try {
-    const updateRsvp = httpsCallable<{ eventId: string, status: string }, { success: boolean }>(
-      functions, 
-      'updateEventRsvpApi'
-    );
+    const result = await getCSRFClient().callFunction('updateEventRsvpApi', { eventId, status });
     
-    const result = await updateRsvp({ eventId, status });
-    
-    return result.data;
+    return result.data as { success: boolean };
   } catch (error) {
     console.error(`Error updating RSVP for event ${eventId}:`, error);
     throw error;
@@ -294,14 +294,9 @@ export async function updateEvent(eventId: string, eventData: Partial<EventData>
     }
     console.log("[eventUtils] Final data being sent to Firebase:", logData);
     
-    const updateEventFunc = httpsCallable<{ eventId: string, eventData: Partial<EventData> }, { success: boolean }>(
-      functions, 
-      'updateEvent'
-    );
+    const result = await getCSRFClient().callFunction('updateEvent', dataToSend);
     
-    const result = await updateEventFunc(dataToSend);
-    
-    return result.data;
+    return result.data as { success: boolean };
   } catch (error) {
     console.error(`Error updating event ${eventId}:`, error);
     throw error;
@@ -313,14 +308,9 @@ export async function updateEvent(eventId: string, eventData: Partial<EventData>
  */
 export async function deleteEvent(eventId: string) {
   try {
-    const deleteEventFunc = httpsCallable<{ eventId: string }, { success: boolean }>(
-      functions, 
-      'deleteEventApi'
-    );
+    const result = await getCSRFClient().callFunction('deleteEventApi', { eventId });
     
-    const result = await deleteEventFunc({ eventId });
-    
-    return result.data;
+    return result.data as { success: boolean };
   } catch (error) {
     console.error(`Error deleting event ${eventId}:`, error);
     throw error;

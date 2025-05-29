@@ -130,7 +130,7 @@ const fetchFirestoreUser = async (userId: string): Promise<FirestoreUser | null>
   try {
     const userDoc = await getDoc(doc(db, "users", userId));
     if (!userDoc.exists()) {
-      console.warn(`[Auth] No Firestore document found for user ${userId}`);
+      // User document not found - this is expected for new users
       return null;
     }
     
@@ -160,8 +160,9 @@ const fetchFirestoreUser = async (userId: string): Promise<FirestoreUser | null>
     }
     
     return userData;
-  } catch (error) {
-    console.error("[Auth] Error fetching Firestore user:", error);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (_error) {
+    // Error fetching user data - fail silently to avoid exposing sensitive info
     return null;
   }
 };
@@ -182,9 +183,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    setPersistence(auth, browserLocalPersistence).catch((error) => {
-      console.error("[Auth] Error setting persistence:", error);
-    });
+    setPersistence(auth, browserLocalPersistence).catch(
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      (_error) => {
+        // Error setting persistence - fail silently
+      }
+    );
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
@@ -203,6 +207,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     password: string,
   ): Promise<void> => {
     try {
+      // Signup is CSRF-exempt, call directly
       const handleSignUp = httpsCallable<SignUpRequest, SignUpResult>(functions, 'handleSignUp');
       await handleSignUp({
         email,
@@ -241,12 +246,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // If this is the first time the user is signing in with Google,
       // we need to create a Firestore user document
       if (result.user) {
-        console.log("Google sign-in successful for user:", result.user.uid);
+        // Google sign-in successful
         const userDoc = await getDoc(doc(db, "users", result.user.uid));
         
         if (!userDoc.exists()) {
-          console.log("This is a new Google user, creating Firestore document");
-          // Create a new user document in Firestore
+          // New Google user - creating Firestore document
+          // Google sign-in is CSRF-exempt
           const handleGoogleSignIn = httpsCallable(functions, 'handleGoogleSignIn');
           await handleGoogleSignIn({
             userId: result.user.uid,
@@ -255,22 +260,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             photoURL: result.user.photoURL || '',
           });
           isNewUser = true;
-          console.log("New Google user document created, isNewUser =", isNewUser);
+          // New Google user document created
         } else {
           // Check if this is an existing user who hasn't completed onboarding
           const userData = userDoc.data();
           if (userData && userData.onboardingCompleted === false) {
-            console.log("Existing Google user but onboarding not completed");
+            // Existing Google user but onboarding not completed
             isNewUser = true;
           } else {
-            console.log("Existing Google user with completed onboarding");
+            // Existing Google user with completed onboarding
           }
         }
       }
       
       return isNewUser;
     } catch (error) {
-      console.error("Error in Google sign-in:", error);
+      // Google sign-in error - re-throw without logging sensitive details
       throw error;
     }
   };
@@ -320,6 +325,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signUpWithInvitation = async (data: InvitedSignupFormData) => {
+    // Invited signup is CSRF-exempt
     const handleInvitedSignUp = httpsCallable<InvitedSignupFormData, { success: boolean; userId: string; familyTreeId: string }>(
       functions,
       "handleInvitedSignUp"
@@ -334,6 +340,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const verifyInvitation = async (token: string, invitationId: string) => {
+    // Invitation verification is CSRF-exempt (public endpoint)
     const verifyInvitationToken = httpsCallable<
       { token: string; invitationId: string },
       {
@@ -348,7 +355,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         inviteeEmail: string;
       }
     >(functions, "verifyInvitationToken");
-
     const result = await verifyInvitationToken({ token, invitationId });
     return result.data;
   };
@@ -376,15 +382,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Phone authentication functions
   const signInWithPhone = async (phoneNumber: string): Promise<{ verificationId: string }> => {
     try {
+      // Starting phone sign-in process
+      // Auth object initialized
+      // Auth app config verified
+      
       // Create invisible reCAPTCHA verifier
       if (!window.recaptchaVerifier) {
+        // Creating new RecaptchaVerifier
         window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
           'size': 'invisible',
         });
+        // RecaptchaVerifier created
+      } else {
+        // Using existing RecaptchaVerifier
       }
 
       const appVerifier = window.recaptchaVerifier;
+      // Attempting signInWithPhoneNumber
+      
       const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
+      // signInWithPhoneNumber successful
       
       // Store the confirmation result for later use
       window.confirmationResult = confirmationResult;
@@ -392,20 +409,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Return the verification ID
       return { verificationId: confirmationResult.verificationId };
     } catch (error) {
-      console.error("Error sending verification code:", error);
+      // Error sending verification code
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const firebaseError = error as { code?: string; message?: string; customData?: unknown };
+      // Phone auth error - re-throw without logging sensitive details
       throw error;
     }
   };
 
-  const confirmPhoneSignIn = async (verificationId: string, code: string): Promise<boolean> => {
+  const confirmPhoneSignIn = async (_verificationId: string, code: string): Promise<boolean> => {
     try {
       // Sign in with the verification code
       const result = await window.confirmationResult.confirm(code);
       const user = result.user;
       
-      // Call the Firebase function to handle phone sign-in
-      const handlePhoneSignIn = httpsCallable(functions, 'handlePhoneSignIn');
-      const response = await handlePhoneSignIn({
+      // Phone sign-in is CSRF-exempt
+      const handlePhoneSignInFn = httpsCallable(functions, 'handlePhoneSignIn');
+      const response = await handlePhoneSignInFn({
         phoneNumber: user.phoneNumber,
         uid: user.uid,
       });
@@ -417,7 +437,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const responseData = response.data as { isNewUser: boolean };
       return responseData.isNewUser;
     } catch (error) {
-      console.error("Error confirming phone sign-in:", error);
+      // Error confirming phone sign-in
       throw error;
     }
   };
@@ -444,7 +464,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 };

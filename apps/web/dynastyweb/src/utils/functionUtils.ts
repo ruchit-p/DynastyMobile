@@ -1,12 +1,21 @@
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app } from '@/lib/firebase';
 import type { Node } from 'relatives-tree/lib/types';
 import type { Story } from './storyUtils';
 import { Timestamp } from 'firebase/firestore';
-import { EventData } from './eventUtils';
+import { CSRFProtectedClient } from '@/lib/csrf-client';
 
-// Initialize Firebase Functions
-const functions = getFunctions(app, 'us-central1');
+// CSRF client for API calls
+let csrfClient: CSRFProtectedClient | null = null;
+
+export function setFunctionUtilsCSRFClient(client: CSRFProtectedClient) {
+  csrfClient = client;
+}
+
+function getCSRFClient(): CSRFProtectedClient {
+  if (!csrfClient) {
+    throw new Error('CSRF client not initialized for functionUtils. Please ensure CSRFProvider is set up.');
+  }
+  return csrfClient;
+}
 
 // Define the enriched story type
 type EnrichedStory = Story & {
@@ -24,8 +33,7 @@ type EnrichedStory = Story & {
 // MARK: - Family Tree Functions
 
 export const getFamilyTreeData = async (userId: string) => {
-  const functionRef = httpsCallable(functions, 'getFamilyTreeData');
-  const result = await functionRef({ userId });
+  const result = await getCSRFClient().callFunction('getFamilyTreeData', { userId });
   return result.data as { treeNodes: Node[] };
 };
 
@@ -40,24 +48,19 @@ export const updateFamilyRelationships = async (
     removeSpouses?: string[];
   }
 ) => {
-  const functionRef = httpsCallable(functions, 'updateFamilyRelationships');
-  const result = await functionRef({ userId, updates });
+  const result = await getCSRFClient().callFunction('updateFamilyRelationships', { userId, updates });
   return result.data as { success: boolean };
 };
 
 // MARK: - Stories Functions
 
 export const getAccessibleStories = async (userId: string, familyTreeId: string) => {
-  const functionRef = httpsCallable(functions, 'getAccessibleStories');
-  const result = await functionRef({ userId, familyTreeId });
+  const result = await getCSRFClient().callFunction('getAccessibleStories', { userId, familyTreeId });
   return result.data as { stories: EnrichedStory[] };
 };
 
 export const getUserStories = async (userId: string) => {
-  const functionRef = httpsCallable(functions, 'getUserStories', {
-    timeout: 60000, // 60 seconds timeout
-  });
-  const result = await functionRef({ userId });
+  const result = await getCSRFClient().callFunction('getUserStories', { userId });
   return result.data as { stories: EnrichedStory[] };
 };
 
@@ -83,7 +86,6 @@ export const createStory = async (storyData: {
   coverPhoto?: string;
 }) => {
   console.log("📞 Creating function reference for createStory");
-  const functionRef = httpsCallable(functions, 'createStory');
   
   try {
     console.log("📤 Sending story data to Firebase function", { 
@@ -96,7 +98,7 @@ export const createStory = async (storyData: {
     // Add debugger for browser inspection
     debugger;
     
-    const result = await functionRef(storyData);
+    const result = await getCSRFClient().callFunction('createStory', storyData);
     console.log("📥 Received response from createStory function", result.data);
     return result.data as { id: string };
   } catch (error) {
@@ -127,14 +129,12 @@ export const updateStory = async (
     peopleInvolved: string[];
   }>
 ) => {
-  const functionRef = httpsCallable(functions, 'updateStory');
-  const result = await functionRef({ storyId, userId, updates });
+  const result = await getCSRFClient().callFunction('updateStory', { storyId, userId, updates });
   return result.data as { success: boolean; id?: string };
 };
 
 export const deleteStory = async (storyId: string, userId: string) => {
-  const functionRef = httpsCallable(functions, 'deleteStory');
-  const result = await functionRef({ storyId, userId });
+  const result = await getCSRFClient().callFunction('deleteStory', { storyId, userId });
   return result.data as { success: boolean };
 };
 
@@ -158,8 +158,7 @@ export const createFamilyMember = async (
     connectToExistingParent?: boolean;
   }
 ) => {
-  const functionRef = httpsCallable(functions, 'createFamilyMember');
-  const result = await functionRef({ userData, relationType, selectedNodeId, options });
+  const result = await getCSRFClient().callFunction('createFamilyMember', { userData, relationType, selectedNodeId, options });
   return result.data as { success: boolean; userId: string };
 };
 
@@ -168,8 +167,7 @@ export const deleteFamilyMember = async (
   familyTreeId: string,
   currentUserId: string
 ) => {
-  const functionRef = httpsCallable(functions, 'deleteFamilyMember');
-  const result = await functionRef({ memberId, familyTreeId, currentUserId });
+  const result = await getCSRFClient().callFunction('deleteFamilyMember', { memberId, familyTreeId, currentUserId });
   return result.data as { success: boolean };
 };
 
@@ -185,8 +183,7 @@ export const updateFamilyMember = async (
   },
   familyTreeId: string
 ) => {
-  const functionRef = httpsCallable(functions, 'updateFamilyMember');
-  const result = await functionRef({ memberId, updates, familyTreeId });
+  const result = await getCSRFClient().callFunction('updateFamilyMember', { memberId, updates, familyTreeId });
   return result.data as { success: boolean };
 };
 
@@ -197,8 +194,7 @@ export const promoteToAdmin = async (
   familyTreeId: string,
   currentUserId: string
 ) => {
-  const functionRef = httpsCallable(functions, 'promoteToAdmin');
-  const result = await functionRef({ memberId, familyTreeId, currentUserId });
+  const result = await getCSRFClient().callFunction('promoteToAdmin', { memberId, familyTreeId, currentUserId });
   return result.data as { success: boolean; message?: string };
 };
 
@@ -207,8 +203,7 @@ export const demoteToMember = async (
   familyTreeId: string,
   currentUserId: string
 ) => {
-  const functionRef = httpsCallable(functions, 'demoteToMember');
-  const result = await functionRef({ memberId, familyTreeId, currentUserId });
+  const result = await getCSRFClient().callFunction('demoteToMember', { memberId, familyTreeId, currentUserId });
   return result.data as { success: boolean; message?: string };
 };
 
@@ -217,8 +212,7 @@ export const demoteToMember = async (
  * @returns Family tree data and members with admin/owner status
  */
 export const getFamilyManagementData = async () => {
-  const functionRef = httpsCallable(functions, 'getFamilyManagementData');
-  const result = await functionRef();
+  const result = await getCSRFClient().callFunction('getFamilyManagementData', {});
   return result.data as {
     tree: {
       id: string;
@@ -246,12 +240,10 @@ export async function getEventsForFeed(userId: string, familyTreeId: string) {
   try {
     console.log('Fetching events for feed with userId:', userId, 'familyTreeId:', familyTreeId);
     
-    const getEventsForFeed = httpsCallable<{ userId: string, familyTreeId: string }, { events: EventData[] }>(
-      functions, 
-      'getEventsForFeedApi'
-    );
-    
-    const result = await getEventsForFeed({ userId, familyTreeId });
+    const result = await getCSRFClient().callFunction<
+      { userId: string; familyTreeId: string },
+      { events: unknown[] }
+    >('getEventsForFeedApi', { userId, familyTreeId });
     
     if (!result.data || !Array.isArray(result.data.events)) {
       console.error('Invalid events data structure:', result.data);

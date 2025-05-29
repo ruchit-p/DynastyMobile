@@ -273,7 +273,7 @@ export default function OnboardingForm({ isOpen, onComplete, userEmail, prefillD
         <div className="bg-gradient-to-r from-[#0A5C36] to-[#0C6A3E] text-white p-6 relative overflow-hidden">
           <div className="absolute -top-5 -right-5 w-40 h-40 opacity-10 animate-pulse">
             {/* Dynasty Logo */}
-            <Image src="/dynasty.png" alt="Dynasty Logo" width={100} height={100} className="w-full h-full" />
+            <Image src="/dynasty.png" alt="Dynasty Logo" width={100} height={100} className="w-full h-full" priority style={{ height: 'auto' }} />
           </div>
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold text-white">Welcome to Dynasty</DialogTitle>

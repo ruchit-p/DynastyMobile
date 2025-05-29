@@ -9,10 +9,11 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Calendar, Clock, MapPin, Check, X, HelpCircle, MoreHorizontal, Edit, Share2, Trash2, Eye, Loader2 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { httpsCallable } from "firebase/functions"
-import { functions } from "@/lib/firebase"
 import { useRouter } from "next/navigation"
 import { ensureAccessibleStorageUrl } from "@/utils/mediaUtils"
+import { deleteEvent as deleteEventUtil } from "@/utils/eventUtils"
+import { functions } from "@/lib/firebase"
+import { httpsCallable } from "firebase/functions"
 
 // Event categories
 export const EVENT_CATEGORIES = [
@@ -147,8 +148,7 @@ export function EventCard({
     } else {
       try {
         setIsDeleting(true)
-        const deleteEvent = httpsCallable(functions, 'deleteEvent')
-        await deleteEvent({ eventId: id })
+        await deleteEventUtil(id)
         router.refresh()
       } catch (error) {
         console.error("Error deleting event:", error)
