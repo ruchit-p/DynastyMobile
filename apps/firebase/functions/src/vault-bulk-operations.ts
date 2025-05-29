@@ -335,6 +335,7 @@ async function executeBulkShare(
       .get();
 
     const batch = db.batch();
+    // const sharePromises: Promise<void>[] = [];
 
     for (const doc of itemsSnapshot.docs) {
       for (const target of shareTargets) {

@@ -1,5 +1,6 @@
 import { auth } from '@/lib/firebase';
-import { CSRFProtectedClient } from '@/lib/csrf-client';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/lib/firebase';
 
 export enum FontSizePreset {
   EXTRA_SMALL = 0.85,
@@ -22,7 +23,6 @@ class FontSizeService {
   private useDeviceSettings: boolean = true;
   private listeners: Set<(scale: number) => void> = new Set();
   private userId: string | null = null;
-  private csrfClient: CSRFProtectedClient | null = null;
 
   private constructor() {
     this.loadFromLocalStorage();
@@ -33,19 +33,6 @@ class FontSizeService {
       FontSizeService.instance = new FontSizeService();
     }
     return FontSizeService.instance;
-  }
-
-  // Set the CSRF client (should be called when the app initializes)
-  setCSRFClient(client: CSRFProtectedClient) {
-    this.csrfClient = client;
-  }
-
-  // Get CSRF client with error if not set
-  private getCSRFClient(): CSRFProtectedClient {
-    if (!this.csrfClient) {
-      throw new Error('CSRF client not initialized. Please ensure CSRFProvider is set up.');
-    }
-    return this.csrfClient;
   }
 
   private loadFromLocalStorage() {
@@ -106,8 +93,9 @@ class FontSizeService {
       }
 
       // Fetch from server
-      const response = await this.getCSRFClient().callFunction('getUserSettings', { userId: this.userId });
-      const data = response.data as { fontSettings?: { fontScale?: number; useDeviceSettings?: boolean } };
+      const getUserSettings = httpsCallable<{ userId: string }, { fontSettings?: { fontScale?: number; useDeviceSettings?: boolean } }>(functions, 'getUserSettings');
+      const response = await getUserSettings({ userId: this.userId });
+      const data = response.data;
       
       if (data?.fontSettings) {
         const { fontScale, useDeviceSettings } = data.fontSettings;
@@ -149,7 +137,8 @@ class FontSizeService {
           }));
         }
 
-        await this.getCSRFClient().callFunction('updateUserSettings', {
+        const updateUserSettings = httpsCallable(functions, 'updateUserSettings');
+        await updateUserSettings({
           fontSettings: {
             fontScale: this.currentScale,
             useDeviceSettings: this.useDeviceSettings,

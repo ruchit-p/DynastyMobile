@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import FontSizeService from '../services/FontSizeService';
-import Typography from '../constants/Typography';
+import Typography from '../../constants/Typography';
 
 export function useFontScale() {
   const fontService = FontSizeService.getInstance();

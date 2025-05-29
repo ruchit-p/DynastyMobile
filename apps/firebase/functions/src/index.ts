@@ -31,7 +31,7 @@ export * from "./sync"; // Offline sync functions
 export * from "./messaging"; // Chat messaging and notifications
 export * from "./chatManagement"; // Chat management APIs
 export * from "./migrations/userDocumentConsistency"; // User document consistency migration
-export {generateCSRFToken, validateCSRFToken} from "./middleware/csrf"; // CSRF protection endpoints
+export {generateInitialCSRFToken, generateCSRFToken, validateCSRFToken} from "./middleware/csrf"; // CSRF protection endpoints
 export * from "./deviceFingerprint"; // Device fingerprinting and trust management
 export * from "./signal"; // Signal Protocol key management and verification
 export * from "./sms"; // Twilio SMS functions for invitations and notifications
