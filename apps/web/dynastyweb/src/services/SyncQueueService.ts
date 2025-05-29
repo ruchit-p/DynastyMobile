@@ -4,8 +4,7 @@
 import React from 'react';
 import { networkMonitor } from './NetworkMonitor';
 import { errorHandler, ErrorSeverity } from './ErrorHandlingService';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { CSRFProtectedClient } from '@/lib/csrf-client';
 
 export interface SyncOperation {
   id: string;
@@ -31,6 +30,7 @@ class SyncQueueService {
   private isProcessing = false;
   private maxRetries = 3;
   private syncInterval?: NodeJS.Timeout;
+  private csrfClient: CSRFProtectedClient | null = null;
 
   private constructor() {
     this.initializeDatabase();
@@ -42,6 +42,19 @@ class SyncQueueService {
       SyncQueueService.instance = new SyncQueueService();
     }
     return SyncQueueService.instance;
+  }
+
+  // Set the CSRF client (should be called when the app initializes)
+  setCSRFClient(client: CSRFProtectedClient) {
+    this.csrfClient = client;
+  }
+
+  // Get CSRF client with error if not set
+  private getCSRFClient(): CSRFProtectedClient {
+    if (!this.csrfClient) {
+      throw new Error('CSRF client not initialized. Please ensure CSRFProvider is set up.');
+    }
+    return this.csrfClient;
   }
 
   private async initializeDatabase() {
@@ -186,8 +199,7 @@ class SyncQueueService {
 
   private async processOperation(operation: SyncOperation): Promise<SyncResult> {
     try {
-      const processSyncQueue = httpsCallable(functions, 'processSyncQueue');
-      const result = await processSyncQueue({
+      const result = await this.getCSRFClient().callFunction('processSyncQueue', {
         operations: [operation]
       });
 

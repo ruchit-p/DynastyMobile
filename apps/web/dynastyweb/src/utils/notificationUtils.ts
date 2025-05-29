@@ -1,12 +1,26 @@
 import { useState, useEffect } from 'react';
-import { functions, db, messaging } from '@/lib/firebase';
-import { httpsCallable } from 'firebase/functions';
+import { db, messaging } from '@/lib/firebase';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '@/context/AuthContext';
 import { getToken, onMessage } from 'firebase/messaging';
+import { CSRFProtectedClient } from '@/lib/csrf-client';
 
 // Token registration lock to prevent race conditions
 let isTokenRegistrationInProgress = false;
+
+// CSRF client for API calls
+let csrfClient: CSRFProtectedClient | null = null;
+
+export function setNotificationUtilsCSRFClient(client: CSRFProtectedClient) {
+  csrfClient = client;
+}
+
+function getCSRFClient(): CSRFProtectedClient {
+  if (!csrfClient) {
+    throw new Error('CSRF client not initialized for notificationUtils. Please ensure CSRFProvider is set up.');
+  }
+  return csrfClient;
+}
 
 // Notification types
 export type NotificationType = 
@@ -38,8 +52,7 @@ export interface Notification {
 // Function to register a device token
 export const registerDeviceToken = async (token: string, platform: 'web' | 'ios' | 'android' = 'web') => {
   try {
-    const registerDevice = httpsCallable(functions, 'registerDeviceToken');
-    await registerDevice({ token, platform, deleteDuplicates: true });
+    await getCSRFClient().callFunction('registerDeviceToken', { token, platform, deleteDuplicates: true });
     console.log('Device token registered successfully');
     return true;
   } catch (error) {
@@ -160,8 +173,7 @@ export const setupForegroundNotificationHandler = () => {
 // Function to log notification interactions
 export const logNotificationInteraction = async (notificationId: string, action: 'viewed' | 'clicked' | 'dismissed') => {
   try {
-    const logInteraction = httpsCallable(functions, 'logNotificationInteraction');
-    await logInteraction({ notificationId, action });
+    await getCSRFClient().callFunction('logNotificationInteraction', { notificationId, action });
     return true;
   } catch (error) {
     console.error('Error logging notification interaction:', error);
@@ -242,8 +254,7 @@ export const useNotifications = (limit = 20, includeRead = true) => {
   // Function to mark a notification as read
   const markAsRead = async (notificationId: string) => {
     try {
-      const markRead = httpsCallable(functions, 'markNotificationRead');
-      await markRead({ notificationId });
+      await getCSRFClient().callFunction('markNotificationRead', { notificationId });
       return true;
     } catch (error) {
       console.error('Error marking notification as read:', error);
@@ -254,8 +265,7 @@ export const useNotifications = (limit = 20, includeRead = true) => {
   // Function to mark all notifications as read
   const markAllAsRead = async () => {
     try {
-      const markAllRead = httpsCallable(functions, 'markAllNotificationsRead');
-      await markAllRead();
+      await getCSRFClient().callFunction('markAllNotificationsRead', {});
       return true;
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
@@ -266,8 +276,7 @@ export const useNotifications = (limit = 20, includeRead = true) => {
   // Function to delete a notification
   const deleteNotification = async (notificationId: string) => {
     try {
-      const deleteNotif = httpsCallable(functions, 'deleteNotification');
-      await deleteNotif({ notificationId });
+      await getCSRFClient().callFunction('deleteNotification', { notificationId });
       return true;
     } catch (error) {
       console.error('Error deleting notification:', error);

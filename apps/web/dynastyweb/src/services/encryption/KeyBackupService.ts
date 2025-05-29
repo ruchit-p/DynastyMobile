@@ -1,11 +1,10 @@
 // Key Backup Service for Dynasty Web App
 // Manages secure backup and recovery of encryption keys
 
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
 import { e2eeService } from './E2EEService';
 import type { ExportedKeyPair } from './E2EEService';
 import { errorHandler, ErrorSeverity } from '../ErrorHandlingService';
+import { CSRFProtectedClient } from '@/lib/csrf-client';
 
 export interface KeyBackup {
   id: string;
@@ -32,6 +31,20 @@ export interface RecoveryOptions {
 class KeyBackupService {
   private static instance: KeyBackupService;
   private readonly iterations = 210000; // Updated to OWASP 2024 recommendation
+  private csrfClient: CSRFProtectedClient | null = null;
+
+  // Set the CSRF client (should be called when the app initializes)
+  setCSRFClient(client: CSRFProtectedClient) {
+    this.csrfClient = client;
+  }
+
+  // Get CSRF client with error if not set
+  private getCSRFClient(): CSRFProtectedClient {
+    if (!this.csrfClient) {
+      throw new Error('CSRF client not initialized. Please ensure CSRFProvider is set up.');
+    }
+    return this.csrfClient;
+  }
 
   private constructor() {}
 
@@ -76,8 +89,7 @@ class KeyBackupService {
       combined.set(new Uint8Array(encryptedPrivateKey), iv.length);
 
       // Create backup on server
-      const createKeyBackup = httpsCallable(functions, 'createKeyBackup');
-      const result = await createKeyBackup({
+      const result = await this.getCSRFClient().callFunction('createKeyBackup', {
         encryptedPrivateKey: this.arrayBufferToBase64(combined.buffer),
         publicKey: keyPair.publicKey,
         salt: this.arrayBufferToBase64(salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength)),
@@ -103,8 +115,7 @@ class KeyBackupService {
   async recoverFromBackup(options: RecoveryOptions): Promise<ExportedKeyPair> {
     try {
       // Fetch backup from server
-      const getKeyBackup = httpsCallable(functions, 'getKeyBackup');
-      const result = await getKeyBackup({ backupId: options.backupId });
+      const result = await this.getCSRFClient().callFunction('getKeyBackup', { backupId: options.backupId });
       const backup = result.data as KeyBackup;
 
       // Derive decryption key from password
@@ -148,8 +159,7 @@ class KeyBackupService {
 
   async listBackups(): Promise<KeyBackup[]> {
     try {
-      const listKeyBackups = httpsCallable(functions, 'listKeyBackups');
-      const result = await listKeyBackups();
+      const result = await this.getCSRFClient().callFunction('listKeyBackups', {});
       return (result.data as { backups: KeyBackup[] }).backups || [];
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
@@ -161,8 +171,7 @@ class KeyBackupService {
 
   async deleteBackup(backupId: string): Promise<void> {
     try {
-      const deleteKeyBackup = httpsCallable(functions, 'deleteKeyBackup');
-      await deleteKeyBackup({ backupId });
+      await this.getCSRFClient().callFunction('deleteKeyBackup', { backupId });
       
       // Remove from local storage
       this.removeBackupId(backupId);
@@ -226,8 +235,7 @@ class KeyBackupService {
 
   private async updateBackupAccess(backupId: string): Promise<void> {
     try {
-      const updateKeyBackupAccess = httpsCallable(functions, 'updateKeyBackupAccess');
-      await updateKeyBackupAccess({ backupId });
+      await this.getCSRFClient().callFunction('updateKeyBackupAccess', { backupId });
     } catch (error) {
       // Non-critical error, don't throw
       console.error('Failed to update backup access time:', error);

@@ -2,10 +2,12 @@
 
 import {onCall, onRequest} from "firebase-functions/v2/https";
 import {getFirestore, FieldValue} from "firebase-admin/firestore";
+import {logger} from "firebase-functions/v2";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
 import {createError, withErrorHandling, ErrorCode} from "./utils/errors";
 import {validateRequest} from "./utils/request-validator";
 import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
+import {twilioAuthToken} from "./config/twilioConfig";
 import {
   getTwilioService,
   SMS_TEMPLATES,
@@ -245,11 +247,12 @@ export const sendEventSms = onCall({
           rsvpLink
         );
         break;
-      case "reminder":
+      case "reminder": {
         const hoursUntil = Math.floor((event.startDate.toDate().getTime() - Date.now()) / (1000 * 60 * 60));
         const timeUntil = hoursUntil > 24 ? `${Math.floor(hoursUntil / 24)} days` : `${hoursUntil} hours`;
         messageBody = SMS_TEMPLATES.eventReminder(event.title, timeUntil);
         break;
+      }
       case "update":
         messageBody = SMS_TEMPLATES.eventUpdate(
           event.title,
@@ -338,16 +341,48 @@ export const twilioWebhook = onRequest({
       return;
     }
 
-    // Verify webhook signature (optional but recommended)
-    // This requires the Twilio webhook signature validation
-    // const twilioSignature = req.headers['x-twilio-signature'] as string;
-    // const url = `https://${req.headers.host}${req.originalUrl}`;
-    // const isValid = twilio.validateRequest(twilioAuthToken.value(), twilioSignature, url, req.body);
+    // Verify webhook signature - CRITICAL for security
+    const twilioSignature = req.headers["x-twilio-signature"] as string;
 
-    // if (!isValid) {
-    //   res.status(403).send('Forbidden');
-    //   return;
-    // }
+    if (!twilioSignature) {
+      logger.warn("Twilio webhook called without signature");
+      res.status(403).send("Forbidden: Missing signature");
+      return;
+    }
+
+    // Construct the full URL for signature validation - sanitize headers
+    const protocol = req.headers["x-forwarded-proto"] === "http" ? "http" : "https";
+    const host = req.headers.host || "";
+
+    // Validate host header to prevent header injection
+    if (!host || !/^[a-zA-Z0-9.-]+(:[0-9]+)?$/.test(host)) {
+      logger.warn("Invalid host header in Twilio webhook", {host});
+      res.status(400).send("Bad Request: Invalid host header");
+      return;
+    }
+
+    const url = `${protocol}://${host}${req.originalUrl}`;
+
+    // Get Twilio auth token for validation
+    const authToken = twilioAuthToken.value();
+
+    // Validate the request signature
+    const twilio = await import("twilio");
+    const isValid = twilio.validateRequest(
+      authToken,
+      twilioSignature,
+      url,
+      req.body
+    );
+
+    if (!isValid) {
+      logger.warn("Invalid Twilio webhook signature", {
+        url,
+        signatureReceived: twilioSignature.substring(0, 10) + "...",
+      });
+      res.status(403).send("Forbidden: Invalid signature");
+      return;
+    }
 
     const {MessageSid, MessageStatus, ErrorCode: errorCode} = req.body;
 

@@ -117,6 +117,8 @@ export default function VerifyEmailPage() {
             width={60}
             height={60}
             className="mx-auto"
+            priority
+            style={{ height: 'auto' }}
           />
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Phone Number Verified
@@ -141,6 +143,8 @@ export default function VerifyEmailPage() {
           width={60}
           height={60}
           className="mx-auto"
+          priority
+          style={{ height: 'auto' }}
         />
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
           Verify Your Email

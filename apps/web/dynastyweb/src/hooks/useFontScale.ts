@@ -12,7 +12,7 @@ export function useFontScale() {
     });
 
     return unsubscribe;
-  }, []);
+  }, [fontService]);
 
   const getScaledFontSize = (size: number) => {
     return fontService.getScaledFontSize(size);

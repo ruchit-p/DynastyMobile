@@ -47,6 +47,7 @@ export default function ForgotPasswordPage() {
               fill
               className="object-contain"
               priority
+              style={{ height: 'auto' }}
             />
           </div>
         </div>
