@@ -12,6 +12,13 @@ interface CSRFTokenResponse {
 }
 
 /**
+ * CSRF token request data
+ */
+interface CSRFTokenRequest {
+  visitorId?: string;
+}
+
+/**
  * Hook for managing CSRF tokens
  */
 export interface UseCSRFReturn {
@@ -48,12 +55,15 @@ export function useCSRF(functions: Functions | null | undefined): UseCSRFReturn 
         throw new Error('Firebase Functions not initialized');
       }
       
-      const generateToken = httpsCallable<void, CSRFTokenResponse>(
+      const generateToken = httpsCallable<CSRFTokenRequest, CSRFTokenResponse>(
         functions,
         'generateCSRFToken'
       );
       
-      const result = await generateToken();
+      // Prepare request data - no visitor ID for now to avoid FingerprintJS dependency
+      const requestData: CSRFTokenRequest = {};
+      
+      const result = await generateToken(requestData);
       const { token, expiresIn, sessionId } = result.data;
       
       if (!isMountedRef.current) return '';
