@@ -24,6 +24,7 @@ import { useErrorHandler } from '@/hooks/useErrorHandler';
 import { ErrorSeverity } from '@/src/lib/ErrorHandlingService';
 import GuestListManagement from '@/components/ui/GuestListManagement';
 import RSVPStatusIndicator, { RSVPDeadlineCountdown } from '@/components/ui/RSVPStatusIndicator';
+import RSVPSummary from '@/components/ui/RSVPSummary';
 import { logger } from '../../src/services/LoggingService';
 
 const EventDetailScreen = () => {

@@ -1,21 +1,7 @@
-import { 
-  FpjsProvider,
-} from '@fingerprintjs/fingerprintjs-pro-react';
-import { auth } from '@/lib/firebase';
-import { CSRFProtectedClient } from '@/lib/csrf-client';
-
-// Type for FingerprintJS Pro client
-type FingerprintJSAgent = {
-  get: (options?: {
-    tag?: Record<string, string>;
-    linkedId?: string;
-    extendedResult?: boolean;
-  }) => Promise<{
-    visitorId: string;
-    requestId: string;
-    confidence?: { score: number };
-  }>;
-};
+import { FpjsProvider } from '@fingerprintjs/fingerprintjs-pro-react';
+import type FingerprintJSPro from '@fingerprintjs/fingerprintjs-pro';
+import { auth, functions } from '@/lib/firebase';
+import { httpsCallable } from 'firebase/functions';
 
 // FingerprintJS configuration
 const FINGERPRINT_API_KEY = process.env.NEXT_PUBLIC_FINGERPRINT_API_KEY || '';
@@ -46,23 +32,9 @@ export interface DeviceTrustResult {
 }
 
 class FingerprintService {
-  private fpjsClient: FingerprintJSAgent | null = null;
+  private fpjsClient: FingerprintJSPro | null = null;
   private initPromise: Promise<void> | null = null;
   private isInitialized = false;
-  private csrfClient: CSRFProtectedClient | null = null;
-
-  // Set the CSRF client (should be called when the app initializes)
-  setCSRFClient(client: CSRFProtectedClient) {
-    this.csrfClient = client;
-  }
-
-  // Get CSRF client with error if not set
-  private getCSRFClient(): CSRFProtectedClient {
-    if (!this.csrfClient) {
-      throw new Error('CSRF client not initialized. Please ensure CSRFProvider is set up.');
-    }
-    return this.csrfClient;
-  }
 
   /**
    * Initialize FingerprintJS Pro client
@@ -89,18 +61,11 @@ class FingerprintService {
       // Dynamic import to avoid SSR issues
       const FingerprintJSPro = (await import('@fingerprintjs/fingerprintjs-pro')).default;
 
-      const loadOptions: Record<string, unknown> = {
+      this.fpjsClient = await FingerprintJSPro.load({
         apiKey: FINGERPRINT_API_KEY,
-        endpoint: FINGERPRINT_ENDPOINT
-      };
-      
-      // Only add region if it's a valid region
-      const validRegions = ['eu', 'ap', 'us'];
-      if (validRegions.includes(FINGERPRINT_REGION)) {
-        loadOptions.region = FINGERPRINT_REGION;
-      }
-      
-      this.fpjsClient = await FingerprintJSPro.load(loadOptions as Parameters<typeof FingerprintJSPro.load>[0]);
+        endpoint: FINGERPRINT_ENDPOINT,
+        region: FINGERPRINT_REGION as FingerprintJSPro.LoadOptions['region']
+      });
       
       this.isInitialized = true;
       console.log('FingerprintService: Initialized successfully');
@@ -182,13 +147,18 @@ class FingerprintService {
       }
 
       // Verify with backend
-      const result = await this.getCSRFClient().callFunction('verifyDeviceFingerprint', {
+      const verifyDeviceFingerprint = httpsCallable<{ requestId: string; visitorId: string; deviceInfo: ReturnType<FingerprintService['getWebDeviceInfo']> }, DeviceTrustResult>(
+        functions,
+        'verifyDeviceFingerprint'
+      );
+      
+      const result = await verifyDeviceFingerprint({
         requestId: fingerprint.requestId,
         visitorId: fingerprint.visitorId,
         deviceInfo: deviceInfo || this.getWebDeviceInfo()
       });
 
-      const trustResult = result.data as DeviceTrustResult;
+      const trustResult = result.data;
 
       // Cache the result
       this.cacheTrustResult(userId, fingerprint.visitorId, trustResult);
@@ -219,19 +189,19 @@ class FingerprintService {
       }
 
       // Quick check with backend
-      const result = await this.getCSRFClient().callFunction('checkDeviceTrust', {
-        userId,
-        visitorId: fingerprint.visitorId
-      });
-
-      const data = result.data as {
+      const checkDeviceTrust = httpsCallable<{ userId: string; visitorId: string }, {
         success: boolean;
         isTrusted: boolean;
         trustScore: number;
         requiresAdditionalAuth: boolean;
-      };
+      }>(functions, 'checkDeviceTrust');
 
-      return data.isTrusted && !data.requiresAdditionalAuth;
+      const result = await checkDeviceTrust({
+        userId,
+        visitorId: fingerprint.visitorId
+      });
+
+      return result.data.isTrusted && !result.data.requiresAdditionalAuth;
     } catch (error) {
       console.error('FingerprintService: Trust check failed:', error);
       return false;
@@ -245,7 +215,12 @@ class FingerprintService {
     try {
       const currentFingerprint = this.getCachedFingerprint();
       
-      const result = await this.getCSRFClient().callFunction('removeTrustedDevice', {
+      const removeTrustedDevice = httpsCallable<{ visitorId: string; currentVisitorId?: string }, { success: boolean }>(
+        functions,
+        'removeTrustedDevice'
+      );
+
+      const result = await removeTrustedDevice({
         visitorId,
         currentVisitorId: currentFingerprint?.visitorId
       });
@@ -253,8 +228,7 @@ class FingerprintService {
       // Clear cached trust for this device
       this.clearCachedTrust(visitorId);
 
-      const data = result.data as { success: boolean };
-      return data.success;
+      return result.data.success;
     } catch (error) {
       console.error('FingerprintService: Failed to remove device:', error);
       return false;

@@ -35,7 +35,7 @@ export async function middleware(request: NextRequest) {
   // Generate nonce for CSP
   const nonce = Buffer.from(globalThis.crypto.randomUUID()).toString('base64');
   
-  // CSP configuration
+  // CSP configuration with Firebase emulator support
   const cspDirectives = isDevelopment ? [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' 'unsafe-inline' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://js.stripe.com https://*.sentry.io https://www.googletagmanager.com https://fpnpmcdn.net`,
@@ -43,7 +43,7 @@ export async function middleware(request: NextRequest) {
     "img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.firebaseapp.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://hatscripts.github.io https://react-circle-flags.pages.dev",
     `style-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://fonts.googleapis.com`,
     "font-src 'self' https://fonts.gstatic.com",
-    "frame-src 'self' https://*.firebaseapp.com https://*.google.com",
+    "frame-src 'self' https://*.firebaseapp.com https://*.google.com http://127.0.0.1:* http://localhost:*",
     "worker-src 'self' blob:",
     `script-src-elem 'self' 'nonce-${nonce}' 'unsafe-inline' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://js.stripe.com https://*.sentry.io https://www.googletagmanager.com https://fpnpmcdn.net`,
   ] : [
@@ -77,6 +77,20 @@ export async function middleware(request: NextRequest) {
     response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   }
   
+  // CORS headers for API routes (Firebase Functions handle their own CORS)
+  if (request.nextUrl.pathname.startsWith('/api') && !request.nextUrl.pathname.includes('firebase-callable')) {
+    response.headers.set('Access-Control-Allow-Origin', process.env.NEXT_PUBLIC_APP_URL || '*');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token');
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+    response.headers.set('Access-Control-Max-Age', '86400');
+  }
+
+  // Handle preflight requests
+  if (request.method === 'OPTIONS') {
+    return new NextResponse(null, { status: 200, headers: response.headers });
+  }
+  
   // Add nonce to request headers for use in components
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
@@ -103,8 +117,9 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - public folder
      * Now includes API routes for rate limiting
      */
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\..*|manifest).*)',
   ],
 };

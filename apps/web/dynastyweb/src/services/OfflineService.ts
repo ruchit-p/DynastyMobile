@@ -11,7 +11,7 @@ import { Workbox } from 'workbox-window';
 export interface OfflineAction {
   id: string;
   type: 'message' | 'reaction' | 'media_upload' | 'profile_update' | 'vault_update';
-  data: unknown;
+  data: Record<string, unknown>;
   timestamp: number;
   retryCount: number;
   maxRetries: number;
@@ -472,7 +472,7 @@ export class OfflineService {
   }
 
   // MARK: - Background Sync
-  private async handleBackgroundSync(payload: { type: string; [key: string]: unknown }): Promise<void> {
+  private async handleBackgroundSync(payload: Record<string, unknown>): Promise<void> {
     console.log('[Offline] Handling background sync:', payload);
     
     // Process specific background sync events
