@@ -1,12 +1,4 @@
-import React from 'react';
-import { act, renderHook, waitFor } from '@testing-library/react';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { AuthProvider, useAuth } from '@/context/AuthContext';
-import { createMockFirebaseUser, createMockFirestoreUser } from '../test-utils';
-
-// Mock dependencies
+// Mock dependencies BEFORE imports
 jest.mock('@/context/AuthContext');
 jest.mock('firebase/auth');
 jest.mock('firebase/firestore');
@@ -14,8 +6,19 @@ jest.mock('firebase/functions');
 jest.mock('@/lib/firebase', () => ({
   auth: {},
   db: {},
+  storage: {},
   functions: {},
+  messaging: null,
+  analytics: null,
 }));
+
+import React from 'react';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { createMockFirebaseUser, createMockFirestoreUser } from '../test-utils';
 
 describe('AuthContext - Realistic Tests', () => {
   // Setup mock implementations

@@ -1,14 +1,22 @@
+// Mock dependencies BEFORE imports
+jest.mock('next/navigation');
+jest.mock('@/lib/firebase', () => ({
+  auth: {},
+  db: {},
+  storage: {},
+  functions: {},
+  messaging: null,
+  analytics: null,
+}));
+jest.mock('@/context/AuthContext');
+jest.mock('@/components/ui/use-toast');
+
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { useRouter } from 'next/navigation';
 import SignUpPage from '@/app/signup/page';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
-
-// Mock dependencies
-jest.mock('next/navigation');
-jest.mock('@/context/AuthContext');
-jest.mock('@/components/ui/use-toast');
 jest.mock('next/image', () => ({
   __esModule: true,
   default: (props: React.ImgHTMLAttributes<HTMLImageElement>) => {
