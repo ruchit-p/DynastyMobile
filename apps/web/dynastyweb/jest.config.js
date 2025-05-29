@@ -8,7 +8,8 @@ const createJestConfig = nextJest({
 // Add any custom config to be passed to Jest
 const customJestConfig = {
   // Add more setup options before each test is run
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  setupFiles: ['<rootDir>/jest.setup.mocks.js'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.enhanced.js'],
   testEnvironment: 'jest-environment-jsdom',
   moduleDirectories: ['node_modules', 'src'],
   automock: false,
@@ -40,7 +41,7 @@ const customJestConfig = {
     '/.next/',
   ],
   transformIgnorePatterns: [
-    'node_modules/(?!(lucide-react|nanoid|ics|uuid)/)',
+    'node_modules/(?!(lucide-react|nanoid|ics|uuid|firebase)/)',
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
 }

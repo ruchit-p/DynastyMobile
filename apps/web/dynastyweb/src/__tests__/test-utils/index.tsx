@@ -1,14 +1,25 @@
+/**
+ * Centralized Test Utilities for Dynasty Web App
+ * 
+ * This file provides a streamlined testing experience by:
+ * - Pre-configured render functions with common providers
+ * - Standardized mock factories for business entities
+ * - Common assertion helpers and interaction utilities
+ * - Consistent patterns across all test types
+ */
+
 import React, { ReactElement } from 'react';
-import { render as rtlRender, RenderOptions, waitFor, screen } from '@testing-library/react';
+import { render as rtlRender, RenderOptions, waitFor, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { User } from 'firebase/auth';
 
-// Context Providers
-import { AuthContext } from '@/context/AuthContext';
-import { NotificationContext } from '@/context/NotificationContext';
-import { OfflineContext } from '@/context/OfflineContext';
-import { CSRFContext } from '@/context/CSRFContext';
-import { CookieConsentContext } from '@/context/CookieConsentContext';
+// Create mock contexts instead of importing to avoid circular dependencies
+const AuthContext = React.createContext<any>(null);
+const NotificationContext = React.createContext<any>(null);
+const OfflineContext = React.createContext<any>(null);
+const CSRFContext = React.createContext<any>(null);
+const CookieConsentContext = React.createContext<any>(null);
+const OnboardingContext = React.createContext<any>(null);
 
 // Types
 export interface TestUser extends Partial<User> {
@@ -174,6 +185,201 @@ export const createMockCookieConsentContext = (overrides = {}) => ({
 });
 
 // =============================================================================
+// ENHANCED RENDER FUNCTIONS
+// =============================================================================
+
+interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
+  authContext?: any;
+  notificationContext?: any;
+  offlineContext?: any;
+  csrfContext?: any;
+  cookieConsentContext?: any;
+  withAllProviders?: boolean;
+}
+
+const AllTheProviders: React.FC<{
+  children: React.ReactNode;
+  authContext?: any;
+  notificationContext?: any;
+  offlineContext?: any;
+  csrfContext?: any;
+  cookieConsentContext?: any;
+}> = ({
+  children,
+  authContext = createMockAuthContext(),
+  notificationContext = createMockNotificationContext(),
+  offlineContext = createMockOfflineContext(),
+  csrfContext = createMockCSRFContext(),
+  cookieConsentContext = createMockCookieConsentContext(),
+}) => {
+  return (
+    <CSRFContext.Provider value={csrfContext}>
+      <AuthContext.Provider value={authContext}>
+        <NotificationContext.Provider value={notificationContext}>
+          <OfflineContext.Provider value={offlineContext}>
+            <CookieConsentContext.Provider value={cookieConsentContext}>
+              {children}
+            </CookieConsentContext.Provider>
+          </OfflineContext.Provider>
+        </NotificationContext.Provider>
+      </AuthContext.Provider>
+    </CSRFContext.Provider>
+  );
+};
+
+// Main render function with providers
+export const renderWithProviders = (
+  ui: ReactElement,
+  options: CustomRenderOptions = {}
+) => {
+  const {
+    authContext,
+    notificationContext,
+    offlineContext,
+    csrfContext,
+    cookieConsentContext,
+    withAllProviders = true,
+    ...renderOptions
+  } = options;
+
+  const Wrapper = withAllProviders
+    ? ({ children }: { children: React.ReactNode }) => (
+        <AllTheProviders
+          authContext={authContext}
+          notificationContext={notificationContext}
+          offlineContext={offlineContext}
+          csrfContext={csrfContext}
+          cookieConsentContext={cookieConsentContext}
+        >
+          {children}
+        </AllTheProviders>
+      )
+    : undefined;
+
+  return rtlRender(ui, { wrapper: Wrapper, ...renderOptions });
+};
+
+// Specialized render functions for common scenarios
+export const renderWithAuthenticatedUser = (
+  ui: ReactElement,
+  user: Partial<TestUser> = {},
+  options: CustomRenderOptions = {}
+) => {
+  const testUser = createMockFirebaseUser(user);
+  const authContext = createMockAuthContext({
+    currentUser: testUser,
+    firestoreUser: createMockFirestoreUser({ uid: testUser.uid }),
+  });
+
+  return renderWithProviders(ui, { ...options, authContext });
+};
+
+export const renderWithUnauthenticatedUser = (
+  ui: ReactElement,
+  options: CustomRenderOptions = {}
+) => {
+  const authContext = createMockAuthContext({
+    currentUser: null,
+    firestoreUser: null,
+  });
+
+  return renderWithProviders(ui, { ...options, authContext });
+};
+
+export const renderWithOfflineMode = (
+  ui: ReactElement,
+  options: CustomRenderOptions = {}
+) => {
+  const offlineContext = createMockOfflineContext({
+    isOnline: false,
+    pendingActions: [
+      { id: '1', action: 'create-story', data: {}, timestamp: Date.now() },
+      { id: '2', action: 'update-profile', data: {}, timestamp: Date.now() },
+    ],
+  });
+
+  return renderWithProviders(ui, { ...options, offlineContext });
+};
+
+export const renderWithLoadingState = (
+  ui: ReactElement,
+  options: CustomRenderOptions = {}
+) => {
+  const authContext = createMockAuthContext({
+    loading: true,
+    currentUser: null,
+    firestoreUser: null,
+  });
+
+  return renderWithProviders(ui, { ...options, authContext });
+};
+
+// =============================================================================
+// INTERACTION HELPERS
+// =============================================================================
+
+export const userEventSetup = () => userEvent.setup();
+
+export const fillAndSubmitForm = async (
+  formData: Record<string, string>,
+  submitButtonText: string = 'Submit'
+) => {
+  const user = userEventSetup();
+  
+  for (const [fieldName, value] of Object.entries(formData)) {
+    const field = screen.getByLabelText(new RegExp(fieldName, 'i'));
+    await user.clear(field);
+    await user.type(field, value);
+  }
+  
+  const submitButton = screen.getByRole('button', { name: new RegExp(submitButtonText, 'i') });
+  await user.click(submitButton);
+};
+
+export const simulateFileUpload = async (
+  inputLabelText: string,
+  file: File = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
+) => {
+  const user = userEventSetup();
+  const input = screen.getByLabelText(new RegExp(inputLabelText, 'i'));
+  await user.upload(input, file);
+};
+
+// =============================================================================
+// ASSERTION HELPERS
+// =============================================================================
+
+export const waitForLoadingToFinish = async (
+  loadingText: string = 'Loading...',
+  timeout: number = 5000
+) => {
+  await waitFor(
+    () => {
+      expect(screen.queryByText(loadingText)).not.toBeInTheDocument();
+    },
+    { timeout }
+  );
+};
+
+export const expectFormValidationError = async (errorMessage: string | RegExp) => {
+  await waitFor(() => {
+    expect(screen.getByText(errorMessage)).toBeInTheDocument();
+  });
+};
+
+export const expectSuccessToast = async (message: string | RegExp) => {
+  await waitFor(() => {
+    expect(screen.getByText(message)).toBeInTheDocument();
+  });
+};
+
+export const expectErrorToast = async (message: string | RegExp) => {
+  await waitFor(() => {
+    expect(screen.getByText(message)).toBeInTheDocument();
+  });
+};
+
+// =============================================================================
 // BUSINESS ENTITY GENERATORS
 // =============================================================================
 
@@ -334,72 +540,10 @@ export const AllProviders: React.FC<AllProvidersProps> = ({
 };
 
 // =============================================================================
-// CUSTOM RENDER FUNCTIONS
+// ADDITIONAL HELPER FUNCTIONS (REMOVED DUPLICATE)
 // =============================================================================
 
-interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
-  authContext?: any;
-  notificationContext?: any;
-  offlineContext?: any;
-  csrfContext?: any;
-  cookieConsentContext?: any;
-  withAllProviders?: boolean;
-}
-
-export function renderWithProviders(
-  ui: ReactElement,
-  {
-    authContext,
-    notificationContext,
-    offlineContext,
-    csrfContext,
-    cookieConsentContext,
-    withAllProviders = true,
-    ...renderOptions
-  }: CustomRenderOptions = {}
-) {
-  const Wrapper = withAllProviders
-    ? ({ children }: { children: React.ReactNode }) => (
-        <AllProviders
-          authContext={authContext}
-          notificationContext={notificationContext}
-          offlineContext={offlineContext}
-          csrfContext={csrfContext}
-          cookieConsentContext={cookieConsentContext}
-        >
-          {children}
-        </AllProviders>
-      )
-    : undefined;
-
-  return rtlRender(ui, { wrapper: Wrapper, ...renderOptions });
-}
-
-// Specialized render functions for common scenarios
-export function renderWithAuth(ui: ReactElement, authContextOverrides = {}) {
-  return renderWithProviders(ui, {
-    authContext: createMockAuthContext(authContextOverrides),
-  });
-}
-
-export function renderWithAuthenticatedUser(ui: ReactElement, userOverrides = {}) {
-  const mockUser = createMockFirebaseUser(userOverrides);
-  const mockFirestoreUser = createMockFirestoreUser(userOverrides);
-  
-  return renderWithProviders(ui, {
-    authContext: createMockAuthContext({
-      currentUser: mockUser,
-      firestoreUser: mockFirestoreUser,
-      loading: false,
-    }),
-  });
-}
-
-export function renderWithOfflineContext(ui: ReactElement, offlineOverrides = {}) {
-  return renderWithProviders(ui, {
-    offlineContext: createMockOfflineContext(offlineOverrides),
-  });
-}
+// Note: Main render functions are defined above to avoid duplication
 
 // =============================================================================
 // MOCK SERVICE FACTORIES
