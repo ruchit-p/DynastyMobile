@@ -13,6 +13,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:emulator": "USE_FIREBASE_EMULATOR=true jest",
+    "test:emulator:watch": "USE_FIREBASE_EMULATOR=true jest --watch",
     "emulator:export": "cd ../../firebase && firebase emulators:export ./emulator-data",
     "emulator:start": "cd ../../firebase && firebase emulators:start --import=./emulator-data --export-on-exit"
   },

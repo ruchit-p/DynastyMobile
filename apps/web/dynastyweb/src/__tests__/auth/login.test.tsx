@@ -1,3 +1,19 @@
+// Mock dependencies BEFORE imports
+jest.mock('next/navigation');
+jest.mock('@/lib/firebase', () => ({
+  auth: {},
+  db: {},
+  storage: {},
+  functions: {},
+  messaging: null,
+  analytics: null,
+}));
+jest.mock('@/context/AuthContext');
+jest.mock('@/context/CSRFContext');
+jest.mock('@/hooks/useCSRF', () => ({
+  useCSRF: () => ({ csrfToken: 'test-csrf-token' }),
+}));
+
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -5,14 +21,6 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import LoginPage from '@/app/login/page';
 import { createMockAuthContext, createMockCSRFContext, createMockFirebaseUser, createMockFirestoreUser } from '../test-utils';
-
-// Mock dependencies
-jest.mock('next/navigation');
-jest.mock('@/context/AuthContext');
-jest.mock('@/context/CSRFContext');
-jest.mock('@/hooks/useCSRF', () => ({
-  useCSRF: () => ({ csrfToken: 'test-csrf-token' }),
-}));
 
 // Mock Firebase
 jest.mock('firebase/auth', () => ({
