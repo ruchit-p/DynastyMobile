@@ -478,7 +478,7 @@ export class EnhancedFingerprintService {
 
   private isStorageSupported(storageType: string): boolean {
     try {
-      const storage = (window as any)[storageType] as Storage;
+      const storage = (window as Record<string, unknown>)[storageType] as Storage;
       const testKey = '__storage_test__';
       storage.setItem(testKey, 'test');
       storage.removeItem(testKey);
