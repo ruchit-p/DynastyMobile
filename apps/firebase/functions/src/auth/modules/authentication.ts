@@ -33,7 +33,7 @@ export const handleSignIn = onCall(
         undefined
       );
 
-      const { email } = validatedData;
+      const {email} = validatedData;
 
       logger.info("handleSignIn: Processing sign-in request", createLogContext({
         email,
@@ -76,7 +76,7 @@ export const handleSignIn = onCall(
 
         // Get user document from Firestore
         const userDoc = await db.collection("users").doc(userRecord.uid).get();
-        
+
         if (!userDoc.exists) {
           logger.error("handleSignIn: User document not found", createLogContext({
             email,
@@ -183,28 +183,28 @@ export const handleSignUp = onCall({
         // Check for various "user not found" error patterns
         const userNotFoundCodes = [
           "auth/user-not-found",
-          "auth/invalid-email", 
+          "auth/invalid-email",
           "NOT_FOUND",
-          "not-found"
+          "not-found",
         ];
-        
+
         // Check for Firebase Admin SDK authentication errors - these should be treated as "user not found"
         // because we can't verify user existence when the SDK can't authenticate
         const adminSdkAuthErrors = [
           "app/invalid-credential",
           "invalid-credential",
           "invalid_grant",
-          "invalid-argument"
+          "invalid-argument",
         ];
-        
+
         const errorCode = error?.code || error?.errorInfo?.code || "";
         const errorMessage = error?.message || "";
-        
-        const isUserNotFound = userNotFoundCodes.some(code => 
+
+        const isUserNotFound = userNotFoundCodes.some((code) =>
           errorCode.includes(code) || errorCode === code
         );
-        
-        const isAdminSdkAuthError = adminSdkAuthErrors.some(code => 
+
+        const isAdminSdkAuthError = adminSdkAuthErrors.some((code) =>
           errorCode.includes(code) || errorMessage.includes(code)
         );
 
@@ -214,7 +214,7 @@ export const handleSignUp = onCall({
           logger.info("Proceeding with account creation", createLogContext({
             email: signupData.email,
             reason: isUserNotFound ? "user_not_found" : "admin_sdk_auth_error",
-            errorCode
+            errorCode,
           }));
         } else {
           // If it's not a "user not found" or admin auth error, re-throw it
@@ -230,7 +230,7 @@ export const handleSignUp = onCall({
       if (userExists) {
         logger.info("Account creation blocked - email already registered", createLogContext({
           email: signupData.email,
-          reason: "existing_account"
+          reason: "existing_account",
         }));
         throw createError(
           ErrorCode.EMAIL_EXISTS,
@@ -281,7 +281,7 @@ export const handleSignUp = onCall({
 
       // Remove undefined values before saving to Firestore
       const cleanedUserDoc = Object.fromEntries(
-        Object.entries(newUserDoc).filter(([_, value]) => value !== undefined)
+        Object.entries(newUserDoc).filter(([, value]) => value !== undefined)
       );
 
       await userRef.set(cleanedUserDoc);
@@ -324,19 +324,19 @@ export const handleSignUp = onCall({
         logger.info("Signup validation failed", createLogContext({
           email: signupData.email,
           errorCode: error.code,
-          errorMessage: error.message
+          errorMessage: error.message,
         }));
         throw error;
       }
-      
+
       // Log unexpected errors with full details
       logger.error("Unexpected error during signup", createLogContext({
         email: signupData.email,
         errorType: typeof error,
         errorMessage: error?.message || "Unknown error",
-        errorStack: error?.stack
+        errorStack: error?.stack,
       }));
-      
+
       // Throw a user-friendly error
       throw createError(
         ErrorCode.INTERNAL,
@@ -774,9 +774,6 @@ export const completeOnboarding = onCall({
 });
 
 
-
-
-
 /**
  * Handles post-phone number sign-in logic.
  * This function is typically called after a user successfully verifies their phone number.
@@ -925,7 +922,7 @@ export const handleGoogleSignIn = onCall(
         request.data.userId
       );
 
-      const { userId, email, displayName, photoURL } = validatedData;
+      const {userId, email, displayName, photoURL} = validatedData;
 
       logger.info("handleGoogleSignIn: Processing Google sign-in", createLogContext({
         userId,
@@ -981,7 +978,7 @@ export const handleGoogleSignIn = onCall(
           displayName: displayName || userRecord.displayName || "",
           firstName,
           lastName,
-          profilePicture: photoURL ? { url: photoURL, path: "" } : undefined,
+          profilePicture: photoURL ? {url: photoURL, path: ""} : undefined,
 
           // Relationship fields (empty arrays)
           parentIds: [],
@@ -1008,7 +1005,7 @@ export const handleGoogleSignIn = onCall(
 
         // Remove undefined values before saving
         const cleanedUserDoc = Object.fromEntries(
-          Object.entries(newUserDoc).filter(([_, value]) => value !== undefined)
+          Object.entries(newUserDoc).filter(([, value]) => value !== undefined)
         );
 
         await userRef.set(cleanedUserDoc);
@@ -1075,7 +1072,7 @@ export const handleAppleSignIn = onCall(
         request.data.userId
       );
 
-      const { userId, email, fullName } = validatedData;
+      const {userId, email, fullName} = validatedData;
 
       logger.info("handleAppleSignIn: Processing Apple sign-in", createLogContext({
         userId,
@@ -1169,7 +1166,7 @@ export const handleAppleSignIn = onCall(
 
         // Remove undefined values before saving
         const cleanedUserDoc = Object.fromEntries(
-          Object.entries(newUserDoc).filter(([_, value]) => value !== undefined)
+          Object.entries(newUserDoc).filter(([, value]) => value !== undefined)
         );
 
         await userRef.set(cleanedUserDoc);
