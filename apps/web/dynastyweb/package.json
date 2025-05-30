@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev ",
+    "dev": "SENTRY_SUPPRESS_TURBOPACK_WARNING=1 next dev --turbopack",
+    "dev:webpack": "next dev",
     "dev:prod": "NODE_ENV=production next dev --turbopack",
     "dev:emulator": "concurrently \"cd ../../firebase/functions && npm run build:watch\" \"cd ../../firebase && firebase emulators:start --import=./emulator-data --export-on-exit\" \"next dev --turbopack\" --rules",
     "build": "next build",

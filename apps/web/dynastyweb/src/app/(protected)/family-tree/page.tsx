@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef, useCallback} from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { useOnboarding } from '@/context/OnboardingContext';
+import { useCSRFClient } from '@/context/CSRFContext';
 import { useSearchParams } from 'next/navigation';
 import calcTree from "relatives-tree";
 import type { Node, ExtNode, Connector } from 'relatives-tree/lib/types';
@@ -93,6 +94,7 @@ interface FirestoreTimestamp {
 export default function FamilyTreePage() {
   const { currentUser, firestoreUser } = useAuth();
   const { hasCompletedOnboarding } = useOnboarding();
+  const { isReady: csrfReady } = useCSRFClient();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -244,7 +246,7 @@ export default function FamilyTreePage() {
   }, [isNewUser]);
 
   const fetchFamilyTreeData = useCallback(async () => {
-    if (!currentUser) return;
+    if (!currentUser || !csrfReady) return;
     
     // Don't try to fetch family tree data if onboarding isn't completed
     if (!hasCompletedOnboarding) {
@@ -262,11 +264,11 @@ export default function FamilyTreePage() {
     } finally {
       setLoading(false);
     }
-  }, [currentUser, hasCompletedOnboarding]);
+  }, [currentUser, hasCompletedOnboarding, csrfReady]);
 
   // Fetch family tree admin data and members
   const fetchFamilyManagementData = useCallback(async () => {
-    if (!currentUser || !hasCompletedOnboarding) return;
+    if (!currentUser || !hasCompletedOnboarding || !csrfReady) return;
 
     try {
       setLoading(true);
@@ -310,7 +312,7 @@ export default function FamilyTreePage() {
     } finally {
       setLoading(false);
     }
-  }, [currentUser, hasCompletedOnboarding]);
+  }, [currentUser, hasCompletedOnboarding, csrfReady]);
 
   useEffect(() => {
     // Only fetch family tree data if onboarding is completed

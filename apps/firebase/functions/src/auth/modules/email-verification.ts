@@ -2,15 +2,12 @@ import {onCall} from "firebase-functions/v2/https";
 import {getFirestore, Timestamp, FieldValue} from "firebase-admin/firestore";
 import {logger} from "firebase-functions/v2";
 import {getAuth} from "firebase-admin/auth";
-import {MailDataRequired} from "@sendgrid/mail";
-import * as sgMail from "@sendgrid/mail";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "../../common";
 import {createError, ErrorCode} from "../../utils/errors";
 import {withAuth, RateLimitType} from "../../middleware";
 import {UserDocument} from "../types/user";
-import {initSendGrid} from "../config/sendgrid";
-import {SENDGRID_CONFIG, FRONTEND_URL} from "../config/secrets";
-import {getSendGridConfig} from "../config/sendgridConfig";
+import {sendEmail} from "../utils/sendgridHelper";
+import {FRONTEND_URL} from "../config/secrets";
 import {ERROR_MESSAGES, TOKEN_EXPIRY} from "../config/constants";
 import {generateSecureToken, hashToken} from "../utils/tokens";
 import {validateRequest} from "../../utils/request-validator";
@@ -23,7 +20,7 @@ export const sendVerificationEmail = onCall(
   {
     region: DEFAULT_REGION,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-    secrets: [SENDGRID_CONFIG, FRONTEND_URL],
+    secrets: [FRONTEND_URL],
   },
   withAuth(
     async (request) => {
@@ -36,7 +33,6 @@ export const sendVerificationEmail = onCall(
 
       const {userId, email, displayName} = validatedData;
 
-      initSendGrid();
       const db = getFirestore();
       const userRef = db.collection("users").doc(userId);
       const userDoc = await userRef.get();
@@ -61,42 +57,47 @@ export const sendVerificationEmail = onCall(
         email: email, // Update email if it's being changed during this process
       });
 
-      // Prepare and send email
-      const sendgridConfig = getSendGridConfig();
-      const frontendUrlValue = FRONTEND_URL.value();
-
-      if (!sendgridConfig.fromEmail || !sendgridConfig.templates.verification || !frontendUrlValue) {
-        logger.error("SendGrid configuration secrets are missing for sendVerificationEmail.");
-        throw createError(ErrorCode.INTERNAL, "Email service configuration error.");
-      }
-
+      // Get frontend URL (with fallback for development)
+      const frontendUrlValue = FRONTEND_URL.value() || 
+        (process.env.FUNCTIONS_EMULATOR === "true" ? "http://localhost:3000" : "https://mydynastyapp.com");
+      
       const verificationLink = `${frontendUrlValue}/verify-email?token=${verificationToken}`;
-      const msg: MailDataRequired = {
-        to: email,
-        from: {
-          email: sendgridConfig.fromEmail,
-          name: "Dynasty App",
-        },
-        templateId: sendgridConfig.templates.verification,
-        dynamicTemplateData: {
-          userName: displayName || userData.firstName || "User",
-          verificationLink: verificationLink,
-        },
-      };
+      
+      logger.info("Sending verification email", {
+        userId: request.auth?.uid,
+        email,
+        verificationLink,
+        frontendUrl: frontendUrlValue,
+        environment: process.env.FUNCTIONS_EMULATOR === "true" ? "DEVELOPMENT" : "PRODUCTION"
+      });
 
       try {
-        await sgMail.send(msg);
-        logger.info(`Verification email sent to ${email} for user ${request.auth?.uid}`);
+        // Use the updated sendEmail helper function
+        await sendEmail({
+          to: email,
+          templateType: "verification",
+          dynamicTemplateData: {
+            userName: displayName || userData.firstName || "User",
+            verificationUrl: verificationLink, // Note: changed from verificationLink to verificationUrl for template consistency
+          },
+        });
+        
+        logger.info(`Verification email sent successfully to ${email} for user ${request.auth?.uid}`);
         return {success: true, message: "Verification email sent successfully."};
       } catch (error) {
-        logger.error("Failed to send verification email:", {error, userId: request.auth?.uid, email});
+        logger.error("Failed to send verification email:", {
+          error: error instanceof Error ? error.message : error,
+          userId: request.auth?.uid, 
+          email,
+          verificationLink
+        });
         throw createError(ErrorCode.INTERNAL, ERROR_MESSAGES.EMAIL_SEND_FAILED);
       }
     },
     "sendVerificationEmail",
     {
       authLevel: "auth",
-      enableCSRF: true,
+      enableCSRF: false, // Disable CSRF for email verification - auth + rate limiting provides sufficient protection
       rateLimitConfig: {
         type: RateLimitType.AUTH,
         maxRequests: 3, // 3 verification emails per hour

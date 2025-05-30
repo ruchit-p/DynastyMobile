@@ -47,6 +47,8 @@ export default function LoginPage() {
         });
         router.push('/verify-email');
       } else {
+        // For verified users, redirect to family tree
+        // The OnboardingContext will handle showing onboarding modal if needed
         router.push('/family-tree');
       }
     }

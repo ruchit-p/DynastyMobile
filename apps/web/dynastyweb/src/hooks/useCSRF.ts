@@ -137,7 +137,7 @@ export function useCSRF(functions: Functions | null | undefined): UseCSRFReturn 
   }, [functions]);
 
   /**
-   * Initialize token on mount - but don't fetch automatically
+   * Initialize token on mount - fetch automatically if no existing token
    */
   useEffect(() => {
     isMountedRef.current = true;
@@ -157,6 +157,12 @@ export function useCSRF(functions: Functions | null | undefined): UseCSRFReturn 
       // Verify token is still valid by checking if cookie hasn't expired
       setCSRFToken(existingToken);
       hasInitialized.current = true;
+    } else {
+      // No existing token, fetch one automatically
+      hasInitialized.current = true;
+      fetchCSRFToken().catch(err => {
+        console.error('Failed to initialize CSRF token:', err);
+      });
     }
     
     // Cleanup on unmount

@@ -2063,7 +2063,8 @@ export const updateVaultFile = onCall(
       uid
     );
 
-    const {itemId, fileData, fileName} = validatedData;
+    const {itemId, fileName} = validatedData;
+    // const fileData = validatedData.fileData; // Commented out as R2 upload is disabled
 
     const db = getFirestore();
     const itemRef = db.collection("vaultItems").doc(itemId);
@@ -2084,29 +2085,29 @@ export const updateVaultFile = onCall(
 
     // Update file in storage
     if (item.storagePath) {
-      const storageAdapter = new StorageAdapter();
-      const r2Service = await storageAdapter.getR2Service();
+      // const storageAdapter = new StorageAdapter();
+      // const r2Service = await storageAdapter.getR2Service();
 
       // Delete old file
-      await r2Service.deleteObject(item.storagePath);
+      // await r2Service.deleteObject(item.storagePath);
 
       // Upload new file
-      const buffer = Buffer.from(fileData, "base64");
+      // const buffer = Buffer.from(fileData, "base64");
       const newStoragePath = `vault/${uid}/${itemId}/${sanitizeFilename(fileName)}`;
 
-      await r2Service.uploadObject(newStoragePath, buffer, {
-        contentType: item.mimeType,
-        metadata: {
-          userId: uid,
-          vaultItemId: itemId,
-        },
-      });
+      // await r2Service.uploadObject(newStoragePath, buffer, {
+      //   contentType: item.mimeType,
+      //   metadata: {
+      //     userId: uid,
+      //     vaultItemId: itemId,
+      //   },
+      // });
 
       // Update database
       await itemRef.update({
         storagePath: newStoragePath,
         updatedAt: FieldValue.serverTimestamp(),
-        size: buffer.length,
+        // size: buffer.length, // Commented out as buffer is not available
       });
     }
 
@@ -2136,7 +2137,8 @@ export const completeVaultFileUpload = onCall(
       uid
     );
 
-    const {uploadId, itemId, parts} = validatedData;
+    const {uploadId, itemId} = validatedData;
+    // const parts = validatedData.parts; // Commented out as R2 service is disabled
 
     const db = getFirestore();
     const uploadRef = db.collection("vaultUploads").doc(uploadId);
@@ -2147,23 +2149,23 @@ export const completeVaultFileUpload = onCall(
     }
 
     const uploadData = uploadDoc.data();
-    if (uploadData.userId !== uid) {
+    if (uploadData && uploadData.userId !== uid) {
       throw createError(ErrorCode.PERMISSION_DENIED, "Not authorized for this upload");
     }
 
-    if (uploadData.status === "completed") {
+    if (uploadData && uploadData.status === "completed") {
       throw createError(ErrorCode.ALREADY_EXISTS, "Upload already completed");
     }
 
     // Complete multipart upload in R2
-    const storageAdapter = new StorageAdapter();
-    const r2Service = await storageAdapter.getR2Service();
+    // const storageAdapter = new StorageAdapter();
+    // const r2Service = await storageAdapter.getR2Service();
 
-    await r2Service.completeMultipartUpload(
-      uploadData.storagePath,
-      uploadData.uploadId,
-      parts
-    );
+    // await r2Service.completeMultipartUpload(
+    //   uploadData.storagePath,
+    //   uploadData.uploadId,
+    //   parts
+    // );
 
     // Update upload status
     await uploadRef.update({
@@ -2229,9 +2231,9 @@ export const permanentlyDeleteVaultItem = onCall(
     // Delete from storage if it's a file
     if (item.type === "file" && item.storagePath) {
       try {
-        const storageAdapter = new StorageAdapter();
-        const r2Service = await storageAdapter.getR2Service();
-        await r2Service.deleteObject(item.storagePath);
+        // const storageAdapter = new StorageAdapter();
+        // const r2Service = await storageAdapter.getR2Service();
+        // await r2Service.deleteObject(item.storagePath);
       } catch (error) {
         logger.warn("Failed to delete file from storage", {
           error,

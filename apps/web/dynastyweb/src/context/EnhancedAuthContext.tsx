@@ -442,7 +442,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setMfaSignInState({
           isRequired: true,
           availableFactors: resolver?.hints || [],
-          resolver,
+          resolver: resolver || null,
           selectedFactor: null,
         });
         

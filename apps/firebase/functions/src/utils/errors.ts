@@ -106,6 +106,21 @@ export interface ErrorData {
 }
 
 /**
+ * Custom security error class for rate limiting and other security violations
+ */
+export class SecurityError extends Error {
+  public readonly code: string;
+  public readonly details?: any;
+
+  constructor(code: string, message: string, details?: any) {
+    super(message);
+    this.name = "SecurityError";
+    this.code = code;
+    this.details = details;
+  }
+}
+
+/**
  * Creates a standardized HttpsError for Dynasty Firebase functions
  *
  * @param code - ErrorCode enum value

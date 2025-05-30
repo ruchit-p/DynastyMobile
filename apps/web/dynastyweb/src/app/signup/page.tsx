@@ -32,6 +32,7 @@ export default function SignupPage() {
   const [isPhoneLoading, setIsPhoneLoading] = useState(false);
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [codeSent, setCodeSent] = useState(false);
+  const [showAccountExistsModal, setShowAccountExistsModal] = useState(false);
   const router = useRouter();
   const { signUp, signInWithGoogle, signInWithPhone, confirmPhoneSignIn } = useAuth();
   const { toast } = useToast();
@@ -95,14 +96,16 @@ export default function SignupPage() {
           ? errorMessage.split('auth/')[1].split(')')[0].trim() 
           : '';
         
+        // Check if the error contains "already exists" text or has the already-exists code
+        if (errorCode === 'email-already-in-use' || 
+            errorMessage.includes('already exists') || 
+            errorMessage.includes('already-exists')) {
+          setShowAccountExistsModal(true);
+          return; // Return early to prevent the generic toast from showing
+        }
+        
+        // Handle other error types
         switch (errorCode) {
-          case 'email-already-in-use':
-            toast({
-              title: "Email already in use",
-              description: "This email is already registered. Please use a different email or try signing in.",
-              variant: "destructive",
-            });
-            break;
           case 'invalid-email':
             toast({
               title: "Invalid email",
@@ -118,6 +121,17 @@ export default function SignupPage() {
             });
             break;
           default:
+            // Check JSON error object if it exists
+            try {
+              const errorObj = JSON.parse(errorMessage);
+              if (errorObj.code === 'already-exists') {
+                setShowAccountExistsModal(true);
+                return; // Return early to prevent the generic toast from showing
+              }
+            } catch (e) {
+              // Not a JSON error, continue with default handling
+            }
+            
             toast({
               title: "Signup failed",
               description: "Unable to create your account. Please try again.",
@@ -261,6 +275,32 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      {showAccountExistsModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Account Already Exists</h3>
+            <p className="text-gray-600 mb-6">
+              An account with this email already exists. Please sign in with your existing credentials.
+            </p>
+            <div className="flex flex-col space-y-3">
+              <Button
+                onClick={() => router.push('/login')}
+                className="w-full bg-[#0A5C36] hover:bg-[#0A5C36]/80"
+              >
+                Go to Sign In
+              </Button>
+              <Button
+                onClick={() => setShowAccountExistsModal(false)}
+                variant="ghost"
+                className="w-full"
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <Link href="/">
           <Image

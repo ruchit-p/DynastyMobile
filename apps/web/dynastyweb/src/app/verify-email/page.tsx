@@ -8,12 +8,11 @@ import { useToast } from "@/components/ui/use-toast"
 import { Loader2 } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 import { auth } from "@/lib/firebase"
-import Link from "next/link"
 
 export default function VerifyEmailPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
-  const { currentUser, firestoreUser, sendVerificationEmail } = useAuth()
+  const { currentUser, firestoreUser, sendVerificationEmail, signOut } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
   const hasRedirected = useRef(false)
@@ -102,6 +101,28 @@ export default function VerifyEmailPage() {
       setIsLoading(false)
     }
   }
+  
+  const handleBackToSignIn = async () => {
+    setIsLoading(true)
+    try {
+      await signOut()
+      toast({
+        title: "Signed out",
+        description: "You have been signed out successfully.",
+      })
+      router.push("/login")
+    } catch (error) {
+      console.error("Error signing out:", error)
+      toast({
+        title: "Error",
+        description: "Failed to sign out. Please try again.",
+        variant: "destructive",
+      })
+      router.push("/login")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   if (!currentUser) {
     return null
@@ -185,12 +206,13 @@ export default function VerifyEmailPage() {
               </Button>
 
               <div className="text-center">
-                <Link
-                  href="/login"
+                <Button
+                  onClick={handleBackToSignIn}
+                  variant="link"
                   className="text-sm font-medium text-[#0A5C36] hover:text-[#0A5C36]/80"
                 >
                   Back to Sign In
-                </Link>
+                </Button>
               </div>
             </div>
           </div>

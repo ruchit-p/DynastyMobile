@@ -127,7 +127,7 @@ export const registerBiometricCredential = onCall(
     } catch (error) {
       return handleError(error, functionName);
     }
-  })
+  }, "registerBiometricCredential")
 );
 
 /**
@@ -191,7 +191,7 @@ export const createBiometricChallenge = onCall(
     } catch (error) {
       return handleError(error, functionName);
     }
-  })
+  }, "createBiometricChallenge")
 );
 
 /**

@@ -1,5 +1,5 @@
 import { FpjsProvider } from '@fingerprintjs/fingerprintjs-pro-react';
-import type FingerprintJSPro from '@fingerprintjs/fingerprintjs-pro';
+import { Agent, LoadOptions } from '@fingerprintjs/fingerprintjs-pro';
 import { auth, functions } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 
@@ -32,7 +32,7 @@ export interface DeviceTrustResult {
 }
 
 class FingerprintService {
-  private fpjsClient: FingerprintJSPro | null = null;
+  private fpjsClient: Agent | null = null;
   private initPromise: Promise<void> | null = null;
   private isInitialized = false;
 
@@ -64,7 +64,7 @@ class FingerprintService {
       this.fpjsClient = await FingerprintJSPro.load({
         apiKey: FINGERPRINT_API_KEY,
         endpoint: FINGERPRINT_ENDPOINT,
-        region: FINGERPRINT_REGION as FingerprintJSPro.LoadOptions['region']
+        region: FINGERPRINT_REGION as LoadOptions['region']
       });
       
       this.isInitialized = true;
@@ -152,10 +152,17 @@ class FingerprintService {
         'verifyDeviceFingerprint'
       );
       
+      const webDeviceInfo = this.getWebDeviceInfo();
+      const finalDeviceInfo = {
+        deviceName: deviceInfo?.deviceName || webDeviceInfo.deviceName,
+        deviceType: deviceInfo?.deviceType || webDeviceInfo.deviceType,
+        platform: deviceInfo?.platform || webDeviceInfo.platform
+      };
+      
       const result = await verifyDeviceFingerprint({
         requestId: fingerprint.requestId,
         visitorId: fingerprint.visitorId,
-        deviceInfo: deviceInfo || this.getWebDeviceInfo()
+        deviceInfo: finalDeviceInfo
       });
 
       const trustResult = result.data;

@@ -5,6 +5,26 @@ const nextConfig = {
   },
   transpilePackages: ['ui', 'utils'],
   
+  // Turbopack configuration (replaces webpack config)
+  experimental: {
+    turbo: {
+      resolveAlias: {
+        'react-native$': 'react-native-web',
+      },
+      resolveExtensions: [
+        '.web.js',
+        '.web.jsx',
+        '.web.ts',
+        '.web.tsx',
+        '.js',
+        '.jsx',
+        '.ts',
+        '.tsx',
+        '.json',
+      ],
+    },
+  },
+  
   // Add security headers for development to allow Firebase emulator connections
   async headers() {
     if (process.env.NODE_ENV === 'development') {
@@ -67,26 +87,16 @@ const nextConfig = {
       },
     ],
   },
-  webpack: (config) => {
-    config.resolve.alias = {
-      ...(config.resolve.alias || {}),
-      'react-native$': 'react-native-web',
-    };
-    config.resolve.extensions = [
-      '.web.js',
-      '.web.jsx',
-      '.web.ts',
-      '.web.tsx',
-      ...config.resolve.extensions,
-    ];
-    return config;
-  },
 }
 
 // Injected content via Sentry wizard below
 const { withSentryConfig } = require("@sentry/nextjs");
 
-module.exports = withSentryConfig(
+// Only apply Sentry configuration if not using Turbopack in development
+const shouldUseSentry = process.env.NODE_ENV === 'production' || 
+                       !process.argv.includes('--turbopack');
+
+const finalConfig = shouldUseSentry ? withSentryConfig(
   nextConfig,
   {
     // For all available options, see:
@@ -116,4 +126,6 @@ module.exports = withSentryConfig(
     // https://vercel.com/docs/cron-jobs
     automaticVercelMonitors: true,
   }
-);
+) : nextConfig;
+
+module.exports = finalConfig;

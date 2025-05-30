@@ -185,7 +185,7 @@ export class EnhancedFingerprintService {
         localStorage: this.isStorageSupported('localStorage'),
         sessionStorage: this.isStorageSupported('sessionStorage'),
         indexedDB: this.isStorageSupported('indexedDB'),
-        cpuClass: (navigator as Record<string, unknown>).cpuClass as string | undefined,
+        cpuClass: (navigator as unknown as Record<string, unknown>).cpuClass as string | undefined,
         hardwareConcurrency: navigator.hardwareConcurrency || 0,
         colorDepth: screen.colorDepth,
         colorGamut: this.getColorGamut(),
@@ -291,7 +291,7 @@ export class EnhancedFingerprintService {
   private async generateAudioFingerprint(): Promise<string> {
     return new Promise((resolve) => {
       try {
-        const AudioContextClass = window.AudioContext || (window as Record<string, unknown>).webkitAudioContext as typeof AudioContext;
+        const AudioContextClass = window.AudioContext || (window as unknown as Record<string, unknown>).webkitAudioContext as typeof AudioContext;
         const context = new AudioContextClass();
         
         // Create oscillator for audio fingerprinting
@@ -429,7 +429,7 @@ export class EnhancedFingerprintService {
   private generateHardwareFingerprint(): string {
     const data = {
       cores: navigator.hardwareConcurrency,
-      memory: (navigator as Record<string, unknown>).deviceMemory as number || 0,
+      memory: (navigator as unknown as Record<string, unknown>).deviceMemory as number || 0,
       platform: navigator.platform,
       maxTouchPoints: navigator.maxTouchPoints,
       screen: {
@@ -450,7 +450,7 @@ export class EnhancedFingerprintService {
       languages: navigator.languages,
       cookieEnabled: navigator.cookieEnabled,
       onLine: navigator.onLine,
-      buildID: (navigator as Record<string, unknown>).buildID as string || '',
+      buildID: (navigator as unknown as Record<string, unknown>).buildID as string || '',
       product: navigator.product,
       productSub: navigator.productSub,
       vendor: navigator.vendor,
@@ -478,7 +478,7 @@ export class EnhancedFingerprintService {
 
   private isStorageSupported(storageType: string): boolean {
     try {
-      const storage = (window as Record<string, unknown>)[storageType] as Storage;
+      const storage = (window as unknown as Record<string, unknown>)[storageType] as Storage;
       const testKey = '__storage_test__';
       storage.setItem(testKey, 'test');
       storage.removeItem(testKey);
@@ -562,7 +562,8 @@ export class EnhancedFingerprintService {
 
   private async getBatteryInfo(): Promise<BatteryInfo | undefined> {
     try {
-      const battery = await (navigator as Record<string, unknown>).getBattery?.() as BatteryManager | undefined;
+      const getBattery = (navigator as unknown as Record<string, unknown>).getBattery as (() => Promise<BatteryManager>) | undefined;
+      const battery = await getBattery?.();
       
       if (battery) {
         return {
@@ -580,16 +581,17 @@ export class EnhancedFingerprintService {
   }
 
   private getNetworkInfo(): NetworkInfo | undefined {
-    const connection = (navigator as Record<string, unknown>).connection || 
-                      (navigator as Record<string, unknown>).mozConnection || 
-                      (navigator as Record<string, unknown>).webkitConnection as NetworkInformation | undefined;
+    const connection = (navigator as unknown as Record<string, unknown>).connection || 
+                      (navigator as unknown as Record<string, unknown>).mozConnection || 
+                      (navigator as unknown as Record<string, unknown>).webkitConnection as NetworkInformation | undefined;
     
     if (connection) {
+      const networkConnection = connection as NetworkInformation;
       return {
-        effectiveType: connection.effectiveType || 'unknown',
-        downlink: connection.downlink || 0,
-        rtt: connection.rtt || 0,
-        saveData: connection.saveData || false
+        effectiveType: networkConnection.effectiveType || 'unknown',
+        downlink: networkConnection.downlink || 0,
+        rtt: networkConnection.rtt || 0,
+        saveData: networkConnection.saveData || false
       };
     }
     
