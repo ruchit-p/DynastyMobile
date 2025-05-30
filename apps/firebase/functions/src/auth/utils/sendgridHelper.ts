@@ -18,16 +18,16 @@ function getBaseUrl(): string {
   if (process.env.BASE_URL) {
     return process.env.BASE_URL;
   }
-  
+
   // Environment-specific URLs
   if (process.env.FUNCTIONS_EMULATOR === "true" || process.env.NODE_ENV === "development") {
     return "http://localhost:3000"; // Development
   }
-  
+
   if (process.env.NODE_ENV === "staging") {
     return "https://dynastytest.com"; // Staging
   }
-  
+
   return "https://mydynastyapp.com"; // Production
 }
 
@@ -39,21 +39,21 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
 
   // Get configuration
   const config = getSendGridConfig();
-  
+
   logger.info("SendGrid configuration loaded", {
     hasApiKey: !!config.apiKey,
     fromEmail: config.fromEmail,
     templateType,
-    templateId: config.templates[templateType]
+    templateId: config.templates[templateType],
   });
 
   // Initialize SendGrid using require to ensure compatibility
   const sgMail = require("@sendgrid/mail");
-  
-  if (!sgMail || typeof sgMail.setApiKey !== 'function') {
+
+  if (!sgMail || typeof sgMail.setApiKey !== "function") {
     throw createError(ErrorCode.INTERNAL, "SendGrid module failed to load properly");
   }
-  
+
   sgMail.setApiKey(config.apiKey);
   logger.info("SendGrid initialized successfully");
 
@@ -81,15 +81,15 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
       ...dynamicTemplateData,
       baseUrl,
       // Override any existing URL fields with environment-appropriate ones
-      verificationUrl: dynamicTemplateData.verificationUrl ? 
-        dynamicTemplateData.verificationUrl.replace(/https?:\/\/[^/]+/, baseUrl) : 
+      verificationUrl: dynamicTemplateData.verificationUrl ?
+        dynamicTemplateData.verificationUrl.replace(/https?:\/\/[^/]+/, baseUrl) :
         dynamicTemplateData.verificationUrl,
-      resetUrl: dynamicTemplateData.resetUrl ? 
-        dynamicTemplateData.resetUrl.replace(/https?:\/\/[^/]+/, baseUrl) : 
+      resetUrl: dynamicTemplateData.resetUrl ?
+        dynamicTemplateData.resetUrl.replace(/https?:\/\/[^/]+/, baseUrl) :
         dynamicTemplateData.resetUrl,
-      inviteUrl: dynamicTemplateData.inviteUrl ? 
-        dynamicTemplateData.inviteUrl.replace(/https?:\/\/[^/]+/, baseUrl) : 
-        dynamicTemplateData.inviteUrl
+      inviteUrl: dynamicTemplateData.inviteUrl ?
+        dynamicTemplateData.inviteUrl.replace(/https?:\/\/[^/]+/, baseUrl) :
+        dynamicTemplateData.inviteUrl,
     };
 
     // Update the message with corrected template data
@@ -97,25 +97,25 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
 
     // Send the email (works in all environments now)
     const response = await sgMail.send(msg);
-    
-    const environmentLabel = process.env.FUNCTIONS_EMULATOR === "true" ? "DEVELOPMENT" : 
-                            process.env.NODE_ENV === "staging" ? "STAGING" : "PRODUCTION";
-    
+
+    const environmentLabel = process.env.FUNCTIONS_EMULATOR === "true" ? "DEVELOPMENT" :
+      process.env.NODE_ENV === "staging" ? "STAGING" : "PRODUCTION";
+
     logger.info(`📧 Email sent successfully (${environmentLabel})`, {
-      to, 
-      templateType, 
+      to,
+      templateType,
       baseUrl,
       environment: environmentLabel,
       sendgridResponse: {
         statusCode: response?.[0]?.statusCode,
         body: response?.[0]?.body,
-        headers: response?.[0]?.headers
-      }
+        headers: response?.[0]?.headers,
+      },
     });
   } catch (error: any) {
-    const environmentLabel = process.env.FUNCTIONS_EMULATOR === "true" ? "DEVELOPMENT" : 
-                            process.env.NODE_ENV === "staging" ? "STAGING" : "PRODUCTION";
-    
+    const environmentLabel = process.env.FUNCTIONS_EMULATOR === "true" ? "DEVELOPMENT" :
+      process.env.NODE_ENV === "staging" ? "STAGING" : "PRODUCTION";
+
     // Extract detailed error information
     const errorDetails = {
       message: error?.message || "Unknown error",
@@ -123,18 +123,18 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
       status: error?.response?.status || "Unknown status",
       statusText: error?.response?.statusText || "Unknown status text",
       body: error?.response?.body || "No response body",
-      stack: error?.stack || "No stack trace"
+      stack: error?.stack || "No stack trace",
     };
-    
+
     logger.error(`Failed to send email (${environmentLabel}):`, {
       errorDetails,
-      to, 
+      to,
       templateType,
       environment: environmentLabel,
       baseUrl: getBaseUrl(),
-      templateData: msg.dynamicTemplateData
+      templateData: msg.dynamicTemplateData,
     });
-    
+
     // Always throw error - let the calling function decide how to handle it
     throw createError(ErrorCode.INTERNAL, `Failed to send email. SendGrid error: ${errorDetails.message}`);
   }

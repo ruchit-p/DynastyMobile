@@ -58,17 +58,17 @@ export const sendVerificationEmail = onCall(
       });
 
       // Get frontend URL (with fallback for development)
-      const frontendUrlValue = FRONTEND_URL.value() || 
+      const frontendUrlValue = FRONTEND_URL.value() ||
         (process.env.FUNCTIONS_EMULATOR === "true" ? "http://localhost:3000" : "https://mydynastyapp.com");
-      
+
       const verificationLink = `${frontendUrlValue}/verify-email?token=${verificationToken}`;
-      
+
       logger.info("Sending verification email", {
         userId: request.auth?.uid,
         email,
         verificationLink,
         frontendUrl: frontendUrlValue,
-        environment: process.env.FUNCTIONS_EMULATOR === "true" ? "DEVELOPMENT" : "PRODUCTION"
+        environment: process.env.FUNCTIONS_EMULATOR === "true" ? "DEVELOPMENT" : "PRODUCTION",
       });
 
       try {
@@ -81,15 +81,15 @@ export const sendVerificationEmail = onCall(
             verificationUrl: verificationLink, // Note: changed from verificationLink to verificationUrl for template consistency
           },
         });
-        
+
         logger.info(`Verification email sent successfully to ${email} for user ${request.auth?.uid}`);
         return {success: true, message: "Verification email sent successfully."};
       } catch (error) {
         logger.error("Failed to send verification email:", {
           error: error instanceof Error ? error.message : error,
-          userId: request.auth?.uid, 
+          userId: request.auth?.uid,
           email,
-          verificationLink
+          verificationLink,
         });
         throw createError(ErrorCode.INTERNAL, ERROR_MESSAGES.EMAIL_SEND_FAILED);
       }

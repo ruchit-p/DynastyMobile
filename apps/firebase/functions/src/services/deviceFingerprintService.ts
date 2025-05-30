@@ -106,7 +106,7 @@ class DeviceFingerprintService {
    */
   private hashIpAddress(ip: string | undefined): string | undefined {
     if (!ip) return undefined;
-    
+
     // Create a hash of the IP address for privacy
     return crypto
       .createHash("sha256")

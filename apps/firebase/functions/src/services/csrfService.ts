@@ -174,7 +174,6 @@ export class CSRFService {
       return 0;
     }
   }
-
 }
 
 // Export an instance for convenience
