@@ -282,14 +282,15 @@ export default function LoginPage() {
       }
       // For existing users with completed onboarding, the useEffect at the top of 
       // this component will handle the redirection based on email verification status
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Google login error:", error);
       
       // Handle specific Firebase Auth errors
       let errorMessage = "Unable to sign in with Google. Please try again.";
       
-      if (error?.code) {
-        switch (error.code) {
+      const firebaseError = error as { code?: string; message?: string };
+      if (firebaseError?.code) {
+        switch (firebaseError.code) {
           case 'auth/popup-closed-by-user':
             errorMessage = "Sign-in was cancelled. Please try again.";
             break;

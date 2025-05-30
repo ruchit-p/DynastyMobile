@@ -90,6 +90,7 @@ async function testFileSecurity() {
 async function testPBKDF2Performance() {
   console.log("\n\nTesting PBKDF2 Performance...\n");
 
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const crypto = require("crypto");
   const password = "testPassword123!";
   const salt = crypto.randomBytes(32);

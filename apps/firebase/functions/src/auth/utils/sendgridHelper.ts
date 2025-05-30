@@ -48,6 +48,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
   });
 
   // Initialize SendGrid using require to ensure compatibility
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const sgMail = require("@sendgrid/mail");
 
   if (!sgMail || typeof sgMail.setApiKey !== "function") {

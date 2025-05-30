@@ -1098,7 +1098,7 @@ export const onStoryCreatedOrUpdated = onDocumentCreated({
 export const onStoryUpdated = onDocumentUpdated({
   document: "stories/{storyId}",
   region: DEFAULT_REGION,
-}, async (_event) => {
+}, async () => {
   // For now, we'll skip update notifications to avoid duplicate notifications
   // In a production system, you'd compare before/after to only notify newly tagged people
   return;

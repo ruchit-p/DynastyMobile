@@ -2,7 +2,6 @@ import {describe, it, expect, jest, beforeEach, afterEach} from "@jest/globals";
 import * as admin from "firebase-admin";
 import {CallableRequest} from "firebase-functions/v2/https";
 import {withAuth, withResourceAccess, PermissionLevel, RateLimitType} from "../middleware/auth";
-import {createError, ErrorCode} from "../utils/errors";
 import {csrfService} from "../services/csrfService";
 
 // Mock Firebase Admin
