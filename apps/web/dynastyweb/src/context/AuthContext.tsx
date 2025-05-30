@@ -246,28 +246,47 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // If this is the first time the user is signing in with Google,
       // we need to create a Firestore user document
       if (result.user) {
+        console.log("🔵 Google sign-in successful for user:", result.user.uid);
         // Google sign-in successful
         const userDoc = await getDoc(doc(db, "users", result.user.uid));
+        console.log("🔍 Checking if user document exists:", userDoc.exists());
         
         if (!userDoc.exists()) {
+          console.log("🆕 New Google user - creating Firestore document");
           // New Google user - creating Firestore document
           // Google sign-in is CSRF-exempt
           const handleGoogleSignIn = httpsCallable(functions, 'handleGoogleSignIn');
-          await handleGoogleSignIn({
-            userId: result.user.uid,
-            email: result.user.email,
-            displayName: result.user.displayName || '',
-            photoURL: result.user.photoURL || '',
-          });
-          isNewUser = true;
-          // New Google user document created
+          try {
+            console.log("📞 Calling handleGoogleSignIn with data:", {
+              userId: result.user.uid,
+              email: result.user.email,
+              displayName: result.user.displayName || '',
+              photoURL: result.user.photoURL || '',
+            });
+            const response = await handleGoogleSignIn({
+              userId: result.user.uid,
+              email: result.user.email,
+              displayName: result.user.displayName || '',
+              photoURL: result.user.photoURL || '',
+            });
+            console.log("✅ handleGoogleSignIn response:", response);
+            isNewUser = true;
+            // New Google user document created
+          } catch (error) {
+            console.error("❌ handleGoogleSignIn failed:", error);
+            throw error;
+          }
         } else {
+          console.log("👤 Existing user document found");
           // Check if this is an existing user who hasn't completed onboarding
           const userData = userDoc.data();
+          console.log("📋 User data:", userData);
           if (userData && userData.onboardingCompleted === false) {
+            console.log("🔄 Existing Google user but onboarding not completed");
             // Existing Google user but onboarding not completed
             isNewUser = true;
           } else {
+            console.log("✨ Existing Google user with completed onboarding");
             // Existing Google user with completed onboarding
           }
         }

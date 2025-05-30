@@ -173,6 +173,7 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
 
   completeOnboarding: {
     rules: [
+      {field: "userId", type: "id", required: true},
       {field: "firstName", type: "string", maxLength: 50},
       {field: "lastName", type: "string", maxLength: 50},
       {field: "displayName", type: "string", maxLength: 100},
@@ -1084,6 +1085,66 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
       {field: "newKeyId", type: "string", required: true, maxLength: 100},
       {field: "encryptedKey", type: "string", required: true, maxLength: 5000},
       {field: "metadata", type: "object"},
+    ],
+    xssCheck: false,
+  },
+
+  // Authentication schemas
+  handleSignUp: {
+    rules: [
+      {field: "email", type: "email", required: true},
+      {field: "password", type: "string", required: true},
+      {field: "displayName", type: "string", maxLength: 100},
+      {field: "firstName", type: "string", maxLength: 50},
+      {field: "lastName", type: "string", maxLength: 50},
+      {field: "phoneNumber", type: "phone"},
+      {field: "dateOfBirth", type: "date"},
+      {field: "gender", type: "enum", enumValues: ["male", "female", "other", "unspecified"]},
+      {field: "invitationId", type: "string", maxLength: 200},
+      {field: "familyTreeId", type: "id"},
+    ],
+    xssCheck: true,
+  },
+
+  handlePhoneSignInComplete: {
+    rules: [
+      {field: "uid", type: "id", required: true},
+      {field: "phoneNumber", type: "phone", required: true},
+    ],
+    xssCheck: false,
+  },
+
+  handleGoogleSignIn: {
+    rules: [
+      {field: "userId", type: "id", required: true},
+      {field: "email", type: "email"},
+      {field: "displayName", type: "string", maxLength: 100},
+      {field: "photoURL", type: "string", maxLength: 2000},
+    ],
+    xssCheck: true,
+  },
+
+  handleAppleSignIn: {
+    rules: [
+      {field: "userId", type: "id", required: true},
+      {field: "email", type: "email"},
+      {field: "fullName", type: "object"},
+    ],
+    xssCheck: true,
+  },
+
+  handleSignIn: {
+    rules: [
+      {field: "email", type: "email", required: true},
+      {field: "password", type: "string", required: true},
+    ],
+    xssCheck: false,
+  },
+
+  confirmPhoneSignIn: {
+    rules: [
+      {field: "verificationId", type: "string", required: true, maxLength: 200},
+      {field: "verificationCode", type: "string", required: true, maxLength: 10},
     ],
     xssCheck: false,
   },

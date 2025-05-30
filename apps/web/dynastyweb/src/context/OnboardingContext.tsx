@@ -63,7 +63,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const isOnboardingRedirectPage = pathname === '/onboarding-redirect'
 
   const checkOnboardingStatus = useCallback(async () => {
-    if (!currentUser || isCheckingRef.current) return
+    if (!currentUser || isCheckingRef.current || !csrfClient) return
     
     console.log("Checking onboarding status for user:", currentUser.uid);
     
@@ -293,16 +293,32 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         throw new Error('User not authenticated')
       }
 
+      if (!csrfClient) {
+        throw new Error('CSRF client not available')
+      }
+
       // Call the Cloud Function to complete onboarding
       // This will handle all database operations in one call
-      await csrfClient.callFunction('completeOnboarding', {
+      console.log("🎯 Starting onboarding completion for user:", currentUser.uid);
+      console.log("📝 Onboarding data:", {
         userId: currentUser.uid,
         firstName: userData.firstName,
         lastName: userData.lastName,
         displayName: `${userData.firstName} ${userData.lastName}`,
         dateOfBirth: userData.dateOfBirth,
         gender: userData.gender || 'unspecified',
-      })
+      });
+      
+      const response = await csrfClient.callFunction('completeOnboarding', {
+        userId: currentUser.uid,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        displayName: `${userData.firstName} ${userData.lastName}`,
+        dateOfBirth: userData.dateOfBirth,
+        gender: userData.gender || 'unspecified',
+      });
+      
+      console.log("✅ Onboarding completion response:", response);
 
       // Update local state
       setHasCompletedOnboarding(true)

@@ -32,13 +32,14 @@ export default function LoginPage() {
   const [isPhoneLoading, setIsPhoneLoading] = useState(false);
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [codeSent, setCodeSent] = useState(false);
+  const [googleRedirectHandled, setGoogleRedirectHandled] = useState(false);
   const router = useRouter();
   const { signIn, signInWithGoogle, signInWithPhone, confirmPhoneSignIn, currentUser, firestoreUser } = useAuth();
   const { toast } = useToast();
 
   // Add effect to handle post-login navigation
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && !googleRedirectHandled) {
       // Check if the user is verified through phone or email
       if (!currentUser.emailVerified && !firestoreUser?.phoneNumberVerified) {
         toast({
@@ -52,7 +53,7 @@ export default function LoginPage() {
         router.push('/family-tree');
       }
     }
-  }, [currentUser, firestoreUser, router, toast]);
+  }, [currentUser, firestoreUser, router, toast, googleRedirectHandled]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -243,6 +244,7 @@ export default function LoginPage() {
       // For new users, redirect to onboarding
       if (isNewUser) {
         console.log("New phone user detected, ensuring onboarding is checked");
+        setGoogleRedirectHandled(true); // Prevent the useEffect from overriding this redirect
         router.push('/onboarding-redirect');
       } else {
         // For existing users, redirect directly to family tree
@@ -265,24 +267,58 @@ export default function LoginPage() {
     try {
       // Check if this is a new Google user or a user who hasn't completed onboarding
       const isNewUser = await signInWithGoogle();
+      
+      // Only show success toast if no errors occurred
       toast({
         title: "Welcome!",
         description: "You have successfully signed in with Google.",
       });
       
-      // For new users or users who haven't completed onboarding, 
-      // redirect to onboarding-redirect page to ensure the onboarding form shows
+      // For new users, redirect to onboarding-redirect page to ensure the onboarding form shows
       if (isNewUser) {
         console.log("New Google user detected, ensuring onboarding is checked");
+        setGoogleRedirectHandled(true); // Prevent the useEffect from overriding this redirect
         router.push('/onboarding-redirect');
       }
       // For existing users with completed onboarding, the useEffect at the top of 
       // this component will handle the redirection based on email verification status
-    } catch (error) {
+    } catch (error: any) {
       console.error("Google login error:", error);
+      
+      // Handle specific Firebase Auth errors
+      let errorMessage = "Unable to sign in with Google. Please try again.";
+      
+      if (error?.code) {
+        switch (error.code) {
+          case 'auth/popup-closed-by-user':
+            errorMessage = "Sign-in was cancelled. Please try again.";
+            break;
+          case 'auth/popup-blocked':
+            errorMessage = "Popup was blocked by your browser. Please allow popups and try again.";
+            break;
+          case 'auth/cancelled-popup-request':
+            errorMessage = "Another sign-in request is already in progress.";
+            break;
+          case 'auth/account-exists-with-different-credential':
+            errorMessage = "An account already exists with the same email address but different sign-in credentials.";
+            break;
+          case 'auth/network-request-failed':
+            errorMessage = "Network error. Please check your connection and try again.";
+            break;
+          default:
+            // For internal Firebase errors that don't prevent authentication,
+            // check if user was actually signed in despite the error
+            if (error.message?.includes('internal') && !error.message?.includes('failed')) {
+              console.warn('Google Sign-in had internal warning but may have succeeded');
+              // Don't show error toast for internal warnings - let the auth state change handle it
+              return;
+            }
+        }
+      }
+      
       toast({
         title: "Sign-in Failed",
-        description: "Unable to sign in with Google. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
