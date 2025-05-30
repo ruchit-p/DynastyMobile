@@ -558,7 +558,7 @@ export const checkScheduledKeyRotations = onCall(
     memory: "512MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
-  async (_request) => {
+  async () => {
     const functionName = "checkScheduledKeyRotations";
 
     try {

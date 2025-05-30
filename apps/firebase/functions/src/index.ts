@@ -9,6 +9,7 @@
 
 // Load environment variables for local development
 if (process.env.FUNCTIONS_EMULATOR === "true") {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   require("dotenv").config({path: ".env.local"});
 }
 

@@ -7,7 +7,8 @@ export const initSendGrid = () => {
     throw createError(ErrorCode.INTERNAL, "SendGrid API key is not set");
   }
 
-  // Use require() to load SendGrid in CommonJS environment
+  // Use dynamic import to load SendGrid in CommonJS environment
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const sgMail = require("@sendgrid/mail");
 
   // Check if the module loaded correctly

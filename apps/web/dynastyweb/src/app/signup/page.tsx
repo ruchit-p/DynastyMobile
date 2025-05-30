@@ -128,7 +128,7 @@ export default function SignupPage() {
                 setShowAccountExistsModal(true);
                 return; // Return early to prevent the generic toast from showing
               }
-            } catch (e) {
+            } catch {
               // Not a JSON error, continue with default handling
             }
             
