@@ -4,6 +4,7 @@ import { AuthProvider } from '@/context/AuthContext'
 import { CSRFProvider } from '@/context/CSRFContext'
 import { EmulatorProvider } from '@/context/EmulatorContext'
 import { NotificationProvider } from '@/context/NotificationContext'
+import { OfflineProvider } from '@/context/OfflineContext'
 import { Toaster } from '@/components/ui/toaster'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import { ServiceInitializer } from '@/components/ServiceInitializer'
@@ -31,12 +32,14 @@ export default function RootLayout({
           <EmulatorProvider>
             <AuthProvider>
               <CSRFProvider>
-                <ServiceInitializer>
-                  <NotificationProvider>
-                    {children}
-                    <Toaster />
-                  </NotificationProvider>
-                </ServiceInitializer>
+                <OfflineProvider>
+                  <ServiceInitializer>
+                    <NotificationProvider>
+                      {children}
+                      <Toaster />
+                    </NotificationProvider>
+                  </ServiceInitializer>
+                </OfflineProvider>
               </CSRFProvider>
             </AuthProvider>
           </EmulatorProvider>

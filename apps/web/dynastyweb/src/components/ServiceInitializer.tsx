@@ -10,6 +10,8 @@ import { setStoryUtilsCSRFClient } from '@/utils/storyUtils';
 import { keyBackupService } from '@/services/encryption/KeyBackupService';
 import { setNotificationUtilsCSRFClient } from '@/utils/notificationUtils';
 import { setFunctionUtilsCSRFClient } from '@/utils/functionUtils';
+import { fingerprintService } from '@/services/FingerprintService';
+import { fontSizeService } from '@/services/FontSizeService';
 
 /**
  * ServiceInitializer component initializes all services with the CSRF client
@@ -25,6 +27,8 @@ export function ServiceInitializer({ children }: { children: React.ReactNode }) 
       vaultService.setCSRFClient(csrfClient);
       syncQueue.setCSRFClient(csrfClient);
       keyBackupService.setCSRFClient(csrfClient);
+      fingerprintService.setCSRFClient(csrfClient);
+      fontSizeService.setCSRFClient(csrfClient);
       
       // Initialize utility functions with CSRF client
       setEventUtilsCSRFClient(csrfClient);
