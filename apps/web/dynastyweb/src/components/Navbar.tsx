@@ -14,7 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Settings, LogOut, Plus, BookOpen, Users, Home, PenSquare, Menu, Calendar } from "lucide-react"
+import { Settings, LogOut, Plus, BookOpen, Users, Home, PenSquare, Menu, Calendar, Lock } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/context/AuthContext"
 import NotificationBell from "./NotificationBell"
@@ -44,6 +44,7 @@ export default function Navbar({ user }: NavbarProps) {
     if (pathname?.includes('/history-book')) return 'History Book'
     if (pathname?.includes('/events')) return 'Events'
     if (pathname?.includes('/story')) return 'Story'
+    if (pathname?.includes('/vault')) return 'Vault'
     return 'Dynasty'
   }
 
@@ -123,6 +124,16 @@ export default function Navbar({ user }: NavbarProps) {
           >
             <Calendar className="h-4 w-4" />
             Events
+          </Link>
+          <Link
+            href="/vault"
+            className={cn(
+              "flex items-center gap-2 text-sm font-medium hover:text-[#0A5C36]", 
+              pathname?.includes('/vault') ? "text-[#0A5C36]" : "text-gray-600"
+            )}
+          >
+            <Lock className="h-4 w-4" />
+            Vault
           </Link>
         </div>
 
@@ -253,6 +264,12 @@ export default function Navbar({ user }: NavbarProps) {
                 <Link href="/events" className="flex items-center gap-2 cursor-pointer">
                   <Calendar className="h-4 w-4" />
                   <span>Events</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/vault" className="flex items-center gap-2 cursor-pointer">
+                  <Lock className="h-4 w-4" />
+                  <span>Vault</span>
                 </Link>
               </DropdownMenuItem>
             </DropdownMenuContent>

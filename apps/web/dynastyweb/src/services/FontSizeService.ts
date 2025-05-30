@@ -1,6 +1,5 @@
 import { auth } from '@/lib/firebase';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { CSRFProtectedClient } from '@/lib/csrf-client';
 
 export enum FontSizePreset {
   EXTRA_SMALL = 0.85,
@@ -23,6 +22,7 @@ class FontSizeService {
   private useDeviceSettings: boolean = true;
   private listeners: Set<(scale: number) => void> = new Set();
   private userId: string | null = null;
+  private csrfClient: CSRFProtectedClient | null = null;
 
   private constructor() {
     this.loadFromLocalStorage();
@@ -33,6 +33,13 @@ class FontSizeService {
       FontSizeService.instance = new FontSizeService();
     }
     return FontSizeService.instance;
+  }
+
+  /**
+   * Set CSRF client for protected API calls
+   */
+  setCSRFClient(client: CSRFProtectedClient): void {
+    this.csrfClient = client;
   }
 
   private loadFromLocalStorage() {
@@ -93,8 +100,15 @@ class FontSizeService {
       }
 
       // Fetch from server
-      const getUserSettings = httpsCallable<{ userId: string }, { fontSettings?: { fontScale?: number; useDeviceSettings?: boolean } }>(functions, 'getUserSettings');
-      const response = await getUserSettings({ userId: this.userId });
+      if (!this.csrfClient) {
+        console.warn('FontSizeService: CSRF client not initialized');
+        return;
+      }
+
+      const response = await this.csrfClient.callFunction<
+        { userId: string },
+        { fontSettings?: { fontScale?: number; useDeviceSettings?: boolean } }
+      >('getUserSettings', { userId: this.userId });
       const data = response.data;
       
       if (data?.fontSettings) {
@@ -137,8 +151,12 @@ class FontSizeService {
           }));
         }
 
-        const updateUserSettings = httpsCallable(functions, 'updateUserSettings');
-        await updateUserSettings({
+        if (!this.csrfClient) {
+          console.warn('FontSizeService: CSRF client not initialized');
+          return;
+        }
+
+        await this.csrfClient.callFunction('updateUserSettings', {
           fontSettings: {
             fontScale: this.currentScale,
             useDeviceSettings: this.useDeviceSettings,
@@ -215,4 +233,8 @@ class FontSizeService {
   }
 }
 
+// Export singleton instance
+export const fontSizeService = FontSizeService.getInstance();
+
+// Also export the class for backward compatibility
 export default FontSizeService;

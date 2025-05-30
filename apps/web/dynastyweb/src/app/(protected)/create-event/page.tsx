@@ -24,8 +24,7 @@ import { useAuth } from "@/context/AuthContext"
 import { useToast } from "@/components/ui/use-toast"
 import { uploadMedia } from "@/utils/mediaUtils"
 import { useCSRFClient } from "@/context/CSRFContext"
-import { functions } from "@/lib/firebase"
-import { httpsCallable } from "firebase/functions"
+import { getFamilyManagementData } from "@/utils/functionUtils"
 
 export default function CreateEventPage() {
   const router = useRouter()
@@ -769,16 +768,12 @@ export default function CreateEventPage() {
                         onClick={() => {
                           setLoadingMembers(true);
                           setMembersError(null);
-                          const getFamilyManagementData = httpsCallable<object, { members: Array<{ id: string; displayName: string; profilePicture: string | null }> }>(
-                            functions, 
-                            'getFamilyManagementData'
-                          );
                           
-                          getFamilyManagementData({})
+                          getFamilyManagementData()
                             .then((result) => {
-                              if (result.data && Array.isArray(result.data.members)) {
+                              if (result && Array.isArray(result.members)) {
                                 // Filter out the current user from the family members list
-                                const filteredMembers = result.data.members
+                                const filteredMembers = result.members
                                   .filter(member => member.id !== currentUser?.uid)
                                   .map(member => ({
                                     id: member.id || '',
@@ -788,7 +783,7 @@ export default function CreateEventPage() {
                                 
                                 setFamilyMembers(filteredMembers);
                               } else {
-                                console.error('Invalid family members data structure:', result.data);
+                                console.error('Invalid family members data structure:', result);
                                 setMembersError('Received invalid data format from server.');
                               }
                               setLoadingMembers(false);
