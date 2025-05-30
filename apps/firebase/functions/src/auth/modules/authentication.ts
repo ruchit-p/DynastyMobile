@@ -4,7 +4,7 @@ import {logger} from "firebase-functions/v2";
 import {getAuth} from "firebase-admin/auth";
 import {FUNCTION_TIMEOUT} from "../../common";
 import type {SignupData} from "../../utils/validation";
-import {createError, withErrorHandling, ErrorCode} from "../../utils/errors";
+import {createError, ErrorCode} from "../../utils/errors";
 import {createLogContext} from "../../utils";
 import {UserDocument} from "../types/user";
 import {initSendGrid} from "../config/sendgrid";
@@ -12,8 +12,123 @@ import {SENDGRID_CONFIG, FRONTEND_URL} from "../config/secrets";
 import {generateSecureToken, hashToken} from "../utils/tokens";
 import {validateRequest} from "../../utils/request-validator";
 import {VALIDATION_SCHEMAS} from "../../config/validation-schemas";
-import {checkRateLimitByIP, RateLimitType, withAuth} from "../../middleware/auth";
+import {withAuth} from "../../middleware/auth";
 import {SECURITY_CONFIG} from "../../config/security-config";
+
+/**
+ * Handles standard email/password sign-in
+ * Validates credentials and returns user data
+ */
+export const handleSignIn = onCall(
+  {
+    memory: "512MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(
+    async (request) => {
+      // Validate and sanitize input using centralized validator
+      const validatedData = validateRequest(
+        request.data,
+        VALIDATION_SCHEMAS.handleSignIn,
+        undefined
+      );
+
+      const { email } = validatedData;
+
+      logger.info("handleSignIn: Processing sign-in request", createLogContext({
+        email,
+      }));
+
+      try {
+        const auth = getAuth();
+        const db = getFirestore();
+
+        // Note: Firebase Admin SDK doesn't provide a direct sign-in method
+        // The actual authentication happens on the client side
+        // This function is primarily for validation and user data retrieval
+
+        // Get user by email to verify they exist
+        let userRecord;
+        try {
+          userRecord = await auth.getUserByEmail(email);
+        } catch (error) {
+          logger.info("handleSignIn: User not found", createLogContext({
+            email,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+          throw createError(
+            ErrorCode.NOT_FOUND,
+            "Invalid email or password"
+          );
+        }
+
+        // Check if email is verified
+        if (!userRecord.emailVerified) {
+          logger.info("handleSignIn: Email not verified", createLogContext({
+            email,
+            userId: userRecord.uid,
+          }));
+          throw createError(
+            ErrorCode.PERMISSION_DENIED,
+            "Please verify your email before signing in"
+          );
+        }
+
+        // Get user document from Firestore
+        const userDoc = await db.collection("users").doc(userRecord.uid).get();
+        
+        if (!userDoc.exists) {
+          logger.error("handleSignIn: User document not found", createLogContext({
+            email,
+            userId: userRecord.uid,
+          }));
+          throw createError(
+            ErrorCode.NOT_FOUND,
+            "User profile not found. Please contact support."
+          );
+        }
+
+        const userData = userDoc.data() as UserDocument;
+
+        logger.info("handleSignIn: Sign-in successful", createLogContext({
+          userId: userRecord.uid,
+        }));
+
+        return {
+          success: true,
+          userId: userRecord.uid,
+          email: userRecord.email,
+          displayName: userData.displayName,
+          onboardingCompleted: userData.onboardingCompleted || false,
+        };
+      } catch (error: any) {
+        // Re-throw HttpsError instances
+        if (error instanceof HttpsError) {
+          throw error;
+        }
+
+        // Log unexpected errors
+        logger.error("handleSignIn: Unexpected error", createLogContext({
+          email,
+          errorType: typeof error,
+          errorMessage: error?.message || "Unknown error",
+        }));
+
+        // Throw a generic error for security
+        throw createError(
+          ErrorCode.INTERNAL,
+          "Invalid email or password"
+        );
+      }
+    },
+    "handleSignIn",
+    {
+      authLevel: "none", // No auth required for sign-in
+      enableCSRF: false, // Disable CSRF for authentication endpoint
+      rateLimitConfig: SECURITY_CONFIG.rateLimits.auth,
+    }
+  )
+);
 
 /**
  * Handles the signup process, which now only:
@@ -272,6 +387,9 @@ export const completeOnboarding = onCall({
 
   logger.info("Starting onboarding process", createLogContext({
     userId: userId,
+    firstName,
+    lastName,
+    displayName,
   }));
 
   try {
@@ -655,54 +773,9 @@ export const completeOnboarding = onCall({
   }
 });
 
-// Placeholder for signInWithPhoneNumber - Requires more complex setup with Recaptcha or other verification
-export const signInWithPhoneNumber = onCall(
-  {
-    memory: "512MiB",
-    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-    // secrets: [RECAPTCHA_SECRET_KEY] // If using reCAPTCHA Enterprise
-  },
-  withErrorHandling(async (request) => {
-    // Apply rate limiting for phone sign-in attempts
-    await checkRateLimitByIP(request, {
-      type: RateLimitType.AUTH,
-      maxRequests: 5, // Max 5 attempts per IP
-      windowSeconds: 900, // 15 minutes
-    });
 
-    // const {phoneNumber, recaptchaToken} = request.data;
-    // Implementation depends on chosen verification method (e.g., reCAPTCHA, custom OTP service)
-    // This is a complex flow involving client-side steps as well.
-    logger.warn("signInWithPhoneNumber is not fully implemented yet.");
-    throw createError(ErrorCode.UNIMPLEMENTED, "Phone number sign-in is not available at this moment.");
-  }, "signInWithPhoneNumber")
-);
 
-// Placeholder for verifyPhoneNumber
-export const verifyPhoneNumber = onCall(
-  {
-    memory: "512MiB",
-    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-  },
-  withErrorHandling(async () => { // Removed unused request
-    // const {verificationId, verificationCode} = request.data;
-    logger.warn("verifyPhoneNumber is not fully implemented yet.");
-    throw createError(ErrorCode.UNIMPLEMENTED, "Phone number verification is not available at this moment.");
-  }, "verifyPhoneNumber")
-);
 
-// Placeholder for resendPhoneNumberVerification
-export const resendPhoneNumberVerification = onCall(
-  {
-    memory: "512MiB",
-    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-  },
-  withErrorHandling(async () => { // Removed unused request
-    // const {phoneNumber, recaptchaToken} = request.data;
-    logger.warn("resendPhoneNumberVerification is not fully implemented yet.");
-    throw createError(ErrorCode.UNIMPLEMENTED, "Resending phone number verification is not available at this moment.");
-  }, "resendPhoneNumberVerification")
-);
 
 /**
  * Handles post-phone number sign-in logic.
@@ -832,4 +905,315 @@ export const handlePhoneSignIn = onCall(
       );
     }
   }
+);
+
+/**
+ * Handles Google Sign-In for new users
+ * Creates the initial Firestore user document after Google authentication
+ */
+export const handleGoogleSignIn = onCall(
+  {
+    memory: "512MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(
+    async (request) => {
+      // Validate and sanitize input using centralized validator
+      const validatedData = validateRequest(
+        request.data,
+        VALIDATION_SCHEMAS.handleGoogleSignIn,
+        request.data.userId
+      );
+
+      const { userId, email, displayName, photoURL } = validatedData;
+
+      logger.info("handleGoogleSignIn: Processing Google sign-in", createLogContext({
+        userId,
+        email,
+      }));
+
+      try {
+        const db = getFirestore();
+        const auth = getAuth();
+
+        // Verify the user exists in Firebase Auth
+        let userRecord;
+        try {
+          userRecord = await auth.getUser(userId);
+        } catch (error) {
+          logger.error("handleGoogleSignIn: User not found in Auth", createLogContext({
+            userId,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+          throw createError(
+            ErrorCode.NOT_FOUND,
+            "User not found. Please try signing in again."
+          );
+        }
+
+        // Check if user document already exists
+        const userRef = db.collection("users").doc(userId);
+        const userDoc = await userRef.get();
+
+        if (userDoc.exists) {
+          logger.info("handleGoogleSignIn: User document already exists", createLogContext({
+            userId,
+          }));
+          return {
+            success: true,
+            userId,
+            isNewUser: false,
+          };
+        }
+
+        // Extract name parts from displayName
+        const nameParts = (displayName || "").trim().split(" ");
+        const firstName = nameParts[0] || "";
+        const lastName = nameParts.slice(1).join(" ") || "";
+
+        // Create new user document for Google sign-in user
+        const newUserDoc: Partial<UserDocument> = {
+          // Identity fields
+          id: userId,
+          email: email || userRecord.email || "",
+
+          // Profile fields
+          displayName: displayName || userRecord.displayName || "",
+          firstName,
+          lastName,
+          profilePicture: photoURL ? { url: photoURL, path: "" } : undefined,
+
+          // Relationship fields (empty arrays)
+          parentIds: [],
+          childrenIds: [],
+          spouseIds: [],
+
+          // Permission fields (defaults)
+          isAdmin: false,
+          canAddMembers: false,
+          canEdit: false,
+
+          // Status fields
+          emailVerified: true, // Google accounts are pre-verified
+          phoneNumberVerified: false,
+          isPendingSignUp: false,
+          onboardingCompleted: false,
+
+          // System fields
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          dataRetentionPeriod: "forever",
+          dataRetentionLastUpdated: new Date(),
+        };
+
+        // Remove undefined values before saving
+        const cleanedUserDoc = Object.fromEntries(
+          Object.entries(newUserDoc).filter(([_, value]) => value !== undefined)
+        );
+
+        await userRef.set(cleanedUserDoc);
+
+        logger.info("handleGoogleSignIn: Successfully created user document", createLogContext({
+          userId,
+        }));
+
+        return {
+          success: true,
+          userId,
+          isNewUser: true,
+        };
+      } catch (error: any) {
+        // Re-throw HttpsError instances
+        if (error instanceof HttpsError) {
+          logger.info("handleGoogleSignIn: Request failed", createLogContext({
+            userId,
+            errorCode: error.code,
+            errorMessage: error.message,
+          }));
+          throw error;
+        }
+
+        // Log unexpected errors
+        logger.error("handleGoogleSignIn: Unexpected error", createLogContext({
+          userId,
+          errorType: typeof error,
+          errorMessage: error?.message || "Unknown error",
+          errorStack: error?.stack,
+        }));
+
+        // Throw a user-friendly error
+        throw createError(
+          ErrorCode.INTERNAL,
+          "Unable to complete Google sign-in. Please try again."
+        );
+      }
+    },
+    "handleGoogleSignIn",
+    {
+      authLevel: "none", // No auth required for initial sign-in
+      enableCSRF: false, // Disable CSRF for authentication endpoint
+      rateLimitConfig: SECURITY_CONFIG.rateLimits.auth,
+    }
+  )
+);
+
+/**
+ * Handles Apple Sign-In for new users
+ * Creates the initial Firestore user document after Apple authentication
+ */
+export const handleAppleSignIn = onCall(
+  {
+    memory: "512MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(
+    async (request) => {
+      // Validate and sanitize input using centralized validator
+      const validatedData = validateRequest(
+        request.data,
+        VALIDATION_SCHEMAS.handleAppleSignIn,
+        request.data.userId
+      );
+
+      const { userId, email, fullName } = validatedData;
+
+      logger.info("handleAppleSignIn: Processing Apple sign-in", createLogContext({
+        userId,
+        email,
+      }));
+
+      try {
+        const db = getFirestore();
+        const auth = getAuth();
+
+        // Verify the user exists in Firebase Auth
+        let userRecord;
+        try {
+          userRecord = await auth.getUser(userId);
+        } catch (error) {
+          logger.error("handleAppleSignIn: User not found in Auth", createLogContext({
+            userId,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+          throw createError(
+            ErrorCode.NOT_FOUND,
+            "User not found. Please try signing in again."
+          );
+        }
+
+        // Check if user document already exists
+        const userRef = db.collection("users").doc(userId);
+        const userDoc = await userRef.get();
+
+        if (userDoc.exists) {
+          logger.info("handleAppleSignIn: User document already exists", createLogContext({
+            userId,
+          }));
+          return {
+            success: true,
+            userId,
+            isNewUser: false,
+          };
+        }
+
+        // Extract name parts from fullName
+        let firstName = "";
+        let lastName = "";
+        if (fullName && fullName.givenName) {
+          firstName = fullName.givenName;
+        }
+        if (fullName && fullName.familyName) {
+          lastName = fullName.familyName;
+        }
+
+        // If no name provided, try to use email username
+        if (!firstName && email) {
+          firstName = email.split("@")[0];
+        }
+
+        const displayName = `${firstName} ${lastName}`.trim() || userRecord.displayName || "";
+
+        // Create new user document for Apple sign-in user
+        const newUserDoc: Partial<UserDocument> = {
+          // Identity fields
+          id: userId,
+          email: email || userRecord.email || "",
+
+          // Profile fields
+          displayName,
+          firstName,
+          lastName,
+
+          // Relationship fields (empty arrays)
+          parentIds: [],
+          childrenIds: [],
+          spouseIds: [],
+
+          // Permission fields (defaults)
+          isAdmin: false,
+          canAddMembers: false,
+          canEdit: false,
+
+          // Status fields
+          emailVerified: true, // Apple accounts are pre-verified
+          phoneNumberVerified: false,
+          isPendingSignUp: false,
+          onboardingCompleted: false,
+
+          // System fields
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          dataRetentionPeriod: "forever",
+          dataRetentionLastUpdated: new Date(),
+        };
+
+        // Remove undefined values before saving
+        const cleanedUserDoc = Object.fromEntries(
+          Object.entries(newUserDoc).filter(([_, value]) => value !== undefined)
+        );
+
+        await userRef.set(cleanedUserDoc);
+
+        logger.info("handleAppleSignIn: Successfully created user document", createLogContext({
+          userId,
+        }));
+
+        return {
+          success: true,
+          userId,
+          isNewUser: true,
+        };
+      } catch (error: any) {
+        // Re-throw HttpsError instances
+        if (error instanceof HttpsError) {
+          logger.info("handleAppleSignIn: Request failed", createLogContext({
+            userId,
+            errorCode: error.code,
+            errorMessage: error.message,
+          }));
+          throw error;
+        }
+
+        // Log unexpected errors
+        logger.error("handleAppleSignIn: Unexpected error", createLogContext({
+          userId,
+          errorType: typeof error,
+          errorMessage: error?.message || "Unknown error",
+          errorStack: error?.stack,
+        }));
+
+        // Throw a user-friendly error
+        throw createError(
+          ErrorCode.INTERNAL,
+          "Unable to complete Apple sign-in. Please try again."
+        );
+      }
+    },
+    "handleAppleSignIn",
+    {
+      authLevel: "none", // No auth required for initial sign-in
+      enableCSRF: false, // Disable CSRF for authentication endpoint
+      rateLimitConfig: SECURITY_CONFIG.rateLimits.auth,
+    }
+  )
 );

@@ -28,6 +28,7 @@ export interface UserDocument {
   onboardingCompleted: boolean;
   isTreeOwner?: boolean;
   invitationId?: string;
+  status?: "active" | "pending" | "inactive";
   fontSettings?: {
     fontScale: number;
     useDeviceSettings: boolean;

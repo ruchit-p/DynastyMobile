@@ -7,6 +7,7 @@ export interface ValidationRule {
   type: "string" | "number" | "boolean" | "array" | "object" | "date" | "email" |
         "phone" | "name" | "id" | "location" | "file" | "enum";
   required?: boolean;
+  minLength?: number;
   maxLength?: number;
   maxSize?: number;
   enumValues?: readonly any[];
@@ -47,6 +48,9 @@ export function validateRequest(
       case "string":
         if (typeof value !== "string") {
           throw new Error("must be a string");
+        }
+        if (rule.minLength && value.length < rule.minLength) {
+          throw new Error(`must be at least ${rule.minLength} characters long`);
         }
         if (rule.maxLength) {
           validations.validateTextLength(value, rule.field, rule.maxLength);

@@ -77,11 +77,11 @@ export interface ResourceAccessConfig {
  * Rate limit types for different actions
  */
 export enum RateLimitType {
-  GENERAL = "general", // Default general rate limiting
+  API = "api", // Default general rate limiting (mapped to API)
   AUTH = "auth", // Authentication operations (login, signup, etc.)
   MEDIA = "media", // Media uploads
-  API = "api", // API calls
   WRITE = "write", // Write operations (create/update)
+  SENSITIVE = "sensitive", // Sensitive operations
 }
 
 /**
@@ -306,7 +306,7 @@ export async function checkRateLimit(
   const uid = requireAuth(request);
 
   const {
-    type = RateLimitType.GENERAL,
+    type = RateLimitType.API,
     ignoreAdmin = true,
   } = config;
 
@@ -614,7 +614,7 @@ export function withResourceAccess<T>(
  * @returns Rate limiting middleware function
  */
 export function createRateLimiter(
-  type: RateLimitType = RateLimitType.GENERAL,
+  type: RateLimitType = RateLimitType.API,
   maxRequests?: number,
   windowSeconds?: number
 ) {

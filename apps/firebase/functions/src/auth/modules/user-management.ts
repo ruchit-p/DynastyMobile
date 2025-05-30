@@ -491,3 +491,55 @@ export const updateUserSettings = onCall(
     return {success: true};
   }
 );
+
+/**
+ * Get user data for onboarding and profile status
+ */
+export const getUserData = onCall(
+  {
+    region: DEFAULT_REGION,
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  async (request) => {
+    const userId = request.auth?.uid;
+    if (!userId) {
+      throw createError(ErrorCode.UNAUTHENTICATED, "User not authenticated");
+    }
+
+    // Allow fetching another user's data only if it's provided in the request
+    const targetUserId = request.data?.userId || userId;
+
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(targetUserId);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      return {
+        success: false,
+        message: "User not found",
+        userData: null,
+      };
+    }
+
+    const userData = userDoc.data() as UserDocument;
+
+    // Return essential user data for onboarding and profile management
+    return {
+      success: true,
+      userData: {
+        onboardingCompleted: userData.onboardingCompleted || false,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        displayName: userData.displayName,
+        dateOfBirth: userData.dateOfBirth,
+        gender: userData.gender,
+        phoneNumber: userData.phoneNumber,
+        email: userData.email,
+        familyTreeId: userData.familyTreeId,
+        isAdmin: userData.isAdmin || false,
+        status: userData.status,
+        profilePicture: userData.profilePicture,
+      },
+    };
+  }
+);

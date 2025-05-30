@@ -18,12 +18,18 @@ const CSRF_EXEMPT_FUNCTIONS = new Set([
   "confirmPasswordReset",
   "sendVerificationEmail",
   "verifyEmail",
+  "verifyEmailToken",
   
   // Initial token generation (public endpoint)
   "generateInitialCSRFToken",
   
   // Public invitation verification
   "verifyInvitation",
+  "signUpWithInvitation",
+  
+  // Device verification (called during auth flow)
+  "verifyDeviceFingerprint",
+  "initiatePasswordReset",
 ]);
 
 /**
