@@ -20,8 +20,8 @@ const getDb = () => {
 };
 
 // Rate limit configuration
-const _RATE_LIMIT_WINDOW_SECONDS = 60; // 1 minute
-const _DEFAULT_MAX_REQUESTS_PER_WINDOW = 20; // 20 requests per minute by default
+// const _RATE_LIMIT_WINDOW_SECONDS = 60; // 1 minute
+// const _DEFAULT_MAX_REQUESTS_PER_WINDOW = 20; // 20 requests per minute by default
 
 /**
  * Resource types that can be accessed
@@ -97,13 +97,13 @@ export interface RateLimitConfig {
 /**
  * Rate limit tracking data in Firestore
  */
-interface _RateLimitData {
-  userId: string;
-  type: RateLimitType;
-  requestCount: number;
-  windowStart: FirebaseFirestore.Timestamp;
-  lastRequestTime: FirebaseFirestore.Timestamp;
-}
+// interface _RateLimitData {
+//   userId: string;
+//   type: RateLimitType;
+//   requestCount: number;
+//   windowStart: FirebaseFirestore.Timestamp;
+//   lastRequestTime: FirebaseFirestore.Timestamp;
+// }
 
 /**
  * Middleware for checking user authentication status

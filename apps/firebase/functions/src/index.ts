@@ -7,6 +7,11 @@
  * See a full list of supported triggers at https://firebase.google.com/docs/functions
  */
 
+// Load environment variables for local development
+if (process.env.FUNCTIONS_EMULATOR === "true") {
+  require("dotenv").config({path: ".env.local"});
+}
+
 import {initializeApp} from "firebase-admin/app";
 import {setGlobalOptions} from "firebase-functions/v2";
 import {DEFAULT_REGION} from "./common";
@@ -15,7 +20,22 @@ import {DEFAULT_REGION} from "./common";
 setGlobalOptions({region: DEFAULT_REGION});
 
 // Initialize Firebase Admin
-initializeApp();
+if (process.env.FUNCTIONS_EMULATOR === "true") {
+  // Set environment variables BEFORE initializing Firebase Admin SDK
+  // Use the correct environment variable names for Firebase emulators
+  process.env.FIRESTORE_EMULATOR_HOST = "localhost:8080";
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = "localhost:9099";
+  process.env.FIREBASE_STORAGE_EMULATOR_HOST = "localhost:9199";
+  
+  // For emulator, use the configured project ID to avoid warnings
+  initializeApp({
+    projectId: "dynasty-eba63",
+    // No credentials needed for emulator
+  });
+} else {
+  // For production, use default credentials
+  initializeApp();
+}
 
 // Export all functions
 export * from "./familyTree";

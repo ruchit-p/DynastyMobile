@@ -152,35 +152,6 @@ export default function CreateStoryPage() {
     }
   }, [currentUser?.uid]);
 
-  // Request location permission on page load
-  useEffect(() => {
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          // Successfully got permission and location
-          console.log("Location permission granted");
-          try {
-            // Reverse geocode to get the address
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`
-            );
-            const data = await response.json();
-            setUserLocation({
-              lat: position.coords.latitude,
-              lng: position.coords.longitude,
-              address: data.display_name
-            });
-          } catch (error) {
-            console.error("Error getting location address:", error);
-          }
-        },
-        (error) => {
-          console.log("Location permission denied or error:", error);
-        }
-      );
-    }
-  }, []);
-
   // Check if user has a family tree ID
   useEffect(() => {
     if (!currentUser?.uid) {
@@ -669,11 +640,58 @@ export default function CreateStoryPage() {
     toggleLocationPicker();
   }
 
+  // Function to request location permission
+  const requestLocationPermission = async () => {
+    if ("geolocation" in navigator) {
+      return new Promise<Location | null>((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            // Successfully got permission and location
+            console.log("Location permission granted");
+            try {
+              // Reverse geocode to get the address
+              const response = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`
+              );
+              const data = await response.json();
+              const currentLocation = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+                address: data.display_name
+              };
+              setUserLocation(currentLocation);
+              resolve(currentLocation);
+            } catch (error) {
+              console.error("Error getting location address:", error);
+              const basicLocation = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+                address: `${position.coords.latitude}, ${position.coords.longitude}`
+              };
+              setUserLocation(basicLocation);
+              resolve(basicLocation);
+            }
+          },
+          (error) => {
+            console.log("Location permission denied or error:", error);
+            resolve(null);
+          }
+        );
+      });
+    }
+    return null;
+  };
+
   // Toggle location picker with improved handling
-  const toggleLocationPicker = () => {
+  const toggleLocationPicker = async () => {
     if (showLocationPicker) {
       setShowLocationPicker(false);
     } else {
+      // Request location permission if we don't have user location yet
+      if (!userLocation) {
+        await requestLocationPermission();
+      }
+      
       // Force a re-render with a new key before showing
       setLocationPickerKey(prev => prev + 1);
       // Show the picker in the next frame for smooth transition

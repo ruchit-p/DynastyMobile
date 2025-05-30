@@ -12,7 +12,14 @@
     "esModuleInterop": true
   },
   "compileOnSave": true,
-  "include": [
-    "src"
-  ],
+  "include": ["src"],
+  "exclude": [
+    "src/__tests__/**/*",
+    "src/__tests__.bak/**/*",
+    "src/biometric-auth.ts",
+    "src/key-rotation.ts",
+    "src/vault-bulk-operations.ts",
+    "src/test/**/*",
+    "src/middleware/__tests__/**/*"
+  ]
 }

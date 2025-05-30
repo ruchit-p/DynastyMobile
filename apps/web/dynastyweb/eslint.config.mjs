@@ -13,28 +13,34 @@ const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     ignores: [
+      // Dependencies
+      "node_modules/**",
+      // Production build
+      ".next/**",
+      "out/**",
+      "build/**",
       // Test files
       "**/*.test.ts",
       "**/*.test.tsx",
+      "**/*.test.js",
+      "**/*.test.jsx",
       "**/*.spec.ts",
       "**/*.spec.tsx",
       "**/__tests__/**",
       "**/__mocks__/**",
-      // Build and config files
-      ".next/**",
-      "node_modules/**",
-      "coverage/**",
-      "dist/**",
-      "build/**",
-      // Config files
-      "next.config.js",
       "jest.config.js",
       "jest.setup.js",
-      "postcss.config.mjs",
+      // Coverage reports
+      "coverage/**",
+      // Config files
+      "next.config.js",
       "tailwind.config.ts",
+      "postcss.config.mjs",
       // Environment files
       ".env*",
       // Other
+      ".DS_Store",
+      "*.log",
       "public/firebase-messaging-sw.js"
     ]
   }

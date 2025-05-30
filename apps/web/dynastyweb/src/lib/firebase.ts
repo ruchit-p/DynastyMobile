@@ -73,8 +73,8 @@ if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULAT
     }
     
     try {
-      console.log('🔧 FIREBASE DEBUG: Connecting to Functions Emulator at 127.0.0.1:8693');
-      connectFunctionsEmulator(functions, '127.0.0.1', 8693);
+      console.log('🔧 FIREBASE DEBUG: Connecting to Functions Emulator at 127.0.0.1:5001');
+      connectFunctionsEmulator(functions, '127.0.0.1', 5001);
       console.log('✅ FIREBASE DEBUG: Functions Emulator connected successfully');
     } catch (error) {
       console.error('❌ FIREBASE DEBUG: Functions Emulator connection failed:', error);

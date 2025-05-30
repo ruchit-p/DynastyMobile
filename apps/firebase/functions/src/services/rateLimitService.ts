@@ -4,9 +4,16 @@ import * as functions from "firebase-functions";
 import {SecurityError} from "../utils/errors";
 
 // Initialize Redis client
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL || functions.config().upstash?.redis_url || "";
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || functions.config().upstash?.redis_token || "";
+
+if (!redisUrl || !redisToken) {
+  throw new Error("Redis configuration is missing. Please set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables.");
+}
+
 const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || functions.config().upstash?.redis_url || "",
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || functions.config().upstash?.redis_token || "",
+  url: redisUrl,
+  token: redisToken,
 });
 
 // Different rate limiters for different operations
@@ -151,7 +158,7 @@ export function createRateLimitMiddleware(type: RateLimitType, identifierExtract
       });
 
       next();
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof SecurityError) {
         res.status(429).json({
           error: error.code,
@@ -169,7 +176,17 @@ export function createRateLimitMiddleware(type: RateLimitType, identifierExtract
 
 // Utility to reset rate limits (for testing or admin purposes)
 export async function resetRateLimit(type: RateLimitType, identifier: string): Promise<void> {
-  const prefix = rateLimiters[type].prefix;
+  // Use a manual prefix mapping since the property is protected
+  const prefixMap: Record<RateLimitType, string> = {
+    auth: "@dynasty/auth",
+    api: "@dynasty/api", 
+    media: "@dynasty/media",
+    write: "@dynasty/write",
+    sensitive: "@dynasty/sensitive",
+    sms: "@dynasty/sms"
+  };
+  
+  const prefix = prefixMap[type];
   const key = `${prefix}:${identifier}`;
 
   try {

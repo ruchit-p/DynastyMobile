@@ -6,7 +6,6 @@
 
 import { 
   collection, 
-  doc: _doc, 
   addDoc, 
   query, 
   where, 
@@ -377,7 +376,7 @@ export class AuditLogService {
   ): Promise<AuditSummary> {
     try {
       const startDate = new Date();
-      startDate.setDate(startDate.getDate() - days);
+      startDate.setDate(startDate.getDate() - _days);
 
       const events = await this.queryEvents({
         userId,
@@ -392,7 +391,7 @@ export class AuditLogService {
         recentEvents: events.slice(0, 10),
         topEventTypes: this.aggregateEventTypes(events),
         deviceActivity: this.aggregateDeviceActivity(events),
-        riskTrends: this.calculateRiskTrends(events, days)
+        riskTrends: this.calculateRiskTrends(events, _days)
       };
 
       return summary;
@@ -533,7 +532,8 @@ export class AuditLogService {
     }
 
     try {
-      const decrypted = CryptoJS.AES.decrypt(metadata.encrypted, this.config.encryptionKey);
+      const encryptedData = metadata.encrypted as string;
+      const decrypted = CryptoJS.AES.decrypt(encryptedData, this.config.encryptionKey);
       const jsonString = decrypted.toString(CryptoJS.enc.Utf8);
       return JSON.parse(jsonString);
     } catch (error) {
@@ -639,7 +639,11 @@ export class AuditLogService {
       .slice(0, 10);
   }
 
-  private calculateRiskTrends(events: AuditEvent[], _days: number): { date: string; riskScore: number }[] {
+  private calculateRiskTrends(
+    events: AuditEvent[], 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _days: number
+  ): { date: string; riskScore: number }[] {
     const dailyRisks: Record<string, { total: number; count: number }> = {};
     
     events.forEach(event => {

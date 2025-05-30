@@ -4,8 +4,6 @@ import { useEffect } from 'react';
 import { useCSRFClient } from '@/context/CSRFContext';
 import { notificationService } from '@/services/NotificationService';
 import { syncQueue } from '@/services/SyncQueueService';
-import FontSizeService from '@/services/FontSizeService';
-import { fingerprintService } from '@/services/FingerprintService';
 import { vaultService } from '@/services/VaultService';
 import { setEventUtilsCSRFClient } from '@/utils/eventUtils';
 import { setStoryUtilsCSRFClient } from '@/utils/storyUtils';
@@ -26,8 +24,6 @@ export function ServiceInitializer({ children }: { children: React.ReactNode }) 
       notificationService.setCSRFClient(csrfClient);
       vaultService.setCSRFClient(csrfClient);
       syncQueue.setCSRFClient(csrfClient);
-      FontSizeService.getInstance().setCSRFClient(csrfClient);
-      fingerprintService.setCSRFClient(csrfClient);
       keyBackupService.setCSRFClient(csrfClient);
       
       // Initialize utility functions with CSRF client

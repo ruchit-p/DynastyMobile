@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useAuth } from "@/context/AuthContext"
+import { useCSRFClient } from "@/context/CSRFContext"
 import { type Story } from "@/utils/storyUtils"
 import { Button } from "@/components/ui/button"
 import { PenSquare, BookOpen, Calendar } from "lucide-react"
@@ -36,6 +37,7 @@ interface FeedItem {
 
 export default function FeedPage() {
   const { currentUser, firestoreUser } = useAuth()
+  const { isReady: isCSRFReady } = useCSRFClient()
   const [feedItems, setFeedItems] = useState<FeedItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -53,6 +55,11 @@ export default function FeedPage() {
         if (!currentUser?.uid || !firestoreUser?.familyTreeId) {
           console.log('[Feed] Missing required IDs, skipping feed fetch');
           setError('Unable to load feed. Please try logging out and back in.');
+          return;
+        }
+
+        if (!isCSRFReady) {
+          console.log('[Feed] CSRF not ready yet, skipping feed fetch');
           return;
         }
         
@@ -158,7 +165,7 @@ export default function FeedPage() {
     return () => {
       mounted = false;
     };
-  }, [currentUser, firestoreUser]);
+  }, [currentUser, firestoreUser, isCSRFReady]);
 
   if (loading) {
     return (

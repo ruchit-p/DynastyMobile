@@ -269,7 +269,7 @@ export const beforeSignIn = beforeUserSignedIn(
     timeoutSeconds: 10,
   },
   async (event) => {
-    const email = event.data.email;
+    const email = event.data?.email;
 
     if (!email) {
       // Allow sign in for non-email providers
@@ -278,7 +278,7 @@ export const beforeSignIn = beforeUserSignedIn(
 
     logger.debug("Checking account lockout before sign in", createLogContext({
       email,
-      uid: event.data.uid,
+      uid: event.data?.uid,
     }));
 
     // Check if account is locked
@@ -305,7 +305,7 @@ export const beforeSignIn = beforeUserSignedIn(
 
     logger.warn("Blocked sign in attempt for locked account", createLogContext({
       email,
-      uid: event.data.uid,
+      uid: event.data?.uid,
       minutesRemaining,
     }));
 
