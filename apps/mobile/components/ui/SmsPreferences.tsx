@@ -131,7 +131,7 @@ export default function SmsPreferences({ onPhoneVerified }: SmsPreferencesProps)
 
     setIsSaving(true);
     try {
-      const result = await callFirebaseFunction('verifyPhoneNumber', {
+      const result = await callFirebaseFunction('verifySmsCode', {
         phoneNumber: phoneNumber.trim(),
         code: verificationCode.trim(),
       });
