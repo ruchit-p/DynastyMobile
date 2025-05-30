@@ -179,13 +179,13 @@ export async function resetRateLimit(type: RateLimitType, identifier: string): P
   // Use a manual prefix mapping since the property is protected
   const prefixMap: Record<RateLimitType, string> = {
     auth: "@dynasty/auth",
-    api: "@dynasty/api", 
+    api: "@dynasty/api",
     media: "@dynasty/media",
     write: "@dynasty/write",
     sensitive: "@dynasty/sensitive",
-    sms: "@dynasty/sms"
+    sms: "@dynasty/sms",
   };
-  
+
   const prefix = prefixMap[type];
   const key = `${prefix}:${identifier}`;
 

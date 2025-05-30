@@ -12,21 +12,21 @@ const db = getFirestore();
 function validateCryptoKey(input: string, keyType: string): string {
   // Remove whitespace
   const trimmed = input.trim();
-  
+
   // Check if it's base64 encoded
   const base64Regex = /^[A-Za-z0-9+/]+=*$/;
   if (!base64Regex.test(trimmed)) {
     throw new HttpsError("invalid-argument", `Invalid ${keyType} format - must be base64 encoded`);
   }
-  
+
   // Validate length (Signal keys should be specific sizes)
   const minLength = 32; // Minimum for most crypto keys
   const maxLength = 10000; // Maximum reasonable size
-  
+
   if (trimmed.length < minLength || trimmed.length > maxLength) {
     throw new HttpsError("invalid-argument", `Invalid ${keyType} length`);
   }
-  
+
   return trimmed;
 }
 
@@ -131,26 +131,26 @@ export const getUserSignalBundle = onCall(async (request) => {
     // Rate limit prekey requests (max 10 per hour per requester)
     const rateLimitRef = db.collection("rateLimits")
       .doc(`prekey_${requesterId}_${userId}`);
-    
+
     const now = Date.now();
     const hourAgo = now - (60 * 60 * 1000);
-    
+
     const rateLimitDoc = await rateLimitRef.get();
     if (rateLimitDoc.exists) {
       const data = rateLimitDoc.data()!;
       const requests = data.requests || [];
       const recentRequests = requests.filter((timestamp: number) => timestamp > hourAgo);
-      
+
       if (recentRequests.length >= 10) {
         throw new HttpsError("resource-exhausted", "Too many prekey requests. Please try again later.");
       }
-      
+
       await rateLimitRef.update({
-        requests: [...recentRequests, now]
+        requests: [...recentRequests, now],
       });
     } else {
       await rateLimitRef.set({
-        requests: [now]
+        requests: [now],
       });
     }
 
@@ -193,7 +193,7 @@ export const getUserSignalBundle = onCall(async (request) => {
 
       // Delete the used prekey
       await preKeyDoc.ref.delete();
-      
+
       // Check remaining prekey count and notify if low
       const remainingPrekeys = await db
         .collection("users")
@@ -202,7 +202,7 @@ export const getUserSignalBundle = onCall(async (request) => {
         .where("deviceId", "==", deviceId)
         .count()
         .get();
-      
+
       const prekeyCount = remainingPrekeys.data().count;
       if (prekeyCount < 10) {
         // Create notification for user to upload more prekeys
@@ -212,9 +212,9 @@ export const getUserSignalBundle = onCall(async (request) => {
           deviceId,
           prekeyCount,
           createdAt: FieldValue.serverTimestamp(),
-          read: false
+          read: false,
         });
-        
+
         logger.warn(`User ${userId} device ${deviceId} has only ${prekeyCount} prekeys remaining`);
       }
     }
@@ -484,11 +484,11 @@ export const notifyKeyChange = onDocumentUpdated("signalKeys/{userId}", async (e
         .doc(affectedUserId)
         .collection("trustedIdentities")
         .doc(userId);
-      
+
       batch.update(trustedIdentityRef, {
         trusted: false,
         untrustedAt: FieldValue.serverTimestamp(),
-        reason: "key_changed"
+        reason: "key_changed",
       });
 
       // Create a notification for each affected user
@@ -500,7 +500,7 @@ export const notifyKeyChange = onDocumentUpdated("signalKeys/{userId}", async (e
         message: `Security alert: ${userId}'s encryption keys have changed. Please verify their identity before continuing.`,
         createdAt: FieldValue.serverTimestamp(),
         read: false,
-        priority: "high"
+        priority: "high",
       });
     }
 
@@ -524,7 +524,7 @@ export const cleanupOldPreKeys = onSchedule("every 24 hours", async (_event) => 
 
     for (const userDoc of usersSnapshot.docs) {
       const userId = userDoc.id;
-      
+
       // Get all prekeys grouped by device
       const allPrekeysSnapshot = await userDoc.ref
         .collection("prekeys")
@@ -548,7 +548,7 @@ export const cleanupOldPreKeys = onSchedule("every 24 hours", async (_event) => 
       for (const [deviceId, prekeys] of prekeysByDevice) {
         // Keep at least 20 prekeys per device
         const minPrekeys = 20;
-        
+
         if (prekeys.length <= minPrekeys) {
           // Not enough prekeys, notify user
           await db.collection("notifications").add({
@@ -557,14 +557,14 @@ export const cleanupOldPreKeys = onSchedule("every 24 hours", async (_event) => 
             deviceId,
             prekeyCount: prekeys.length,
             createdAt: FieldValue.serverTimestamp(),
-            read: false
+            read: false,
           });
           continue;
         }
 
         // Find old prekeys to delete (keep newest minPrekeys)
         const oldPrekeys = prekeys
-          .filter(pk => pk.data.createdAt.toDate() < thirtyDaysAgo)
+          .filter((pk) => pk.data.createdAt.toDate() < thirtyDaysAgo)
           .slice(0, prekeys.length - minPrekeys);
 
         if (oldPrekeys.length > 0) {

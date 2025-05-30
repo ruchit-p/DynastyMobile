@@ -106,7 +106,7 @@ export function requireCSRFToken<T = any, R = any>(
 
     // Validate encrypted token
     const userId = request.auth?.uid || "";
-    
+
     // For session-based tokens (initial tokens), validate differently
     if (!request.auth?.uid && sessionId.startsWith("session_")) {
       // Recreate the session identifier
@@ -116,10 +116,10 @@ export function requireCSRFToken<T = any, R = any>(
         .createHash("sha256")
         .update(`${clientIp}:${userAgent}:${sessionId}`)
         .digest("hex");
-      
+
       // Validate session token
       const isValid = CSRFService.validateToken(csrfHeader, sessionIdentifier, sessionId);
-      
+
       if (!isValid) {
         logger.warn("Invalid session CSRF token", {
           userAgent,
@@ -131,14 +131,14 @@ export function requireCSRFToken<T = any, R = any>(
           "Invalid or expired CSRF token"
         );
       }
-      
+
       // Token is valid for session use
       request.csrfToken = csrfHeader;
       request.sessionId = sessionId;
-      
+
       return handler(request);
     }
-    
+
     // For authenticated users, validate with user ID
     const isValid = CSRFService.validateToken(csrfHeader, userId, sessionId);
 
@@ -197,10 +197,10 @@ export const generateInitialCSRFToken = onCall(
     // Get client IP and user agent for session binding
     const clientIp = request.rawRequest.ip || "unknown";
     const userAgent = request.rawRequest.headers["user-agent"] || "unknown";
-    
+
     // Generate a unique session ID
     const sessionId = `session_${Date.now()}_${crypto.randomBytes(16).toString("hex")}`;
-    
+
     // Create a session-bound identifier (not user-specific)
     const sessionIdentifier = crypto
       .createHash("sha256")

@@ -9,7 +9,7 @@ import {logger} from "firebase-functions/v2";
 const CSRF_EXEMPT_FUNCTIONS = new Set([
   // Authentication functions
   "handleSignUp",
-  "handleSignIn", 
+  "handleSignIn",
   "handleGoogleSignIn",
   "handleAppleSignIn",
   "handlePhoneSignIn",
@@ -19,14 +19,14 @@ const CSRF_EXEMPT_FUNCTIONS = new Set([
   "sendVerificationEmail",
   "verifyEmail",
   "verifyEmailToken",
-  
+
   // Initial token generation (public endpoint)
   "generateInitialCSRFToken",
-  
+
   // Public invitation verification
   "verifyInvitation",
   "signUpWithInvitation",
-  
+
   // Device verification (called during auth flow)
   "verifyDeviceFingerprint",
   "initiatePasswordReset",
@@ -57,7 +57,7 @@ export function withConditionalCSRF<T = any, R = any>(
       logger.debug(`Skipping CSRF check for exempt function: ${functionName}`);
       return handler(request);
     }
-    
+
     // For non-exempt functions, apply CSRF protection
     const {requireCSRFToken} = await import("./csrf");
     return requireCSRFToken(handler)(request);

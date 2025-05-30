@@ -27,26 +27,26 @@ export const verifyDeviceFingerprint = onCall({
     // Rate limit fingerprint verification (max 5 per minute)
     const rateLimitRef = admin.firestore().collection("rateLimits")
       .doc(`fingerprint_${request.auth.uid}`);
-    
+
     const now = Date.now();
     const minuteAgo = now - (60 * 1000);
-    
+
     const rateLimitDoc = await rateLimitRef.get();
     if (rateLimitDoc.exists) {
       const data = rateLimitDoc.data()!;
       const requests = data.requests || [];
       const recentRequests = requests.filter((timestamp: number) => timestamp > minuteAgo);
-      
+
       if (recentRequests.length >= 5) {
         throw new HttpsError("resource-exhausted", "Too many fingerprint verification requests. Please try again later.");
       }
-      
+
       await rateLimitRef.update({
-        requests: [...recentRequests, now]
+        requests: [...recentRequests, now],
       });
     } else {
       await rateLimitRef.set({
-        requests: [now]
+        requests: [now],
       });
     }
 
