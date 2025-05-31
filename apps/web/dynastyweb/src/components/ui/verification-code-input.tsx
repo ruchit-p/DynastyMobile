@@ -121,7 +121,7 @@ export function VerificationCodeInput({
   };
 
   return (
-    <div className={cn("flex gap-2 justify-center", className)}>
+    <div className={cn("flex gap-3 justify-center items-center", className)}>
       {codes.map((code, index) => (
         <Input
           key={index}
@@ -136,9 +136,19 @@ export function VerificationCodeInput({
           disabled={disabled}
           placeholder={placeholder}
           className={cn(
-            "w-12 h-12 text-center text-lg font-semibold",
-            error ? "border-red-500" : "",
-            "focus:ring-2 focus:ring-[#0A5C36] focus:border-[#0A5C36]"
+            "w-14 h-14 text-center text-xl font-bold",
+            "border-2 rounded-lg",
+            "transition-all duration-200",
+            "focus:outline-none focus:ring-2 focus:ring-[#0A5C36] focus:border-[#0A5C36]",
+            error 
+              ? "border-red-500 focus:border-red-500 focus:ring-red-500" 
+              : "border-gray-300 hover:border-gray-400",
+            disabled 
+              ? "bg-gray-100 cursor-not-allowed" 
+              : "bg-white",
+            code 
+              ? "border-[#0A5C36] bg-green-50" 
+              : ""
           )}
           autoComplete="one-time-code"
         />

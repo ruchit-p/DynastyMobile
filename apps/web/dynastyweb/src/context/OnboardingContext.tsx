@@ -41,6 +41,17 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const { toast } = useToast()
   const { csrfClient } = useCSRFClient()
   
+  // Add debugging for state changes
+  useEffect(() => {
+    console.log("🔄 OnboardingProvider state changed:", {
+      hasCompletedOnboarding,
+      showOnboarding,
+      currentUser: !!currentUser,
+      loading,
+      pathname
+    });
+  }, [hasCompletedOnboarding, showOnboarding, currentUser, loading, pathname]);
+  
   // Debugging log for initial state
   useEffect(() => {
     if (currentUser) {
@@ -321,15 +332,21 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       console.log("✅ Onboarding completion response:", response);
 
       // Update local state
+      console.log("🔄 Updating local onboarding state to completed");
       setHasCompletedOnboarding(true)
       setShowOnboarding(false)
+      
+      console.log("🎉 Onboarding state updated successfully", {
+        hasCompletedOnboarding: true,
+        showOnboarding: false
+      });
 
       toast({
         title: "Onboarding completed!",
         description: "Your profile has been set up successfully.",
       })
     } catch (error) {
-      console.error('Error completing onboarding:', error)
+      console.error('❌ Error completing onboarding:', error)
       toast({
         title: "Error",
         description: "There was an error completing your onboarding. Please try again.",

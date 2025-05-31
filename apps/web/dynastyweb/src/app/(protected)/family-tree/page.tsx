@@ -248,19 +248,43 @@ export default function FamilyTreePage() {
   const fetchFamilyTreeData = useCallback(async () => {
     if (!currentUser || !csrfReady) return;
     
+    console.log("🌳 fetchFamilyTreeData called", { 
+      userId: currentUser.uid, 
+      hasCompletedOnboarding,
+      csrfReady 
+    });
+    
     // Don't try to fetch family tree data if onboarding isn't completed
     if (!hasCompletedOnboarding) {
+      console.log("⏸️ Skipping family tree data fetch - onboarding not completed");
       setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
+      console.log("📡 Calling getFamilyTreeData for user:", currentUser.uid);
       const { treeNodes } = await getFamilyTreeData(currentUser.uid);
+      console.log("✅ Received tree nodes:", { count: treeNodes?.length || 0, nodes: treeNodes });
       setTreeData([...treeNodes]); // Convert readonly array to mutable array
+      
+      if (treeNodes?.length === 0) {
+        console.warn("⚠️ No tree nodes returned - this might indicate a data issue");
+      }
     } catch (error) {
-      console.error("Failed to load family tree:", error);
-      // Toast removed as requested
+      console.error("❌ Failed to load family tree:", error);
+      // Add user-friendly error handling
+      if (error instanceof Error) {
+        console.error("Error details:", error.message);
+        // If it's a permission or not found error, show a helpful message
+        if (error.message.includes('not found') || error.message.includes('permission')) {
+          console.log("🔄 Attempting to refresh onboarding status and retry...");
+          // Force a check of onboarding status
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -315,11 +339,34 @@ export default function FamilyTreePage() {
   }, [currentUser, hasCompletedOnboarding, csrfReady]);
 
   useEffect(() => {
+    console.log("🔄 Family tree useEffect triggered", { 
+      hasCompletedOnboarding, 
+      currentUser: !!currentUser,
+      userId: currentUser?.uid 
+    });
+    
     // Only fetch family tree data if onboarding is completed
     if (hasCompletedOnboarding) {
+      console.log("✅ Onboarding completed, fetching family tree data");
       void fetchFamilyTreeData();
+    } else {
+      console.log("⏳ Onboarding not completed yet, waiting...");
+      // If we have a user but onboarding isn't completed, set a timeout to check again
+      // This handles cases where the onboarding state might be delayed
+      if (currentUser) {
+        const retryTimeout = setTimeout(() => {
+          console.log("🔄 Retry: Re-checking onboarding status after delay");
+          // Force a refresh of the onboarding context by reloading
+          if (!hasCompletedOnboarding) {
+            console.log("🔄 Onboarding still not completed, reloading page...");
+            window.location.reload();
+          }
+        }, 3000); // Wait 3 seconds before retry
+        
+        return () => clearTimeout(retryTimeout);
+      }
     }
-  }, [fetchFamilyTreeData, hasCompletedOnboarding]);
+  }, [fetchFamilyTreeData, hasCompletedOnboarding, currentUser]);
 
   // Calculate optimal zoom level to fit the entire tree
   const calculateOptimalZoom = useCallback(() => {
@@ -1783,9 +1830,55 @@ export default function FamilyTreePage() {
         </Sheet>
 
         {treeData.length === 0 ? (
-          <div className="flex flex-col items-center justify-center w-full h-full gap-4">
+          <div className="flex flex-col items-center justify-center w-full h-full gap-4 p-8">
             <h2 className="text-xl font-semibold">No Family Tree Data</h2>
-            <p className="text-gray-600">Your family tree is empty. Start by adding family members.</p>
+            <p className="text-gray-600 text-center max-w-md">
+              {hasCompletedOnboarding 
+                ? "Your family tree appears to be empty. This might be a temporary loading issue."
+                : "Your family tree is being set up. Please wait a moment..."}
+            </p>
+            
+            {hasCompletedOnboarding && (
+              <div className="flex flex-col items-center gap-4 mt-4">
+                <Button 
+                  onClick={() => {
+                    console.log("🔄 Manual refresh triggered by user");
+                    setLoading(true);
+                    fetchFamilyTreeData();
+                  }}
+                  disabled={loading}
+                  className="bg-[#0A5C36] hover:bg-[#0A5C36]/90"
+                >
+                  {loading ? (
+                    <>
+                      <Spinner className="mr-2 h-4 w-4" />
+                      Loading...
+                    </>
+                  ) : (
+                    "Try Again"
+                  )}
+                </Button>
+                
+                <div className="text-xs text-gray-500 text-center max-w-lg">
+                  <p>If this issue persists:</p>
+                  <p>1. Check the browser console for error messages</p>
+                  <p>2. Try refreshing the page</p>
+                  <p>3. Clear your browser cache and try again</p>
+                </div>
+                
+                {/* Debug info - only show in development */}
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="text-xs text-gray-400 mt-4 p-4 bg-gray-50 rounded">
+                    <p><strong>Debug Info:</strong></p>
+                    <p>User ID: {currentUser?.uid}</p>
+                    <p>Onboarding Completed: {hasCompletedOnboarding.toString()}</p>
+                    <p>CSRF Ready: {csrfReady.toString()}</p>
+                    <p>Tree Data Length: {treeData.length}</p>
+                    <p>Loading: {loading.toString()}</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div 
