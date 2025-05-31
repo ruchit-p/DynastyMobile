@@ -14,6 +14,7 @@ import { initialSignupFormSchema, type InitialSignupFormData, validateFormData }
 import { GoogleSignInButton } from '@/components/ui/google-sign-in-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CountryDropdown, type Country } from '@/components/CountryDropdown';
+import { VerificationCodeInput } from '@/components/ui/verification-code-input';
 
 export default function SignupPage() {
   const [formData, setFormData] = useState<InitialSignupFormData>({
@@ -52,6 +53,14 @@ export default function SignupPage() {
     // Clear error when user starts typing
     if (phoneErrors[name]) {
       setPhoneErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+  };
+
+  const handleVerificationCodeChange = (value: string) => {
+    setPhoneFormData((prev) => ({ ...prev, verificationCode: value }));
+    // Clear error when user starts typing
+    if (phoneErrors.verificationCode) {
+      setPhoneErrors((prev) => ({ ...prev, verificationCode: "" }));
     }
   };
 
@@ -432,15 +441,12 @@ export default function SignupPage() {
                   <div>
                     <Label htmlFor="verificationCode-input">Verification Code</Label>
                     <div className="mt-1">
-                      <Input
-                        id="verificationCode-input"
-                        name="verificationCode"
-                        type="text"
-                        placeholder="123456"
-                        required
+                      <VerificationCodeInput
+                        length={6}
                         value={phoneFormData.verificationCode}
-                        onChange={handlePhoneChange}
-                        className={`h-10 ${phoneErrors.verificationCode ? "border-red-500" : ""}`}
+                        onChange={handleVerificationCodeChange}
+                        error={!!phoneErrors.verificationCode}
+                        className="justify-center"
                       />
                       {phoneErrors.verificationCode && (
                         <p className="mt-1 text-xs text-red-500">{phoneErrors.verificationCode}</p>

@@ -825,9 +825,9 @@ export const handlePhoneSignIn = onCall(
           email: userRecord.email || "",
 
           // Profile fields
-          displayName: userRecord.displayName || undefined,
-          firstName: undefined,
-          lastName: undefined,
+          displayName: userRecord.displayName || "",
+          firstName: "",
+          lastName: "",
           phoneNumber: phoneNumber,
           phoneNumberVerified: true, // Phone is verified if they got this far
           profilePicture: userRecord.photoURL ? {url: userRecord.photoURL, path: ""} : undefined,
@@ -865,7 +865,12 @@ export const handlePhoneSignIn = onCall(
           invitationId: undefined,
         };
 
-        await userDocRef.set(newUserDoc);
+        // Remove undefined values before saving to Firestore
+        const cleanedUserDoc = Object.fromEntries(
+          Object.entries(newUserDoc).filter(([, value]) => value !== undefined)
+        );
+
+        await userDocRef.set(cleanedUserDoc);
         logger.info("handlePhoneSignIn: Successfully created user document", createLogContext({
           uid: uid,
         }));

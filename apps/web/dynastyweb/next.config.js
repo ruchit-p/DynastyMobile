@@ -5,6 +5,11 @@ const nextConfig = {
   },
   transpilePackages: ['ui', 'utils'],
   
+  // Environment variables
+  env: {
+    NEXT_PUBLIC_USE_FIREBASE_EMULATOR: process.env.NODE_ENV === 'development' ? 'true' : 'false',
+  },
+  
   // Turbopack configuration (replaces webpack config)
   experimental: {
     turbo: {
