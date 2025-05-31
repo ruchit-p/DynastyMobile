@@ -100,3 +100,11 @@ web-build/
 
 # Firebase emulator data
 apps/firebase/emulator-data/
+
+# Firebase emulator export data - contains sensitive local development data
+apps/firebase/emulator-data-backup/
+apps/firebase/emulator-data-backup/auth_export/accounts.json
+apps/firebase/emulator-data-backup/auth_export/config.json
+apps/firebase/emulator-data-backup/storage_export/buckets.json
+**/emulator-data-backup/**/*.json
+firebase-export-*/
