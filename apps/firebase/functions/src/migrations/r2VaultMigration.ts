@@ -52,7 +52,7 @@ export const getVaultUploadSignedUrlR2 = onCall(
 
     // Use R2Service to generate the storage key and signed URL
     const r2Service = getR2Service();
-    const bucket = R2Service.getBucketName("vault");
+    const bucket = R2Service.getBucketName();
     const storageKey = R2Service.generateStorageKey("vault", uid, fileName, parentId || undefined);
 
     // Generate signed upload URL
@@ -301,7 +301,7 @@ export const migrateVaultItemsToR2 = onCall(
         // const [fileBuffer] = await storage.bucket().file(item.storagePath).download();
 
         // Generate new R2 key
-        const bucket = R2Service.getBucketName("vault");
+        const bucket = R2Service.getBucketName();
         const r2Key = R2Service.generateStorageKey(
           "vault",
           item.userId,

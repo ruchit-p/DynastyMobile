@@ -438,9 +438,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const confirmPhoneSignIn = async (_verificationId: string, code: string): Promise<boolean> => {
     try {
+      console.log("📱 Starting phone sign-in confirmation process");
+      
       // Sign in with the verification code
       const result = await window.confirmationResult.confirm(code);
       const user = result.user;
+      
+      console.log("📱 Phone sign-in successful, calling handlePhoneSignIn function", {
+        uid: user.uid,
+        phoneNumber: user.phoneNumber
+      });
       
       // Phone sign-in is CSRF-exempt
       const handlePhoneSignInFn = httpsCallable(functions, 'handlePhoneSignIn');
@@ -449,13 +456,46 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         uid: user.uid,
       });
       
-      // Refresh the Firestore user data
+      console.log("📱 handlePhoneSignIn response:", response.data);
+      
+      // Extract data with proper typing
+      const responseData = response.data as { 
+        success: boolean; 
+        message: string; 
+        userId: string; 
+        isNewUser: boolean 
+      };
+      
+      console.log("📱 Extracted response data:", {
+        success: responseData.success,
+        isNewUser: responseData.isNewUser,
+        userId: responseData.userId
+      });
+      
+      // Add a longer delay to ensure the user document is properly saved to Firestore
+      console.log("📱 Waiting for Firestore document to be ready...");
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      console.log("📱 Refreshing Firestore user data...");
+      // Refresh the Firestore user data to get the updated phoneNumberVerified status
       await refreshFirestoreUser();
       
+      console.log("📱 Firestore user data refreshed, current firestoreUser:", firestoreUser);
+      
+      // If firestoreUser is still null, try again with a longer delay
+      if (!firestoreUser) {
+        console.log("📱 firestoreUser is null, retrying after longer delay...");
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await refreshFirestoreUser();
+        console.log("📱 Second attempt - firestoreUser:", firestoreUser);
+      }
+      
       // Return whether this is a new user
-      const responseData = response.data as { isNewUser: boolean };
-      return responseData.isNewUser;
+      console.log("📱 Phone sign-in complete, isNewUser:", responseData.isNewUser);
+      
+      return responseData.isNewUser || false; // Default to false if undefined
     } catch (error) {
+      console.error("📱 Error confirming phone sign-in:", error);
       // Error confirming phone sign-in
       throw error;
     }

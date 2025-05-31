@@ -255,7 +255,7 @@ export const getVaultUploadSignedUrl = onCall(
 
     if (storageProvider === "r2") {
       // Use R2 storage
-      r2Bucket = R2Service.getBucketName("vault");
+      r2Bucket = R2Service.getBucketName();
       r2Key = R2Service.generateStorageKey("vault", uid, fileName, parentId || undefined);
 
       const result = await storageAdapter.generateUploadUrl(
