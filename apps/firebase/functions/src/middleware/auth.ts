@@ -136,12 +136,12 @@ export async function requireVerifiedUser(request: CallableRequest): Promise<str
     const auth = getAuth();
     const db = getDb();
     const user = await auth.getUser(uid);
-    
+
     // Check email verification first (from Firebase Auth)
     if (user.emailVerified) {
       return uid;
     }
-    
+
     // If email is not verified, check phone verification from Firestore
     const userDoc = await db.collection("users").doc(uid).get();
     if (userDoc.exists) {
@@ -150,7 +150,7 @@ export async function requireVerifiedUser(request: CallableRequest): Promise<str
         return uid;
       }
     }
-    
+
     // Neither email nor phone is verified
     throw createError(
       ErrorCode.PERMISSION_DENIED,
@@ -161,14 +161,14 @@ export async function requireVerifiedUser(request: CallableRequest): Promise<str
     if (error.code && error.message) {
       throw error;
     }
-    
+
     // Log unexpected errors
     logger.error("requireVerifiedUser: Unexpected error", createLogContext({
       uid,
       errorType: typeof error,
       errorMessage: error?.message || "Unknown error",
     }));
-    
+
     throw createError(
       ErrorCode.INTERNAL,
       "Error verifying user status. Please try again."
