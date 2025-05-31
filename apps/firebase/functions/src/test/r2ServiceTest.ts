@@ -44,7 +44,7 @@ export const testR2Integration = onCall(
 
       // Test 2: Generate upload URL
       try {
-        const bucket = R2Service.getBucketName("vault");
+        const bucket = R2Service.getBucketName();
         const key = R2Service.generateStorageKey("vault", uid, "test-file.txt");
 
         results.bucketTest.bucket = bucket;
@@ -73,7 +73,7 @@ export const testR2Integration = onCall(
 
       // Test 3: Generate download URL
       try {
-        const bucket = R2Service.getBucketName("vault");
+        const bucket = R2Service.getBucketName();
         const key = R2Service.generateStorageKey("vault", uid, "test-download.txt");
 
         const downloadUrl = await r2Service.generateDownloadUrl({
@@ -129,7 +129,7 @@ export const testR2FileUpload = onCall(
 
     try {
       const r2Service = getR2Service();
-      const bucket = R2Service.getBucketName("vault");
+      const bucket = R2Service.getBucketName();
       const fileName = `test-upload-${Date.now()}.txt`;
       const key = R2Service.generateStorageKey("vault", uid, fileName);
 

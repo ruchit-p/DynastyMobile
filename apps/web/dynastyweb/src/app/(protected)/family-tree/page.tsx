@@ -93,7 +93,7 @@ interface FirestoreTimestamp {
 
 export default function FamilyTreePage() {
   const { currentUser, firestoreUser } = useAuth();
-  const { hasCompletedOnboarding } = useOnboarding();
+  const { hasCompletedOnboarding, isOnboardingLoading } = useOnboarding();
   const { isReady: csrfReady } = useCSRFClient();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -342,31 +342,26 @@ export default function FamilyTreePage() {
     console.log("🔄 Family tree useEffect triggered", { 
       hasCompletedOnboarding, 
       currentUser: !!currentUser,
-      userId: currentUser?.uid 
+      userId: currentUser?.uid,
+      isOnboardingLoading
     });
     
+    // Don't fetch data if we're still loading onboarding status
+    if (isOnboardingLoading) {
+      console.log("⏳ Onboarding status loading, waiting...");
+      return;
+    }
+    
     // Only fetch family tree data if onboarding is completed
-    if (hasCompletedOnboarding) {
+    if (hasCompletedOnboarding && currentUser && csrfReady) {
       console.log("✅ Onboarding completed, fetching family tree data");
       void fetchFamilyTreeData();
-    } else {
-      console.log("⏳ Onboarding not completed yet, waiting...");
-      // If we have a user but onboarding isn't completed, set a timeout to check again
-      // This handles cases where the onboarding state might be delayed
-      if (currentUser) {
-        const retryTimeout = setTimeout(() => {
-          console.log("🔄 Retry: Re-checking onboarding status after delay");
-          // Force a refresh of the onboarding context by reloading
-          if (!hasCompletedOnboarding) {
-            console.log("🔄 Onboarding still not completed, reloading page...");
-            window.location.reload();
-          }
-        }, 3000); // Wait 3 seconds before retry
-        
-        return () => clearTimeout(retryTimeout);
-      }
+    } else if (!hasCompletedOnboarding && currentUser) {
+      console.log("⏳ Onboarding not completed yet, showing onboarding form...");
+      // The OnboardingContext will handle showing the onboarding form
+      // No need to reload the page - just wait for onboarding to complete
     }
-  }, [fetchFamilyTreeData, hasCompletedOnboarding, currentUser]);
+  }, [fetchFamilyTreeData, hasCompletedOnboarding, currentUser, csrfReady, isOnboardingLoading]);
 
   // Calculate optimal zoom level to fit the entire tree
   const calculateOptimalZoom = useCallback(() => {
@@ -1831,14 +1826,31 @@ export default function FamilyTreePage() {
 
         {treeData.length === 0 ? (
           <div className="flex flex-col items-center justify-center w-full h-full gap-4 p-8">
-            <h2 className="text-xl font-semibold">No Family Tree Data</h2>
+            <h2 className="text-xl font-semibold">
+              {isOnboardingLoading 
+                ? "Setting up your profile..." 
+                : hasCompletedOnboarding 
+                  ? "No Family Tree Data" 
+                  : "Profile Setup Required"
+              }
+            </h2>
             <p className="text-gray-600 text-center max-w-md">
-              {hasCompletedOnboarding 
-                ? "Your family tree appears to be empty. This might be a temporary loading issue."
-                : "Your family tree is being set up. Please wait a moment..."}
+              {isOnboardingLoading 
+                ? "We're checking your profile status. This will only take a moment..."
+                : hasCompletedOnboarding 
+                  ? "Your family tree appears to be empty. This might be a temporary loading issue."
+                  : "Please complete your profile to access your family tree and start building your family connections."
+              }
             </p>
             
-            {hasCompletedOnboarding && (
+            {isOnboardingLoading && (
+              <div className="flex items-center gap-2 mt-4">
+                <Spinner className="h-5 w-5" />
+                <span className="text-sm text-gray-500">Loading profile...</span>
+              </div>
+            )}
+            
+            {hasCompletedOnboarding && !isOnboardingLoading && (
               <div className="flex flex-col items-center gap-4 mt-4">
                 <Button 
                   onClick={() => {
@@ -1872,6 +1884,7 @@ export default function FamilyTreePage() {
                     <p><strong>Debug Info:</strong></p>
                     <p>User ID: {currentUser?.uid}</p>
                     <p>Onboarding Completed: {hasCompletedOnboarding.toString()}</p>
+                    <p>Onboarding Loading: {isOnboardingLoading.toString()}</p>
                     <p>CSRF Ready: {csrfReady.toString()}</p>
                     <p>Tree Data Length: {treeData.length}</p>
                     <p>Loading: {loading.toString()}</p>

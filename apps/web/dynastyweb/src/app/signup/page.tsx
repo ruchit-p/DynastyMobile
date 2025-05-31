@@ -35,7 +35,7 @@ export default function SignupPage() {
   const [codeSent, setCodeSent] = useState(false);
   const [showAccountExistsModal, setShowAccountExistsModal] = useState(false);
   const router = useRouter();
-  const { signUp, signInWithGoogle, signInWithPhone, confirmPhoneSignIn } = useAuth();
+  const { signUp, signInWithGoogle, signInWithPhone, confirmPhoneSignIn, refreshFirestoreUser } = useAuth();
   const { toast } = useToast();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -234,6 +234,14 @@ export default function SignupPage() {
         title: "Welcome!",
         description: "You have successfully signed up with your phone number.",
       });
+
+      // Add additional delay and force refresh for phone auth to ensure data is properly synced
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Force refresh of auth context user data
+      if (refreshFirestoreUser) {
+        await refreshFirestoreUser();
+      }
 
       // For new users, redirect to onboarding via onboarding-redirect page
       if (isNewUser) {

@@ -9,6 +9,7 @@ import {
 import {requireCSRFToken, CSRFValidatedRequest} from "./csrf";
 import {createLogContext, formatErrorForLogging} from "../utils/sanitization";
 import {checkRateLimit as checkRedisRateLimit, RateLimitType as RedisRateLimitType} from "../services/rateLimitService";
+import {getAuth} from "firebase-admin/auth";
 
 // Lazy-load Firestore to avoid initialization issues in tests
 let db: FirebaseFirestore.Firestore | null = null;
@@ -131,25 +132,48 @@ export function requireAuth(request: CallableRequest): string {
 export async function requireVerifiedUser(request: CallableRequest): Promise<string> {
   const uid = requireAuth(request);
 
-  const userDoc = await getDb().collection("users").doc(uid).get();
-
-  if (!userDoc.exists) {
-    throw createError(
-      ErrorCode.NOT_FOUND,
-      "User profile not found."
-    );
-  }
-
-  const userData = userDoc.data();
-
-  if (!userData?.emailVerified) {
+  try {
+    const auth = getAuth();
+    const db = getDb();
+    const user = await auth.getUser(uid);
+    
+    // Check email verification first (from Firebase Auth)
+    if (user.emailVerified) {
+      return uid;
+    }
+    
+    // If email is not verified, check phone verification from Firestore
+    const userDoc = await db.collection("users").doc(uid).get();
+    if (userDoc.exists) {
+      const userData = userDoc.data();
+      if (userData?.phoneNumberVerified) {
+        return uid;
+      }
+    }
+    
+    // Neither email nor phone is verified
     throw createError(
       ErrorCode.PERMISSION_DENIED,
-      "Email verification required. Please verify your email address before proceeding."
+      "Account verification required. Please verify your email address or phone number before proceeding."
+    );
+  } catch (error: any) {
+    // Re-throw HttpsError instances
+    if (error.code && error.message) {
+      throw error;
+    }
+    
+    // Log unexpected errors
+    logger.error("requireVerifiedUser: Unexpected error", createLogContext({
+      uid,
+      errorType: typeof error,
+      errorMessage: error?.message || "Unknown error",
+    }));
+    
+    throw createError(
+      ErrorCode.INTERNAL,
+      "Error verifying user status. Please try again."
     );
   }
-
-  return uid;
 }
 
 /**

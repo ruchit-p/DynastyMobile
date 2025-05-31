@@ -26,13 +26,15 @@ type OnboardingContextType = {
     gender?: 'male' | 'female' | 'other' | 'unspecified'
   }) => Promise<void>
   hasCompletedOnboarding: boolean
+  isOnboardingLoading: boolean
 }
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined)
 
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
   const [showOnboarding, setShowOnboarding] = useState(false)
-  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(true)
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false)
+  const [isOnboardingLoading, setIsOnboardingLoading] = useState(true)
   const [prefillData, setPrefillData] = useState<PrefillData | null>(null)
   const { currentUser, loading, firestoreUser } = useAuth()
   const isCheckingRef = useRef(false)
@@ -48,9 +50,10 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       showOnboarding,
       currentUser: !!currentUser,
       loading,
+      isOnboardingLoading,
       pathname
     });
-  }, [hasCompletedOnboarding, showOnboarding, currentUser, loading, pathname]);
+  }, [hasCompletedOnboarding, showOnboarding, currentUser, loading, isOnboardingLoading, pathname]);
   
   // Debugging log for initial state
   useEffect(() => {
@@ -80,6 +83,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     
     isCheckingRef.current = true
     lastCheckedUserIdRef.current = currentUser.uid
+    setIsOnboardingLoading(true)
     
     try {
       // Add a slight delay to ensure data is ready
@@ -256,6 +260,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       }
     } finally {
       isCheckingRef.current = false
+      setIsOnboardingLoading(false)
     }
   }, [currentUser, hasCompletedOnboarding, shouldSkip, toast, isOnboardingRedirectPage, csrfClient]);
 
@@ -276,15 +281,25 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       console.log("Triggering onboarding check for user:", currentUser.uid);
       console.log("Email verified:", currentUser.emailVerified);
       console.log("Phone verified:", firestoreUser?.phoneNumberVerified);
-      // Add a slight delay to ensure Firebase data is ready
+      // Add a longer delay to ensure Firebase data is ready, especially for phone auth
       const timer = setTimeout(() => {
         console.log("Delayed check for onboarding completed");
         checkOnboardingStatus();
-      }, 1000);
+      }, 2000); // Increased from 1000ms to 2000ms
       
       return () => clearTimeout(timer);
     } else if (currentUser) {
       console.log("Skipping onboarding check for user:", currentUser.uid);
+      console.log("Current user auth state:", {
+        uid: currentUser.uid,
+        emailVerified: currentUser.emailVerified,
+        phoneNumber: currentUser.phoneNumber
+      });
+      console.log("Firestore user state:", {
+        phoneNumberVerified: firestoreUser?.phoneNumberVerified,
+        phoneNumber: firestoreUser?.phoneNumber,
+        emailVerified: firestoreUser?.emailVerified
+      });
       if (isCheckingRef.current) console.log("Reason: Already checking");
       if (shouldSkip && !isOnboardingRedirectPage) console.log("Reason: Should skip this path");
       if (isPublicPage && !isOnboardingRedirectPage) console.log("Reason: On a public page");
@@ -292,6 +307,13 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       if (!currentUser.emailVerified && !firestoreUser?.phoneNumberVerified) console.log("Reason: Neither email nor phone is verified");
     }
   }, [currentUser, firestoreUser, loading, pathname, checkOnboardingStatus, shouldSkip, isPublicPage, isOnboardingRedirectPage]);
+
+  // Handle initial loading state when no user or auth loading is complete
+  useEffect(() => {
+    if (!loading && !currentUser) {
+      setIsOnboardingLoading(false);
+    }
+  }, [loading, currentUser]);
 
   const handleOnboardingComplete = async (userData: {
     firstName: string
@@ -311,7 +333,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       // Call the Cloud Function to complete onboarding
       // This will handle all database operations in one call
       console.log("🎯 Starting onboarding completion for user:", currentUser.uid);
-      console.log("📝 Onboarding data:", {
+      console.log("�� Onboarding data:", {
         userId: currentUser.uid,
         firstName: userData.firstName,
         lastName: userData.lastName,
@@ -359,7 +381,8 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     <OnboardingContext.Provider value={{ 
       showOnboarding, 
       completeOnboarding: handleOnboardingComplete,
-      hasCompletedOnboarding
+      hasCompletedOnboarding,
+      isOnboardingLoading
     }}>
       {children}
       {currentUser && showOnboarding && (

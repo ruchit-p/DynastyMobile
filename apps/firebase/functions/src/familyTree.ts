@@ -271,7 +271,7 @@ export const getFamilyTreeData = onCall(
     });
 
     return {treeNodes};
-  }, "getFamilyTreeData", "onboarded", {type: RateLimitType.API})
+  }, "getFamilyTreeData", "verified", {type: RateLimitType.API})
 );
 
 /**

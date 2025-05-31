@@ -35,7 +35,7 @@ export default function LoginPage() {
   const [codeSent, setCodeSent] = useState(false);
   const [googleRedirectHandled, setGoogleRedirectHandled] = useState(false);
   const router = useRouter();
-  const { signIn, signInWithGoogle, signInWithPhone, confirmPhoneSignIn, currentUser, firestoreUser } = useAuth();
+  const { signIn, signInWithGoogle, signInWithPhone, confirmPhoneSignIn, currentUser, firestoreUser, refreshFirestoreUser } = useAuth();
   const { toast } = useToast();
 
   // Add effect to handle post-login navigation
@@ -249,6 +249,14 @@ export default function LoginPage() {
         title: "Welcome!",
         description: "You have successfully signed in with your phone number.",
       });
+
+      // Add additional delay and force refresh for phone auth to ensure data is properly synced
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Force refresh of auth context user data
+      if (refreshFirestoreUser) {
+        await refreshFirestoreUser();
+      }
 
       // For new users, redirect to onboarding
       if (isNewUser) {

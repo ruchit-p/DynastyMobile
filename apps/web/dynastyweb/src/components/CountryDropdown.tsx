@@ -169,7 +169,7 @@ const CountryDropdownComponent = (
 
   const triggerClasses = cn(
     "flex h-10 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2.5 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 hover:bg-secondary/80",
-    slim === true && showCallingCode && "w-[100px] gap-1",
+    slim === true && showCallingCode && "w-[120px] gap-1",
     slim === true && !showCallingCode && "w-[80px] gap-1",
     inline && "rounded-r-none border-r-0 gap-1 pr-1",
     className
@@ -198,7 +198,7 @@ const CountryDropdownComponent = (
                   />
                 </div>
                 {showCallingCode && (
-                  <span className="text-sm font-medium">
+                  <span className="text-sm font-medium min-w-[55px] shrink-0">
                     {getCallingCode(selectedCountries[0])}
                   </span>
                 )}
@@ -254,7 +254,7 @@ const CountryDropdownComponent = (
                         />
                       </div>
                       {showCallingCode && (
-                        <span className="text-sm font-medium min-w-[45px]">
+                        <span className="text-sm font-medium min-w-[55px]">
                           {getCallingCode(option)}
                         </span>
                       )}

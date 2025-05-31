@@ -874,6 +874,13 @@ export const handlePhoneSignIn = onCall(
         logger.info("handlePhoneSignIn: Successfully created user document", createLogContext({
           uid: uid,
         }));
+
+        return {
+          success: true,
+          message: `User ${uid} processed successfully with phone number ${phoneNumber}.`,
+          userId: uid,
+          isNewUser: true,
+        };
       } else {
         logger.info("handlePhoneSignIn: User document already exists. Updating phone number", createLogContext({
           uid: uid,
@@ -886,13 +893,14 @@ export const handlePhoneSignIn = onCall(
         logger.info("handlePhoneSignIn: Successfully updated user document", createLogContext({
           uid: uid,
         }));
-      }
 
-      return {
-        success: true,
-        message: `User ${uid} processed successfully with phone number ${phoneNumber}.`,
-        userId: uid,
-      };
+        return {
+          success: true,
+          message: `User ${uid} processed successfully with phone number ${phoneNumber}.`,
+          userId: uid,
+          isNewUser: false,
+        };
+      }
     } catch (error: any) {
       logger.error("handlePhoneSignIn: Error processing request", createLogContext({
         uid: uid,
