@@ -12,6 +12,7 @@ import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { loginFormSchema, type LoginFormData, validateFormData } from '@/lib/validation';
 import { GoogleSignInButton } from '@/components/ui/google-sign-in-button';
+import { AppleSignInButton } from '@/components/ui/apple-sign-in-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CountryDropdown, type Country } from '@/components/CountryDropdown';
 import { VerificationCodeInput } from '@/components/ui/verification-code-input';
@@ -30,12 +31,13 @@ export default function LoginPage() {
   const [phoneErrors, setPhoneErrors] = useState<{ [key: string]: string }>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isAppleLoading, setIsAppleLoading] = useState(false);
   const [isPhoneLoading, setIsPhoneLoading] = useState(false);
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [codeSent, setCodeSent] = useState(false);
   const [googleRedirectHandled, setGoogleRedirectHandled] = useState(false);
   const router = useRouter();
-  const { signIn, signInWithGoogle, signInWithPhone, confirmPhoneSignIn, currentUser, firestoreUser, refreshFirestoreUser } = useAuth();
+  const { signIn, signInWithGoogle, signInWithApple, signInWithPhone, confirmPhoneSignIn, currentUser, firestoreUser, refreshFirestoreUser } = useAuth();
   const { toast } = useToast();
 
   // Add effect to handle post-login navigation
@@ -344,6 +346,63 @@ export default function LoginPage() {
     }
   };
 
+  const handleAppleSignIn = async () => {
+    setIsAppleLoading(true);
+    try {
+      // Check if this is a new Apple user or a user who hasn't completed onboarding
+      const isNewUser = await signInWithApple();
+      
+      // Only show success toast if no errors occurred
+      toast({
+        title: "Welcome!",
+        description: "You have successfully signed in with Apple.",
+      });
+      
+      // For new users, redirect to onboarding-redirect page to ensure the onboarding form shows
+      if (isNewUser) {
+        console.log("New Apple user detected, ensuring onboarding is checked");
+        setGoogleRedirectHandled(true); // Prevent the useEffect from overriding this redirect
+        router.push('/onboarding-redirect');
+      }
+      // For existing users with completed onboarding, the useEffect at the top of 
+      // this component will handle the redirection based on email verification status
+    } catch (error: unknown) {
+      console.error("Apple login error:", error);
+      
+      // Handle specific Firebase Auth errors
+      let errorMessage = "Unable to sign in with Apple. Please try again.";
+      
+      const firebaseError = error as { code?: string; message?: string };
+      if (firebaseError?.code) {
+        switch (firebaseError.code) {
+          case 'auth/popup-closed-by-user':
+            errorMessage = "Sign-in was cancelled. Please try again.";
+            break;
+          case 'auth/popup-blocked':
+            errorMessage = "Popup was blocked by your browser. Please allow popups and try again.";
+            break;
+          case 'auth/cancelled-popup-request':
+            errorMessage = "Another sign-in request is already in progress.";
+            break;
+          case 'auth/account-exists-with-different-credential':
+            errorMessage = "An account already exists with the same email address but different sign-in credentials.";
+            break;
+          case 'auth/network-request-failed':
+            errorMessage = "Network error. Please check your connection and try again.";
+            break;
+        }
+      }
+      
+      toast({
+        title: "Sign-in Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsAppleLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
@@ -551,11 +610,16 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div className="mt-6">
+            <div className="mt-6 space-y-3">
               <GoogleSignInButton
                 onClick={handleGoogleSignIn}
                 loading={isGoogleLoading}
                 label="Sign in with Google"
+              />
+              <AppleSignInButton
+                onClick={handleAppleSignIn}
+                loading={isAppleLoading}
+                label="Sign in with Apple"
               />
             </div>
           </div>
