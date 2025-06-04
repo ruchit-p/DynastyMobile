@@ -12,6 +12,7 @@ import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { initialSignupFormSchema, type InitialSignupFormData, validateFormData } from '@/lib/validation';
 import { GoogleSignInButton } from '@/components/ui/google-sign-in-button';
+import { AppleSignInButton } from '@/components/ui/apple-sign-in-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CountryDropdown, type Country } from '@/components/CountryDropdown';
 import { VerificationCodeInput } from '@/components/ui/verification-code-input';
@@ -30,12 +31,13 @@ export default function SignupPage() {
   const [phoneErrors, setPhoneErrors] = useState<{ [key: string]: string }>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isAppleLoading, setIsAppleLoading] = useState(false);
   const [isPhoneLoading, setIsPhoneLoading] = useState(false);
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [codeSent, setCodeSent] = useState(false);
   const [showAccountExistsModal, setShowAccountExistsModal] = useState(false);
   const router = useRouter();
-  const { signUp, signInWithGoogle, signInWithPhone, confirmPhoneSignIn, refreshFirestoreUser } = useAuth();
+  const { signUp, signInWithGoogle, signInWithApple, signInWithPhone, confirmPhoneSignIn, refreshFirestoreUser } = useAuth();
   const { toast } = useToast();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -290,6 +292,33 @@ export default function SignupPage() {
     }
   };
 
+  const handleAppleSignIn = async () => {
+    setIsAppleLoading(true);
+    try {
+      const isNewUser = await signInWithApple();
+      toast({
+        title: "Welcome!",
+        description: "You have successfully signed up with Apple.",
+      });
+      
+      // For new users, redirect to onboarding
+      if (isNewUser) {
+        router.push('/onboarding-redirect');
+      } else {
+        router.push('/family-tree');
+      }
+    } catch (error) {
+      console.error("Apple signup error:", error);
+      toast({
+        title: "Sign-up Failed",
+        description: "Unable to sign up with Apple. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAppleLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       {showAccountExistsModal && (
@@ -512,11 +541,16 @@ export default function SignupPage() {
               </div>
             </div>
 
-            <div className="mt-6">
+            <div className="mt-6 space-y-3">
               <GoogleSignInButton
                 onClick={handleGoogleSignIn}
                 loading={isGoogleLoading}
                 label="Sign up with Google"
+              />
+              <AppleSignInButton
+                onClick={handleAppleSignIn}
+                loading={isAppleLoading}
+                label="Sign up with Apple"
               />
             </div>
           </div>

@@ -12,6 +12,7 @@ import {
   updateEmail as firebaseUpdateEmail,
   updatePassword as firebaseUpdatePassword,
   GoogleAuthProvider,
+  OAuthProvider,
   signInWithPopup,
   RecaptchaVerifier,
   signInWithPhoneNumber,
@@ -76,6 +77,7 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<boolean>;
+  signInWithApple: () => Promise<boolean>;
   signInWithPhone: (phoneNumber: string) => Promise<{ verificationId: string }>;
   confirmPhoneSignIn: (verificationId: string, code: string) => Promise<boolean>;
   signOut: () => Promise<void>;
@@ -97,6 +99,7 @@ interface AuthContextType {
   }>;
   refreshFirestoreUser: () => Promise<void>;
   updateUserProfile: (displayName: string) => Promise<void>;
+  getUserProviders: () => string[];
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -106,6 +109,7 @@ const AuthContext = createContext<AuthContextType>({
   signUp: async () => {},
   signIn: async () => {},
   signInWithGoogle: async () => false,
+  signInWithApple: async () => false,
   signInWithPhone: async () => ({ verificationId: '' }),
   confirmPhoneSignIn: async () => false,
   signOut: async () => {},
@@ -123,6 +127,7 @@ const AuthContext = createContext<AuthContextType>({
     inviteeEmail: '',
   }),
   refreshFirestoreUser: async () => {},
+  getUserProviders: () => [],
 });
 
 // MARK: - Helper Functions
@@ -299,6 +304,99 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const signInWithApple = async (): Promise<boolean> => {
+    try {
+      const provider = new OAuthProvider('apple.com');
+      // Add scopes if needed
+      provider.addScope('email');
+      provider.addScope('name');
+      // Set custom parameters
+      provider.setCustomParameters({
+        locale: 'en'
+      });
+      
+      const result = await signInWithPopup(auth, provider);
+      let isNewUser = false;
+      
+      // If this is the first time the user is signing in with Apple,
+      // we need to create a Firestore user document
+      if (result.user) {
+        console.log("🍎 Apple sign-in successful for user:", result.user.uid);
+        // Apple sign-in successful
+        const userDoc = await getDoc(doc(db, "users", result.user.uid));
+        console.log("🔍 Checking if user document exists:", userDoc.exists());
+        
+        if (!userDoc.exists()) {
+          console.log("🆕 New Apple user - creating Firestore document");
+          // New Apple user - creating Firestore document
+          // Apple sign-in is CSRF-exempt
+          const handleAppleSignIn = httpsCallable(functions, 'handleAppleSignIn');
+          try {
+            // Extract Apple-specific user information
+            const credential = OAuthProvider.credentialFromResult(result);
+            
+            // Extract name information from Apple if available
+            // Apple provides this on first sign-in only
+            let fullName = null;
+            try {
+              // Check if we have additional user info from the auth result
+              const additionalUserInfo = (result as any).additionalUserInfo;
+              if (additionalUserInfo?.profile?.name) {
+                fullName = {
+                  givenName: additionalUserInfo.profile.name.firstName || '',
+                  familyName: additionalUserInfo.profile.name.lastName || ''
+                };
+              } else if (result.user.displayName) {
+                // Fallback: parse display name if available
+                const nameParts = result.user.displayName.split(' ');
+                fullName = {
+                  givenName: nameParts[0] || '',
+                  familyName: nameParts.slice(1).join(' ') || ''
+                };
+              }
+            } catch (error) {
+              console.log("Could not extract name from Apple sign-in:", error);
+            }
+            
+            // Only send fields that are expected by the validation schema
+            const appleData = {
+              userId: result.user.uid,
+              email: result.user.email,
+              fullName: fullName
+            };
+            
+            console.log("📞 Calling handleAppleSignIn with data:", appleData);
+            const response = await handleAppleSignIn(appleData);
+            console.log("✅ handleAppleSignIn response:", response);
+            isNewUser = true;
+            // New Apple user document created
+          } catch (error) {
+            console.error("❌ handleAppleSignIn failed:", error);
+            throw error;
+          }
+        } else {
+          console.log("👤 Existing user document found");
+          // Check if this is an existing user who hasn't completed onboarding
+          const userData = userDoc.data();
+          console.log("📋 User data:", userData);
+          if (userData && userData.onboardingCompleted === false) {
+            console.log("🔄 Existing Apple user but onboarding not completed");
+            // Existing Apple user but onboarding not completed
+            isNewUser = true;
+          } else {
+            console.log("✨ Existing Apple user with completed onboarding");
+            // Existing Apple user with completed onboarding
+          }
+        }
+      }
+      
+      return isNewUser;
+    } catch (error) {
+      // Apple sign-in error - re-throw without logging sensitive details
+      throw error;
+    }
+  };
+
   const logout = async () => {
     try {
       await firebaseSignOut(auth);
@@ -436,6 +534,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const getUserProviders = (): string[] => {
+    if (!user) return [];
+    return user.providerData.map(provider => provider.providerId);
+  };
+
   const confirmPhoneSignIn = async (_verificationId: string, code: string): Promise<boolean> => {
     try {
       console.log("📱 Starting phone sign-in confirmation process");
@@ -508,6 +611,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     signUp,
     signIn,
     signInWithGoogle,
+    signInWithApple,
     signInWithPhone,
     confirmPhoneSignIn,
     signOut: logout,
@@ -519,6 +623,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     signUpWithInvitation,
     verifyInvitation,
     refreshFirestoreUser,
+    getUserProviders,
    };
 
   return (
