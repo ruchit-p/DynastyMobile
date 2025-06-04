@@ -35,7 +35,6 @@ echo "🚀 Setting Firebase Functions configuration..."
 # Core security secrets
 echo "Setting core security secrets..."
 firebase functions:config:set \
-    security.csrf_secret="$CSRF_SECRET_KEY" \
     security.jwt_secret="$JWT_SECRET_KEY" \
     security.encryption_key="$ENCRYPTION_MASTER_KEY" \
     security.session_secret="$SESSION_SECRET" \
@@ -93,7 +92,7 @@ echo "✅ All secrets deployed successfully!"
 echo ""
 echo "📋 Next steps:"
 echo "1. Deploy functions: firebase deploy --only functions"
-echo "2. Test CSRF protection endpoints"
+echo "2. Test authenticated endpoints"
 echo "3. Verify external service integrations"
 echo "4. Monitor function logs for any issues"
 echo ""

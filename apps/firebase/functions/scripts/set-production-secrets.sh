@@ -29,7 +29,6 @@ if [ ! -f "firebase-functions-config.json" ]; then
 fi
 
 # Load the generated secrets
-CSRF_SECRET=$(grep "CSRF_SECRET_KEY=" .env.production.template | cut -d'=' -f2)
 JWT_SECRET=$(grep "JWT_SECRET_KEY=" .env.production.template | cut -d'=' -f2)
 ENCRYPTION_KEY=$(grep "ENCRYPTION_MASTER_KEY=" .env.production.template | cut -d'=' -f2)
 SESSION_SECRET=$(grep "SESSION_SECRET=" .env.production.template | cut -d'=' -f2)
@@ -59,7 +58,6 @@ read -p "Enter production domain (e.g., mydynastyapp.com): " PRODUCTION_DOMAIN
 # Set core security configuration
 echo -e "${BLUE}Setting core security configuration...${NC}"
 firebase functions:config:set \
-  security.csrf_secret_key="$CSRF_SECRET" \
   security.jwt_secret_key="$JWT_SECRET" \
   security.encryption_master_key="$ENCRYPTION_KEY" \
   security.session_secret="$SESSION_SECRET" \
@@ -108,8 +106,8 @@ echo ""
 echo "2. Deploy functions:"
 echo "   ${BLUE}firebase deploy --only functions${NC}"
 echo ""
-echo "3. Test CSRF protection:"
-echo "   ${BLUE}npm test -- csrf-functions-enabled.test.ts${NC}"
+echo "3. Test authenticated endpoints:"
+echo "   ${BLUE}npm test -- auth.test.ts${NC}"
 echo ""
 echo -e "${RED}⚠️  Security reminder:${NC}"
 echo "• These secrets are now stored in Firebase Functions config"

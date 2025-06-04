@@ -124,7 +124,6 @@ export const handleSignIn = onCall(
     "handleSignIn",
     {
       authLevel: "none", // No auth required for sign-in
-      enableCSRF: false, // Disable CSRF for authentication endpoint
       rateLimitConfig: SECURITY_CONFIG.rateLimits.auth,
     }
   )
@@ -347,7 +346,6 @@ export const handleSignUp = onCall({
   "handleSignUp",
   {
     authLevel: "none", // No auth required for signup
-    enableCSRF: false, // Disable CSRF protection for public signup endpoint
     rateLimitConfig: SECURITY_CONFIG.rateLimits.auth,
   }
 ));
@@ -1061,7 +1059,6 @@ export const handleGoogleSignIn = onCall(
     "handleGoogleSignIn",
     {
       authLevel: "none", // No auth required for initial sign-in
-      enableCSRF: false, // Disable CSRF for authentication endpoint
       rateLimitConfig: SECURITY_CONFIG.rateLimits.auth,
     }
   )
@@ -1222,7 +1219,6 @@ export const handleAppleSignIn = onCall(
     "handleAppleSignIn",
     {
       authLevel: "none", // No auth required for initial sign-in
-      enableCSRF: false, // Disable CSRF for authentication endpoint
       rateLimitConfig: SECURITY_CONFIG.rateLimits.auth,
     }
   )

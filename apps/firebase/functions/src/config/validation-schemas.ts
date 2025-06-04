@@ -137,14 +137,15 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
 
   addVaultFile: {
     rules: [
-      {field: "folderId", type: "id", required: true},
-      {field: "fileName", type: "string", required: true, maxLength: 255},
-      {field: "fileSize", type: "number", required: true},
-      {field: "mimeType", type: "string", required: true},
-      {field: "encryptedMetadata", type: "object"},
-      {field: "keyBundle", type: "object"},
-      {field: "isShared", type: "boolean"},
-      {field: "sharedWith", type: "array", maxSize: 50},
+      {field: "itemId", type: "id", required: true},
+      {field: "name", type: "string", required: true, maxLength: 255},
+      {field: "storagePath", type: "string", required: true, maxLength: 500},
+      {field: "fileType", type: "enum", required: true, enumValues: ["image", "video", "audio", "document", "other"]},
+      {field: "size", type: "number", required: true},
+      {field: "mimeType", type: "string", required: true, maxLength: 100},
+      {field: "parentId", type: "id"},
+      {field: "isEncrypted", type: "boolean"},
+      {field: "encryptionKeyId", type: "id"},
     ],
     xssCheck: true,
   },
@@ -317,7 +318,7 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
   moveVaultItem: {
     rules: [
       {field: "itemId", type: "id", required: true},
-      {field: "targetFolderId", type: "id"},
+      {field: "newParentId", type: "id"},
     ],
     xssCheck: false,
   },
@@ -359,19 +360,66 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
     rules: [
       {field: "itemId", type: "id", required: true},
       {field: "userId", type: "id", required: true},
-      {field: "permissions", type: "enum", required: true,
-        enumValues: ["read", "write", "admin"]},
+      {field: "permissions", type: "enum", required: true, enumValues: ["read", "write", "admin"]},
     ],
     xssCheck: false,
   },
 
   searchVaultItems: {
     rules: [
-      {field: "query", type: "string", required: true, maxLength: 100},
-      {field: "folderId", type: "id"},
+      {field: "query", type: "string", maxLength: 100},
+      {field: "fileTypes", type: "array", maxSize: 10},
+      {field: "parentId", type: "id"},
+      {field: "includeDeleted", type: "boolean"},
+      {field: "sortBy", type: "enum", enumValues: ["name", "date", "size", "type"]},
+      {field: "sortOrder", type: "enum", enumValues: ["asc", "desc"]},
       {field: "limit", type: "number"},
+      {field: "filters", type: "object"},
     ],
     xssCheck: true,
+  },
+
+  getVaultUploadSignedUrl: {
+    rules: [
+      {field: "fileName", type: "string", required: true, maxLength: 255},
+      {field: "mimeType", type: "string", required: true, maxLength: 100},
+      {field: "fileSize", type: "number", required: true},
+      {field: "parentId", type: "id"},
+      {field: "isEncrypted", type: "boolean"},
+    ],
+    xssCheck: true,
+  },
+
+  getVaultItems: {
+    rules: [
+      {field: "parentId", type: "id"},
+      {field: "includeDeleted", type: "boolean"},
+    ],
+    xssCheck: false,
+  },
+
+  getDeletedVaultItems: {
+    rules: [],
+    xssCheck: false,
+  },
+
+  getVaultStorageInfo: {
+    rules: [],
+    xssCheck: false,
+  },
+
+  cleanupDeletedVaultItems: {
+    rules: [
+      {field: "olderThanDays", type: "number"},
+    ],
+    xssCheck: false,
+  },
+
+  revokeVaultShare: {
+    rules: [
+      {field: "shareId", type: "id", required: true},
+    ],
+    xssCheck: false,
   },
 
   // Messaging
@@ -1051,7 +1099,6 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
     xssCheck: false,
   },
 
-  // Additional Vault Schemas
   updateVaultFile: {
     rules: [
       {field: "itemId", type: "string", required: true, maxLength: 100},

@@ -23,15 +23,14 @@ import { LocationSearch } from "@/components/location-search"
 import { useAuth } from "@/context/AuthContext"
 import { useToast } from "@/components/ui/use-toast"
 import { uploadMedia } from "@/utils/mediaUtils"
-import { useCSRFClient } from "@/context/CSRFContext"
 import { getFamilyManagementData } from "@/utils/functionUtils"
+import { createEvent } from "@/utils/eventUtils"
 
 export default function CreateEventPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const { currentUser } = useAuth()
   const { toast } = useToast()
-  const { csrfClient } = useCSRFClient()
   
   // Use refs for tracking state that shouldn't trigger re-renders
   const formStateTracker = useRef({
@@ -214,10 +213,9 @@ export default function CreateEventPage() {
         setLoadingMembers(true)
         setMembersError(null)
         
-        const result = await csrfClient.callFunction('getFamilyManagementData', {})
+        const data = await getFamilyManagementData()
         
         // Validate and transform the data
-        const data = result.data as { members?: Array<{id: string, displayName: string, profilePicture?: string}> }
         if (data && Array.isArray(data.members)) {
           // Filter out the current user from the family members list
           const filteredMembers = data.members
@@ -242,7 +240,7 @@ export default function CreateEventPage() {
     }
     
     fetchFamilyMembers()
-  }, [currentUser?.uid, csrfClient])
+  }, [currentUser?.uid])
 
   // Handle photo upload
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -412,11 +410,11 @@ export default function CreateEventPage() {
       console.log("Submitting event data to Firebase...");
       
       // Call the createEvent Firebase callable function
-      const result = await csrfClient.callFunction('createEvent', eventData);
+      const result = await createEvent(eventData);
       
-      console.log("Event created successfully:", result.data);
+      console.log("Event created successfully:", result);
       
-      if (result.data && typeof result.data === 'object') {
+      if (result && typeof result === 'object') {
         toast({
           title: "Success",
           description: "Event created successfully!"
@@ -770,10 +768,10 @@ export default function CreateEventPage() {
                           setMembersError(null);
                           
                           getFamilyManagementData()
-                            .then((result) => {
-                              if (result && Array.isArray(result.members)) {
+                            .then((data) => {
+                              if (data && Array.isArray(data.members)) {
                                 // Filter out the current user from the family members list
-                                const filteredMembers = result.members
+                                const filteredMembers = data.members
                                   .filter(member => member.id !== currentUser?.uid)
                                   .map(member => ({
                                     id: member.id || '',
@@ -783,7 +781,7 @@ export default function CreateEventPage() {
                                 
                                 setFamilyMembers(filteredMembers);
                               } else {
-                                console.error('Invalid family members data structure:', result);
+                                console.error('Invalid family members data structure:', data);
                                 setMembersError('Received invalid data format from server.');
                               }
                               setLoadingMembers(false);

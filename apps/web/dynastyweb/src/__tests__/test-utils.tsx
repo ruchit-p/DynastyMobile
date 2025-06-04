@@ -111,13 +111,11 @@ export const createMockOfflineContext = (overrides = {}) => ({
   ...overrides,
 });
 
-// Mock CSRF Context
-export const createMockCSRFContext = (overrides = {}) => ({
-  csrfToken: 'test-csrf-token',
-  isLoading: false,
-  error: null,
-  refreshToken: jest.fn().mockResolvedValue(undefined),
-  ...overrides,
+// Mock Firebase Functions Client
+export const createMockFunctionsClient = () => ({
+  callFunction: jest.fn().mockResolvedValue({ data: {} }),
+  createTypedFunction: jest.fn(),
+  batchCall: jest.fn().mockResolvedValue([]),
 });
 
 // Custom render function with providers

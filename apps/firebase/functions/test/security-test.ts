@@ -1,36 +1,4 @@
-import {CSRFService} from "../src/services/csrfService";
 import {fileSecurityService} from "../src/services/fileSecurityService";
-
-// Test CSRF token generation and validation
-async function testCSRF() {
-  console.log("Testing CSRF Protection...\n");
-
-  try {
-    // Test 1: Generate token
-    const userId = "test-user-123";
-    const sessionId = "test-session-456";
-    const token = CSRFService.generateToken(userId, sessionId);
-    console.log("✅ Token generated:", token.substring(0, 20) + "...");
-
-    // Test 2: Validate correct token
-    const isValid = CSRFService.validateToken(token, userId, sessionId);
-    console.log("✅ Valid token validation:", isValid);
-
-    // Test 3: Validate with wrong user
-    const isInvalidUser = CSRFService.validateToken(token, "wrong-user", sessionId);
-    console.log("✅ Invalid user validation (should be false):", isInvalidUser);
-
-    // Test 4: Validate with wrong session
-    const isInvalidSession = CSRFService.validateToken(token, userId, "wrong-session");
-    console.log("✅ Invalid session validation (should be false):", isInvalidSession);
-
-    // Test 5: Check token expiry time
-    const expiryTime = CSRFService.getTimeUntilExpiry(token);
-    console.log("✅ Time until expiry (ms):", expiryTime);
-  } catch (error) {
-    console.error("❌ CSRF test failed:", error);
-  }
-}
 
 // Test file security scanning
 async function testFileSecurity() {
@@ -112,7 +80,6 @@ async function testPBKDF2Performance() {
 async function runTests() {
   console.log("=== Dynasty Security Implementation Tests ===\n");
 
-  await testCSRF();
   await testFileSecurity();
   await testPBKDF2Performance();
 
@@ -124,4 +91,4 @@ if (require.main === module) {
   runTests().catch(console.error);
 }
 
-export {testCSRF, testFileSecurity, testPBKDF2Performance};
+export {testFileSecurity, testPBKDF2Performance};

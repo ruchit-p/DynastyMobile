@@ -97,7 +97,6 @@ export const sendVerificationEmail = onCall(
     "sendVerificationEmail",
     {
       authLevel: "auth",
-      enableCSRF: false, // Disable CSRF for email verification - auth + rate limiting provides sufficient protection
       rateLimitConfig: {
         type: RateLimitType.AUTH,
         maxRequests: 3, // 3 verification emails per hour
@@ -170,7 +169,6 @@ export const verifyEmail = onCall(
     return {success: true, message: "Email verified successfully."};
   }, "verifyEmail", {
     authLevel: "none", // Email verification doesn't require auth
-    enableCSRF: true,
     rateLimitConfig: {
       type: RateLimitType.AUTH,
       maxRequests: 10, // Allow more attempts for email verification

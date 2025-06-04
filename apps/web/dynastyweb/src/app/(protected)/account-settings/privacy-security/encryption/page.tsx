@@ -31,7 +31,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Spinner } from '@/components/ui/spinner';
 import { e2eeService } from '@/services/encryption/E2EEService';
 import { keyBackupService } from '@/services/encryption/KeyBackupService';
-import { useCSRFClient } from '@/context/CSRFContext';
+import { checkEncryptionStatus, uploadEncryptionKeys, rotateEncryptionKeys } from '@/utils/functionUtils';
 
 interface EncryptionStatus {
   keysGenerated: boolean;
@@ -44,7 +44,6 @@ interface EncryptionStatus {
 export default function EncryptionSettingsPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { csrfClient } = useCSRFClient();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<EncryptionStatus>({
     keysGenerated: false,
@@ -55,7 +54,7 @@ export default function EncryptionSettingsPage() {
   const [showFingerprint, setShowFingerprint] = useState(false);
   const [processing, setProcessing] = useState(false);
 
-  const checkEncryptionStatus = useCallback(async () => {
+  const checkLocalEncryptionStatus = useCallback(async () => {
     setLoading(true);
     try {
       // Check if keys exist locally
@@ -63,12 +62,7 @@ export default function EncryptionSettingsPage() {
       const backupIds = keyBackupService.getStoredBackupIds();
 
       // Check server status
-      const result = await csrfClient.callFunction('checkEncryptionStatus', {});
-      const serverStatus = result.data as {
-        publicKeyExists: boolean;
-        backupExists: boolean;
-        lastRotation?: string;
-      };
+      const serverStatus = await checkEncryptionStatus();
 
       let fingerprint: string | undefined;
       if (keyPair) {
@@ -92,11 +86,11 @@ export default function EncryptionSettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast, csrfClient]);
+  }, [toast]);
 
   useEffect(() => {
-    checkEncryptionStatus();
-  }, [checkEncryptionStatus]);
+    checkLocalEncryptionStatus();
+  }, [checkLocalEncryptionStatus]);
 
   const handleGenerateKeys = async () => {
     setProcessing(true);
@@ -106,7 +100,7 @@ export default function EncryptionSettingsPage() {
       const exportedKeyPair = await e2eeService.exportKeyPair(keyPair);
 
       // Upload public key to server
-      await csrfClient.callFunction('uploadEncryptionKeys', {
+      await uploadEncryptionKeys({
         publicKey: exportedKeyPair.publicKey,
       });
 
@@ -115,7 +109,7 @@ export default function EncryptionSettingsPage() {
         description: 'Your encryption keys have been generated successfully',
       });
 
-      await checkEncryptionStatus();
+      await checkLocalEncryptionStatus();
     } catch (error) {
       console.error('Error generating keys:', error);
       toast({
@@ -136,7 +130,7 @@ export default function EncryptionSettingsPage() {
       const exportedKeyPair = await e2eeService.exportKeyPair(newKeyPair);
 
       // Rotate keys on server
-      await csrfClient.callFunction('rotateEncryptionKeys', {
+      await rotateEncryptionKeys({
         newPublicKey: exportedKeyPair.publicKey,
       });
 
@@ -146,7 +140,7 @@ export default function EncryptionSettingsPage() {
       });
 
       setShowRotateDialog(false);
-      await checkEncryptionStatus();
+      await checkLocalEncryptionStatus();
     } catch (error) {
       console.error('Error rotating keys:', error);
       toast({

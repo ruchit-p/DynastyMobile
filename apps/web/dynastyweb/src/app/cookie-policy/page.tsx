@@ -79,11 +79,6 @@ export default function CookiePolicyPage() {
                         <td className="px-4 py-2">7 days</td>
                       </tr>
                       <tr className="border-t border-green-200">
-                        <td className="px-4 py-2">dynasty_csrf</td>
-                        <td className="px-4 py-2">Security token to prevent attacks</td>
-                        <td className="px-4 py-2">Session</td>
-                      </tr>
-                      <tr className="border-t border-green-200">
                         <td className="px-4 py-2">cookie_consent</td>
                         <td className="px-4 py-2">Stores your cookie preferences</td>
                         <td className="px-4 py-2">1 year</td>

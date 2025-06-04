@@ -18,9 +18,6 @@ generate_key() {
 # Generate all core security keys
 echo "🔑 Generating core security keys..."
 
-CSRF_SECRET=$(generate_key 32)
-echo "✅ Generated CSRF Secret Key (256-bit)"
-
 JWT_SECRET=$(generate_key 32)
 echo "✅ Generated JWT Secret Key (256-bit)"
 
@@ -56,8 +53,6 @@ cp .env.staging.template .env.staging
 # Replace placeholders with generated values
 if [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS
-    sed -i '' "s/<WILL_BE_GENERATED>/$CSRF_SECRET/g" .env.staging
-    sed -i '' "s/CSRF_SECRET_KEY=.*/CSRF_SECRET_KEY=$CSRF_SECRET/g" .env.staging
     sed -i '' "s/JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$JWT_SECRET/g" .env.staging
     sed -i '' "s/ENCRYPTION_MASTER_KEY=.*/ENCRYPTION_MASTER_KEY=$ENCRYPTION_KEY/g" .env.staging
     sed -i '' "s/SESSION_SECRET=.*/SESSION_SECRET=$SESSION_SECRET/g" .env.staging
@@ -66,8 +61,6 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     sed -i '' "s/DB_ENCRYPTION_KEY=.*/DB_ENCRYPTION_KEY=$DB_ENCRYPTION_KEY/g" .env.staging
 else
     # Linux
-    sed -i "s/<WILL_BE_GENERATED>/$CSRF_SECRET/g" .env.staging
-    sed -i "s/CSRF_SECRET_KEY=.*/CSRF_SECRET_KEY=$CSRF_SECRET/g" .env.staging
     sed -i "s/JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$JWT_SECRET/g" .env.staging
     sed -i "s/ENCRYPTION_MASTER_KEY=.*/ENCRYPTION_MASTER_KEY=$ENCRYPTION_KEY/g" .env.staging
     sed -i "s/SESSION_SECRET=.*/SESSION_SECRET=$SESSION_SECRET/g" .env.staging
@@ -90,7 +83,6 @@ echo "✅ Created .env.staging with generated secrets"
 echo ""
 echo "📊 STAGING SECRETS SUMMARY"
 echo "========================="
-echo "✅ CSRF Secret Key:        $(echo $CSRF_SECRET | cut -c1-4)...$(echo $CSRF_SECRET | tail -c 5)"
 echo "✅ JWT Secret Key:         $(echo $JWT_SECRET | cut -c1-4)...$(echo $JWT_SECRET | tail -c 5)"
 echo "✅ Encryption Master Key:  $(echo $ENCRYPTION_KEY | cut -c1-4)...$(echo $ENCRYPTION_KEY | tail -c 5)"
 echo "✅ Session Secret:         $(echo $SESSION_SECRET | cut -c1-4)...$(echo $SESSION_SECRET | tail -c 5)"

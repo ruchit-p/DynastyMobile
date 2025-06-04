@@ -62,7 +62,6 @@ echo "🔐 Checking core security configuration..."
 
 # Core security secrets (required)
 ERRORS=0
-check_config "security.csrf_secret" "CSRF Secret Key" || ((ERRORS++))
 check_config "security.jwt_secret" "JWT Secret Key" || ((ERRORS++))
 check_config "security.encryption_key" "Encryption Master Key" || ((ERRORS++))
 check_config "security.session_secret" "Session Secret" || ((ERRORS++))
@@ -130,7 +129,7 @@ fi
 echo ""
 echo "🔒 Security reminders:"
 echo "- All secrets are properly masked in logs"
-echo "- CSRF protection is enabled on critical functions"
+echo "- Security headers are configured on critical functions"
 echo "- Rate limiting is configured for authentication"
 echo "- Keep staging secrets separate from production"
 echo "- Use staging-specific external service keys"

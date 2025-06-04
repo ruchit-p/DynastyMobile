@@ -2,7 +2,7 @@ import { FpjsProvider } from '@fingerprintjs/fingerprintjs-pro-react';
 import { Agent, LoadOptions } from '@fingerprintjs/fingerprintjs-pro';
 import { auth, functions } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
-import { CSRFProtectedClient } from '@/lib/csrf-client';
+import { FirebaseFunctionsClient, createFirebaseClient } from '@/lib/functions-client';
 
 // FingerprintJS configuration
 const FINGERPRINT_API_KEY = process.env.NEXT_PUBLIC_FINGERPRINT_API_KEY || '';
@@ -36,7 +36,7 @@ class FingerprintService {
   private fpjsClient: Agent | null = null;
   private initPromise: Promise<void> | null = null;
   private isInitialized = false;
-  private csrfClient: CSRFProtectedClient | null = null;
+  private functionsClient: FirebaseFunctionsClient | null = null;
 
   /**
    * Initialize FingerprintJS Pro client
@@ -76,11 +76,11 @@ class FingerprintService {
     }
   }
 
-  /**
-   * Set CSRF client for protected API calls
-   */
-  setCSRFClient(client: CSRFProtectedClient): void {
-    this.csrfClient = client;
+  constructor() {
+    // Initialize functions client
+    if (functions) {
+      this.functionsClient = createFirebaseClient(functions);
+    }
   }
 
   /**
@@ -205,12 +205,12 @@ class FingerprintService {
       }
 
       // Quick check with backend
-      if (!this.csrfClient) {
-        console.warn('FingerprintService: CSRF client not initialized');
+      if (!this.functionsClient) {
+        console.warn('FingerprintService: Functions client not initialized');
         return false;
       }
 
-      const result = await this.csrfClient.callFunction<
+      const result = await this.functionsClient.callFunction<
         { userId: string; visitorId: string },
         { success: boolean; isTrusted: boolean; trustScore: number; requiresAdditionalAuth: boolean }
       >('checkDeviceTrust', {
@@ -232,12 +232,12 @@ class FingerprintService {
     try {
       const currentFingerprint = this.getCachedFingerprint();
       
-      if (!this.csrfClient) {
-        console.warn('FingerprintService: CSRF client not initialized');
+      if (!this.functionsClient) {
+        console.warn('FingerprintService: Functions client not initialized');
         return false;
       }
 
-      const result = await this.csrfClient.callFunction<
+      const result = await this.functionsClient.callFunction<
         { visitorId: string; currentVisitorId?: string },
         { success: boolean }
       >('removeTrustedDevice', {

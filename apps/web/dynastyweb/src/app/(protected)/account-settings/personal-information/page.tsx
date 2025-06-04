@@ -12,7 +12,7 @@ import Image from "next/image"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import ImageCropper from "@/components/ImageCropper"
 import { uploadProfilePicture } from "@/utils/mediaUtils"
-import { useCSRFClient } from "@/context/CSRFContext"
+import { updateUserProfile } from "@/utils/functionUtils"
 
 // MARK: - Helper Constants
 const MONTHS = [
@@ -33,7 +33,6 @@ const MONTHS = [
 export default function PersonalInformationPage() {
   const { currentUser, firestoreUser, refreshFirestoreUser } = useAuth()
   const { toast } = useToast()
-  const { csrfClient } = useCSRFClient()
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [newProfilePicture, setNewProfilePicture] = useState<File | null>(null)
@@ -248,7 +247,7 @@ export default function PersonalInformationPage() {
       }
 
       // Call the Firebase function to update the user profile
-      await csrfClient.callFunction('updateUserProfile', {
+      await updateUserProfile({
         userId: currentUser.uid,
         updates: updateData
       })

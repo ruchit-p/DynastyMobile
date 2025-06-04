@@ -6,7 +6,6 @@ import {
   ErrorCode,
   withErrorHandling,
 } from "../utils/errors";
-import {requireCSRFToken, CSRFValidatedRequest} from "./csrf";
 import {createLogContext, formatErrorForLogging} from "../utils/sanitization";
 import {checkRateLimit as checkRedisRateLimit, RateLimitType as RedisRateLimitType} from "../services/rateLimitService";
 import {getAuth} from "firebase-admin/auth";
@@ -442,7 +441,6 @@ export async function checkRateLimitByIP(
 export interface AuthConfig {
   authLevel?: "none" | "auth" | "verified" | "onboarded";
   rateLimitConfig?: RateLimitConfig;
-  enableCSRF?: boolean; // Enable CSRF protection for state-changing operations
 }
 
 /**
@@ -476,48 +474,13 @@ export function withAuth<T>(
     config = {
       authLevel: authLevelOrConfig || "auth",
       rateLimitConfig,
-      enableCSRF: false, // Default to false for backward compatibility
     };
   } else {
     config = authLevelOrConfig;
   }
 
-  const {authLevel = "auth", enableCSRF = false} = config;
+  const {authLevel = "auth"} = config;
 
-  // If CSRF is enabled, wrap with CSRF protection
-  if (enableCSRF) {
-    return requireCSRFToken(
-      withErrorHandling(async (request: CSRFValidatedRequest): Promise<T> => {
-        // Skip auth for 'none' level
-        if (authLevel === "none") {
-          return await handler(request);
-        }
-
-        // Apply rate limiting if configured
-        if (config.rateLimitConfig) {
-          await checkRateLimit(request, config.rateLimitConfig);
-        }
-
-        // Apply appropriate auth check based on level
-        switch (authLevel) {
-        case "auth":
-          requireAuth(request);
-          break;
-        case "verified":
-          await requireVerifiedUser(request);
-          break;
-        case "onboarded":
-          await requireOnboardedUser(request);
-          break;
-        }
-
-        // Call the handler function
-        return await handler(request);
-      }, handlerName)
-    );
-  }
-
-  // Original behavior without CSRF
   return withErrorHandling(async (request: CallableRequest): Promise<T> => {
     // Skip auth for 'none' level
     if (authLevel === "none") {
@@ -553,7 +516,6 @@ export function withAuth<T>(
 export interface ResourceAccessMiddlewareConfig {
   resourceConfig: ResourceAccessConfig;
   rateLimitConfig?: RateLimitConfig;
-  enableCSRF?: boolean; // Enable CSRF protection for state-changing operations
 }
 
 /**
@@ -588,34 +550,12 @@ export function withResourceAccess<T>(
     config = {
       resourceConfig: resourceConfigOrConfig,
       rateLimitConfig,
-      enableCSRF: false, // Default to false for backward compatibility
     };
   } else {
     // New API
     config = resourceConfigOrConfig;
   }
 
-  const {enableCSRF = false} = config;
-
-  // If CSRF is enabled, wrap with CSRF protection
-  if (enableCSRF) {
-    return requireCSRFToken(
-      withErrorHandling(async (request: CSRFValidatedRequest): Promise<T> => {
-        // Apply rate limiting if configured
-        if (config.rateLimitConfig) {
-          await checkRateLimit(request, config.rateLimitConfig);
-        }
-
-        // Check resource access
-        const {resource} = await checkResourceAccess(request, config.resourceConfig);
-
-        // Call the handler with the resource
-        return await handler(request, resource);
-      }, handlerName)
-    );
-  }
-
-  // Original behavior without CSRF
   return withErrorHandling(async (request: CallableRequest): Promise<T> => {
     // Apply rate limiting if configured
     if (config.rateLimitConfig) {

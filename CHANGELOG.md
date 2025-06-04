@@ -1,5 +1,33 @@
 # Dynasty Changelog
 
+## Version 2.9.0 - January 2025
+
+### 🔒 Security Updates
+
+**CSRF Protection Removal**
+- ✅ **Removed CSRF middleware** from Firebase callable functions
+  - Deleted CSRF validation middleware and services
+  - Removed `enableCSRF` parameter from all function configurations
+  - Simplified auth middleware to remove CSRF wrapping
+- ✅ **Updated Web Application**:
+  - Created new `FirebaseFunctionsClient` for direct function calls
+  - Removed `CSRFContext` and `useCSRF` hook
+  - Updated all services to use Firebase functions directly
+  - Removed `ServiceInitializer` component
+- ✅ **Security Rationale**:
+  - Firebase callable functions use bearer token authentication (not cookies)
+  - CSRF attacks don't apply to bearer token auth
+  - Firebase provides built-in token validation and CORS protection
+  - Simplified codebase while maintaining security
+
+### 🛠️ Code Quality Improvements
+
+**TypeScript and Linting Fixes**
+- ✅ Fixed all TypeScript `any` type errors
+- ✅ Removed unused imports and variables
+- ✅ Updated test utilities to remove CSRF mocks
+- ✅ Cleaned up function dependencies
+
 ## Version 2.8.0 - May 2025
 
 ### 🏗️ Monorepo Consolidation

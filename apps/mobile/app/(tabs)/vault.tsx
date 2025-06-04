@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { StyleSheet, View, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, ActivityIndicator, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import FloatingActionMenu, { FabMenuItemAction, FloatingActionMenuRef } from '../../components/ui/FloatingActionMenu';
@@ -29,6 +29,8 @@ import {
 } from '../../src/lib/firebaseUtils';
 import firebase from '@react-native-firebase/app';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import { showErrorAlert } from '../../src/lib/errorUtils';
 import { useSmartMediaUpload } from '../../hooks/useSmartMediaUpload';
 import { useEncryption } from '../../src/contexts/EncryptionContext';
 import { getVaultService, VaultItem as ServiceVaultItem } from '../../src/services/VaultService';
@@ -37,6 +39,7 @@ import Checkbox from '../../components/ui/Checkbox';
 import UploadProgressBar from '../../components/ui/UploadProgressBar';
 import Button from '../../components/ui/Button';
 import { logger } from '../../src/services/LoggingService';
+import { useBackgroundColor, useBorderColor } from '../../hooks/useThemeColor';
 
 // MARK: - Helper Functions
 
@@ -89,6 +92,11 @@ const VaultScreen = () => {
   // Smart media upload hook
   const smartUpload = useSmartMediaUpload();
   const { isEncryptionReady } = useEncryption();
+
+  // Get theme colors
+  const backgroundColor = useBackgroundColor('secondary');
+  const borderColor = useBorderColor();
+  const tertiaryBackgroundColor = useBackgroundColor('tertiary');
 
   const fetchItems = useCallback(async (parentId: string | null, forceRefresh = false) => {
     setIsLoading(true);
@@ -652,9 +660,11 @@ const VaultScreen = () => {
   // MARK: - Main Return
   return (
     <ErrorBoundary screenName="VaultScreen">
-      <View style={styles.screen}>
-      {/* Vault-specific header shadow wrapper */}
-      <View style={styles.vaultHeaderShadowContainer}>
+      <Screen 
+        safeArea={true} 
+        scroll={false}
+        style={[styles.screen, { backgroundColor }]}
+      >
         <AppHeader
           title={selectionMode ? `${selectedItems.size} selected` : (pathHistory.length > 1 ? currentPathDisplay : 'Vault')}
           headerLeft={selectionMode ? () => (
@@ -708,71 +718,83 @@ const VaultScreen = () => {
             </View>
           )}
         />
-      </View>
-      {!selectionMode && (
-        <VaultSearchBar
-          filters={searchFilters}
-          onFiltersChange={handleFiltersChange}
-          onSearch={handleSearch}
-        />
-      )}
-      {selectionMode && (
-        <View style={styles.bulkActionsBar}>
-          <Button
-            variant="text"
-            size="small"
-            onPress={() => {
-              if (selectedItems.size === items.length) {
-                setSelectedItems(new Set());
-              } else {
-                setSelectedItems(new Set(items.map(i => i.id)));
-              }
-            }}
-          >
-            {selectedItems.size === items.length ? 'Deselect All' : 'Select All'}
-          </Button>
-        </View>
-      )}
-      <Screen safeArea={false} style={styles.contentScreen}>
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.dynastyGreen} />
-            <ThemedText variant="bodyMedium" color="secondary">Loading items...</ThemedText>
-          </View>
-        ) : items.length === 0 ? (
-           <View style={styles.emptyStateContainer}>
-              <EmptyState 
-                  title={isSearching ? "No Results Found" : (currentPathId === null ? "Vault is Empty" : "Folder is Empty")}
-                  description={isSearching ? "Try adjusting your search or filters." : (currentPathId === null ? "Tap the '+' button to add your first file or folder." : "This folder is currently empty. Add some files!")}
-                  icon={isSearching ? "search-outline" : "archive-outline"}
-                  onAction={isSearching ? () => {
-                    setSearchFilters({ query: '', fileTypes: [], sortBy: 'name', sortOrder: 'asc' });
-                    setIsSearching(false);
-                    fetchItems(currentPathId);
-                  } : (currentPathId === null ? undefined : () => fabMenuRef.current?.open())}
-                  actionLabel={isSearching ? "Clear Search" : (currentPathId === null ? undefined : "Add Items")}
-              />
-          </View>
-        ) : (
-          <FlashList
-            data={items}
-            renderItem={renderItem}
-            keyExtractor={(item: UIVaultItem) => item.id}
-            contentContainerStyle={styles.listContentContainer}
-            estimatedItemSize={80}
+        
+        {!selectionMode && (
+          <VaultSearchBar
+            filters={searchFilters}
+            onFiltersChange={handleFiltersChange}
+            onSearch={handleSearch}
           />
         )}
+        
+        {selectionMode && (
+          <View style={[styles.bulkActionsBar, { 
+            backgroundColor: tertiaryBackgroundColor,
+            borderBottomWidth: 1,
+            borderBottomColor: borderColor 
+          }]}>
+            <Button
+              variant="text"
+              size="small"
+              onPress={() => {
+                if (selectedItems.size === items.length) {
+                  setSelectedItems(new Set());
+                } else {
+                  setSelectedItems(new Set(items.map(i => i.id)));
+                }
+              }}
+            >
+              {selectedItems.size === items.length ? 'Deselect All' : 'Select All'}
+            </Button>
+          </View>
+        )}
+        
+        <View style={styles.contentArea}>
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <EmptyState
+                icon="hourglass-outline"
+                title="Loading Vault"
+                description="Fetching your files and folders..."
+                iconSize={50}
+              />
+            </View>
+          ) : items.length === 0 ? (
+             <View style={styles.emptyStateContainer}>
+                <EmptyState 
+                    title={isSearching ? "No Results Found" : (currentPathId === null ? "Vault is Empty" : "Folder is Empty")}
+                    description={isSearching ? "Try adjusting your search or filters." : (currentPathId === null ? "Tap the '+' button to add your first file or folder." : "This folder is currently empty. Add some files!")}
+                    icon={isSearching ? "search-outline" : "archive-outline"}
+                    onAction={isSearching ? () => {
+                      setSearchFilters({ query: '', fileTypes: [], sortBy: 'name', sortOrder: 'asc' });
+                      setIsSearching(false);
+                      fetchItems(currentPathId);
+                    } : (currentPathId === null ? undefined : () => fabMenuRef.current?.open())}
+                    actionLabel={isSearching ? "Clear Search" : (currentPathId === null ? undefined : "Add Items")}
+                />
+            </View>
+          ) : (
+            <FlashList
+              data={items}
+              renderItem={renderItem}
+              keyExtractor={(item: UIVaultItem) => item.id}
+              contentContainerStyle={styles.listContentContainer}
+              estimatedItemSize={80}
+            />
+          )}
+        </View>
+        
         <FloatingActionMenu
           ref={fabMenuRef}
           menuItems={vaultMenuItems}
         />
+        
+        {showUploadProgress && (
+          <UploadProgressBar 
+            onDismiss={() => setShowUploadProgress(false)}
+          />
+        )}
       </Screen>
-      {showUploadProgress && (
-        <UploadProgressBar 
-          onDismiss={() => setShowUploadProgress(false)}
-        />
-      )}
-      </View>
     </ErrorBoundary>
   );
 };
@@ -781,30 +803,15 @@ const VaultScreen = () => {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.light.background.primary,
   },
-  contentScreen: {
+  contentArea: {
     flex: 1,
-  },
-  vaultHeaderShadowContainer: {
-    zIndex: 1,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.light.background.primary,
+    paddingHorizontal: Spacing.md,
   },
   emptyStateContainer: {
     flex: 1,
@@ -814,7 +821,8 @@ const styles = StyleSheet.create({
   },
   listContentContainer: {
     flexGrow: 1,
-    paddingBottom: Spacing.lg + 80,
+    paddingBottom: Spacing['5xl'],
+    paddingHorizontal: Spacing.md,
   },
   itemWrapper: {
     flexDirection: 'row',
@@ -825,11 +833,12 @@ const styles = StyleSheet.create({
     marginRight: Spacing.xs,
   },
   selectedItem: {
-    backgroundColor: Colors.light.background.secondary,
+    // Selection styling handled by theme-aware component
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: Spacing.sm,
   },
   bulkActionsBar: {
     flexDirection: 'row',
@@ -837,9 +846,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
-    backgroundColor: Colors.light.background.secondary,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
   },
 });
 

@@ -328,7 +328,7 @@ export default function LoginPage() {
           default:
             // For internal Firebase errors that don't prevent authentication,
             // check if user was actually signed in despite the error
-            if (error.message?.includes('internal') && !error.message?.includes('failed')) {
+            if (error instanceof Error && error.message?.includes('internal') && !error.message?.includes('failed')) {
               console.warn('Google Sign-in had internal warning but may have succeeded');
               // Don't show error toast for internal warnings - let the auth state change handle it
               return;

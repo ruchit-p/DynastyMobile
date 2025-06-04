@@ -4,7 +4,6 @@ import React, { useEffect, useState, useRef, useCallback} from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { useOnboarding } from '@/context/OnboardingContext';
-import { useCSRFClient } from '@/context/CSRFContext';
 import { useSearchParams } from 'next/navigation';
 import calcTree from "relatives-tree";
 import type { Node, ExtNode, Connector } from 'relatives-tree/lib/types';
@@ -94,7 +93,6 @@ interface FirestoreTimestamp {
 export default function FamilyTreePage() {
   const { currentUser, firestoreUser } = useAuth();
   const { hasCompletedOnboarding, isOnboardingLoading } = useOnboarding();
-  const { isReady: csrfReady } = useCSRFClient();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -246,12 +244,11 @@ export default function FamilyTreePage() {
   }, [isNewUser]);
 
   const fetchFamilyTreeData = useCallback(async () => {
-    if (!currentUser || !csrfReady) return;
+    if (!currentUser) return;
     
     console.log("🌳 fetchFamilyTreeData called", { 
       userId: currentUser.uid, 
-      hasCompletedOnboarding,
-      csrfReady 
+      hasCompletedOnboarding
     });
     
     // Don't try to fetch family tree data if onboarding isn't completed
@@ -288,11 +285,11 @@ export default function FamilyTreePage() {
     } finally {
       setLoading(false);
     }
-  }, [currentUser, hasCompletedOnboarding, csrfReady]);
+  }, [currentUser, hasCompletedOnboarding]);
 
   // Fetch family tree admin data and members
   const fetchFamilyManagementData = useCallback(async () => {
-    if (!currentUser || !hasCompletedOnboarding || !csrfReady) return;
+    if (!currentUser || !hasCompletedOnboarding) return;
 
     try {
       setLoading(true);
@@ -336,7 +333,7 @@ export default function FamilyTreePage() {
     } finally {
       setLoading(false);
     }
-  }, [currentUser, hasCompletedOnboarding, csrfReady]);
+  }, [currentUser, hasCompletedOnboarding]);
 
   useEffect(() => {
     console.log("🔄 Family tree useEffect triggered", { 
@@ -353,7 +350,7 @@ export default function FamilyTreePage() {
     }
     
     // Only fetch family tree data if onboarding is completed
-    if (hasCompletedOnboarding && currentUser && csrfReady) {
+    if (hasCompletedOnboarding && currentUser) {
       console.log("✅ Onboarding completed, fetching family tree data");
       void fetchFamilyTreeData();
     } else if (!hasCompletedOnboarding && currentUser) {
@@ -361,7 +358,7 @@ export default function FamilyTreePage() {
       // The OnboardingContext will handle showing the onboarding form
       // No need to reload the page - just wait for onboarding to complete
     }
-  }, [fetchFamilyTreeData, hasCompletedOnboarding, currentUser, csrfReady, isOnboardingLoading]);
+  }, [fetchFamilyTreeData, hasCompletedOnboarding, currentUser, isOnboardingLoading]);
 
   // Calculate optimal zoom level to fit the entire tree
   const calculateOptimalZoom = useCallback(() => {
@@ -1885,7 +1882,6 @@ export default function FamilyTreePage() {
                     <p>User ID: {currentUser?.uid}</p>
                     <p>Onboarding Completed: {hasCompletedOnboarding.toString()}</p>
                     <p>Onboarding Loading: {isOnboardingLoading.toString()}</p>
-                    <p>CSRF Ready: {csrfReady.toString()}</p>
                     <p>Tree Data Length: {treeData.length}</p>
                     <p>Loading: {loading.toString()}</p>
                   </div>

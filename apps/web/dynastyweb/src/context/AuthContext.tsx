@@ -17,6 +17,7 @@ import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
   ConfirmationResult,
+  UserCredential,
 } from 'firebase/auth';
 import { auth, functions, db } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
@@ -212,7 +213,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     password: string,
   ): Promise<void> => {
     try {
-      // Signup is CSRF-exempt, call directly
+      // Call signup function directly
       const handleSignUp = httpsCallable<SignUpRequest, SignUpResult>(functions, 'handleSignUp');
       await handleSignUp({
         email,
@@ -259,7 +260,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (!userDoc.exists()) {
           console.log("🆕 New Google user - creating Firestore document");
           // New Google user - creating Firestore document
-          // Google sign-in is CSRF-exempt
+          // Handle Google sign-in
           const handleGoogleSignIn = httpsCallable(functions, 'handleGoogleSignIn');
           try {
             console.log("📞 Calling handleGoogleSignIn with data:", {
@@ -329,18 +330,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (!userDoc.exists()) {
           console.log("🆕 New Apple user - creating Firestore document");
           // New Apple user - creating Firestore document
-          // Apple sign-in is CSRF-exempt
+          // Handle Apple sign-in
           const handleAppleSignIn = httpsCallable(functions, 'handleAppleSignIn');
           try {
-            // Extract Apple-specific user information
-            const credential = OAuthProvider.credentialFromResult(result);
-            
             // Extract name information from Apple if available
             // Apple provides this on first sign-in only
             let fullName = null;
             try {
               // Check if we have additional user info from the auth result
-              const additionalUserInfo = (result as any).additionalUserInfo;
+              const additionalUserInfo = (result as UserCredential & { additionalUserInfo?: { profile?: { name?: { firstName?: string; lastName?: string } } } }).additionalUserInfo;
               if (additionalUserInfo?.profile?.name) {
                 fullName = {
                   givenName: additionalUserInfo.profile.name.firstName || '',
@@ -442,7 +440,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signUpWithInvitation = async (data: InvitedSignupFormData) => {
-    // Invited signup is CSRF-exempt
+    // Handle invited signup
     const handleInvitedSignUp = httpsCallable<InvitedSignupFormData, { success: boolean; userId: string; familyTreeId: string }>(
       functions,
       "handleInvitedSignUp"
@@ -457,7 +455,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const verifyInvitation = async (token: string, invitationId: string) => {
-    // Invitation verification is CSRF-exempt (public endpoint)
+    // Verify invitation (public endpoint)
     const verifyInvitationToken = httpsCallable<
       { token: string; invitationId: string },
       {
@@ -552,7 +550,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         phoneNumber: user.phoneNumber
       });
       
-      // Phone sign-in is CSRF-exempt
+      // Initialize phone sign-in
       const handlePhoneSignInFn = httpsCallable(functions, 'handlePhoneSignIn');
       const response = await handlePhoneSignInFn({
         phoneNumber: user.phoneNumber,
