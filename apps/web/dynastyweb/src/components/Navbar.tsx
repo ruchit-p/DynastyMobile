@@ -202,13 +202,12 @@ export default function Navbar({ user }: NavbarProps) {
                       )
                     )}
                   />
-                  <div className="flex flex-col">
+                  <div className="flex items-center">
                     <span className="text-sm font-medium">
                       {firstName && lastName 
                         ? `${firstName} ${lastName}` 
                         : user.displayName || "User"}
                     </span>
-                    <span className="text-xs text-gray-500 truncate max-w-[180px]">{user.email}</span>
                   </div>
                 </div>
               </div>
