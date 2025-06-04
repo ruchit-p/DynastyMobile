@@ -4,6 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Recent Updates (January 2025)
 
+### Signal Protocol Security Implementation
+The Signal Protocol functions have been updated to use standardized authentication middleware, input validation, and rate limiting for production-ready security.
+
+**Key changes:**
+- All 7 Signal Protocol functions now use `withAuth` middleware with appropriate authentication levels
+- Comprehensive input validation using centralized validation schemas
+- Rate limiting configured for different operation types (key publishing: 3/hour, key retrieval: 20/hour, verification: 5/day, maintenance: 10/minute)
+- Removed manual authentication and validation code in favor of middleware approach
+- Standardized error handling using `createError` instead of `HttpsError`
+
+**Security improvements:**
+- High-security functions (key publishing) require verified users
+- Medium-security functions (key retrieval, verification) require verified users
+- Low-security functions (status checks) require basic authentication
+- All cryptographic keys are validated for base64 format and appropriate length
+- Rate limiting prevents abuse and DoS attacks
+
 ### CSRF Protection Removed
 The codebase has been updated to remove CSRF protection from Firebase callable functions. Firebase's built-in authentication (bearer tokens) provides sufficient security without the need for additional CSRF tokens.
 

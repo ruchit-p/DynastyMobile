@@ -1,51 +1,26 @@
-import {onCall, HttpsError} from "firebase-functions/v2/https";
+import {onCall} from "firebase-functions/v2/https";
 import {onDocumentUpdated} from "firebase-functions/v2/firestore";
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {getFirestore, FieldValue} from "firebase-admin/firestore";
 import {logger} from "firebase-functions/v2";
+import {withAuth, RateLimitType} from "./middleware/auth";
+import {validateRequest} from "./utils/request-validator";
+import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
+import {SECURITY_CONFIG} from "./config/security-config";
+import {createError, ErrorCode} from "./utils/errors";
 
 const db = getFirestore();
 
-/**
- * Validate and sanitize cryptographic keys
- */
-function validateCryptoKey(input: string, keyType: string): string {
-  // Remove whitespace
-  const trimmed = input.trim();
-
-  // Check if it's base64 encoded
-  const base64Regex = /^[A-Za-z0-9+/]+=*$/;
-  if (!base64Regex.test(trimmed)) {
-    throw new HttpsError("invalid-argument", `Invalid ${keyType} format - must be base64 encoded`);
-  }
-
-  // Validate length (Signal keys should be specific sizes)
-  const minLength = 32; // Minimum for most crypto keys
-  const maxLength = 10000; // Maximum reasonable size
-
-  if (trimmed.length < minLength || trimmed.length > maxLength) {
-    throw new HttpsError("invalid-argument", `Invalid ${keyType} length`);
-  }
-
-  return trimmed;
-}
-
-/**
- * Validate that the request is authenticated
- */
-function validateAuth(request: any) {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "User must be authenticated");
-  }
-  return request.auth.uid;
-}
 
 /**
  * Publish Signal Protocol keys for a user
  */
-export const publishSignalKeys = onCall(async (request) => {
+export const publishSignalKeys = onCall(withAuth(async (request) => {
   try {
-    const userId = validateAuth(request);
+    const userId = request.auth!.uid;
+
+    // Validate request data
+    const validatedData = validateRequest(request.data, VALIDATION_SCHEMAS.publishSignalKeys, userId);
 
     const {
       identityKey,
@@ -53,12 +28,7 @@ export const publishSignalKeys = onCall(async (request) => {
       preKeys,
       registrationId,
       deviceId = 1,
-    } = request.data;
-
-    // Validate input
-    if (!identityKey || !signedPreKey || !preKeys || !registrationId) {
-      throw new HttpsError("invalid-argument", "Missing required key data");
-    }
+    } = validatedData;
 
     // Start a batch write
     const batch = db.batch();
@@ -67,7 +37,7 @@ export const publishSignalKeys = onCall(async (request) => {
     const identityRef = db.collection("signalKeys").doc(userId);
     batch.set(identityRef, {
       userId,
-      identityKey: validateCryptoKey(identityKey, "identity key"),
+      identityKey,
       registrationId,
       lastUpdated: FieldValue.serverTimestamp(),
     }, {merge: true});
@@ -78,8 +48,8 @@ export const publishSignalKeys = onCall(async (request) => {
       deviceId,
       signedPreKey: {
         keyId: signedPreKey.id,
-        publicKey: validateCryptoKey(signedPreKey.publicKey, "signed prekey"),
-        signature: validateCryptoKey(signedPreKey.signature, "signature"),
+        publicKey: signedPreKey.publicKey,
+        signature: signedPreKey.signature,
         timestamp: signedPreKey.timestamp,
       },
       lastUpdated: FieldValue.serverTimestamp(),
@@ -97,7 +67,7 @@ export const publishSignalKeys = onCall(async (request) => {
         userId,
         deviceId,
         keyId: preKey.id,
-        publicKey: validateCryptoKey(preKey.publicKey, "prekey"),
+        publicKey: preKey.publicKey,
         createdAt: FieldValue.serverTimestamp(),
       });
     }
@@ -108,56 +78,31 @@ export const publishSignalKeys = onCall(async (request) => {
     return {success: true};
   } catch (error) {
     logger.error("Error publishing Signal keys:", error);
-    if (error instanceof HttpsError) {
+    if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
       throw error;
     }
-    throw new HttpsError("internal", "Failed to publish Signal keys");
+    throw createError(ErrorCode.INTERNAL, "Failed to publish Signal keys");
   }
-});
+}, "publishSignalKeys", {
+  authLevel: "verified",
+  rateLimitConfig: SECURITY_CONFIG.rateLimits.signal_key_publish,
+}));
 
 /**
  * Get user's Signal Protocol bundle for key exchange
  */
-export const getUserSignalBundle = onCall(async (request) => {
+export const getUserSignalBundle = onCall(withAuth(async (request) => {
   try {
-    const requesterId = validateAuth(request);
+    const requesterId = request.auth!.uid;
 
-    const {userId, deviceId = 1} = request.data;
-
-    if (!userId) {
-      throw new HttpsError("invalid-argument", "User ID is required");
-    }
-
-    // Rate limit prekey requests (max 10 per hour per requester)
-    const rateLimitRef = db.collection("rateLimits")
-      .doc(`prekey_${requesterId}_${userId}`);
-
-    const now = Date.now();
-    const hourAgo = now - (60 * 60 * 1000);
-
-    const rateLimitDoc = await rateLimitRef.get();
-    if (rateLimitDoc.exists) {
-      const data = rateLimitDoc.data()!;
-      const requests = data.requests || [];
-      const recentRequests = requests.filter((timestamp: number) => timestamp > hourAgo);
-
-      if (recentRequests.length >= 10) {
-        throw new HttpsError("resource-exhausted", "Too many prekey requests. Please try again later.");
-      }
-
-      await rateLimitRef.update({
-        requests: [...recentRequests, now],
-      });
-    } else {
-      await rateLimitRef.set({
-        requests: [now],
-      });
-    }
+    // Validate request data
+    const validatedData = validateRequest(request.data, VALIDATION_SCHEMAS.getUserSignalBundle, requesterId);
+    const {userId, deviceId = 1} = validatedData;
 
     // Get identity key
     const identityDoc = await db.collection("signalKeys").doc(userId).get();
     if (!identityDoc.exists) {
-      throw new HttpsError("not-found", "User has no Signal keys");
+      throw createError(ErrorCode.NOT_FOUND, "User has no Signal keys");
     }
 
     const identityData = identityDoc.data()!;
@@ -169,7 +114,7 @@ export const getUserSignalBundle = onCall(async (request) => {
       .get();
 
     if (!deviceDoc.exists) {
-      throw new HttpsError("not-found", "Device not found");
+      throw createError(ErrorCode.NOT_FOUND, "Device not found");
     }
 
     const deviceData = deviceDoc.data()!;
@@ -228,25 +173,26 @@ export const getUserSignalBundle = onCall(async (request) => {
     };
   } catch (error) {
     logger.error("Error getting Signal bundle:", error);
-    if (error instanceof HttpsError) {
+    if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
       throw error;
     }
-    throw new HttpsError("internal", "Failed to get Signal bundle");
+    throw createError(ErrorCode.INTERNAL, "Failed to get Signal bundle");
   }
-});
+}, "getUserSignalBundle", {
+  authLevel: "verified",
+  rateLimitConfig: SECURITY_CONFIG.rateLimits.signal_key_retrieve,
+}));
 
 /**
  * Publish new signed prekey
  */
-export const publishSignedPreKey = onCall(async (request) => {
+export const publishSignedPreKey = onCall(withAuth(async (request) => {
   try {
-    const userId = validateAuth(request);
+    const userId = request.auth!.uid;
 
-    const {signedPreKey, deviceId = 1} = request.data;
-
-    if (!signedPreKey) {
-      throw new HttpsError("invalid-argument", "Signed prekey is required");
-    }
+    // Validate request data
+    const validatedData = validateRequest(request.data, VALIDATION_SCHEMAS.publishSignedPreKey, userId);
+    const {signedPreKey, deviceId = 1} = validatedData;
 
     // Update device's signed prekey
     const deviceRef = db
@@ -258,8 +204,8 @@ export const publishSignedPreKey = onCall(async (request) => {
     await deviceRef.update({
       signedPreKey: {
         keyId: signedPreKey.id,
-        publicKey: validateCryptoKey(signedPreKey.publicKey, "signed prekey"),
-        signature: validateCryptoKey(signedPreKey.signature, "signature"),
+        publicKey: signedPreKey.publicKey,
+        signature: signedPreKey.signature,
         timestamp: signedPreKey.timestamp,
       },
       lastUpdated: FieldValue.serverTimestamp(),
@@ -269,25 +215,26 @@ export const publishSignedPreKey = onCall(async (request) => {
     return {success: true};
   } catch (error) {
     logger.error("Error publishing signed prekey:", error);
-    if (error instanceof HttpsError) {
+    if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
       throw error;
     }
-    throw new HttpsError("internal", "Failed to publish signed prekey");
+    throw createError(ErrorCode.INTERNAL, "Failed to publish signed prekey");
   }
-});
+}, "publishSignedPreKey", {
+  authLevel: "verified",
+  rateLimitConfig: SECURITY_CONFIG.rateLimits.signal_key_publish,
+}));
 
 /**
  * Publish new prekeys
  */
-export const publishPreKeys = onCall(async (request) => {
+export const publishPreKeys = onCall(withAuth(async (request) => {
   try {
-    const userId = validateAuth(request);
+    const userId = request.auth!.uid;
 
-    const {preKeys, deviceId = 1} = request.data;
-
-    if (!preKeys || !Array.isArray(preKeys)) {
-      throw new HttpsError("invalid-argument", "PreKeys array is required");
-    }
+    // Validate request data
+    const validatedData = validateRequest(request.data, VALIDATION_SCHEMAS.publishPreKeys, userId);
+    const {preKeys, deviceId = 1} = validatedData;
 
     const batch = db.batch();
 
@@ -302,7 +249,7 @@ export const publishPreKeys = onCall(async (request) => {
         userId,
         deviceId,
         keyId: preKey.id,
-        publicKey: validateCryptoKey(preKey.publicKey, "prekey"),
+        publicKey: preKey.publicKey,
         createdAt: FieldValue.serverTimestamp(),
       });
     }
@@ -313,25 +260,26 @@ export const publishPreKeys = onCall(async (request) => {
     return {success: true};
   } catch (error) {
     logger.error("Error publishing prekeys:", error);
-    if (error instanceof HttpsError) {
+    if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
       throw error;
     }
-    throw new HttpsError("internal", "Failed to publish prekeys");
+    throw createError(ErrorCode.INTERNAL, "Failed to publish prekeys");
   }
-});
+}, "publishPreKeys", {
+  authLevel: "verified",
+  rateLimitConfig: SECURITY_CONFIG.rateLimits.signal_key_publish,
+}));
 
 /**
  * Mark a user's identity as verified
  */
-export const markUserAsVerified = onCall(async (request) => {
+export const markUserAsVerified = onCall(withAuth(async (request) => {
   try {
-    const verifierId = validateAuth(request);
+    const verifierId = request.auth!.uid;
 
-    const {userId} = request.data;
-
-    if (!userId) {
-      throw new HttpsError("invalid-argument", "User ID is required");
-    }
+    // Validate request data
+    const validatedData = validateRequest(request.data, VALIDATION_SCHEMAS.markUserAsVerified, verifierId);
+    const {userId} = validatedData;
 
     // Store verification record
     await db
@@ -349,30 +297,31 @@ export const markUserAsVerified = onCall(async (request) => {
     return {success: true};
   } catch (error) {
     logger.error("Error marking user as verified:", error);
-    if (error instanceof HttpsError) {
+    if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
       throw error;
     }
-    throw new HttpsError("internal", "Failed to mark user as verified");
+    throw createError(ErrorCode.INTERNAL, "Failed to mark user as verified");
   }
-});
+}, "markUserAsVerified", {
+  authLevel: "verified",
+  rateLimitConfig: SECURITY_CONFIG.rateLimits.signal_verification,
+}));
 
 /**
  * Trust a user's new identity key
  */
-export const trustUserIdentity = onCall(async (request) => {
+export const trustUserIdentity = onCall(withAuth(async (request) => {
   try {
-    const trusterId = validateAuth(request);
+    const trusterId = request.auth!.uid;
 
-    const {userId} = request.data;
-
-    if (!userId) {
-      throw new HttpsError("invalid-argument", "User ID is required");
-    }
+    // Validate request data
+    const validatedData = validateRequest(request.data, VALIDATION_SCHEMAS.trustUserIdentity, trusterId);
+    const {userId} = validatedData;
 
     // Get the current identity key
     const identityDoc = await db.collection("signalKeys").doc(userId).get();
     if (!identityDoc.exists) {
-      throw new HttpsError("not-found", "User has no Signal keys");
+      throw createError(ErrorCode.NOT_FOUND, "User has no Signal keys");
     }
 
     const identityKey = identityDoc.data()!.identityKey;
@@ -394,21 +343,26 @@ export const trustUserIdentity = onCall(async (request) => {
     return {success: true};
   } catch (error) {
     logger.error("Error trusting user identity:", error);
-    if (error instanceof HttpsError) {
+    if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
       throw error;
     }
-    throw new HttpsError("internal", "Failed to trust user identity");
+    throw createError(ErrorCode.INTERNAL, "Failed to trust user identity");
   }
-});
+}, "trustUserIdentity", {
+  authLevel: "verified",
+  rateLimitConfig: SECURITY_CONFIG.rateLimits.signal_verification,
+}));
 
 /**
  * Get prekey count for a user
  */
-export const getPreKeyCount = onCall(async (request) => {
+export const getPreKeyCount = onCall(withAuth(async (request) => {
   try {
-    const userId = validateAuth(request);
+    const userId = request.auth!.uid;
 
-    const {deviceId = 1} = request.data;
+    // Validate request data
+    const validatedData = validateRequest(request.data, VALIDATION_SCHEMAS.getPreKeyCount, userId);
+    const {deviceId = 1} = validatedData;
 
     const snapshot = await db
       .collection("users")
@@ -421,12 +375,15 @@ export const getPreKeyCount = onCall(async (request) => {
     return {count: snapshot.data().count};
   } catch (error) {
     logger.error("Error getting prekey count:", error);
-    if (error instanceof HttpsError) {
+    if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
       throw error;
     }
-    throw new HttpsError("internal", "Failed to get prekey count");
+    throw createError(ErrorCode.INTERNAL, "Failed to get prekey count");
   }
-});
+}, "getPreKeyCount", {
+  authLevel: "auth",
+  rateLimitConfig: SECURITY_CONFIG.rateLimits.signal_maintenance,
+}));
 
 /**
  * Notify users when someone's key changes

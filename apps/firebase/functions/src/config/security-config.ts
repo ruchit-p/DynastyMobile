@@ -70,6 +70,34 @@ export const SECURITY_CONFIG = {
       maxRequests: 100,
       windowSeconds: 60, // 100 reads per minute
     },
+
+    // Signal Protocol key publishing operations
+    signal_key_publish: {
+      type: RateLimitType.SIGNAL_KEY_PUBLISH,
+      maxRequests: 3,
+      windowSeconds: 3600, // 3 per hour
+    },
+
+    // Signal Protocol key retrieval operations
+    signal_key_retrieve: {
+      type: RateLimitType.SIGNAL_KEY_RETRIEVE,
+      maxRequests: 20,
+      windowSeconds: 3600, // 20 per hour
+    },
+
+    // Signal Protocol verification operations
+    signal_verification: {
+      type: RateLimitType.SIGNAL_VERIFICATION,
+      maxRequests: 5,
+      windowSeconds: 86400, // 5 per day
+    },
+
+    // Signal Protocol maintenance operations
+    signal_maintenance: {
+      type: RateLimitType.SIGNAL_MAINTENANCE,
+      maxRequests: 10,
+      windowSeconds: 60, // 10 per minute
+    },
   },
 
 };

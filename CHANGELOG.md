@@ -1,5 +1,29 @@
 # Dynasty Changelog
 
+## Version 2.10.0 - January 2025
+
+### 🔒 Security Updates
+
+**Signal Protocol Security Standardization**
+- ✅ **Authentication Middleware**: All Signal Protocol functions now use standardized `withAuth` middleware
+  - High-security functions (key publishing) require verified users
+  - Medium-security functions (key retrieval, verification) require verified users  
+  - Low-security functions (status checks) require basic authentication
+- ✅ **Input Validation**: Comprehensive validation schemas for all Signal Protocol operations
+  - Created 7 validation schemas covering all function parameters
+  - Added cryptographic key validation with base64 format and length checks
+  - Removed manual validation code in favor of centralized approach
+- ✅ **Rate Limiting**: Configured operation-specific rate limits
+  - Key publishing: 3 requests per hour
+  - Key retrieval: 20 requests per hour
+  - Verification operations: 5 requests per day
+  - Maintenance operations: 10 requests per minute
+- ✅ **Code Improvements**:
+  - Removed manual `validateAuth` and `validateCryptoKey` functions
+  - Standardized error handling using `createError` instead of `HttpsError`
+  - Removed custom rate limiting implementation from `getUserSignalBundle`
+  - Maintained backward compatibility with existing function signatures
+
 ## Version 2.9.0 - January 2025
 
 ### 🔒 Security Updates

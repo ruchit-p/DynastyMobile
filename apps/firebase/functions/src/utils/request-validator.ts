@@ -5,7 +5,7 @@ import * as validations from "./validation-extended";
 export interface ValidationRule {
   field: string;
   type: "string" | "number" | "boolean" | "array" | "object" | "date" | "email" |
-        "phone" | "name" | "id" | "location" | "file" | "enum";
+        "phone" | "name" | "id" | "location" | "file" | "enum" | "crypto_key";
   required?: boolean;
   minLength?: number;
   maxLength?: number;
@@ -121,6 +121,21 @@ export function validateRequest(
       case "object":
         if (typeof value !== "object" || value === null || Array.isArray(value)) {
           throw new Error("must be an object");
+        }
+        break;
+
+      case "crypto_key":
+        if (typeof value !== "string") {
+          throw new Error("must be a string");
+        }
+        // Check base64 format
+        const base64Regex = /^[A-Za-z0-9+/]+=*$/;
+        if (!base64Regex.test(value)) {
+          throw new Error("must be base64 encoded");
+        }
+        // Check length constraints for crypto keys
+        if (value.length < 32 || value.length > 10000) {
+          throw new Error("invalid cryptographic key length");
         }
         break;
       }

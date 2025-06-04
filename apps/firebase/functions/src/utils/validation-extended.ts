@@ -178,6 +178,34 @@ export function validateEnum<T>(
   return value;
 }
 
+// Validate cryptographic key
+export function validateCryptoKey(key: string, keyType: string): string {
+  // Remove whitespace
+  const trimmed = key.trim();
+
+  // Check if it's base64 encoded
+  const base64Regex = /^[A-Za-z0-9+/]+=*$/;
+  if (!base64Regex.test(trimmed)) {
+    throw createError(
+      ErrorCode.INVALID_ARGUMENT,
+      `Invalid ${keyType} format - must be base64 encoded`
+    );
+  }
+
+  // Validate length (Signal keys should be specific sizes)
+  const minLength = 32; // Minimum for most crypto keys
+  const maxLength = 10000; // Maximum reasonable size
+
+  if (trimmed.length < minLength || trimmed.length > maxLength) {
+    throw createError(
+      ErrorCode.INVALID_ARGUMENT,
+      `Invalid ${keyType} length`
+    );
+  }
+
+  return trimmed;
+}
+
 // Re-export from base validation for convenience
 export {
   isValidEmail,

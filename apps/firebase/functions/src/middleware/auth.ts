@@ -82,6 +82,10 @@ export enum RateLimitType {
   MEDIA = "media", // Media uploads
   WRITE = "write", // Write operations (create/update)
   SENSITIVE = "sensitive", // Sensitive operations
+  SIGNAL_KEY_PUBLISH = "signal_key_publish", // Signal Protocol key publishing operations
+  SIGNAL_KEY_RETRIEVE = "signal_key_retrieve", // Signal Protocol key retrieval operations
+  SIGNAL_VERIFICATION = "signal_verification", // Signal Protocol verification operations
+  SIGNAL_MAINTENANCE = "signal_maintenance", // Signal Protocol maintenance operations
 }
 
 /**

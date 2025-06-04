@@ -1195,4 +1195,69 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
     ],
     xssCheck: false,
   },
+
+  // Signal Protocol Schemas
+  publishSignalKeys: {
+    rules: [
+      {field: "identityKey", type: "string", required: true, maxLength: 10000},
+      {field: "signedPreKey", type: "object", required: true},
+      {field: "signedPreKey.id", type: "number", required: true},
+      {field: "signedPreKey.publicKey", type: "string", required: true, maxLength: 10000},
+      {field: "signedPreKey.signature", type: "string", required: true, maxLength: 10000},
+      {field: "signedPreKey.timestamp", type: "number", required: true},
+      {field: "preKeys", type: "array", required: true, maxSize: 100},
+      {field: "registrationId", type: "number", required: true},
+      {field: "deviceId", type: "number"},
+    ],
+    xssCheck: false,
+  },
+
+  getUserSignalBundle: {
+    rules: [
+      {field: "userId", type: "id", required: true},
+      {field: "deviceId", type: "number"},
+    ],
+    xssCheck: false,
+  },
+
+  publishSignedPreKey: {
+    rules: [
+      {field: "signedPreKey", type: "object", required: true},
+      {field: "signedPreKey.id", type: "number", required: true},
+      {field: "signedPreKey.publicKey", type: "string", required: true, maxLength: 10000},
+      {field: "signedPreKey.signature", type: "string", required: true, maxLength: 10000},
+      {field: "signedPreKey.timestamp", type: "number", required: true},
+      {field: "deviceId", type: "number"},
+    ],
+    xssCheck: false,
+  },
+
+  publishPreKeys: {
+    rules: [
+      {field: "preKeys", type: "array", required: true, maxSize: 100},
+      {field: "deviceId", type: "number"},
+    ],
+    xssCheck: false,
+  },
+
+  markUserAsVerified: {
+    rules: [
+      {field: "userId", type: "id", required: true},
+    ],
+    xssCheck: false,
+  },
+
+  trustUserIdentity: {
+    rules: [
+      {field: "userId", type: "id", required: true},
+    ],
+    xssCheck: false,
+  },
+
+  getPreKeyCount: {
+    rules: [
+      {field: "deviceId", type: "number"},
+    ],
+    xssCheck: false,
+  },
 };
