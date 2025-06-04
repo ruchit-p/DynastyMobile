@@ -23,44 +23,38 @@ fi
 echo -e "${BLUE}Generating all production secrets...${NC}"
 echo ""
 
-# 1. CSRF Secret Key (256-bit)
-echo -e "${YELLOW}1. CSRF Secret Key (256-bit):${NC}"
-CSRF_SECRET=$(openssl rand -hex 32)
-echo "   $CSRF_SECRET"
-echo ""
-
-# 2. JWT Secret Key (256-bit)
-echo -e "${YELLOW}2. JWT Secret Key (256-bit):${NC}"
+# 1. JWT Secret Key (256-bit)
+echo -e "${YELLOW}1. JWT Secret Key (256-bit):${NC}"
 JWT_SECRET=$(openssl rand -hex 32)
 echo "   $JWT_SECRET"
 echo ""
 
-# 3. Encryption Master Key (256-bit)
-echo -e "${YELLOW}3. Encryption Master Key (256-bit):${NC}"
+# 2. Encryption Master Key (256-bit)
+echo -e "${YELLOW}2. Encryption Master Key (256-bit):${NC}"
 ENCRYPTION_KEY=$(openssl rand -hex 32)
 echo "   $ENCRYPTION_KEY"
 echo ""
 
-# 4. Session Secret (256-bit)
-echo -e "${YELLOW}4. Session Secret (256-bit):${NC}"
+# 3. Session Secret (256-bit)
+echo -e "${YELLOW}3. Session Secret (256-bit):${NC}"
 SESSION_SECRET=$(openssl rand -hex 32)
 echo "   $SESSION_SECRET"
 echo ""
 
-# 5. API Key Salt (128-bit)
-echo -e "${YELLOW}5. API Key Salt (128-bit):${NC}"
+# 4. API Key Salt (128-bit)
+echo -e "${YELLOW}4. API Key Salt (128-bit):${NC}"
 API_SALT=$(openssl rand -hex 16)
 echo "   $API_SALT"
 echo ""
 
-# 6. Webhook Secret (256-bit)
-echo -e "${YELLOW}6. Webhook Secret (256-bit):${NC}"
+# 5. Webhook Secret (256-bit)
+echo -e "${YELLOW}5. Webhook Secret (256-bit):${NC}"
 WEBHOOK_SECRET=$(openssl rand -hex 32)
 echo "   $WEBHOOK_SECRET"
 echo ""
 
-# 7. Database Encryption Key (256-bit)
-echo -e "${YELLOW}7. Database Encryption Key (256-bit):${NC}"
+# 6. Database Encryption Key (256-bit)
+echo -e "${YELLOW}6. Database Encryption Key (256-bit):${NC}"
 DB_ENCRYPTION_KEY=$(openssl rand -hex 32)
 echo "   $DB_ENCRYPTION_KEY"
 echo ""
@@ -73,7 +67,6 @@ cat > .env.production.template << EOF
 # ⚠️  IMPORTANT: Keep these secrets secure and never commit to git!
 
 # Core Security Keys
-CSRF_SECRET_KEY=$CSRF_SECRET
 JWT_SECRET_KEY=$JWT_SECRET
 ENCRYPTION_MASTER_KEY=$ENCRYPTION_KEY
 SESSION_SECRET=$SESSION_SECRET
@@ -118,7 +111,6 @@ ANALYTICS_API_KEY=<your-analytics-api-key>
 LOG_LEVEL=info
 
 # Feature Flags
-ENABLE_CSRF_PROTECTION=true
 ENABLE_RATE_LIMITING=true
 ENABLE_AUDIT_LOGGING=true
 ENABLE_METRICS=true
@@ -129,7 +121,6 @@ echo -e "${BLUE}Generating Firebase Functions config...${NC}"
 cat > firebase-functions-config.json << EOF
 {
   "security": {
-    "csrf_secret_key": "$CSRF_SECRET",
     "jwt_secret_key": "$JWT_SECRET",
     "encryption_master_key": "$ENCRYPTION_KEY",
     "session_secret": "$SESSION_SECRET",

@@ -3,10 +3,10 @@
 
 import React from 'react';
 import { getMessaging, getToken, onMessage, Messaging } from 'firebase/messaging';
-import { app } from '@/lib/firebase';
+import { app, functions } from '@/lib/firebase';
 import { errorHandler, ErrorSeverity } from './ErrorHandlingService';
 import { cacheService, cacheKeys } from './CacheService';
-import { CSRFProtectedClient } from '@/lib/csrf-client';
+import { FirebaseFunctionsClient, createFirebaseClient } from '@/lib/functions-client';
 
 export interface NotificationPreferences {
   enabled: boolean;
@@ -36,9 +36,16 @@ class NotificationService {
   private userId?: string;
   private isInitialized = false;
   private messageListeners: Set<(notification: DynastyNotification) => void> = new Set();
-  private csrfClient: CSRFProtectedClient | null = null;
+  private functionsClient: FirebaseFunctionsClient;
 
-  private constructor() {}
+  private constructor() {
+    // Initialize Firebase Functions client
+    if (functions) {
+      this.functionsClient = createFirebaseClient(functions);
+    } else {
+      throw new Error('Firebase Functions not initialized');
+    }
+  }
 
   static getInstance(): NotificationService {
     if (!NotificationService.instance) {
@@ -47,17 +54,8 @@ class NotificationService {
     return NotificationService.instance;
   }
 
-  // Set the CSRF client (should be called when the app initializes)
-  setCSRFClient(client: CSRFProtectedClient) {
-    this.csrfClient = client;
-  }
-
-  // Get CSRF client with error if not set
-  private getCSRFClient(): CSRFProtectedClient {
-    if (!this.csrfClient) {
-      throw new Error('CSRF client not initialized. Please ensure CSRFProvider is set up.');
-    }
-    return this.csrfClient;
+  private getPlatform(): string {
+    return 'web';
   }
 
   async initialize(userId: string) {
@@ -106,20 +104,25 @@ class NotificationService {
         vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY
       });
 
+      // Only register if a new token is available and different from the current one
       if (token && token !== this.currentToken) {
-        this.currentToken = token;
+        try {
+          // Attempt to register the new token with the backend
+          await this.functionsClient.callFunction('registerDeviceToken', {
+            token,
+            platform: this.getPlatform(),
+            deleteDuplicates: true, // Remove any older tokens for this user
+          });
 
-        // Register token with backend
-        await this.getCSRFClient().callFunction('registerDeviceToken', {
-          token,
-          platform: 'web',
-          deviceInfo: {
-            userAgent: navigator.userAgent,
-            language: navigator.language
-          }
-        });
+          // Update current token and store it
+          this.currentToken = token;
 
-        console.log('FCM token registered successfully');
+          console.log('FCM token registered successfully');
+        } catch (error) {
+          errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
+            action: 'register-fcm-token'
+          });
+        }
       }
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
@@ -234,7 +237,7 @@ class NotificationService {
       return await cacheService.getOrSet(
         cacheKey,
         async () => {
-          const result = await this.getCSRFClient().callFunction('getNotifications', { page, limit });
+          const result = await this.functionsClient.callFunction('getNotifications', { page, limit });
           const data = result.data as { notifications?: DynastyNotification[] };
           return data.notifications || [];
         },
@@ -250,7 +253,7 @@ class NotificationService {
 
   async markAsRead(notificationIds: string[]): Promise<void> {
     try {
-      await this.getCSRFClient().callFunction('markNotificationsRead', { notificationIds });
+      await this.functionsClient.callFunction('markNotificationsRead', { notificationIds });
 
       // Invalidate cache
       if (this.userId) {
@@ -265,7 +268,7 @@ class NotificationService {
 
   async updatePreferences(preferences: NotificationPreferences): Promise<void> {
     try {
-      await this.getCSRFClient().callFunction('updateNotificationPreferences', { preferences });
+      await this.functionsClient.callFunction('updateNotificationPreferences', { preferences });
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
         action: 'update-notification-preferences'
@@ -276,7 +279,7 @@ class NotificationService {
 
   async getPreferences(): Promise<NotificationPreferences> {
     try {
-      const result = await this.getCSRFClient().callFunction('getNotificationPreferences', {});
+      const result = await this.functionsClient.callFunction('getNotificationPreferences', {});
       const data = result.data as { preferences: NotificationPreferences };
       return data.preferences;
     } catch (error) {
@@ -305,7 +308,7 @@ class NotificationService {
   async cleanup() {
     if (this.currentToken && this.userId) {
       try {
-        await this.getCSRFClient().callFunction('unregisterDeviceToken', { token: this.currentToken });
+        await this.functionsClient.callFunction('unregisterDeviceToken', { token: this.currentToken });
       } catch (error) {
         console.error('Failed to unregister token:', error);
       }

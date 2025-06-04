@@ -19,6 +19,7 @@ import {createLogContext, formatErrorForLogging} from "./utils/sanitization";
 import {sanitizeFilename} from "./utils/xssSanitization";
 import {validateRequest} from "./utils/request-validator";
 import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
+import {getCorsOptions} from "./config/cors";
 // import {vaultSecurityService} from "./services/vaultSecurityService";
 
 // MARK: - Types
@@ -211,6 +212,7 @@ async function updateDescendantPathsRecursive(
  */
 export const getVaultUploadSignedUrl = onCall(
   {
+    ...getCorsOptions(),
     region: DEFAULT_REGION,
     memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
@@ -329,7 +331,6 @@ export const getVaultUploadSignedUrl = onCall(
     };
   }, "getVaultUploadSignedUrl", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.upload,
   })
 );
@@ -339,15 +340,13 @@ export const getVaultUploadSignedUrl = onCall(
  */
 export const getVaultItems = onCall(
   {
+    ...getCorsOptions(),
     region: DEFAULT_REGION,
     memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
-    }
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
 
     // Validate and sanitize input using centralized validator
     const validatedData = validateRequest(
@@ -376,7 +375,10 @@ export const getVaultItems = onCall(
       parentId: parentId || "root",
     }));
     return {items};
-  }, "getVaultItems")
+  }, "getVaultItems", {
+    authLevel: "onboarded",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.read,
+  })
 );
 
 /**
@@ -384,6 +386,7 @@ export const getVaultItems = onCall(
  */
 export const createVaultFolder = onCall(
   {
+    ...getCorsOptions(),
     region: DEFAULT_REGION,
     memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
@@ -428,7 +431,6 @@ export const createVaultFolder = onCall(
     return {id: docRef.id};
   }, "createVaultFolder", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
   })
 );
@@ -718,7 +720,6 @@ export const addVaultFile = onCall(
     return {id: docRef.id, downloadURL: finalDownloadURL, isEncrypted};
   }, "addVaultFile", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
   })
 );
@@ -770,7 +771,6 @@ export const renameVaultItem = onCall(
     return {success: true};
   }, "renameVaultItem", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
   })
 );
@@ -829,7 +829,6 @@ export const moveVaultItem = onCall(
     return {success: true};
   }, "moveVaultItem", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
   })
 );
@@ -1004,7 +1003,6 @@ export const deleteVaultItem = onCall(
     return {success: true};
   }, "deleteVaultItem", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
   })
 );
@@ -1165,7 +1163,6 @@ export const restoreVaultItem = onCall(
     return {success: true, restoredCount: itemsToRestore.length};
   }, "restoreVaultItem", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
   })
 );
@@ -1260,7 +1257,6 @@ export const cleanupDeletedVaultItems = onCall(
     return {success: true, deletedCount: itemIds.length};
   }, "cleanupDeletedVaultItems", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
   })
 );
@@ -1497,7 +1493,6 @@ export const shareVaultItem = onCall(
     return {success: true};
   }, "shareVaultItem", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
   })
 );
@@ -1578,7 +1573,6 @@ export const revokeVaultItemAccess = onCall(
     return {success: true};
   }, "revokeVaultItemAccess", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
   })
 );
@@ -1684,7 +1678,6 @@ export const updateVaultItemPermissions = onCall(
     return {success: true};
   }, "updateVaultItemPermissions", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
   })
 );
@@ -2114,7 +2107,6 @@ export const updateVaultFile = onCall(
     return {success: true, itemId};
   }, "updateVaultFile", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.upload,
   })
 );
@@ -2182,7 +2174,6 @@ export const completeVaultFileUpload = onCall(
     return {success: true};
   }, "completeVaultFileUpload", {
     authLevel: "onboarded",
-    enableCSRF: true,
   })
 );
 
@@ -2283,7 +2274,6 @@ export const permanentlyDeleteVaultItem = onCall(
     return {success: true};
   }, "permanentlyDeleteVaultItem", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
   })
 );

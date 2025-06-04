@@ -4,7 +4,8 @@
 import React from 'react';
 import { networkMonitor } from './NetworkMonitor';
 import { errorHandler, ErrorSeverity } from './ErrorHandlingService';
-import { CSRFProtectedClient } from '@/lib/csrf-client';
+import { functions } from '@/lib/firebase';
+import { FirebaseFunctionsClient, createFirebaseClient } from '@/lib/functions-client';
 
 export interface SyncOperation {
   id: string;
@@ -30,11 +31,15 @@ class SyncQueueService {
   private isProcessing = false;
   private maxRetries = 3;
   private syncInterval?: NodeJS.Timeout;
-  private csrfClient: CSRFProtectedClient | null = null;
+  private functionsClient: FirebaseFunctionsClient | null = null;
 
   private constructor() {
     this.initializeDatabase();
     this.setupNetworkListener();
+    // Initialize functions client
+    if (functions) {
+      this.functionsClient = createFirebaseClient(functions);
+    }
   }
 
   static getInstance(): SyncQueueService {
@@ -44,17 +49,12 @@ class SyncQueueService {
     return SyncQueueService.instance;
   }
 
-  // Set the CSRF client (should be called when the app initializes)
-  setCSRFClient(client: CSRFProtectedClient) {
-    this.csrfClient = client;
-  }
-
-  // Get CSRF client with error if not set
-  private getCSRFClient(): CSRFProtectedClient {
-    if (!this.csrfClient) {
-      throw new Error('CSRF client not initialized. Please ensure CSRFProvider is set up.');
+  // Get functions client with error if not set
+  private getFunctionsClient(): FirebaseFunctionsClient {
+    if (!this.functionsClient) {
+      throw new Error('Functions client not initialized');
     }
-    return this.csrfClient;
+    return this.functionsClient;
   }
 
   private async initializeDatabase() {
@@ -199,7 +199,7 @@ class SyncQueueService {
 
   private async processOperation(operation: SyncOperation): Promise<SyncResult> {
     try {
-      const result = await this.getCSRFClient().callFunction('processSyncQueue', {
+      const result = await this.getFunctionsClient().callFunction('processSyncQueue', {
         operations: [operation]
       });
 

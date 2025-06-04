@@ -9,10 +9,6 @@ jest.mock('@/lib/firebase', () => ({
   analytics: null,
 }));
 jest.mock('@/context/AuthContext');
-jest.mock('@/context/CSRFContext');
-jest.mock('@/hooks/useCSRF', () => ({
-  useCSRF: () => ({ csrfToken: 'test-csrf-token' }),
-}));
 
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -20,7 +16,7 @@ import userEvent from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import LoginPage from '@/app/login/page';
-import { createMockAuthContext, createMockCSRFContext, createMockFirebaseUser, createMockFirestoreUser } from '../test-utils';
+import { createMockAuthContext, createMockFirebaseUser, createMockFirestoreUser } from '../test-utils';
 
 // Mock Firebase
 jest.mock('firebase/auth', () => ({
@@ -358,21 +354,6 @@ describe('Login Page - Real-world Scenarios', () => {
   });
 
   describe('Security Features', () => {
-    it('should include CSRF token in requests', async () => {
-      const user = userEvent.setup();
-      const mockSignIn = jest.fn().mockResolvedValue(undefined);
-      
-      mockUseAuth.mockReturnValue(
-        createMockAuthContext({ signIn: mockSignIn })
-      );
-
-      render(<LoginPage />);
-
-      const form = screen.getByRole('form');
-      const csrfInput = form.querySelector('input[name="csrf_token"]');
-      expect(csrfInput).toHaveValue('test-csrf-token');
-    });
-
     it('should mask password input', () => {
       render(<LoginPage />);
 

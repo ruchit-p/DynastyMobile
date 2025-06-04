@@ -1,6 +1,7 @@
 import { Timestamp } from "firebase/firestore"
 import { createEvents, EventAttributes } from 'ics'
-import { CSRFProtectedClient } from '@/lib/csrf-client'
+import { functions } from '@/lib/firebase';
+import { FirebaseFunctionsClient, createFirebaseClient } from '@/lib/functions-client'
 
 // Event types for the application
 export type EventType = 
@@ -124,18 +125,19 @@ class EventManager {
 const eventManager = new EventManager();
 export default eventManager;
 
-// CSRF client for API calls
-let csrfClient: CSRFProtectedClient | null = null;
+// Firebase Functions client
+let functionsClient: FirebaseFunctionsClient | null = null;
 
-export function setEventUtilsCSRFClient(client: CSRFProtectedClient) {
-  csrfClient = client;
+// Initialize the functions client
+if (functions) {
+  functionsClient = createFirebaseClient(functions);
 }
 
-function getCSRFClient(): CSRFProtectedClient {
-  if (!csrfClient) {
-    throw new Error('CSRF client not initialized for eventUtils. Please ensure CSRFProvider is set up.');
+function getFunctionsClient(): FirebaseFunctionsClient {
+  if (!functionsClient) {
+    throw new Error('Firebase Functions not initialized');
   }
-  return csrfClient;
+  return functionsClient;
 }
 
 /**
@@ -143,7 +145,7 @@ function getCSRFClient(): CSRFProtectedClient {
  */
 export async function getAllEvents() {
   try {
-    const result = await getCSRFClient().callFunction('getEventsApi', {});
+    const result = await getFunctionsClient().callFunction('getEventsApi', {});
     
     const data = result.data as { events: EventData[] };
     if (!data || !Array.isArray(data.events)) {
@@ -167,7 +169,7 @@ export async function getAllEvents() {
  */
 export async function getEventDetails(eventId: string) {
   try {
-    const result = await getCSRFClient().callFunction('getEventDetailsApi', { eventId });
+    const result = await getFunctionsClient().callFunction('getEventDetailsApi', { eventId });
     
     const data = result.data as { event: EventData };
     if (!data || !data.event) {
@@ -191,7 +193,7 @@ export async function getEventDetails(eventId: string) {
  */
 export async function updateEventRsvp(eventId: string, status: 'yes' | 'maybe' | 'no') {
   try {
-    const result = await getCSRFClient().callFunction('updateEventRsvpApi', { eventId, status });
+    const result = await getFunctionsClient().callFunction('updateEventRsvpApi', { eventId, status });
     
     return result.data as { success: boolean };
   } catch (error) {
@@ -246,6 +248,41 @@ export function validateEventImages(images?: string[]): { isValid: boolean; erro
 }
 
 /**
+ * Create a new event
+ */
+export async function createEvent(eventData: {
+  title: string;
+  eventDate: string;
+  endDate?: string | null;
+  startTime: string;
+  endTime: string;
+  timezone: string;
+  location?: EventLocation | null;
+  virtualLink?: string | null;
+  isVirtual: boolean;
+  description?: string;
+  dresscode?: string | null;
+  whatToBring?: string | null;
+  additionalInfo?: string | null;
+  privacy: string;
+  allowGuestPlusOne: boolean;
+  showGuestList: boolean;
+  requireRsvp: boolean;
+  rsvpDeadline?: string | null;
+  hostId?: string;
+  invitedMembers: string[];
+  coverPhotos?: string[];
+}) {
+  try {
+    const result = await getFunctionsClient().callFunction('createEvent', eventData);
+    return result.data;
+  } catch (error) {
+    console.error('Error creating event:', error);
+    throw error;
+  }
+}
+
+/**
  * Update an existing event
  */
 export async function updateEvent(eventId: string, eventData: Partial<EventData>) {
@@ -294,7 +331,7 @@ export async function updateEvent(eventId: string, eventData: Partial<EventData>
     }
     console.log("[eventUtils] Final data being sent to Firebase:", logData);
     
-    const result = await getCSRFClient().callFunction('updateEvent', dataToSend);
+    const result = await getFunctionsClient().callFunction('updateEvent', dataToSend);
     
     return result.data as { success: boolean };
   } catch (error) {
@@ -308,7 +345,7 @@ export async function updateEvent(eventId: string, eventData: Partial<EventData>
  */
 export async function deleteEvent(eventId: string) {
   try {
-    const result = await getCSRFClient().callFunction('deleteEventApi', { eventId });
+    const result = await getFunctionsClient().callFunction('deleteEventApi', { eventId });
     
     return result.data as { success: boolean };
   } catch (error) {

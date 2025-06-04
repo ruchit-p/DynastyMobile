@@ -146,7 +146,6 @@ export const createChat = onCall(withAuth(async (request) => {
   }
 }, "createChat", {
   authLevel: "onboarded",
-  enableCSRF: true,
   rateLimitConfig: {
     type: RateLimitType.WRITE,
     maxRequests: 10,
@@ -210,7 +209,6 @@ export const updateChatSettings = onCall(withResourceAccess(async (request, reso
     resourceType: "chat",
     requiredLevel: PermissionLevel.ADMIN,
   },
-  enableCSRF: true,
   rateLimitConfig: {
     type: RateLimitType.WRITE,
     maxRequests: 10,
@@ -310,7 +308,6 @@ export const addChatMembers = onCall(withResourceAccess(async (request, resource
     resourceType: "chat",
     requiredLevel: PermissionLevel.ADMIN,
   },
-  enableCSRF: true,
   rateLimitConfig: {
     type: RateLimitType.WRITE,
     maxRequests: 10,
@@ -398,7 +395,6 @@ export const removeChatMember = onCall(withResourceAccess(async (request, resour
     resourceType: "chat",
     requiredLevel: PermissionLevel.ADMIN,
   },
-  enableCSRF: true,
   rateLimitConfig: {
     type: RateLimitType.WRITE,
     maxRequests: 10,
@@ -470,7 +466,6 @@ export const updateMemberRole = onCall(withResourceAccess(async (request, resour
     resourceType: "chat",
     requiredLevel: PermissionLevel.ADMIN,
   },
-  enableCSRF: true,
   rateLimitConfig: {
     type: RateLimitType.WRITE,
     maxRequests: 10,
@@ -514,7 +509,6 @@ export const updateChatNotifications = onCall(withAuth(async (request) => {
   }
 }, "updateChatNotifications", {
   authLevel: "onboarded",
-  enableCSRF: true,
   rateLimitConfig: {
     type: RateLimitType.WRITE,
     maxRequests: 20,
@@ -576,7 +570,6 @@ export const deleteChat = onCall(withResourceAccess(async (request, resource) =>
     resourceType: "chat",
     requiredLevel: PermissionLevel.ADMIN,
   },
-  enableCSRF: true,
   rateLimitConfig: {
     type: RateLimitType.WRITE,
     maxRequests: 5,

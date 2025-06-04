@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { useCSRFClient } from '@/context/CSRFContext';
+import { addFamilyMember } from '@/utils/functionUtils';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,7 +51,6 @@ export default function AddFamilyMemberPage() {
   const { firestoreUser } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const { csrfClient } = useCSRFClient();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<AddMemberForm>({
     firstName: '',
@@ -87,7 +86,7 @@ export default function AddFamilyMemberPage() {
 
     setLoading(true);
     try {
-      const result = await csrfClient.callFunction('addFamilyMember', {
+      const result = await addFamilyMember({
         firstName: form.firstName,
         lastName: form.lastName,
         email: form.email,
@@ -99,7 +98,7 @@ export default function AddFamilyMemberPage() {
         sendInvite: form.sendInvite,
       });
 
-      const { memberId } = result.data as { memberId: string };
+      const { memberId } = result as { memberId: string };
 
       toast({
         title: 'Member added',

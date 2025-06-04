@@ -212,7 +212,6 @@ export const handleAccountDeletion = onCall(
           return userDoc.exists && userDoc.data()?.isAdmin === true;
         },
       },
-      enableCSRF: true,
       rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
     }
   )
@@ -306,7 +305,6 @@ export const updateUserProfile = onCall(
         resourceIdField: "uid",
         requiredLevel: [PermissionLevel.PROFILE_OWNER, PermissionLevel.ADMIN],
       },
-      enableCSRF: true,
       rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
     }
   )

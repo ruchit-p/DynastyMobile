@@ -3,7 +3,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { useCSRFClient } from '@/context/CSRFContext';
+import { 
+  getFamilyTreeMembers, 
+  getPendingInvitations, 
+  sendFamilyInvitation, 
+  removeFamilyMember, 
+  updateFamilyMemberRole, 
+  cancelFamilyInvitation 
+} from '@/utils/functionUtils';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,29 +55,33 @@ interface FamilyMember {
   displayName: string;
   email: string;
   profilePicture?: string;
-  role: 'admin' | 'member';
-  canAddMembers: boolean;
-  canEdit: boolean;
-  joinedAt: Date;
+  role: 'owner' | 'admin' | 'member';
+  joinedAt: string;
+  status: 'active' | 'invited' | 'inactive';
+  canAddMembers?: boolean;
+  canEdit?: boolean;
   relationship?: string;
 }
 
 interface PendingInvitation {
   id: string;
-  inviteeEmail: string;
-  inviteeName?: string;
+  email: string;
+  firstName: string;
+  lastName: string;
   invitedBy: string;
-  invitedByName: string;
-  createdAt: Date;
-  expiresAt: Date;
+  invitedAt: string;
   status: 'pending' | 'accepted' | 'expired';
+  inviteeEmail?: string;
+  inviteeName?: string;
+  invitedByName?: string;
+  createdAt?: Date;
+  expiresAt?: Date;
 }
 
 export default function FamilyManagementPage() {
   const { currentUser, firestoreUser } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const { csrfClient } = useCSRFClient();
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,16 +105,16 @@ export default function FamilyManagementPage() {
     setLoading(true);
     try {
       // Load family members
-      const membersResult = await csrfClient.callFunction('getFamilyTreeMembers', {
+      const membersResult = await getFamilyTreeMembers({
         familyTreeId: firestoreUser.familyTreeId,
       });
-      setMembers((membersResult.data as { members: FamilyMember[] }).members || []);
+      setMembers(membersResult.members || []);
 
       // Load pending invitations
-      const invitationsResult = await csrfClient.callFunction('getPendingInvitations', {
+      const invitationsResult = await getPendingInvitations({
         familyTreeId: firestoreUser.familyTreeId,
       });
-      setInvitations((invitationsResult.data as { invitations: PendingInvitation[] }).invitations || []);
+      setInvitations(invitationsResult.invitations || []);
     } catch (error) {
       console.error('Error loading family data:', error);
       toast({
@@ -114,7 +125,7 @@ export default function FamilyManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, [firestoreUser?.familyTreeId, toast, csrfClient]);
+  }, [firestoreUser?.familyTreeId, toast]);
 
   useEffect(() => {
     loadFamilyData();
@@ -132,7 +143,7 @@ export default function FamilyManagementPage() {
 
     setProcessing(true);
     try {
-      await csrfClient.callFunction('sendFamilyInvitation', {
+      await sendFamilyInvitation({
         email: inviteForm.email,
         firstName: inviteForm.firstName,
         lastName: inviteForm.lastName,
@@ -164,9 +175,9 @@ export default function FamilyManagementPage() {
 
     setProcessing(true);
     try {
-      await csrfClient.callFunction('removeFamilyMember', {
-        userId: selectedMember.id,
-        familyTreeId: firestoreUser?.familyTreeId,
+      await removeFamilyMember({
+        memberId: selectedMember.id,
+        familyTreeId: firestoreUser?.familyTreeId || '',
       });
 
       toast({
@@ -191,14 +202,10 @@ export default function FamilyManagementPage() {
 
   const handleUpdateMemberRole = async (member: FamilyMember, role: 'admin' | 'member') => {
     try {
-      await csrfClient.callFunction('updateFamilyMemberRole', {
-        userId: member.id,
-        familyTreeId: firestoreUser?.familyTreeId,
+      await updateFamilyMemberRole({
+        memberId: member.id,
         role,
-        permissions: {
-          canAddMembers: role === 'admin',
-          canEdit: role === 'admin',
-        },
+        familyTreeId: firestoreUser?.familyTreeId || '',
       });
 
       toast({
@@ -219,7 +226,7 @@ export default function FamilyManagementPage() {
 
   const handleCancelInvitation = async (invitationId: string) => {
     try {
-      await csrfClient.callFunction('cancelFamilyInvitation', { invitationId });
+      await cancelFamilyInvitation({ invitationId });
 
       toast({
         title: 'Invitation cancelled',
@@ -245,8 +252,9 @@ export default function FamilyManagementPage() {
 
   const filteredInvitations = invitations.filter(
     (invitation) =>
-      invitation.inviteeEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      invitation.inviteeName?.toLowerCase().includes(searchQuery.toLowerCase())
+      invitation.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      invitation.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      invitation.lastName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const canManageFamily = firestoreUser?.isAdmin || firestoreUser?.canAddMembers;
@@ -445,14 +453,11 @@ export default function FamilyManagementPage() {
                         </Badge>
                       </div>
                       <p className="text-sm text-gray-600">
-                        {invitation.inviteeEmail}
+                        {invitation.email}
                       </p>
                       <div className="mt-2 text-xs text-gray-500">
-                        Invited by {invitation.invitedByName} •{' '}
-                        {format(invitation.createdAt, 'MMM d, yyyy')}
-                        {invitation.status === 'pending' && (
-                          <> • Expires {format(invitation.expiresAt, 'MMM d')}</>
-                        )}
+                        {invitation.firstName} {invitation.lastName} •{' '}
+                        {format(new Date(invitation.invitedAt), 'MMM d, yyyy')}
                       </div>
                     </div>
                     {invitation.status === 'pending' && canManageFamily && (

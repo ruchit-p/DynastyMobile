@@ -86,33 +86,6 @@ export class SecureCookieManager {
     });
   }
 
-  /**
-   * Set CSRF token cookie with maximum security
-   */
-  static setCSRFToken(token: string, expiresIn: number) {
-    const expires = new Date(Date.now() + expiresIn);
-    
-    this.set('csrf-token', token, {
-      expires,
-      secure: this.isProduction || this.isSecureContext,
-      sameSite: 'Strict',
-      path: '/'
-    });
-  }
-
-  /**
-   * Get CSRF token from cookie
-   */
-  static getCSRFToken(): string | null {
-    return this.get('csrf-token');
-  }
-
-  /**
-   * Clear CSRF token
-   */
-  static clearCSRFToken() {
-    this.delete('csrf-token');
-  }
 
   /**
    * Check if we're in a secure context (HTTPS or localhost)
@@ -126,6 +99,3 @@ export class SecureCookieManager {
 export const setCookie = SecureCookieManager.set.bind(SecureCookieManager);
 export const getCookie = SecureCookieManager.get.bind(SecureCookieManager);
 export const deleteCookie = SecureCookieManager.delete.bind(SecureCookieManager);
-export const setCSRFToken = SecureCookieManager.setCSRFToken.bind(SecureCookieManager);
-export const getCSRFToken = SecureCookieManager.getCSRFToken.bind(SecureCookieManager);
-export const clearCSRFToken = SecureCookieManager.clearCSRFToken.bind(SecureCookieManager);

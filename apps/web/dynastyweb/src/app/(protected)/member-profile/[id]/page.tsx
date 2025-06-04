@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { useCSRFClient } from '@/context/CSRFContext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -65,7 +64,6 @@ export default function MemberProfilePage() {
   const { currentUser, firestoreUser } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const { csrfClient } = useCSRFClient();
   const [profile, setProfile] = useState<MemberProfile | null>(null);
   const [relationships, setRelationships] = useState<RelationshipInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,11 +75,9 @@ export default function MemberProfilePage() {
   const loadMemberProfile = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await csrfClient.callFunction('getMemberProfile', { userId: memberId });
-      const data = result.data as {
-        profile: MemberProfile;
-        relationships: RelationshipInfo[];
-      };
+      // Import the function from functionUtils
+      const { getMemberProfile } = await import('@/utils/functionUtils');
+      const data = await getMemberProfile(memberId);
       
       setProfile(data.profile);
       setRelationships(data.relationships || []);
@@ -96,7 +92,7 @@ export default function MemberProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [memberId, toast, router, csrfClient]);
+  }, [memberId, toast, router]);
 
   useEffect(() => {
     loadMemberProfile();

@@ -63,64 +63,13 @@ export const SECURITY_CONFIG = {
       maxRequests: 10,
       windowSeconds: 300, // 10 uploads per 5 minutes
     },
+
+    // Read operations
+    read: {
+      type: RateLimitType.API,
+      maxRequests: 100,
+      windowSeconds: 60, // 100 reads per minute
+    },
   },
 
-  /**
-   * CSRF protection settings
-   */
-  csrf: {
-    // Functions that should have CSRF protection enabled
-    enabledFunctions: [
-      // Authentication
-      "handleSignUp",
-      "resetPassword",
-      "changePassword",
-      "sendPasswordResetEmail",
-      "sendVerificationEmail",
-      "verifyEmail",
-
-      // User management
-      "handleAccountDeletion",
-      "updateUserProfile",
-      "updateDataRetention",
-
-      // Events
-      "createEvent",
-      "updateEvent",
-      "deleteEvent",
-      "rsvpToEvent",
-      "addCommentToEvent",
-      "deleteEventComment",
-
-      // Vault
-      "createVaultFolder",
-      "addVaultFile",
-      "renameVaultItem",
-      "moveVaultItem",
-      "deleteVaultItem",
-      "shareVaultItem",
-      "updateVaultItemPermissions",
-
-      // Chat
-      "createChat",
-      "updateChatSettings",
-      "addChatMembers",
-      "removeChatMember",
-      "deleteChat",
-      "sendMessage",
-
-      // Stories (already enabled)
-      "createStory",
-      "updateStory",
-      "deleteStory",
-      "likeStory",
-      "unlikeStory",
-
-      // Family tree
-      "createFamilyMember",
-      "updateFamilyMember",
-      "deleteFamilyMember",
-      "updateFamilyRelationships",
-    ],
-  },
 };

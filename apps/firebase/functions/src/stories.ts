@@ -576,7 +576,6 @@ export const createStory = onCall(
         maxRequests: 10, // 10 stories per hour
         windowSeconds: 3600,
       },
-      enableCSRF: true, // Enable CSRF protection for story creation
     }
   )
 );
@@ -648,7 +647,6 @@ export const updateStory = onCall(
         resourceIdField: "storyId",
         requiredLevel: PermissionLevel.ADMIN, // Only story author can update
       },
-      enableCSRF: true, // Enable CSRF protection for story updates
     }
   )
 );
@@ -707,7 +705,6 @@ export const deleteStory = onCall(
         resourceIdField: "storyId",
         requiredLevel: [PermissionLevel.ADMIN, PermissionLevel.TREE_OWNER], // Story author or tree owner can delete
       },
-      enableCSRF: true, // Enable CSRF protection for story deletion
     }
   )
 );
@@ -769,7 +766,6 @@ export const likeStory = onCall(
           return resource.privacy === "family";
         },
       },
-      enableCSRF: true, // Enable CSRF protection for liking stories
     }
   )
 );
@@ -815,7 +811,6 @@ export const unlikeStory = onCall(
     return {success: true, message: "Story unliked successfully."};
   }, "unlikeStory", {
     authLevel: "auth",
-    enableCSRF: true, // Enable CSRF protection for unliking stories
   })
 );
 

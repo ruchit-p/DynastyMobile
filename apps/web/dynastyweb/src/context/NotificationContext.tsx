@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useCSRFClient } from '@/context/CSRFContext';
 import { 
   initializeMessaging, 
   setupForegroundNotificationHandler,
@@ -32,7 +31,6 @@ const NotificationContext = createContext<NotificationContextType>({
 
 export const NotificationProvider = ({ children }: { children: React.ReactNode }) => {
   const { currentUser } = useAuth();
-  const { isReady } = useCSRFClient();
   const [isTokenRegistered, setIsTokenRegistered] = useState<boolean>(false);
   const setupComplete = useRef<boolean>(false);
   
@@ -45,9 +43,9 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
     deleteNotification
   } = useNotifications();
   
-  // Initialize FCM - only after CSRF client is ready
+  // Initialize FCM
   useEffect(() => {
-    if (!currentUser || !isReady) {
+    if (!currentUser) {
       setIsTokenRegistered(false);
       setupComplete.current = false;
       return;
@@ -85,7 +83,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         unsubscribe();
       }
     };
-  }, [currentUser, isReady]);
+  }, [currentUser]);
   
   const value = {
     notifications,

@@ -54,7 +54,6 @@ export const updateUserPassword = onCall(
     "updateUserPassword",
     {
       authLevel: "auth",
-      enableCSRF: true,
       rateLimitConfig: SECURITY_CONFIG.rateLimits.passwordReset,
     }
   )
@@ -119,7 +118,6 @@ export const initiatePasswordReset = onCall({
   "initiatePasswordReset",
   {
     authLevel: "none", // No auth required for password reset
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.passwordReset,
   }
 ));

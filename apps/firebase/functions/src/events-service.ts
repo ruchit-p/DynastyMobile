@@ -627,7 +627,6 @@ export const createEvent = onCall(
     return {eventId: newEventId, eventData: finalEventData};
   }, "createEvent", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
   }),
 );
@@ -841,7 +840,6 @@ export const updateEvent = onCall(
     return {success: true, eventId};
   }, "updateEvent", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
   }),
 );
@@ -895,7 +893,6 @@ export const deleteEvent = onCall(
     return {success: true, eventId};
   }, "deleteEvent", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
   }),
 );
@@ -1021,7 +1018,6 @@ export const rsvpToEvent = onCall(
     return {success: true, eventId, rsvpStatus: status, plusOne: rsvpData.plusOne};
   }, "rsvpToEvent", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
   }),
 );
@@ -1132,7 +1128,6 @@ export const addCommentToEvent = onCall(
     return {success: true, commentId, comment: newComment};
   }, "addCommentToEvent", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
   }),
 );
@@ -1268,7 +1263,6 @@ export const deleteEventComment = onCall(
     return {success: true, eventId, commentId, totalDeleted};
   }, "deleteEventComment", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
   }),
 );
@@ -1909,7 +1903,6 @@ export const sendEventInvitations = onCall(
     };
   }, "sendEventInvitations", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
   }),
 );
@@ -2115,7 +2108,6 @@ export const respondToInvitation = onCall(
     };
   }, "respondToInvitation", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
   }),
 );
@@ -2280,7 +2272,6 @@ export const updateEventRsvpApi = onCall(
     return {success: true};
   }, "updateEventRsvpApi", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
   }),
 );
@@ -2458,7 +2449,6 @@ export const completeEventCoverPhotoUpload = onCall(
     return {success: true, eventId, storagePath};
   }, "completeEventCoverPhotoUpload", {
     authLevel: "onboarded",
-    enableCSRF: true,
     rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
   }),
 );

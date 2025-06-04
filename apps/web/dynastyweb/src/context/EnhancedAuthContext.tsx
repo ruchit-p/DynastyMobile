@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
   User,
   signInWithEmailAndPassword,
@@ -36,9 +36,11 @@ import { notificationService } from '@/services/NotificationService';
 import { cacheService, cacheKeys } from '@/services/CacheService';
 import { syncQueue } from '@/services/SyncQueueService';
 import { networkMonitor } from '@/services/NetworkMonitor';
-import { useCSRF } from '@/hooks/useCSRF';
-import { createCSRFClient } from '@/lib/csrf-client';
+import { createFirebaseClient } from '@/lib/functions-client';
 import { fingerprintService } from '@/services/FingerprintService';
+
+// Initialize Firebase Functions client at module level
+const functionsClient = createFirebaseClient(functions);
 
 // MARK: - Interfaces and Types
 interface FirebaseError extends Error {
@@ -124,8 +126,6 @@ export interface AuthContextType {
   currentUser: User | null;
   firestoreUser: FirestoreUser | null;
   loading: boolean;
-  csrfToken: string | null;
-  isCSRFReady: boolean;
   mfaSignInState: MfaSignInState;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
@@ -167,8 +167,6 @@ const AuthContext = createContext<AuthContextType>({
   currentUser: null,
   firestoreUser: null,
   loading: false,
-  csrfToken: null,
-  isCSRFReady: false,
   mfaSignInState: {
     isRequired: false,
     availableFactors: [],
@@ -305,12 +303,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     selectedFactor: null,
   });
   
-  // CSRF Protection
-  const { csrfToken, isReady: isCSRFReady } = useCSRF(functions);
-  const csrfClient = useMemo(
-    () => createCSRFClient(functions, () => csrfToken),
-    [csrfToken]
-  );
+  // Using Firebase's built-in security mechanisms
 
   // Initialize services when user logs in
   const initializeUserServices = useCallback(async (userId: string) => {
@@ -411,7 +404,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUp = async (email: string, password: string): Promise<void> => {
     try {
-      // handleSignUp doesn't require CSRF (public endpoint)
+      // Call public signup endpoint
       const handleSignUp = httpsCallable<SignUpRequest, SignUpResult>(functions, 'handleSignUp');
       await handleSignUp({ email, password });
 
@@ -589,8 +582,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const sendVerificationEmail = async () => {
     try {
-      // Use CSRF-protected client for state-changing operation
-      await csrfClient.callFunction('sendVerificationEmail', {});
+      // Use Firebase client for state-changing operation
+      await functionsClient.callFunction('sendVerificationEmail', {});
     } catch (error) {
       const message = handleFirebaseError(error, 'send-verification-email');
       throw new Error(message);
@@ -851,8 +844,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     currentUser: user,
     firestoreUser,
     loading,
-    csrfToken,
-    isCSRFReady,
     mfaSignInState,
     signUp,
     signIn,

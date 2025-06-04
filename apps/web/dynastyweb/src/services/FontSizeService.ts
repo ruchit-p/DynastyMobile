@@ -1,5 +1,5 @@
-import { auth } from '@/lib/firebase';
-import { CSRFProtectedClient } from '@/lib/csrf-client';
+import { auth, functions } from '@/lib/firebase';
+import { FirebaseFunctionsClient, createFirebaseClient } from '@/lib/functions-client';
 
 export enum FontSizePreset {
   EXTRA_SMALL = 0.85,
@@ -22,10 +22,14 @@ class FontSizeService {
   private useDeviceSettings: boolean = true;
   private listeners: Set<(scale: number) => void> = new Set();
   private userId: string | null = null;
-  private csrfClient: CSRFProtectedClient | null = null;
+  private functionsClient: FirebaseFunctionsClient | null = null;
 
   private constructor() {
     this.loadFromLocalStorage();
+    // Initialize functions client
+    if (functions) {
+      this.functionsClient = createFirebaseClient(functions);
+    }
   }
 
   static getInstance(): FontSizeService {
@@ -35,12 +39,6 @@ class FontSizeService {
     return FontSizeService.instance;
   }
 
-  /**
-   * Set CSRF client for protected API calls
-   */
-  setCSRFClient(client: CSRFProtectedClient): void {
-    this.csrfClient = client;
-  }
 
   private loadFromLocalStorage() {
     try {
@@ -100,12 +98,12 @@ class FontSizeService {
       }
 
       // Fetch from server
-      if (!this.csrfClient) {
-        console.warn('FontSizeService: CSRF client not initialized');
+      if (!this.functionsClient) {
+        console.warn('FontSizeService: Functions client not initialized');
         return;
       }
 
-      const response = await this.csrfClient.callFunction<
+      const response = await this.functionsClient.callFunction<
         { userId: string },
         { fontSettings?: { fontScale?: number; useDeviceSettings?: boolean } }
       >('getUserSettings', { userId: this.userId });
@@ -151,12 +149,12 @@ class FontSizeService {
           }));
         }
 
-        if (!this.csrfClient) {
-          console.warn('FontSizeService: CSRF client not initialized');
+        if (!this.functionsClient) {
+          console.warn('FontSizeService: Functions client not initialized');
           return;
         }
 
-        await this.csrfClient.callFunction('updateUserSettings', {
+        await this.functionsClient.callFunction('updateUserSettings', {
           fontSettings: {
             fontScale: this.currentScale,
             useDeviceSettings: this.useDeviceSettings,

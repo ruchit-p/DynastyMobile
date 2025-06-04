@@ -12,7 +12,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { useRouter } from "next/navigation"
 import { ensureAccessibleStorageUrl } from "@/utils/mediaUtils"
 import { deleteEvent as deleteEventUtil } from "@/utils/eventUtils"
-import { useCSRFClient } from "@/context/CSRFContext"
 
 // Event categories
 export const EVENT_CATEGORIES = [
@@ -123,7 +122,6 @@ export function EventCard({
   showDescription = false
 }: EventCardProps) {
   const router = useRouter()
-  const { csrfClient } = useCSRFClient()
   const isPastEvent = isPast(parseISO(date))
   const [isDeleting, setIsDeleting] = useState(false)
   
@@ -132,7 +130,8 @@ export function EventCard({
       onRsvpChange(id, status)
     } else {
       try {
-        await csrfClient.callFunction('updateEventRsvp', { eventId: id, status })
+        const { updateEventRsvp } = await import('@/utils/eventUtils')
+        await updateEventRsvp(id, status)
         // You could update local state here or trigger a refresh
         router.refresh()
       } catch (error) {

@@ -1,13 +1,11 @@
 import './globals.css'
 import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/context/AuthContext'
-import { CSRFProvider } from '@/context/CSRFContext'
 import { EmulatorProvider } from '@/context/EmulatorContext'
 import { NotificationProvider } from '@/context/NotificationContext'
 import { OfflineProvider } from '@/context/OfflineContext'
 import { Toaster } from '@/components/ui/toaster'
 import ErrorBoundary from '@/components/ErrorBoundary'
-import { ServiceInitializer } from '@/components/ServiceInitializer'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -31,16 +29,12 @@ export default function RootLayout({
         <ErrorBoundary screenName="RootLayout">
           <EmulatorProvider>
             <AuthProvider>
-              <CSRFProvider>
-                <OfflineProvider>
-                  <ServiceInitializer>
-                    <NotificationProvider>
-                      {children}
-                      <Toaster />
-                    </NotificationProvider>
-                  </ServiceInitializer>
-                </OfflineProvider>
-              </CSRFProvider>
+              <OfflineProvider>
+                <NotificationProvider>
+                  {children}
+                  <Toaster />
+                </NotificationProvider>
+              </OfflineProvider>
             </AuthProvider>
           </EmulatorProvider>
         </ErrorBoundary>

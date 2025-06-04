@@ -17,7 +17,6 @@ import type { User } from 'firebase/auth';
 const AuthContext = React.createContext<any>(null);
 const NotificationContext = React.createContext<any>(null);
 const OfflineContext = React.createContext<any>(null);
-const CSRFContext = React.createContext<any>(null);
 const CookieConsentContext = React.createContext<any>(null);
 const OnboardingContext = React.createContext<any>(null);
 
@@ -162,13 +161,6 @@ export const createMockOfflineContext = (overrides = {}) => ({
   ...overrides,
 });
 
-export const createMockCSRFContext = (overrides = {}) => ({
-  csrfToken: 'test-csrf-token',
-  isLoading: false,
-  error: null,
-  refreshToken: jest.fn().mockResolvedValue(undefined),
-  ...overrides,
-});
 
 export const createMockCookieConsentContext = (overrides = {}) => ({
   consent: {
@@ -192,7 +184,6 @@ interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
   authContext?: any;
   notificationContext?: any;
   offlineContext?: any;
-  csrfContext?: any;
   cookieConsentContext?: any;
   withAllProviders?: boolean;
 }
@@ -202,28 +193,24 @@ const AllTheProviders: React.FC<{
   authContext?: any;
   notificationContext?: any;
   offlineContext?: any;
-  csrfContext?: any;
   cookieConsentContext?: any;
 }> = ({
   children,
   authContext = createMockAuthContext(),
   notificationContext = createMockNotificationContext(),
   offlineContext = createMockOfflineContext(),
-  csrfContext = createMockCSRFContext(),
   cookieConsentContext = createMockCookieConsentContext(),
 }) => {
   return (
-    <CSRFContext.Provider value={csrfContext}>
-      <AuthContext.Provider value={authContext}>
-        <NotificationContext.Provider value={notificationContext}>
-          <OfflineContext.Provider value={offlineContext}>
-            <CookieConsentContext.Provider value={cookieConsentContext}>
-              {children}
-            </CookieConsentContext.Provider>
-          </OfflineContext.Provider>
-        </NotificationContext.Provider>
-      </AuthContext.Provider>
-    </CSRFContext.Provider>
+    <AuthContext.Provider value={authContext}>
+      <NotificationContext.Provider value={notificationContext}>
+        <OfflineContext.Provider value={offlineContext}>
+          <CookieConsentContext.Provider value={cookieConsentContext}>
+            {children}
+          </CookieConsentContext.Provider>
+        </OfflineContext.Provider>
+      </NotificationContext.Provider>
+    </AuthContext.Provider>
   );
 };
 
@@ -236,7 +223,6 @@ export const renderWithProviders = (
     authContext,
     notificationContext,
     offlineContext,
-    csrfContext,
     cookieConsentContext,
     withAllProviders = true,
     ...renderOptions
@@ -248,7 +234,6 @@ export const renderWithProviders = (
           authContext={authContext}
           notificationContext={notificationContext}
           offlineContext={offlineContext}
-          csrfContext={csrfContext}
           cookieConsentContext={cookieConsentContext}
         >
           {children}
@@ -512,7 +497,6 @@ interface AllProvidersProps {
   authContext?: any;
   notificationContext?: any;
   offlineContext?: any;
-  csrfContext?: any;
   cookieConsentContext?: any;
 }
 
@@ -521,20 +505,17 @@ export const AllProviders: React.FC<AllProvidersProps> = ({
   authContext = createMockAuthContext(),
   notificationContext = createMockNotificationContext(),
   offlineContext = createMockOfflineContext(),
-  csrfContext = createMockCSRFContext(),
   cookieConsentContext = createMockCookieConsentContext(),
 }) => {
   return (
     <CookieConsentContext.Provider value={cookieConsentContext}>
-      <CSRFContext.Provider value={csrfContext}>
-        <AuthContext.Provider value={authContext}>
-          <NotificationContext.Provider value={notificationContext}>
-            <OfflineContext.Provider value={offlineContext}>
-              {children}
-            </OfflineContext.Provider>
-          </NotificationContext.Provider>
-        </AuthContext.Provider>
-      </CSRFContext.Provider>
+      <AuthContext.Provider value={authContext}>
+        <NotificationContext.Provider value={notificationContext}>
+          <OfflineContext.Provider value={offlineContext}>
+            {children}
+          </OfflineContext.Provider>
+        </NotificationContext.Provider>
+      </AuthContext.Provider>
     </CookieConsentContext.Provider>
   );
 };

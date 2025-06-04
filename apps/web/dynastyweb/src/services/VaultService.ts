@@ -2,10 +2,11 @@
 // Manages secure file storage with encryption support
 
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { storage } from '@/lib/firebase';
+import { storage, functions } from '@/lib/firebase';
 import { errorHandler, ErrorSeverity } from './ErrorHandlingService';
 import { cacheService, cacheKeys } from './CacheService';
-import { CSRFProtectedClient } from '@/lib/csrf-client';
+import { FirebaseFunctionsClient, createFirebaseClient } from '@/lib/functions-client';
+import { Timestamp } from 'firebase/firestore';
 
 export interface VaultItem {
   id: string;
@@ -44,6 +45,33 @@ export interface VaultFolder {
   updatedAt: Date;
 }
 
+// Type for vault item data from API
+interface VaultItemData {
+  id: string;
+  name: string;
+  type: 'file' | 'folder';
+  mimeType?: string;
+  size?: number;
+  parentId: string | null;
+  path: string;
+  url?: string;
+  thumbnailUrl?: string;
+  isEncrypted?: boolean;
+  isShared?: boolean;
+  sharedWith?: string[];
+  createdAt: Timestamp | string | Date; // Can be Timestamp or string
+  updatedAt: Timestamp | string | Date; // Can be Timestamp or string
+  lastAccessedAt?: Timestamp | string | Date;
+  metadata?: {
+    width?: number;
+    height?: number;
+    duration?: number;
+    pages?: number;
+  };
+  tags?: string[];
+  description?: string;
+}
+
 export interface UploadProgress {
   bytesTransferred: number;
   totalBytes: number;
@@ -65,28 +93,22 @@ class VaultService {
   private uploadTasks = new Map<string, ReturnType<typeof uploadBytesResumable>>();
   private downloadCache = new Map<string, Blob>();
   private maxFileSize = 100 * 1024 * 1024; // 100MB
-  private csrfClient: CSRFProtectedClient | null = null;
+  private functionsClient: FirebaseFunctionsClient;
 
-  private constructor() {}
+  private constructor() {
+    // Initialize Firebase Functions client
+    if (functions) {
+      this.functionsClient = createFirebaseClient(functions);
+    } else {
+      throw new Error('Firebase Functions not initialized');
+    }
+  }
 
   static getInstance(): VaultService {
     if (!VaultService.instance) {
       VaultService.instance = new VaultService();
     }
     return VaultService.instance;
-  }
-
-  // Set the CSRF client (should be called when the app initializes)
-  setCSRFClient(client: CSRFProtectedClient) {
-    this.csrfClient = client;
-  }
-
-  // Get CSRF client with error if not set
-  private getCSRFClient(): CSRFProtectedClient {
-    if (!this.csrfClient) {
-      throw new Error('CSRF client not initialized. Please ensure CSRFProvider is set up.');
-    }
-    return this.csrfClient;
   }
 
   // File Operations
@@ -104,15 +126,15 @@ class VaultService {
     const uploadId = `upload-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     try {
-      // Get upload URL from backend using CSRF-protected client
-      const { data } = await this.getCSRFClient().callFunction('getVaultUploadUrl', {
+      // Get upload URL from backend
+      const { data } = await this.functionsClient.callFunction('getVaultUploadSignedUrl', {
         fileName: file.name,
-        fileType: file.type,
+        mimeType: file.type,
         fileSize: file.size,
         parentId
       });
 
-      const { fileId, storagePath } = data as { uploadUrl: string; fileId: string; storagePath: string };
+      const { storagePath, itemId } = data as { signedUrl: string; storagePath: string; itemId: string };
 
       // Upload to Firebase Storage
       const storageRef = ref(storage, storagePath);
@@ -152,17 +174,31 @@ class VaultService {
               // Get download URL
               const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
 
-              // Create vault item in backend
-              const result = await this.getCSRFClient().callFunction('createVaultItem', {
-                fileId,
+              // Update vault item in backend
+              await this.functionsClient.callFunction('addVaultFile', {
+                itemId,
                 name: file.name,
+                storagePath,
+                fileType: this.getFileType(file.type),
+                size: file.size,
+                mimeType: file.type,
+                parentId
+              });
+
+              const vaultItem: VaultItem = {
+                id: itemId,
+                name: file.name,
+                type: 'file',
                 mimeType: file.type,
                 size: file.size,
                 parentId,
-                url: downloadUrl
-              });
-
-              const vaultItem = (result.data as { item: VaultItem }).item;
+                path: `/${file.name}`,
+                url: downloadUrl,
+                isEncrypted: false,
+                isShared: false,
+                createdAt: new Date(),
+                updatedAt: new Date()
+              };
               
               // Invalidate cache
               this.invalidateCache();
@@ -219,7 +255,7 @@ class VaultService {
 
   async deleteFile(itemId: string, permanent = false): Promise<void> {
     try {
-      await this.getCSRFClient().callFunction('deleteVaultItem', { itemId, permanent });
+      await this.functionsClient.callFunction('deleteVaultItem', { itemId, permanent });
       
       this.invalidateCache();
     } catch (error) {
@@ -233,7 +269,7 @@ class VaultService {
 
   async restoreFile(itemId: string): Promise<void> {
     try {
-      await this.getCSRFClient().callFunction('restoreVaultItem', { itemId });
+      await this.functionsClient.callFunction('restoreVaultItem', { itemId });
       
       this.invalidateCache();
     } catch (error) {
@@ -249,11 +285,20 @@ class VaultService {
 
   async createFolder(name: string, parentId: string | null = null): Promise<VaultFolder> {
     try {
-      const result = await this.getCSRFClient().callFunction('createVaultFolder', { name, parentId });
+      const result = await this.functionsClient.callFunction('createVaultFolder', { name, parentFolderId: parentId });
       
       this.invalidateCache();
-      const data = result.data as { folder: VaultFolder };
-      return data.folder;
+      const data = result.data as { id: string };
+      return {
+        id: data.id,
+        name,
+        parentId,
+        path: parentId ? `parent/${name}` : `/${name}`,
+        itemCount: 0,
+        totalSize: 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
         action: 'vault-create-folder',
@@ -265,7 +310,7 @@ class VaultService {
 
   async moveItem(itemId: string, newParentId: string | null): Promise<void> {
     try {
-      await this.getCSRFClient().callFunction('moveVaultItem', { itemId, newParentId });
+      await this.functionsClient.callFunction('moveVaultItem', { itemId, newParentId });
       
       this.invalidateCache();
     } catch (error) {
@@ -279,7 +324,7 @@ class VaultService {
 
   async renameItem(itemId: string, newName: string): Promise<void> {
     try {
-      await this.getCSRFClient().callFunction('renameVaultItem', { itemId, newName });
+      await this.functionsClient.callFunction('renameVaultItem', { itemId, newName });
       
       this.invalidateCache();
     } catch (error) {
@@ -306,9 +351,50 @@ class VaultService {
       return await cacheService.getOrSet(
         cacheKey,
         async () => {
-          const result = await this.getCSRFClient().callFunction('getVaultItems', { parentId, includeDeleted });
-          const data = result.data as { items: VaultItem[]; folders: VaultFolder[] };
-          return data;
+          const result = await this.functionsClient.callFunction('getVaultItems', { parentId, includeDeleted });
+          const data = result.data as { items: VaultItemData[] };
+          
+          // Separate files and folders
+          const items: VaultItem[] = [];
+          const folders: VaultFolder[] = [];
+          
+          data.items.forEach((item: VaultItemData) => {
+            if (item.type === 'folder') {
+              folders.push({
+                id: item.id,
+                name: item.name,
+                parentId: item.parentId,
+                path: item.path,
+                itemCount: 0,
+                totalSize: 0,
+                createdAt: (item.createdAt && typeof item.createdAt === 'object' && 'toDate' in item.createdAt) 
+                  ? item.createdAt.toDate() 
+                  : new Date(item.createdAt),
+                updatedAt: (item.updatedAt && typeof item.updatedAt === 'object' && 'toDate' in item.updatedAt) 
+                  ? item.updatedAt.toDate() 
+                  : new Date(item.updatedAt)
+              });
+            } else {
+              items.push({
+                ...item,
+                isEncrypted: item.isEncrypted ?? false,
+                isShared: item.isShared ?? false,
+                createdAt: (item.createdAt && typeof item.createdAt === 'object' && 'toDate' in item.createdAt) 
+                  ? item.createdAt.toDate() 
+                  : new Date(item.createdAt),
+                updatedAt: (item.updatedAt && typeof item.updatedAt === 'object' && 'toDate' in item.updatedAt) 
+                  ? item.updatedAt.toDate() 
+                  : new Date(item.updatedAt),
+                lastAccessedAt: item.lastAccessedAt 
+                  ? ((item.lastAccessedAt && typeof item.lastAccessedAt === 'object' && 'toDate' in item.lastAccessedAt) 
+                    ? item.lastAccessedAt.toDate() 
+                    : new Date(item.lastAccessedAt))
+                  : undefined
+              });
+            }
+          });
+          
+          return { items, folders };
         },
         { ttl: 5 * 60 * 1000, persist: true }
       );
@@ -329,7 +415,7 @@ class VaultService {
     tags?: string[];
   }): Promise<VaultItem[]> {
     try {
-      const result = await this.getCSRFClient().callFunction('searchVaultItems', { query, filters });
+      const result = await this.functionsClient.callFunction('searchVaultItems', { query, filters });
       const data = result.data as { items?: VaultItem[] };
       return data.items || [];
     } catch (error) {
@@ -343,7 +429,7 @@ class VaultService {
 
   async getDeletedItems(): Promise<VaultItem[]> {
     try {
-      const result = await this.getCSRFClient().callFunction('getDeletedVaultItems', {});
+      const result = await this.functionsClient.callFunction('getDeletedVaultItems', {});
       const data = result.data as { items?: VaultItem[] };
       return data.items || [];
     } catch (error) {
@@ -363,7 +449,7 @@ class VaultService {
     password?: string;
   }): Promise<{ shareLink: string; shareId: string }> {
     try {
-      const result = await this.getCSRFClient().callFunction('shareVaultItem', {
+      const result = await this.functionsClient.callFunction('shareVaultItem', {
         itemId,
         ...options,
         expiresAt: options.expiresAt?.toISOString()
@@ -382,7 +468,7 @@ class VaultService {
 
   async revokeShare(shareId: string): Promise<void> {
     try {
-      await this.getCSRFClient().callFunction('revokeVaultShare', { shareId });
+      await this.functionsClient.callFunction('revokeVaultShare', { shareId });
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.LOW, {
         action: 'vault-revoke-share',
@@ -396,7 +482,7 @@ class VaultService {
 
   async getStorageInfo(): Promise<VaultStorageInfo> {
     try {
-      const result = await this.getCSRFClient().callFunction('getVaultStorageInfo', {});
+      const result = await this.functionsClient.callFunction('getVaultStorageInfo', {});
       return result.data as VaultStorageInfo;
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.LOW, {
@@ -408,7 +494,7 @@ class VaultService {
 
   async cleanupDeletedItems(olderThanDays = 30): Promise<{ deletedCount: number }> {
     try {
-      const result = await this.getCSRFClient().callFunction('cleanupDeletedVaultItems', { olderThanDays });
+      const result = await this.functionsClient.callFunction('cleanupDeletedVaultItems', { olderThanDays });
       
       this.invalidateCache();
       const data = result.data as { deletedCount: number };
@@ -433,6 +519,18 @@ class VaultService {
 
   private invalidateCache() {
     cacheService.invalidatePattern(/vault/);
+  }
+
+  private getFileType(mimeType: string): 'image' | 'video' | 'audio' | 'document' | 'other' {
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType.startsWith('video/')) return 'video';
+    if (mimeType.startsWith('audio/')) return 'audio';
+    if (mimeType.includes('pdf') || mimeType.includes('document') || mimeType.includes('word') || 
+        mimeType.includes('sheet') || mimeType.includes('excel') || mimeType.includes('presentation') || 
+        mimeType.includes('powerpoint')) {
+      return 'document';
+    }
+    return 'other';
   }
 
   // File type utilities

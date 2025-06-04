@@ -332,7 +332,6 @@ export const updateFamilyRelationships = onCall(
       resourceIdField: "userId",
       requiredLevel: [PermissionLevel.FAMILY_MEMBER, PermissionLevel.TREE_OWNER],
     },
-    enableCSRF: true,
     rateLimitConfig: {type: RateLimitType.WRITE},
   })
 );
@@ -568,7 +567,6 @@ export const createFamilyMember = onCall(
       resourceIdField: "selectedNodeId",
       requiredLevel: [PermissionLevel.FAMILY_MEMBER, PermissionLevel.TREE_OWNER],
     },
-    enableCSRF: true,
     rateLimitConfig: {type: RateLimitType.WRITE},
   })
 );
@@ -824,7 +822,6 @@ export const deleteFamilyMember = onCall(
         return false;
       },
     },
-    enableCSRF: true,
     rateLimitConfig: {type: RateLimitType.WRITE},
   })
 );
@@ -1008,7 +1005,6 @@ export const updateFamilyMember = onCall(
         return false;
       },
     },
-    enableCSRF: true,
     rateLimitConfig: {type: RateLimitType.WRITE},
   })
 );
@@ -1075,7 +1071,6 @@ export const promoteToAdmin = onCall(
       collectionPath: "familyTrees",
       requiredLevel: PermissionLevel.TREE_OWNER,
     },
-    enableCSRF: true,
     rateLimitConfig: {type: RateLimitType.WRITE},
   })
 );
@@ -1136,7 +1131,6 @@ export const demoteToMember = onCall(
       collectionPath: "familyTrees",
       requiredLevel: PermissionLevel.TREE_OWNER,
     },
-    enableCSRF: true,
     rateLimitConfig: {type: RateLimitType.WRITE},
   })
 );

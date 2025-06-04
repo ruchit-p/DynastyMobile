@@ -1,6 +1,5 @@
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
-import Image from 'next/image';
 
 interface AppleSignInButtonProps {
   onClick: () => void;

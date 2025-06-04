@@ -29,9 +29,12 @@ export function validateRequest(
   const validated: any = {};
   const errors: string[] = [];
 
+  // Create a copy of data for validation
+  const cleanData = {...data};
+
   // Check required fields
   for (const rule of schema.rules) {
-    const value = data[rule.field];
+    const value = cleanData[rule.field];
 
     if (rule.required && (value === undefined || value === null || value === "")) {
       errors.push(`${rule.field} is required`);
@@ -137,7 +140,7 @@ export function validateRequest(
   // Check for extra fields
   if (!schema.allowExtraFields) {
     const allowedFields = schema.rules.map((r) => r.field);
-    const extraFields = Object.keys(data).filter((f) => !allowedFields.includes(f));
+    const extraFields = Object.keys(cleanData).filter((f) => !allowedFields.includes(f));
     if (extraFields.length > 0) {
       errors.push(`Unexpected fields: ${extraFields.join(", ")}`);
     }
