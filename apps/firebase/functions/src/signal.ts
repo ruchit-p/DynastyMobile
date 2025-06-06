@@ -3,7 +3,7 @@ import {onDocumentUpdated} from "firebase-functions/v2/firestore";
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {getFirestore, FieldValue} from "firebase-admin/firestore";
 import {logger} from "firebase-functions/v2";
-import {withAuth, RateLimitType} from "./middleware/auth";
+import {withAuth} from "./middleware/auth";
 import {validateRequest} from "./utils/request-validator";
 import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
 import {SECURITY_CONFIG} from "./config/security-config";
