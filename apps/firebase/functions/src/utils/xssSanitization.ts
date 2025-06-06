@@ -144,7 +144,10 @@ export function sanitizeHtml(
     // Clean attributes
     let cleanedAttributes = attributes;
     DANGEROUS_ATTRIBUTES.forEach((attr) => {
-      const attrRegex = new RegExp(`\\s*${attr}\\s*=\\s*["'][^"']*["']`, "gi");
+      const attrRegex = new RegExp(
+        `\\s*${attr}\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s>]+)`,
+        "gi"
+      );
       cleanedAttributes = cleanedAttributes.replace(attrRegex, "");
     });
 
