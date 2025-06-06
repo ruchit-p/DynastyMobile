@@ -148,6 +148,7 @@ export default function FamilyTreePage() {
   const [rootNode, setRootNode] = useState<string>(currentUser?.uid || '');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const treeContainerRef = useRef<HTMLDivElement>(null);
   const DEBUG_MODE = false; // Debug flag - set to true to enable debug features
   // Add refs for touch handling
@@ -158,6 +159,10 @@ export default function FamilyTreePage() {
   // Add refs for pinch-to-zoom
   const previousTouchDistanceRef = useRef<number | null>(null);
   const initialScaleRef = useRef(1);
+  // Add refs for mouse dragging
+  const isDraggingRef = useRef(false);
+  const mouseStartRef = useRef({ x: 0, y: 0 });
+  const lastMouseRef = useRef({ x: 0, y: 0 });
   const searchParams = useSearchParams();
   const isNewUser = searchParams.get('newUser') === 'true';
   const newUserCheckedRef = useRef(false);
@@ -905,6 +910,65 @@ export default function FamilyTreePage() {
   const handleZoomOut = () => {
     setScale(prev => Math.max(prev - 0.1, 0.1));
   };
+
+  // Mouse event handlers for desktop dragging
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Only initiate drag if not on a mobile device and left mouse button is pressed
+    if (isMobileRef.current || e.button !== 0) return;
+    
+    // Prevent dragging if clicking on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('input') || target.closest('[role="button"]')) {
+      return;
+    }
+    
+    isDraggingRef.current = true;
+    setIsDragging(true);
+    mouseStartRef.current = { x: e.clientX, y: e.clientY };
+    lastMouseRef.current = { x: e.clientX, y: e.clientY };
+    
+    // Prevent text selection during drag
+    e.preventDefault();
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    // Only process if we're dragging on desktop
+    if (!isDraggingRef.current || isMobileRef.current) return;
+    
+    // Calculate the distance moved since the last mouse event
+    const deltaX = e.clientX - lastMouseRef.current.x;
+    const deltaY = e.clientY - lastMouseRef.current.y;
+    
+    // Update position based on the mouse movement
+    setPosition(prev => ({
+      x: prev.x + deltaX,
+      y: prev.y + deltaY
+    }));
+    
+    // Update the last mouse position
+    lastMouseRef.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handleMouseUp = () => {
+    // Only process if we were dragging on desktop
+    if (!isDraggingRef.current || isMobileRef.current) return;
+    
+    isDraggingRef.current = false;
+    setIsDragging(false);
+  };
+
+  // Add global mouse listeners for mouse up (in case mouse leaves the container)
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        setIsDragging(false);
+      }
+    };
+    
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+  }, []);
 
   // Function to handle viewing a family member
   const handleViewMember = () => {
@@ -1892,11 +1956,22 @@ export default function FamilyTreePage() {
         ) : (
           <div 
             ref={treeContainerRef}
-            className="absolute inset-0 overflow-hidden"
+            className="absolute inset-0 overflow-hidden select-none"
+            style={{ 
+              cursor: isMobileRef.current ? 'default' : (isDragging ? 'grabbing' : 'grab'),
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              MozUserSelect: 'none',
+              msUserSelect: 'none'
+            }}
             onWheel={handleWheel}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
           >
             <div 
               className="tree-wrapper absolute"
@@ -1970,14 +2045,16 @@ export default function FamilyTreePage() {
                 <div
                   key={node.id}
                   onMouseDown={(e) => {
-                    handleNodeClick(node, true);
-                    e.stopPropagation();
+                    // Don't handle node click if we're on mobile (touch will handle it)
+                    if (!isMobileRef.current) {
+                      e.stopPropagation();
+                    }
                   }}
                   onMouseUp={(e) => {
-                    e.stopPropagation();
-                  }}
-                  onMouseMove={(e) => {
-                    handleNodeClick(node, false);
+                    // Only handle click if we're not dragging
+                    if (!isMobileRef.current && !isDraggingRef.current) {
+                      handleNodeClick(node, true);
+                    }
                     e.stopPropagation();
                   }}
                   className="cursor-pointer absolute"

@@ -389,4 +389,73 @@ export const ensureAccessibleStorageUrl = (url: string): string => {
     // URL has no parameters yet
     return `${url}?alt=media`;
   }
+};
+
+/**
+ * Uploads event cover photos to the correct storage path for temporary events
+ * Uses the same path pattern as the backend: events/{eventId}/covers/{filename}
+ * This is for temporary uploads before event creation - backend API requires existing eventId
+ */
+export const uploadEventCoverPhoto = async (
+  file: File,
+  eventId: string,
+  callbacks?: UploadProgressCallback
+): Promise<string> => {
+  try {
+    // First compress the image
+    const compressedBlob = await compressImage(file);
+    
+    // Create filename following backend pattern
+    const sanitizedFileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "")}`;
+    
+    // Use the same storage path as backend: events/{eventId}/covers/{filename}
+    const storageRef = ref(storage, `events/${eventId}/covers/${sanitizedFileName}`);
+
+    // Get the current user
+    const auth = getAuth();
+    const userId = auth.currentUser?.uid;
+
+    // Upload the compressed file with progress tracking
+    return new Promise((resolve, reject) => {
+      const uploadTask = uploadBytesResumable(storageRef, compressedBlob, {
+        contentType: 'image/jpeg',
+        customMetadata: {
+          uploadedBy: userId || 'unknown',
+          eventId: eventId,
+          mediaType: 'cover'
+        }
+      });
+
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          callbacks?.onProgress?.(progress);
+        },
+        (error) => {
+          const uploadError = new Error(
+            `Failed to upload cover photo: ${error.message || 'Unknown error'}`
+          );
+          callbacks?.onError?.(uploadError);
+          reject(uploadError);
+        },
+        async () => {
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            resolve(downloadURL);
+          } catch (error) {
+            const urlError = new Error(
+              `Failed to get download URL: ${(error as Error).message || 'Unknown error'}`
+            );
+            callbacks?.onError?.(urlError);
+            reject(urlError);
+          }
+        }
+      );
+    });
+  } catch (error) {
+    const finalError = error as Error;
+    callbacks?.onError?.(finalError);
+    throw finalError;
+  }
 }; 
