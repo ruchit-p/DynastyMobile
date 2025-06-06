@@ -570,11 +570,28 @@ export const addVaultFile = onCall(
 
           // Delete the file from storage
           if (existingItem.storageProvider === "r2" && existingItem.r2Key) {
-            // TODO: Implement R2 delete when method is available
-            logger.warn("R2 file deletion not yet implemented", {
-              bucket: existingItem.r2Bucket,
-              key: existingItem.r2Key,
-            });
+            try {
+              const storageAdapter = new StorageAdapter();
+              await storageAdapter.deleteFile({
+                path: existingItem.r2Key,
+                bucket: existingItem.r2Bucket,
+                provider: "r2",
+              });
+              logger.info(
+                "Deleted R2 file after failed scan",
+                createLogContext({
+                  bucket: existingItem.r2Bucket,
+                  key: existingItem.r2Key,
+                  userId: uid,
+                })
+              );
+            } catch (deleteError) {
+              const {message, context} = formatErrorForLogging(deleteError, {
+                bucket: existingItem.r2Bucket,
+                key: existingItem.r2Key,
+              });
+              logger.warn("Failed to delete R2 file", {message, ...context});
+            }
           } else if (existingItem.storagePath) {
             await getStorage().bucket().file(existingItem.storagePath).delete();
           }
@@ -608,11 +625,28 @@ export const addVaultFile = onCall(
         // On scan error, we can either fail open or closed
         // For security, we'll fail closed (reject the file)
         if (existingItem.storageProvider === "r2" && existingItem.r2Key) {
-          // TODO: Implement R2 delete when method is available
-          logger.warn("R2 file deletion not yet implemented", {
-            bucket: existingItem.r2Bucket,
-            key: existingItem.r2Key,
-          });
+          try {
+            const storageAdapter = new StorageAdapter();
+            await storageAdapter.deleteFile({
+              path: existingItem.r2Key,
+              bucket: existingItem.r2Bucket,
+              provider: "r2",
+            });
+            logger.info(
+              "Deleted R2 file after scan error",
+              createLogContext({
+                bucket: existingItem.r2Bucket,
+                key: existingItem.r2Key,
+                userId: uid,
+              })
+            );
+          } catch (deleteError) {
+            const {message, context} = formatErrorForLogging(deleteError, {
+              bucket: existingItem.r2Bucket,
+              key: existingItem.r2Key,
+            });
+            logger.warn("Failed to delete R2 file", {message, ...context});
+          }
         } else if (existingItem.storagePath) {
           await getStorage().bucket().file(existingItem.storagePath).delete().catch(() => {});
         }
