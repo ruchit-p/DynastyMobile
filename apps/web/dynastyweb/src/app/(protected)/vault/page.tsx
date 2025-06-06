@@ -2,37 +2,36 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { vaultService, formatFileSize, getFileIcon } from '@/services/VaultService';
+import { vaultService, formatFileSize } from '@/services/VaultService';
 import type { VaultItem, VaultFolder, UploadProgress } from '@/services/VaultService';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Folder,
   Upload,
   Download,
   Trash2,
   Share2,
-  MoreVertical,
   Search,
   Grid,
   List,
   ChevronRight,
   Home,
   FolderPlus,
+  FileImage,
+  FileVideo,
+  FileAudio,
+  FileText,
+  File,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatVaultDate } from '@/utils/dateUtils';
 import { useToast } from '@/hooks/use-toast';
 import { Spinner } from '@/components/ui/spinner';
 import { Progress } from '@/components/ui/progress';
 import { useOffline } from '@/context/OfflineContext';
+import Image from 'next/image';
+import FilePreview from '@/components/FilePreview';
 
 interface BreadcrumbItem {
   id: string | null;
@@ -59,6 +58,14 @@ export default function VaultPage() {
   );
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    item: VaultItem | VaultFolder;
+    type: 'file' | 'folder';
+  } | null>(null);
+  const [previewItem, setPreviewItem] = useState<VaultItem | null>(null);
 
   const loadVaultItems = useCallback(async () => {
     setLoading(true);
@@ -242,6 +249,85 @@ export default function VaultPage() {
     const breadcrumb = breadcrumbs[index];
     setCurrentFolderId(breadcrumb.id);
     setBreadcrumbs((prev) => prev.slice(0, index + 1));
+    setSelectedItems(new Set());
+  };
+
+  // Handle item selection
+  const handleItemClick = (itemId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    
+    if (event.ctrlKey || event.metaKey) {
+      // Multi-select with Ctrl/Cmd
+      setSelectedItems((prev) => {
+        const newSet = new Set(prev);
+        if (newSet.has(itemId)) {
+          newSet.delete(itemId);
+        } else {
+          newSet.add(itemId);
+        }
+        return newSet;
+      });
+    } else if (event.shiftKey && selectedItems.size > 0) {
+      // Range select with Shift
+      // This is a simplified version - you might want to implement proper range selection
+      setSelectedItems((prev) => {
+        const newSet = new Set(prev);
+        newSet.add(itemId);
+        return newSet;
+      });
+    } else {
+      // Single select
+      setSelectedItems(new Set([itemId]));
+    }
+  };
+
+  // Handle double-click to open
+  const handleItemDoubleClick = (item: VaultItem) => {
+    if (item.type === 'file') {
+      // Open file preview
+      setPreviewItem(item);
+    }
+  };
+
+  // Handle folder double-click
+  const handleFolderDoubleClick = (folder: VaultFolder) => {
+    navigateToFolder(folder);
+  };
+
+  // Handle right-click context menu
+  const handleContextMenu = (
+    event: React.MouseEvent,
+    item: VaultItem | VaultFolder,
+    type: 'file' | 'folder'
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Select the item if not already selected
+    if (!selectedItems.has(item.id)) {
+      setSelectedItems(new Set([item.id]));
+    }
+    
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      item,
+      type,
+    });
+  };
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }
+  }, [contextMenu]);
+
+  // Clear selection when clicking on empty space
+  const handleContainerClick = () => {
+    setSelectedItems(new Set());
   };
 
   const filteredItems = items.filter((item) =>
@@ -252,6 +338,49 @@ export default function VaultPage() {
     folder.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Helper function to get file icon component
+  const getFileIconComponent = (mimeType?: string) => {
+    if (!mimeType) return <File className="h-12 w-12 text-gray-400" />;
+    
+    if (mimeType.startsWith('image/')) return <FileImage className="h-12 w-12 text-blue-500" />;
+    if (mimeType.startsWith('video/')) return <FileVideo className="h-12 w-12 text-purple-500" />;
+    if (mimeType.startsWith('audio/')) return <FileAudio className="h-12 w-12 text-green-500" />;
+    if (mimeType.includes('pdf') || mimeType.includes('document')) return <FileText className="h-12 w-12 text-red-500" />;
+    
+    return <File className="h-12 w-12 text-gray-400" />;
+  };
+
+  // Helper function to check if file has thumbnail
+  const canShowThumbnail = (item: VaultItem) => {
+    return item.mimeType?.startsWith('image/');
+  };
+
+  // State to track loading thumbnails
+  const [loadingThumbnails, setLoadingThumbnails] = useState<Set<string>>(new Set());
+
+  // Function to load thumbnail URL if not available
+  const loadThumbnailUrl = async (item: VaultItem) => {
+    if (item.url || item.thumbnailUrl || loadingThumbnails.has(item.id)) {
+      return;
+    }
+
+    setLoadingThumbnails(prev => new Set(prev).add(item.id));
+    
+    try {
+      await vaultService.getDownloadUrl(item);
+      // Force re-render by updating items
+      setItems(prev => [...prev]);
+    } catch (error) {
+      console.error('Failed to load thumbnail URL:', error);
+    } finally {
+      setLoadingThumbnails(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(item.id);
+        return newSet;
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
@@ -261,284 +390,428 @@ export default function VaultPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Vault</h1>
-        <p className="text-sm text-gray-600">
-          Secure storage for your family documents and memories
-        </p>
-      </div>
-
-      {/* Toolbar */}
-      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={!isOnline}
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            Upload
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setShowNewFolderDialog(true)}
-          >
-            <FolderPlus className="mr-2 h-4 w-4" />
-            New Folder
-          </Button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="Search files..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-4"
-            />
+    <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto px-4 py-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+          <div className="mt-6">
+            <h1 className="text-2xl font-bold text-gray-900">Family Vault</h1>
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-          >
-            {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => router.push('/vault/trash')}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Breadcrumbs */}
-      <div className="mb-4 flex items-center gap-2 text-sm">
-        {breadcrumbs.map((crumb, index) => (
-          <div key={crumb.id || 'root'} className="flex items-center gap-2">
-            {index > 0 && <ChevronRight className="h-4 w-4 text-gray-400" />}
-            <button
-              onClick={() => navigateToBreadcrumb(index)}
-              className="hover:text-blue-600"
+          <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3 w-full sm:w-auto mt-4 md:mt-6">
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!isOnline}
+              className="bg-[#0A5C36] hover:bg-[#0A5C36]/90 text-white"
             >
-              {index === 0 ? <Home className="h-4 w-4" /> : crumb.name}
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {/* Upload Progress */}
-      {uploadingFiles.size > 0 && (
-        <div className="mb-4 space-y-2">
-          {Array.from(uploadingFiles.entries()).map(([id, progress]) => (
-            <Card key={id} className="p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">{id.split('-')[0]}</span>
-                <span className="text-sm text-gray-500">{progress.percentage.toFixed(0)}%</span>
-              </div>
-              <Progress value={progress.percentage} className="mt-2" />
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Content */}
-      {filteredFolders.length === 0 && filteredItems.length === 0 ? (
-        <Card className="p-8 text-center">
-          <Folder className="mx-auto mb-4 h-12 w-12 text-gray-400" />
-          <h3 className="mb-2 text-lg font-semibold">
-            {searchQuery ? 'No results found' : 'This folder is empty'}
-          </h3>
-          <p className="mb-4 text-sm text-gray-600">
-            {searchQuery
-              ? 'Try adjusting your search'
-              : 'Upload files or create folders to get started'}
-          </p>
-          {!searchQuery && (
-            <Button onClick={() => fileInputRef.current?.click()} disabled={!isOnline}>
               <Upload className="mr-2 h-4 w-4" />
-              Upload Files
+              Upload
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowNewFolderDialog(true)}
+            >
+              <FolderPlus className="mr-2 h-4 w-4" />
+              New Folder
+            </Button>
+          </div>
+        </div>
+
+        {/* Toolbar */}
+        <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Search files..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-4"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+            >
+              {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => router.push('/vault/trash')}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Content Container */}
+        <div className="bg-white rounded-lg shadow-sm border p-6">
+          {/* Breadcrumbs */}
+          <div className="mb-4 flex items-center gap-2 text-sm">
+            {breadcrumbs.map((crumb, index) => (
+              <div key={crumb.id || 'root'} className="flex items-center gap-2">
+                {index > 0 && <ChevronRight className="h-4 w-4 text-gray-400" />}
+                <button
+                  onClick={() => navigateToBreadcrumb(index)}
+                  className="hover:text-blue-600"
+                >
+                  {index === 0 ? <Home className="h-4 w-4" /> : crumb.name}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Divider */}
+          <div className="border-b border-gray-200 mb-4"></div>
+
+          {/* Upload Progress */}
+          {uploadingFiles.size > 0 && (
+            <div className="mb-4 space-y-2">
+              {Array.from(uploadingFiles.entries()).map(([id, progress]) => (
+                <Card key={id} className="p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{id.split('-')[0]}</span>
+                    <span className="text-sm text-gray-500">{progress.percentage.toFixed(0)}%</span>
+                  </div>
+                  <Progress value={progress.percentage} className="mt-2" />
+                </Card>
+              ))}
+            </div>
           )}
-        </Card>
-      ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-          {/* Folders */}
-          {filteredFolders.map((folder) => (
-            <div
-              key={folder.id}
-              className="group cursor-pointer"
-              onClick={() => navigateToFolder(folder)}
-            >
-              <Card className="p-4 text-center transition-colors hover:bg-gray-50">
-                <Folder className="mx-auto mb-2 h-12 w-12 text-blue-500" />
-                <p className="truncate text-sm font-medium">{folder.name}</p>
-                <p className="text-xs text-gray-500">{folder.itemCount} items</p>
-              </Card>
-            </div>
-          ))}
 
-          {/* Files */}
-          {filteredItems.map((item) => (
-            <div key={item.id} className="group relative">
-              <Card className="p-4 text-center">
-                <div className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleDownload(item)}>
-                        <Download className="mr-2 h-4 w-4" />
-                        Download
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleShare(item)}>
-                        <Share2 className="mr-2 h-4 w-4" />
-                        Share
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => handleDelete(item)}
-                        className="text-red-600"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                <div className="mb-2 text-3xl">{getFileIcon(item.mimeType)}</div>
-                <p className="truncate text-sm font-medium">{item.name}</p>
-                <p className="text-xs text-gray-500">{formatFileSize(item.size || 0)}</p>
-              </Card>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {/* List view folders */}
-          {filteredFolders.map((folder) => (
-            <Card
-              key={folder.id}
-              className="cursor-pointer p-4 transition-colors hover:bg-gray-50"
-              onClick={() => navigateToFolder(folder)}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Folder className="h-8 w-8 text-blue-500" />
-                  <div>
-                    <p className="font-medium">{folder.name}</p>
-                    <p className="text-sm text-gray-500">
-                      {folder.itemCount} items • {formatFileSize(folder.totalSize)}
-                    </p>
-                  </div>
-                </div>
-                <span className="text-sm text-gray-500">
-                  {format(folder.updatedAt, 'MMM d, yyyy')}
-                </span>
-              </div>
+          {/* Content */}
+          {filteredFolders.length === 0 && filteredItems.length === 0 ? (
+            <Card className="p-8 text-center">
+              <Folder className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+              <h3 className="mb-2 text-lg font-semibold">
+                {searchQuery ? 'No results found' : 'This folder is empty'}
+              </h3>
+              <p className="mb-4 text-sm text-gray-600">
+                {searchQuery
+                  ? 'Try adjusting your search'
+                  : 'Upload files or create folders to get started'}
+              </p>
+              {!searchQuery && (
+                <Button 
+                  onClick={() => fileInputRef.current?.click()} 
+                  disabled={!isOnline}
+                  className="bg-[#0A5C36] hover:bg-[#0A5C36]/90 text-white"
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload Files
+                </Button>
+              )}
             </Card>
-          ))}
+          ) : viewMode === 'grid' ? (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6" onClick={handleContainerClick}>
+              {/* Folders */}
+              {filteredFolders.map((folder) => (
+                <div
+                  key={folder.id}
+                  className="group cursor-pointer relative"
+                  onClick={(e) => handleItemClick(folder.id, e)}
+                  onDoubleClick={() => handleFolderDoubleClick(folder)}
+                  onContextMenu={(e) => handleContextMenu(e, folder, 'folder')}
+                >
+                  <Card className={`p-4 text-center transition-all hover:bg-gray-50 ${
+                    selectedItems.has(folder.id) ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+                  }`}>
+                    <Folder className="mx-auto mb-2 h-12 w-12 text-blue-500" />
+                    <p className="truncate text-sm font-medium">{folder.name}</p>
+                    <p className="text-xs text-gray-500">{folder.itemCount} items</p>
+                  </Card>
+                </div>
+              ))}
 
-          {/* List view files */}
-          {filteredItems.map((item) => (
-            <Card key={item.id} className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="text-2xl">{getFileIcon(item.mimeType)}</div>
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-gray-500">
-                      {formatFileSize(item.size || 0)}
-                    </p>
+              {/* Files */}
+              {filteredItems.map((item) => (
+                <div 
+                  key={item.id} 
+                  className="group relative cursor-pointer"
+                  onClick={(e) => handleItemClick(item.id, e)}
+                  onDoubleClick={() => handleItemDoubleClick(item)}
+                  onContextMenu={(e) => handleContextMenu(e, item, 'file')}
+                >
+                  <Card className={`p-4 text-center transition-all hover:bg-gray-50 ${
+                    selectedItems.has(item.id) ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+                  }`}>
+                    <div className="mb-2 relative h-20 flex items-center justify-center">
+                      {canShowThumbnail(item) ? (
+                        item.url || item.thumbnailUrl ? (
+                          <div className="relative w-full h-full">
+                            <Image
+                              src={item.thumbnailUrl || item.url || ''}
+                              alt={item.name}
+                              fill
+                              className="object-contain rounded"
+                              sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
+                              onError={() => {
+                                // Fall back to icon if image fails to load
+                                const imgElement = event?.target as HTMLImageElement;
+                                if (imgElement) {
+                                  imgElement.style.display = 'none';
+                                }
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div 
+                            className="relative w-full h-full bg-gray-100 rounded flex items-center justify-center cursor-pointer"
+                            onMouseEnter={() => loadThumbnailUrl(item)}
+                          >
+                            {loadingThumbnails.has(item.id) ? (
+                              <Spinner className="h-6 w-6" />
+                            ) : (
+                              <FileImage className="h-8 w-8 text-gray-400" />
+                            )}
+                          </div>
+                        )
+                      ) : (
+                        getFileIconComponent(item.mimeType)
+                      )}
+                    </div>
+                    <p className="truncate text-sm font-medium">{item.name}</p>
+                    <p className="text-xs text-gray-500">{formatFileSize(item.size || 0)}</p>
+                  </Card>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2" onClick={handleContainerClick}>
+              {/* List view folders */}
+              {filteredFolders.map((folder) => (
+                <Card
+                  key={folder.id}
+                  className={`cursor-pointer p-4 transition-all hover:bg-gray-50 ${
+                    selectedItems.has(folder.id) ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+                  }`}
+                  onClick={(e) => handleItemClick(folder.id, e)}
+                  onDoubleClick={() => handleFolderDoubleClick(folder)}
+                  onContextMenu={(e) => handleContextMenu(e, folder, 'folder')}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Folder className="h-8 w-8 text-blue-500" />
+                      <div>
+                        <p className="font-medium">{folder.name}</p>
+                        <p className="text-sm text-gray-500">
+                          {folder.itemCount} items • {formatFileSize(folder.totalSize)}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-sm text-gray-500">
+                      {formatVaultDate(folder.updatedAt, 'MMM d, yyyy')}
+                    </span>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500">
-                    {format(item.updatedAt, 'MMM d, yyyy')}
-                  </span>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleDownload(item)}>
-                        <Download className="mr-2 h-4 w-4" />
-                        Download
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleShare(item)}>
-                        <Share2 className="mr-2 h-4 w-4" />
-                        Share
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => handleDelete(item)}
-                        className="text-red-600"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-            </Card>
-          ))}
+                </Card>
+              ))}
+
+              {/* List view files */}
+              {filteredItems.map((item) => (
+                <Card 
+                  key={item.id} 
+                  className={`p-4 cursor-pointer transition-all hover:bg-gray-50 ${
+                    selectedItems.has(item.id) ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+                  }`}
+                  onClick={(e) => handleItemClick(item.id, e)}
+                  onDoubleClick={() => handleItemDoubleClick(item)}
+                  onContextMenu={(e) => handleContextMenu(e, item, 'file')}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 relative flex-shrink-0">
+                        {canShowThumbnail(item) ? (
+                          item.url || item.thumbnailUrl ? (
+                            <Image
+                              src={item.thumbnailUrl || item.url || ''}
+                              alt={item.name}
+                              fill
+                              className="object-cover rounded"
+                              sizes="48px"
+                              onError={() => {
+                                // Fall back to icon if image fails to load
+                                const imgElement = event?.target as HTMLImageElement;
+                                if (imgElement) {
+                                  imgElement.style.display = 'none';
+                                }
+                              }}
+                            />
+                          ) : (
+                            <div 
+                              className="h-full w-full bg-gray-100 rounded flex items-center justify-center cursor-pointer"
+                              onMouseEnter={() => loadThumbnailUrl(item)}
+                            >
+                              {loadingThumbnails.has(item.id) ? (
+                                <Spinner className="h-4 w-4" />
+                              ) : (
+                                <FileImage className="h-6 w-6 text-gray-400" />
+                              )}
+                            </div>
+                          )
+                        ) : (
+                          <div className="flex items-center justify-center h-full">
+                            {getFileIconComponent(item.mimeType)}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium">{item.name}</p>
+                        <p className="text-sm text-gray-500">
+                          {formatFileSize(item.size || 0)}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-sm text-gray-500">
+                      {formatVaultDate(item.updatedAt, 'MMM d, yyyy')}
+                    </span>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
-      )}
 
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        className="hidden"
-        onChange={handleFileSelect}
-        multiple
-      />
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={handleFileSelect}
+          multiple
+        />
 
-      {/* New Folder Dialog */}
-      {showNewFolderDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <Card className="w-full max-w-md p-6">
-            <h3 className="mb-4 text-lg font-semibold">Create New Folder</h3>
-            <Input
-              type="text"
-              placeholder="Folder name"
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleCreateFolder();
-                }
-              }}
-              autoFocus
-            />
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowNewFolderDialog(false);
-                  setNewFolderName('');
+        {/* New Folder Dialog */}
+        {showNewFolderDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <Card className="w-full max-w-md p-6">
+              <h3 className="mb-4 text-lg font-semibold">Create New Folder</h3>
+              <Input
+                type="text"
+                placeholder="Folder name"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleCreateFolder();
+                  }
                 }}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleCreateFolder} disabled={!newFolderName.trim()}>
-                Create
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
+                autoFocus
+              />
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowNewFolderDialog(false);
+                    setNewFolderName('');
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleCreateFolder} disabled={!newFolderName.trim()}>
+                  Create
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Context Menu */}
+        {contextMenu && (
+          <div
+            className="fixed z-50"
+            style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
+          >
+            <Card className="w-48 p-1 shadow-lg">
+              <div className="py-1">
+                {contextMenu.type === 'file' && (
+                  <>
+                    <button
+                      className="flex w-full items-center px-3 py-2 text-sm hover:bg-gray-100"
+                      onClick={() => {
+                        setPreviewItem(contextMenu.item as VaultItem);
+                        setContextMenu(null);
+                      }}
+                    >
+                      <FileImage className="mr-2 h-4 w-4" />
+                      Preview
+                    </button>
+                    <button
+                      className="flex w-full items-center px-3 py-2 text-sm hover:bg-gray-100"
+                      onClick={() => {
+                        handleDownload(contextMenu.item as VaultItem);
+                        setContextMenu(null);
+                      }}
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      Download
+                    </button>
+                    <button
+                      className="flex w-full items-center px-3 py-2 text-sm hover:bg-gray-100"
+                      onClick={() => {
+                        handleShare(contextMenu.item as VaultItem);
+                        setContextMenu(null);
+                      }}
+                    >
+                      <Share2 className="mr-2 h-4 w-4" />
+                      Share
+                    </button>
+                    <div className="my-1 border-t" />
+                    <button
+                      className="flex w-full items-center px-3 py-2 text-sm text-red-600 hover:bg-gray-100"
+                      onClick={() => {
+                        handleDelete(contextMenu.item as VaultItem);
+                        setContextMenu(null);
+                      }}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </button>
+                  </>
+                )}
+                {contextMenu.type === 'folder' && (
+                  <>
+                    <button
+                      className="flex w-full items-center px-3 py-2 text-sm hover:bg-gray-100"
+                      onClick={() => {
+                        handleFolderDoubleClick(contextMenu.item as VaultFolder);
+                        setContextMenu(null);
+                      }}
+                    >
+                      <Folder className="mr-2 h-4 w-4" />
+                      Open
+                    </button>
+                    <div className="my-1 border-t" />
+                    <button
+                      className="flex w-full items-center px-3 py-2 text-sm text-red-600 hover:bg-gray-100"
+                      onClick={() => {
+                        // Add folder delete functionality here
+                        setContextMenu(null);
+                      }}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </button>
+                  </>
+                )}
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* File Preview Modal */}
+        <FilePreview
+          item={previewItem}
+          isOpen={!!previewItem}
+          onClose={() => setPreviewItem(null)}
+          onDownload={handleDownload}
+          onShare={handleShare}
+        />
+      </div>
     </div>
   );
 }
