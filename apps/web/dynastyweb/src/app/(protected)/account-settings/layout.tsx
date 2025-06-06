@@ -15,6 +15,7 @@ interface SidebarNavItem {
   title: string
   icon: React.ReactNode
   description: string
+  badge?: string
 }
 
 // MARK: - Account Settings Items
@@ -24,24 +25,28 @@ const sidebarNavItems: SidebarNavItem[] = [
     title: "Personal Information",
     icon: <User className="h-5 w-5" />,
     description: "Manage your profile details",
+    badge: ""
   },
   {
     href: "/account-settings/notifications",
     title: "Notifications",
     icon: <Bell className="h-5 w-5" />,
     description: "Control your notification preferences",
+    badge: ""
   },
   {
     href: "/account-settings/privacy-security",
     title: "Privacy & Security",
     icon: <Lock className="h-5 w-5" />,
     description: "Manage your account's privacy and security",
+    badge: ""
   },
   {
     href: "/account-settings/help-support",
     title: "Help & Support",
     icon: <HelpCircle className="h-5 w-5" />,
     description: "Get assistance and view FAQs",
+    badge: ""
   },
 ];
 
@@ -221,27 +226,47 @@ function SidebarItem({ item, isCollapsed = false, onClick }: SidebarItemProps) {
     <Link
       href={item.href}
       className={`
-        flex items-center space-x-3 px-3 py-3 rounded-lg text-sm transition-all
+        group relative flex items-center space-x-3 px-3 py-3 rounded-xl text-sm 
+        transition-all duration-200 ease-in-out
         ${isCollapsed && 'md:justify-center md:px-2 md:py-4'}
         ${isActive 
-          ? 'bg-[#F9FAFB] text-[#0A5C36] border-l-4 border-[#0A5C36]' 
-          : 'text-gray-700 hover:bg-[#F9FAFB]'
+          ? 'bg-gradient-to-r from-[#0A5C36]/10 to-[#0A5C36]/5 text-[#0A5C36] border-l-4 border-[#0A5C36] shadow-sm' 
+          : 'text-gray-700 hover:bg-gradient-to-r hover:from-[#F9FAFB] hover:to-gray-50'
         }
       `}
       prefetch={true}
       onClick={onClick}
       title={item.title}
     >
+      {/* Progress indicator for active state */}
+      {isActive && (
+        <div className="absolute -left-3 top-0 h-full w-1 bg-[#0A5C36] rounded-r-full animate-pulse" />
+      )}
+      
       <div className={`
-        flex h-8 w-8 items-center justify-center rounded-lg 
-        ${isActive ? 'bg-[#0A5C36] text-white' : 'bg-[#F9FAFB] text-[#0A5C36]'}
+        flex h-10 w-10 items-center justify-center rounded-xl transition-all
+        ${isActive 
+          ? 'bg-[#0A5C36] text-white shadow-lg' 
+          : 'bg-[#F9FAFB] text-[#0A5C36] group-hover:bg-white group-hover:shadow-md'
+        }
       `}>
         {item.icon}
       </div>
-      <div className={`${isCollapsed && 'md:hidden'}`}>
+      
+      <div className={`${isCollapsed && 'md:hidden'} flex-1`}>
         <div className="font-medium">{item.title}</div>
         <div className="text-xs text-gray-500 mt-0.5">{item.description}</div>
       </div>
+      
+      {/* Badge for notifications or status */}
+      {item.badge && (
+        <div className={`
+          ${isCollapsed && 'md:hidden'} 
+          px-2 py-1 text-xs rounded-full bg-[#C4A55C] text-white
+        `}>
+          {item.badge}
+        </div>
+      )}
     </Link>
   )
 } 

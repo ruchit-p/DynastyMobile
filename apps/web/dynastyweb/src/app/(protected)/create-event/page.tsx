@@ -22,7 +22,7 @@ import { DateRangePicker, SimpleDate } from "@/components/date-range-picker"
 import { LocationSearch } from "@/components/location-search"
 import { useAuth } from "@/context/AuthContext"
 import { useToast } from "@/components/ui/use-toast"
-import { uploadMedia } from "@/utils/mediaUtils"
+import { uploadEventCoverPhoto } from "@/utils/mediaUtils"
 import { getFamilyManagementData } from "@/utils/functionUtils"
 import { createEvent } from "@/utils/eventUtils"
 
@@ -332,13 +332,12 @@ export default function CreateEventPage() {
       // Generate a temporary ID for the event (will be replaced by actual ID after creation)
       const tempEventId = `temp_event_${Date.now()}_${Math.random().toString(36).substring(2)}`
       
-      // Upload photos using the standardized uploadMedia function instead of base64 conversion
+      // Upload photos using the corrected event cover photo upload function
       const photoUploadPromises = photos.map(async (file, index) => {
         try {
-          return await uploadMedia(
+          return await uploadEventCoverPhoto(
             file, 
-            tempEventId, 
-            'image',
+            tempEventId,
             {
               onProgress: (progress) => {
                 setPhotoUploadProgress(prev => {
@@ -382,7 +381,23 @@ export default function CreateEventPage() {
         formattedRsvpDeadline = `${rsvpDeadline.year}-${String(rsvpDeadline.month).padStart(2, '0')}-${String(rsvpDeadline.day).padStart(2, '0')}`;
       }
 
-      // Gather event data
+      // Map privacy correctly for backend validation
+      const backendPrivacy = privacy === "private" ? "invite_only" : privacy === "family" ? "family_tree" : privacy;
+
+      // Convert photo URLs to storage paths for backend
+      const coverPhotoStoragePaths = photoUrls.map(url => {
+        // Extract storage path from Firebase Storage URL
+        // URL format: https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{path}?alt=media&token=...
+        if (url.includes('firebasestorage.googleapis.com')) {
+          const match = url.match(/\/o\/(.+?)\?/);
+          if (match) {
+            return decodeURIComponent(match[1]);
+          }
+        }
+        // Fallback: assume URL is already a storage path
+        return url;
+      });
+
       const eventData = {
         title,
         eventDate: formattedStartDate,
@@ -394,17 +409,16 @@ export default function CreateEventPage() {
         virtualLink: isVirtual ? virtualLink : null,
         isVirtual,
         description,
-        dresscode: showDressCode ? dresscode : null,
+        dressCode: showDressCode ? dresscode : null,
         whatToBring: showWhatToBring ? whatToBring : null,
         additionalInfo: showAdditionalInfo ? description : null,
-        privacy,
+        privacy: backendPrivacy,
         allowGuestPlusOne,
         showGuestList,
         requireRsvp,
         rsvpDeadline: formattedRsvpDeadline,
-        hostId: currentUser?.uid, 
-        invitedMembers: inviteType === "all" ? familyMembers.map(member => member.id) : selectedMembers,
-        coverPhotos: photoUrls,
+        invitedMemberIds: inviteType === "all" ? familyMembers.map(member => member.id) : selectedMembers,
+        coverPhotoStoragePaths: coverPhotoStoragePaths, // Support up to 5 photos/videos
       }
 
       console.log("Submitting event data to Firebase...");

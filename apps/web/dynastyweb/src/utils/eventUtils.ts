@@ -41,7 +41,7 @@ export interface EventData {
   virtualLink?: string | null;
   isVirtual: boolean;
   description?: string;
-  dresscode?: string | null;
+  dressCode?: string | null;
   whatToBring?: string | null;
   additionalInfo?: string | null;
   privacy: string;
@@ -50,7 +50,8 @@ export interface EventData {
   requireRsvp: boolean;
   rsvpDeadline?: string | null;
   hostId: string;
-  invitedMembers: string[];
+  invitedMemberIds: string[];
+  coverPhotoStoragePaths?: string[];
   coverPhotoUrls?: string[];
   category?: string; // Added to match the data structure we need
   createdAt?: Timestamp | Date | string; // Proper type
@@ -261,7 +262,7 @@ export async function createEvent(eventData: {
   virtualLink?: string | null;
   isVirtual: boolean;
   description?: string;
-  dresscode?: string | null;
+  dressCode?: string | null;
   whatToBring?: string | null;
   additionalInfo?: string | null;
   privacy: string;
@@ -269,9 +270,8 @@ export async function createEvent(eventData: {
   showGuestList: boolean;
   requireRsvp: boolean;
   rsvpDeadline?: string | null;
-  hostId?: string;
-  invitedMembers: string[];
-  coverPhotos?: string[];
+  invitedMemberIds: string[];
+  coverPhotoStoragePaths?: string[]; // Support up to 5 photos/videos
 }) {
   try {
     const result = await getFunctionsClient().callFunction('createEvent', eventData);
@@ -454,8 +454,8 @@ export const generateEventCalendarFile = (event: EventData) => {
   }
   
   // Add additional details if available
-  if (event.dresscode) {
-    description += `\n\nDress Code: ${event.dresscode}`;
+  if (event.dressCode) {
+    description += `\n\nDress Code: ${event.dressCode}`;
   }
   
   if (event.whatToBring) {
