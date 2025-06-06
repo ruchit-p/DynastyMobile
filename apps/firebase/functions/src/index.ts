@@ -48,6 +48,7 @@ export * from "./notifications"; // Notification functions
 export * from "./vault";
 export * from "./placesApi";
 export * from "./encryption"; // End-to-end encryption functions
+export * from "./support"; // Support and contact functions
 export * from "./sync"; // Offline sync functions
 export * from "./messaging"; // Chat messaging and notifications
 export * from "./chatManagement"; // Chat management APIs

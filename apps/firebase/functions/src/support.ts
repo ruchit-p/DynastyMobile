@@ -83,7 +83,7 @@ export const submitSupportMessage = onCall({
   },
   "submitSupportMessage",
   {
-    authLevel: "user", // Requires authenticated user
+    authLevel: "auth", // Requires authenticated user
     rateLimitConfig: {
       type: RateLimitType.API, // Using API type as base
       maxRequests: 3,
@@ -186,6 +186,18 @@ export const getSupportStats = onCall({
   secrets: ["NOTION_API_KEY", "NOTION_DB_ID"],
 }, withAuth(
   async (request) => {
+    // Check if user is admin
+    const db = getFirestore();
+    const userDoc = await db.collection("users").doc(request.auth!.uid).get();
+    const userData = userDoc.data();
+    
+    if (!userData?.isAdmin) {
+      throw createError(
+        ErrorCode.PERMISSION_DENIED,
+        "Admin access required for this operation."
+      );
+    }
+
     const timeRange = request.data?.timeRange || "week";
 
     logger.info("getSupportStats: Fetching support statistics", createLogContext({
@@ -215,7 +227,7 @@ export const getSupportStats = onCall({
   },
   "getSupportStats",
   {
-    authLevel: "admin", // Requires admin user
+    authLevel: "onboarded", // Requires onboarded user (we'll add admin check in handler)
     rateLimitConfig: {
       type: RateLimitType.API,
       maxRequests: 60,

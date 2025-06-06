@@ -221,7 +221,6 @@ export class NotionService {
 
       logger.info("Notion connection validated", {
         databaseId: database.id,
-        title: database.title,
       });
 
       return true;

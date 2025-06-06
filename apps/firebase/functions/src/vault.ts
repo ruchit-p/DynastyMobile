@@ -1,4 +1,5 @@
 import {onCall} from "firebase-functions/v2/https";
+import {onSchedule} from "firebase-functions/v2/scheduler";
 import {getFirestore, Timestamp, FieldValue, FieldPath} from "firebase-admin/firestore";
 import {getStorage} from "firebase-admin/storage";
 import {logger} from "firebase-functions/v2";
@@ -1217,10 +1218,95 @@ export const restoreVaultItem = onCall(
 );
 
 /**
- * Permanently delete all items in trash older than 30 days
- * This could be called by a scheduled function
+ * Scheduled function to permanently delete all items in trash older than 30 days
+ * Runs daily at 2:00 AM
  */
-export const cleanupDeletedVaultItems = onCall(
+export const cleanupDeletedVaultItems = onSchedule({
+  schedule: "every day 02:00",
+  region: DEFAULT_REGION,
+  memory: "512MiB",
+  timeoutSeconds: FUNCTION_TIMEOUT.LONG,
+  retryCount: 3,
+}, async (event) => {
+    const olderThanDays = 30; // Always clean up items older than 30 days
+
+    logger.info("Starting scheduled cleanup of deleted vault items", createLogContext({
+      olderThanDays,
+      scheduledTime: event.scheduleTime,
+    }));
+
+    const db = getFirestore();
+
+    // Query for ALL deleted items older than specified days across all users
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+
+    const deletedItemsQuery = db.collection("vaultItems")
+      .where("isDeleted", "==", true)
+      .where("deletedAt", "<=", cutoffDate);
+
+    const snapshot = await deletedItemsQuery.get();
+
+    if (snapshot.empty) {
+      logger.info("No deleted items to clean up", createLogContext({
+        olderThanDays,
+        totalChecked: 0,
+      }));
+      return;
+    }
+
+    // Batch delete items and their storage files
+    const batch = db.batch();
+    const filesToDelete: string[] = [];
+    let deletedCount = 0;
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data() as VaultItem;
+      
+      // Collect storage paths for deletion
+      if (data.type === "file" && data.storagePath) {
+        filesToDelete.push(data.storagePath);
+      }
+      
+      // Delete Firestore document
+      batch.delete(doc.ref);
+      deletedCount++;
+    }
+
+    // Commit batch delete
+    await batch.commit();
+
+    // Delete files from storage (R2)
+    if (filesToDelete.length > 0) {
+      const storageAdapter = new StorageAdapter();
+      const deletePromises = filesToDelete.map(async (path) => {
+        try {
+          await storageAdapter.deleteFile({
+            path: path,
+          });
+        } catch (error) {
+          logger.warn("Failed to delete file from storage", createLogContext({
+            path,
+            error: error instanceof Error ? error.message : "Unknown error",
+          }));
+        }
+      });
+      
+      await Promise.all(deletePromises);
+    }
+
+    logger.info("Scheduled cleanup completed", createLogContext({
+      deletedCount,
+      filesDeleted: filesToDelete.length,
+      cutoffDate: cutoffDate.toISOString(),
+    }));
+});
+
+/**
+ * Manual cleanup function for users to empty their trash
+ * Deletes all items in their trash regardless of age
+ */
+export const emptyVaultTrash = onCall(
   {
     region: DEFAULT_REGION,
     memory: "256MiB",
@@ -1229,122 +1315,77 @@ export const cleanupDeletedVaultItems = onCall(
   withAuth(async (request) => {
     const uid = requireAuth(request);
 
-    const validatedData = validateRequest(
-      request.data,
-      VALIDATION_SCHEMAS.cleanupDeletedVaultItems,
-      uid
-    );
-
-    const {olderThanDays = 30, force = false} = validatedData;
-
-    logger.info("Starting cleanup of deleted vault items", createLogContext({
-      olderThanDays,
-      force,
+    logger.info("User requested to empty vault trash", createLogContext({
       userId: uid,
     }));
 
     const db = getFirestore();
 
-    let firestoreQuery = db.collection("vaultItems").where("userId", "==", uid);
+    // Query for ALL deleted items for this user
+    const deletedItemsQuery = db.collection("vaultItems")
+      .where("userId", "==", uid)
+      .where("isDeleted", "==", true);
 
-    // Filter by deletion status
-    if (!includeDeleted) {
-      firestoreQuery = firestoreQuery.where("isDeleted", "==", false);
+    const snapshot = await deletedItemsQuery.get();
+
+    if (snapshot.empty) {
+      logger.info("No deleted items to clean up", createLogContext({
+        userId: uid,
+      }));
+      return {success: true, deletedCount: 0};
     }
 
-    // Filter by parent folder
-    if (parentId !== null) {
-      firestoreQuery = firestoreQuery.where("parentId", "==", parentId);
-    }
-
-    // Filter by file types if specified
-    if (fileTypes.length > 0) {
-      firestoreQuery = firestoreQuery.where("fileType", "in", fileTypes);
-    }
-
-    // Note: Firestore doesn't support case-insensitive text search
-    // We'll fetch all matching documents and filter in memory
-    const snapshot = await firestoreQuery.limit(limit * 2).get(); // Get extra to account for filtering
-
-    let items: VaultItem[] = [];
-    const searchLower = query.toLowerCase();
+    // Batch delete items and their storage files
+    const batch = db.batch();
+    const filesToDelete: string[] = [];
+    let deletedCount = 0;
 
     for (const doc of snapshot.docs) {
       const data = doc.data() as VaultItem;
-
-      // Perform case-insensitive search on name
-      if (!query || data.name.toLowerCase().includes(searchLower)) {
-        // Generate download URL if it's a file
-        let downloadURL: string | undefined = undefined;
-        if (data.type === "file" && data.storagePath && !data.isDeleted) {
-          try {
-            const expiresInMinutes = 60;
-            const expires = Date.now() + expiresInMinutes * 60 * 1000;
-            const [signedUrl] = await getStorage()
-              .bucket()
-              .file(data.storagePath)
-              .getSignedUrl({
-                version: "v4",
-                action: "read",
-                expires,
-              });
-            downloadURL = signedUrl;
-          } catch (error) {
-            const {message, context} = formatErrorForLogging(error, {
-              itemId: doc.id,
-              userId: uid,
-            });
-            logger.warn("Failed to generate download URL for file", {message, ...context});
-          }
-        }
-
-        items.push({
-          ...data,
-          id: doc.id,
-          downloadURL,
-        });
+      
+      // Collect storage paths for deletion
+      if (data.type === "file" && data.storagePath) {
+        filesToDelete.push(data.storagePath);
       }
+      
+      // Delete Firestore document
+      batch.delete(doc.ref);
+      deletedCount++;
     }
 
-    // Sort results
-    items.sort((a, b) => {
-      let comparison = 0;
+    // Commit batch delete
+    await batch.commit();
 
-      switch (sortBy) {
-      case "name":
-        comparison = a.name.localeCompare(b.name);
-        break;
-      case "date": {
-        const aDate = a.updatedAt || a.createdAt;
-        const bDate = b.updatedAt || b.createdAt;
-        comparison = (aDate?.toMillis() || 0) - (bDate?.toMillis() || 0);
-        break;
-      }
-      case "size":
-        comparison = (a.size || 0) - (b.size || 0);
-        break;
-      case "type":
-        comparison = (a.type || "").localeCompare(b.type || "");
-        if (comparison === 0 && a.fileType && b.fileType) {
-          comparison = a.fileType.localeCompare(b.fileType);
+    // Delete files from storage (R2)
+    if (filesToDelete.length > 0) {
+      const storageAdapter = new StorageAdapter();
+      const deletePromises = filesToDelete.map(async (path) => {
+        try {
+          await storageAdapter.deleteFile({
+            path: path,
+          });
+        } catch (error) {
+          logger.warn("Failed to delete file from storage", createLogContext({
+            path,
+            error: error instanceof Error ? error.message : "Unknown error",
+          }));
         }
-        break;
-      }
+      });
+      
+      await Promise.all(deletePromises);
+    }
 
-      return sortOrder === "desc" ? -comparison : comparison;
-    });
-
-    // Apply limit after filtering and sorting
-    items = items.slice(0, limit);
-
-    logger.info("Search returned vault items", createLogContext({
-      resultCount: items.length,
+    logger.info("Emptied vault trash for user", createLogContext({
+      deletedCount,
+      filesDeleted: filesToDelete.length,
       userId: uid,
-      query: query || "no query",
-      fileTypes: fileTypes.length > 0 ? fileTypes.join(",") : "all",
     }));
-    return {items};
-  }, "searchVaultItems")
+
+    return {success: true, deletedCount};
+  }, "emptyVaultTrash", {
+    authLevel: "onboarded",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
+  })
 );
 
 /**
