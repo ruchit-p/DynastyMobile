@@ -28,7 +28,7 @@ case $ENV_CHOICE in
         ;;
     2)
         PROJECT="dynasty-staging"  # Update with your staging project
-        BUCKET_NAME="dynastystaging"
+        BUCKET_NAME="dynastydev"
         echo "📦 Setting up for Staging..."
         ;;
     3)

@@ -109,7 +109,7 @@ This document lists all the GitHub secrets that need to be configured for the Dy
 ### 6. Environment URLs
 
 - `PROD_FRONTEND_URL` - Production web URL (https://mydynastyapp.com)
-- `STAGING_FRONTEND_URL` - Staging web URL (https://staging.mydynastyapp.com)
+- `STAGING_FRONTEND_URL` - Staging web URL (https://dynastytest.com)
 
 ## How to Generate Secrets
 

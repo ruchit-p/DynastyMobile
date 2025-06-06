@@ -38,8 +38,8 @@ firebase deploy --only functions --project your-staging-project
 |--------|------------|---------|
 | **Security Keys** | Unique 256-bit keys | Different 256-bit keys |
 | **SendGrid** | Production API key | Test/Staging API key |
-| **Frontend URL** | https://mydynastyapp.com | https://staging.mydynastyapp.com |
-| **R2 Bucket** | dynastyprod | dynastystaging |
+| **Frontend URL** | https://mydynastyapp.com | https://dynastytest.com |
+| **R2 Bucket** | dynastyprod | dynastydev |
 | **Environment** | production | staging |
 
 ### Security Isolation
@@ -92,7 +92,7 @@ GOOGLE_PLACES_API_KEY=your-staging-places-key
 ```bash
 # Create a separate staging bucket
 R2_CONFIG={"accountId":"xxx","accessKeyId":"yyy","secretAccessKey":"zzz"}
-R2_BASE_BUCKET=dynastystaging
+R2_BASE_BUCKET=dynastydev
 ```
 
 ### 3. Deploy Configuration
