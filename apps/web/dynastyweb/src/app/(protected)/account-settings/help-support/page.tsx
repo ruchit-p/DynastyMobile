@@ -3,13 +3,20 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { 
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger
 } from "@/components/ui/accordion"
-import { HelpCircle, Mail, MessageSquare, Loader2 } from "lucide-react"
+import { HelpCircle, Mail, MessageSquare, Loader2, Tag } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
@@ -17,6 +24,7 @@ import { functions } from '@/lib/firebase'
 export default function HelpSupportPage() {
   const { toast } = useToast()
   const [message, setMessage] = useState("")
+  const [category, setCategory] = useState("technical")
   const [isSending, setIsSending] = useState(false)
   
   const handleSubmit = async (e: React.FormEvent) => {
@@ -37,6 +45,7 @@ export default function HelpSupportPage() {
       const submitSupportMessage = httpsCallable(functions, 'submitSupportMessage')
       await submitSupportMessage({
         message: message.trim(),
+        category: category,
         // name and email will be fetched from user profile server-side
       })
       
@@ -45,6 +54,7 @@ export default function HelpSupportPage() {
         description: "Thank you! We'll get back to you soon.",
       })
       setMessage("")
+      setCategory("technical")
     } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === "functions/resource-exhausted") {
         toast({
@@ -123,6 +133,27 @@ export default function HelpSupportPage() {
           <h2 className="text-lg font-medium border-b pb-2">Contact Support</h2>
           
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <div className="flex items-center space-x-2 mb-2">
+                <Tag className="h-5 w-5 text-[#0A5C36]" />
+                <label htmlFor="category" className="text-base font-medium">
+                  Category
+                </label>
+              </div>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger id="category">
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="technical">Technical Support</SelectItem>
+                  <SelectItem value="billing">Billing Question</SelectItem>
+                  <SelectItem value="privacy">Privacy Concern</SelectItem>
+                  <SelectItem value="feature">Feature Request</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
             <div>
               <div className="flex items-center space-x-2 mb-2">
                 <MessageSquare className="h-5 w-5 text-[#0A5C36]" />

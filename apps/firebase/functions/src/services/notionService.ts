@@ -107,10 +107,10 @@ export class NotionService {
       const logRef = db.collection("supportTicketLogs").doc();
       const ticketLog: SupportTicketLog = {
         id: logRef.id,
-        userId: data.userId,
+        ...(data.userId && { userId: data.userId }),
         name: data.name,
-        email: data.email,
-        phone: data.phone,
+        ...(data.email && { email: data.email }),
+        ...(data.phone && { phone: data.phone }),
         category: data.category || "other",
         message: data.message,
         status: "submitted",
@@ -151,15 +151,10 @@ export class NotionService {
             phone_number: data.phone || null,
           },
           "Category": {
-            select: {
-              name: mapCategoryToNotion(data.category),
-            },
-          },
-          "Message": {
             rich_text: [
               {
                 text: {
-                  content: data.message,
+                  content: mapCategoryToNotion(data.category),
                 },
               },
             ],
@@ -170,11 +165,74 @@ export class NotionService {
             },
           },
           "Status": {
-            select: {
+            status: {
               name: "New",
             },
           },
         },
+        children: [
+          {
+            object: "block",
+            type: "heading_2",
+            heading_2: {
+              rich_text: [
+                {
+                  type: "text",
+                  text: {
+                    content: "Support Message",
+                  },
+                },
+              ],
+            },
+          },
+          {
+            object: "block",
+            type: "paragraph",
+            paragraph: {
+              rich_text: [
+                {
+                  type: "text",
+                  text: {
+                    content: data.message,
+                  },
+                },
+              ],
+            },
+          },
+          {
+            object: "block",
+            type: "divider",
+            divider: {},
+          },
+          {
+            object: "block",
+            type: "heading_3",
+            heading_3: {
+              rich_text: [
+                {
+                  type: "text",
+                  text: {
+                    content: "User Information",
+                  },
+                },
+              ],
+            },
+          },
+          {
+            object: "block",
+            type: "paragraph",
+            paragraph: {
+              rich_text: [
+                {
+                  type: "text",
+                  text: {
+                    content: `User ID: ${data.userId || "Not provided"}`,
+                  },
+                },
+              ],
+            },
+          },
+        ],
       });
 
       // Update log with success
