@@ -34,6 +34,7 @@ import { createStory } from "@/utils/functionUtils"
 import Image from "next/image"
 import ImageCropper from "@/components/ImageCropper"
 import DynastyCarousel from "@/components/DynastyCarousel"
+import { MediaGallery, MediaItem } from "@/components/gallery"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1203,28 +1204,51 @@ export default function CreateStoryPage() {
                         
                         {(block.type === "image" || block.type === "video" || block.type === "audio") && (
                           <div className="space-y-2">
-                            {/* Display carousel if multiple files exist */}
-                            {Array.isArray(block.content) && block.content.length > 1 ? (
+                            {/* Display gallery if files exist */}
+                            {Array.isArray(block.content) && block.content.length > 0 ? (
                               <div>
-                                <DynastyCarousel
-                                  items={block.content as File[]}
-                                  itemType={block.type === "image" ? "image" : block.type === "audio" ? "audio" : "video"}
-                                  onItemClick={(index: number) => removeMediaItem(block.id, index)}
+                                <MediaGallery
+                                  items={(block.content as File[]).map((file, idx) => ({
+                                    id: `${block.id}-${idx}`,
+                                    url: URL.createObjectURL(file),
+                                    type: block.type,
+                                    file: file,
+                                    alt: `${block.type} ${idx + 1}`,
+                                  }))}
+                                  mode="creation"
+                                  enableLightbox={false}
+                                  showIndicators={block.content.length > 1}
+                                  showArrows={block.content.length > 1}
+                                  maxHeight={400}
+                                  aspectRatio="16:9"
+                                  onRemoveItem={(index: number) => removeMediaItem(block.id, index)}
                                 />
-                                <p className="text-xs text-gray-500 mt-2 text-center">Click on an item to remove it</p>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="mt-2 w-full"
+                                  onClick={() => {
+                                    // Trigger file input for adding more media
+                                    const input = document.createElement('input');
+                                    input.type = 'file';
+                                    input.multiple = true;
+                                    input.accept = block.type === 'image' ? 'image/*' : 
+                                                  block.type === 'video' ? 'video/*' : 
+                                                  'audio/*';
+                                    input.onchange = (e) => {
+                                      const files = Array.from((e.target as HTMLInputElement).files || []);
+                                      if (files.length > 0) {
+                                        const currentFiles = block.content as File[];
+                                        updateBlock(block.id, [...currentFiles, ...files]);
+                                      }
+                                    };
+                                    input.click();
+                                  }}
+                                >
+                                  <PlusCircle className="h-4 w-4 mr-2" />
+                                  Add more {block.type}s
+                                </Button>
                               </div>
-                            ) : Array.isArray(block.content) && block.content.length === 1 ? (
-                              <MediaUpload
-                                type={block.type}
-                                onFileSelect={(file) => handleFileSelect(block.id, file)}
-                                onMultipleFilesSelect={(files) => handleMultipleFilesSelect(block.id, files)}
-                                value={
-                                  URL.createObjectURL(block.content[0] as File)
-                                }
-                                onRemove={() => updateBlock(block.id, [])}
-                                showMultiple={true}
-                                allowMultiple={true}
-                              />
                             ) : (
                               // Empty state - show MediaUpload with appropriate type
                               <MediaUpload

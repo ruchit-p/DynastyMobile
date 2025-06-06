@@ -20,6 +20,7 @@ import { toggleStoryLike, checkStoryLikeStatus, type Story as StoryType } from "
 import eventManager, { LikeEventData } from "@/utils/eventUtils"
 import { formatDate, formatTimeAgo } from "@/utils/dateUtils"
 import { ensureAccessibleStorageUrl } from "@/utils/mediaUtils"
+import { MediaGallery, MediaItem } from "./gallery"
 
 interface MediaCount {
   text: number
@@ -47,7 +48,6 @@ export function StoryCard({ story, currentUserId }: StoryProps) {
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(story.likeCount || 0);
   const [isSaved, setIsSaved] = useState(false);
-  const [imageError, setImageError] = useState(false);
   
   useEffect(() => {
     // Check if the user has liked this story
@@ -96,23 +96,37 @@ export function StoryCard({ story, currentUserId }: StoryProps) {
   const isAuthor = story.authorID === currentUserId;
   const formattedTimeAgo = formatTimeAgo(story.createdAt);
 
-  // Get first image from content if available
-  const getCoverImage = () => {
-    // Find the first image block
-    const imageBlocks = story.blocks.filter(block => block.type === 'image');
+  // Get all media items from the story
+  const getMediaItems = (): MediaItem[] => {
+    const mediaItems: MediaItem[] = [];
     
-    if (imageBlocks.length > 0 && imageBlocks[0].data) {
-      if (Array.isArray(imageBlocks[0].data)) {
-        return ensureAccessibleStorageUrl(imageBlocks[0].data[0]);
+    story.blocks.forEach((block) => {
+      if (block.type === 'image' || block.type === 'video' || block.type === 'audio') {
+        if (Array.isArray(block.data)) {
+          block.data.forEach((url, index) => {
+            mediaItems.push({
+              id: `${block.localId}-${index}`,
+              url: ensureAccessibleStorageUrl(url),
+              type: block.type,
+              alt: `${story.title} - ${block.type} ${index + 1}`,
+            });
+          });
+        } else if (typeof block.data === 'string') {
+          mediaItems.push({
+            id: block.localId,
+            url: ensureAccessibleStorageUrl(block.data),
+            type: block.type,
+            alt: `${story.title} - ${block.type}`,
+          });
+        }
       }
-      return ensureAccessibleStorageUrl(imageBlocks[0].data as string);
-    }
+    });
     
-    // Return empty string if no cover image found
-    return "";
+    return mediaItems;
   };
 
-  const coverImage = getCoverImage();
+  const mediaItems = getMediaItems();
+  const hasMedia = mediaItems.length > 0;
 
   const handleLike = async () => {
     // Using the utility function from storyUtils
@@ -223,18 +237,17 @@ export function StoryCard({ story, currentUserId }: StoryProps) {
 
           {story.subtitle && <p className="text-gray-600 mb-3">{story.subtitle}</p>}
 
-          {coverImage && !imageError && (
-            <div className="relative aspect-[1/1] w-1/3 overflow-hidden rounded-lg mb-4">
-              <Image 
-                src={coverImage} 
-                alt={story.title} 
-                fill 
-                className="object-cover"
-                onError={() => setImageError(true)}
-                sizes="(max-width: 768px) 33vw, 33vw"
-                loading="lazy"
-                quality={80}
-                unoptimized={true}
+          {hasMedia && (
+            <div className="mb-4">
+              <MediaGallery
+                items={mediaItems}
+                mode="feed"
+                enableLightbox={false}
+                showIndicators={mediaItems.length > 1}
+                showArrows={false}
+                maxHeight={300}
+                aspectRatio="16:9"
+                className="rounded-lg overflow-hidden"
               />
             </div>
           )}

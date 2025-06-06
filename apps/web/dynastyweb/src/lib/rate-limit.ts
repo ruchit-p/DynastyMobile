@@ -44,6 +44,13 @@ export const rateLimiters = {
     limiter: Ratelimit.fixedWindow(3, '1 h'),
     prefix: '@dynasty/web/sensitive',
   }),
+  
+  // Gallery operations: 100 per minute (for swipe/navigation)
+  gallery: new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(100, '1 m'),
+    prefix: '@dynasty/web/gallery',
+  }),
 }
 
 export type RateLimitType = keyof typeof rateLimiters
