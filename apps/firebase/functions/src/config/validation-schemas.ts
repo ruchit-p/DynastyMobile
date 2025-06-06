@@ -1126,6 +1126,15 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
     xssCheck: false,
   },
 
+  permanentlyDeleteVaultItems: {
+    rules: [
+      {field: "itemIds", type: "array", required: false, maxLength: 100},
+      {field: "deleteAll", type: "boolean", required: false},
+      {field: "confirmDelete", type: "boolean", required: true},
+    ],
+    xssCheck: false,
+  },
+
   rotateEncryptionKey: {
     rules: [
       {field: "keyType", type: "enum", required: true, enumValues: ["user", "vault", "message"]},
