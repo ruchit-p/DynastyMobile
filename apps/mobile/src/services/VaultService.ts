@@ -1004,6 +1004,64 @@ export class VaultService {
     }
   }
 
+  // Permanently delete a vault item (hard delete)
+  async permanentlyDeleteItem(itemId: string): Promise<void> {
+    try {
+      await callFirebaseFunction('permanentlyDeleteVaultItem', {
+        itemId,
+        confirmDelete: true,
+      });
+      
+      // Clear caches after permanent deletion
+      await this.clearAllCaches();
+      
+      logger.info('[VaultService] Permanently deleted item:', { itemId });
+    } catch (error) {
+      logger.error('[VaultService] Error permanently deleting item:', error);
+      throw error;
+    }
+  }
+
+  // Bulk permanent deletion
+  async bulkPermanentlyDelete(itemIds: string[]): Promise<{ success: number; failed: number }> {
+    let success = 0;
+    let failed = 0;
+
+    for (const itemId of itemIds) {
+      try {
+        await this.permanentlyDeleteItem(itemId);
+        success++;
+      } catch (error) {
+        logger.error(`[VaultService] Failed to permanently delete item ${itemId}:`, error);
+        failed++;
+      }
+    }
+
+    // Clear all caches after bulk operation
+    await this.clearAllCaches();
+
+    return { success, failed };
+  }
+
+  // Empty trash (cleanup deleted items older than specified days)
+  async emptyTrash(olderThanDays: number = 0): Promise<{ deletedCount: number }> {
+    try {
+      const result = await callFirebaseFunction('cleanupDeletedVaultItems', {
+        olderThanDays,
+        force: true, // Force deletion regardless of age when user initiates
+      });
+      
+      // Clear all caches after cleanup
+      await this.clearAllCaches();
+      
+      logger.info('[VaultService] Emptied trash:', { deletedCount: result.data.deletedCount });
+      return { deletedCount: result.data.deletedCount };
+    } catch (error) {
+      logger.error('[VaultService] Error emptying trash:', error);
+      throw error;
+    }
+  }
+
   // Search vault items using encrypted search
   async searchItems(options: VaultSearchOptions = {}): Promise<VaultItem[]> {
     try {

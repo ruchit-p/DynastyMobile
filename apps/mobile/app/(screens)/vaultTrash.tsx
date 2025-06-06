@@ -182,9 +182,12 @@ const VaultTrashScreen = () => {
           onPress: async () => {
             setIsRestoring(true);
             try {
-              // Note: This would need a backend function to empty all trash
-              Alert.alert('Info', 'Items older than 30 days will be automatically deleted.');
-              fetchDeletedItems();
+              const result = await vaultService.emptyTrash(0); // Delete all items regardless of age
+              Alert.alert(
+                'Trash Emptied', 
+                `Successfully deleted ${result.deletedCount} items.`,
+                [{ text: 'OK', onPress: () => fetchDeletedItems() }]
+              );
             } catch (error) {
               handleError(error, {
                 severity: ErrorSeverity.ERROR,
@@ -200,6 +203,115 @@ const VaultTrashScreen = () => {
       ]
     );
   });
+
+  const handlePermanentlyDeleteSelected = withErrorHandling(async () => {
+    if (selectedItems.size === 0) return;
+
+    const itemCount = selectedItems.size;
+    Alert.alert(
+      'Permanently Delete Items',
+      `Are you sure you want to permanently delete ${itemCount} item${itemCount > 1 ? 's' : ''}? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently',
+          style: 'destructive',
+          onPress: async () => {
+            setIsRestoring(true);
+            try {
+              const itemIds = Array.from(selectedItems);
+              const result = await vaultService.bulkPermanentlyDelete(itemIds);
+              
+              let message = '';
+              if (result.success > 0) {
+                message += `Successfully deleted ${result.success} item${result.success > 1 ? 's' : ''}.`;
+              }
+              if (result.failed > 0) {
+                message += ` ${result.failed} item${result.failed > 1 ? 's' : ''} failed to delete.`;
+              }
+              
+              Alert.alert(
+                'Deletion Complete',
+                message,
+                [{ text: 'OK', onPress: () => {
+                  setSelectedItems(new Set());
+                  fetchDeletedItems();
+                }}]
+              );
+            } catch (error) {
+              handleError(error, {
+                severity: ErrorSeverity.ERROR,
+                metadata: {
+                  action: 'bulkPermanentlyDeleteVaultItems',
+                  itemCount: selectedItems.size,
+                }
+              });
+            } finally {
+              setIsRestoring(false);
+            }
+          }
+        }
+      ]
+    );
+  });
+
+  const handleItemAction = withErrorHandling(async (item: UIVaultItem, action: 'restore' | 'delete') => {
+    if (action === 'restore') {
+      await handleRestoreItem(item);
+    } else if (action === 'delete') {
+      Alert.alert(
+        'Permanently Delete Item',
+        `Are you sure you want to permanently delete "${item.name}"? This action cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete Permanently',
+            style: 'destructive',
+            onPress: async () => {
+              setIsRestoring(true);
+              try {
+                await vaultService.permanentlyDeleteItem(item.id);
+                Alert.alert(
+                  'Item Deleted',
+                  `"${item.name}" has been permanently deleted.`,
+                  [{ text: 'OK', onPress: () => fetchDeletedItems() }]
+                );
+              } catch (error) {
+                handleError(error, {
+                  severity: ErrorSeverity.ERROR,
+                  metadata: {
+                    action: 'permanentlyDeleteVaultItem',
+                    itemId: item.id,
+                  }
+                });
+              } finally {
+                setIsRestoring(false);
+              }
+            }
+          }
+        ]
+      );
+    }
+  });
+
+  const showItemOptions = (item: UIVaultItem) => {
+    Alert.alert(
+      item.name,
+      'Choose an action:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restore',
+          onPress: () => handleItemAction(item, 'restore')
+        },
+        {
+          text: 'Delete Forever',
+          style: 'destructive',
+          onPress: () => handleItemAction(item, 'delete')
+        }
+      ]
+    );
+  };
 
   const toggleItemSelection = (itemId: string) => {
     const newSelected = new Set(selectedItems);
@@ -222,7 +334,7 @@ const VaultTrashScreen = () => {
         <FileListItemWithPreview
           item={item}
           onPress={() => toggleItemSelection(item.id)}
-          onMorePress={() => handleRestoreItem(item)}
+          onMorePress={() => showItemOptions(item)}
           showPreview={false}
           style={isSelected ? styles.selectedItem : undefined}
         />
@@ -271,15 +383,28 @@ const VaultTrashScreen = () => {
             <ThemedText variant="bodyMedium">
               {selectedItems.size} selected
             </ThemedText>
-            <Button
-              variant="primary"
-              size="small"
-              onPress={handleRestoreSelected}
-              disabled={isRestoring}
-              loading={isRestoring}
-            >
-              Restore Selected
-            </Button>
+            <View style={styles.selectionActions}>
+              <Button
+                variant="secondary"
+                size="small"
+                onPress={handleRestoreSelected}
+                disabled={isRestoring}
+                style={styles.selectionButton}
+              >
+                Restore
+              </Button>
+              <Button
+                variant="secondary"
+                size="small"
+                onPress={handlePermanentlyDeleteSelected}
+                disabled={isRestoring}
+                loading={isRestoring}
+                style={[styles.selectionButton, styles.destructiveButton]}
+                textStyle={styles.destructiveText}
+              >
+                Delete Forever
+              </Button>
+            </View>
           </View>
         )}
 
@@ -348,10 +473,23 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
   },
+  selectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  selectionButton: {
+    marginLeft: Spacing.xs,
+  },
   infoBar: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     backgroundColor: Colors.light.background.tertiary,
+  },
+  destructiveButton: {
+    backgroundColor: Colors.light.status.error,
+  },
+  destructiveText: {
+    color: Colors.light.text.inverse,
   },
 });
 
