@@ -228,11 +228,13 @@ class VaultService {
     }
 
     try {
-      if (!item.url) {
-        throw new Error('File URL not available');
+      // If no URL is available, fetch it first
+      let downloadUrl = item.url;
+      if (!downloadUrl) {
+        downloadUrl = await this.getDownloadUrl(item);
       }
 
-      const response = await fetch(item.url);
+      const response = await fetch(downloadUrl);
       if (!response.ok) {
         throw new Error('Failed to download file');
       }
@@ -250,6 +252,55 @@ class VaultService {
         fileId: item.id
       });
       throw error;
+    }
+  }
+
+  /**
+   * Validates if a URL is from allowed Firebase Storage domains
+   */
+  private isValidStorageUrl(url: string): boolean {
+    try {
+      const parsedUrl = new URL(url);
+      const allowedHosts = [
+        'firebasestorage.googleapis.com',
+        'storage.googleapis.com',
+        'dynasty-eba63.firebasestorage.app'
+      ];
+      
+      return allowedHosts.some(host => parsedUrl.hostname.includes(host)) &&
+             parsedUrl.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }
+
+  async getDownloadUrl(item: VaultItem): Promise<string> {
+    try {
+      const result = await this.functionsClient.callFunction('getVaultDownloadUrl', {
+        itemId: item.id
+      });
+      
+      const data = result.data as { downloadUrl: string };
+      
+      if (!data.downloadUrl) {
+        throw new Error('No download URL returned');
+      }
+      
+      // Validate the URL before using it
+      if (!this.isValidStorageUrl(data.downloadUrl)) {
+        throw new Error('Invalid download URL received');
+      }
+      
+      // Update the item's URL for future use
+      item.url = data.downloadUrl;
+      
+      return data.downloadUrl;
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
+        action: 'vault-get-download-url',
+        fileId: item.id
+      });
+      throw new Error('Failed to get download URL');
     }
   }
 
@@ -348,7 +399,7 @@ class VaultService {
     );
 
     try {
-      return await cacheService.getOrSet(
+      const result = await cacheService.getOrSet(
         cacheKey,
         async () => {
           const result = await this.functionsClient.callFunction('getVaultItems', { parentId, includeDeleted });
@@ -367,29 +418,19 @@ class VaultService {
                 path: item.path,
                 itemCount: 0,
                 totalSize: 0,
-                createdAt: (item.createdAt && typeof item.createdAt === 'object' && 'toDate' in item.createdAt) 
-                  ? item.createdAt.toDate() 
-                  : new Date(item.createdAt),
-                updatedAt: (item.updatedAt && typeof item.updatedAt === 'object' && 'toDate' in item.updatedAt) 
-                  ? item.updatedAt.toDate() 
-                  : new Date(item.updatedAt)
+                createdAt: this.convertTimestampToDate(item.createdAt),
+                updatedAt: this.convertTimestampToDate(item.updatedAt)
               });
             } else {
               items.push({
                 ...item,
                 isEncrypted: item.isEncrypted ?? false,
                 isShared: item.isShared ?? false,
-                createdAt: (item.createdAt && typeof item.createdAt === 'object' && 'toDate' in item.createdAt) 
-                  ? item.createdAt.toDate() 
-                  : new Date(item.createdAt),
-                updatedAt: (item.updatedAt && typeof item.updatedAt === 'object' && 'toDate' in item.updatedAt) 
-                  ? item.updatedAt.toDate() 
-                  : new Date(item.updatedAt),
-                lastAccessedAt: item.lastAccessedAt 
-                  ? ((item.lastAccessedAt && typeof item.lastAccessedAt === 'object' && 'toDate' in item.lastAccessedAt) 
-                    ? item.lastAccessedAt.toDate() 
-                    : new Date(item.lastAccessedAt))
-                  : undefined
+                createdAt: this.convertTimestampToDate(item.createdAt),
+                updatedAt: this.convertTimestampToDate(item.updatedAt),
+                lastAccessedAt: item.lastAccessedAt ? this.convertTimestampToDate(item.lastAccessedAt) : undefined,
+                // Note: downloadURL is not provided by getVaultItems, need to fetch separately
+                url: item.url || item.downloadURL || undefined
               });
             }
           });
@@ -398,6 +439,11 @@ class VaultService {
         },
         { ttl: 5 * 60 * 1000, persist: true }
       );
+
+      // Pre-fetch URLs for image files (but don't wait for them)
+      this.prefetchImageUrls(result.items);
+      
+      return result;
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
         action: 'vault-get-items',
@@ -405,6 +451,26 @@ class VaultService {
       });
       throw error;
     }
+  }
+
+  // Pre-fetch URLs for image files to improve performance
+  private async prefetchImageUrls(items: VaultItem[]): Promise<void> {
+    const imageItems = items.filter(item => 
+      item.mimeType?.startsWith('image/') && !item.url
+    );
+
+    // Fetch URLs in parallel but don't wait
+    Promise.all(
+      imageItems.map(async item => {
+        try {
+          await this.getDownloadUrl(item);
+        } catch (_error) {
+          console.warn('Failed to prefetch URL for item:', item.id);
+        }
+      })
+    ).catch(() => {
+      // Ignore errors - this is just optimization
+    });
   }
 
   async searchItems(query: string, filters?: {
@@ -431,10 +497,39 @@ class VaultService {
     try {
       const result = await this.functionsClient.callFunction('getDeletedVaultItems', {});
       const data = result.data as { items?: VaultItem[] };
-      return data.items || [];
+      
+      // Convert timestamps for deleted items
+      const items = (data.items || []).map(item => ({
+        ...item,
+        createdAt: this.convertTimestampToDate(item.createdAt),
+        updatedAt: this.convertTimestampToDate(item.updatedAt),
+        lastAccessedAt: item.lastAccessedAt ? this.convertTimestampToDate(item.lastAccessedAt) : undefined,
+      }));
+      
+      return items;
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.LOW, {
         action: 'vault-get-deleted'
+      });
+      throw error;
+    }
+  }
+
+  async cleanupDeletedItems(olderThanDays: number = 30, force: boolean = false): Promise<{ deletedCount: number }> {
+    try {
+      const result = await this.functionsClient.callFunction('cleanupDeletedVaultItems', {
+        olderThanDays,
+        force
+      });
+      
+      const data = result.data as { deletedCount: number };
+      this.invalidateCache();
+      return data;
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
+        action: 'vault-cleanup',
+        olderThanDays,
+        force
       });
       throw error;
     }
@@ -492,20 +587,6 @@ class VaultService {
     }
   }
 
-  async cleanupDeletedItems(olderThanDays = 30): Promise<{ deletedCount: number }> {
-    try {
-      const result = await this.functionsClient.callFunction('cleanupDeletedVaultItems', { olderThanDays });
-      
-      this.invalidateCache();
-      const data = result.data as { deletedCount: number };
-      return data;
-    } catch (error) {
-      errorHandler.handleError(error, ErrorSeverity.LOW, {
-        action: 'vault-cleanup'
-      });
-      throw error;
-    }
-  }
 
   // Utility Methods
 
@@ -560,6 +641,44 @@ class VaultService {
     }
     
     return `${size.toFixed(unitIndex > 0 ? 1 : 0)} ${units[unitIndex]}`;
+  }
+
+  // Helper method to convert Firestore timestamps to Date objects
+  private convertTimestampToDate(timestamp: unknown): Date {
+    if (!timestamp) {
+      return new Date();
+    }
+
+    // Handle Firestore Timestamp objects
+    if (timestamp && typeof timestamp === 'object') {
+      // Check for Firestore Timestamp format
+      if ('seconds' in timestamp && 'nanoseconds' in timestamp) {
+        return new Date(timestamp.seconds * 1000);
+      }
+      // Check for _seconds format (sometimes returned by Firebase Functions)
+      if ('_seconds' in timestamp && '_nanoseconds' in timestamp) {
+        return new Date(timestamp._seconds * 1000);
+      }
+      // Check for toDate method (Firestore Timestamp class)
+      if ('toDate' in timestamp && typeof timestamp.toDate === 'function') {
+        return timestamp.toDate();
+      }
+    }
+
+    // Handle string dates
+    if (typeof timestamp === 'string') {
+      const date = new Date(timestamp);
+      return isNaN(date.getTime()) ? new Date() : date;
+    }
+
+    // Handle number (milliseconds)
+    if (typeof timestamp === 'number') {
+      return new Date(timestamp);
+    }
+
+    // Default to current date if we can't parse
+    console.warn('Unable to parse timestamp:', timestamp);
+    return new Date();
   }
 }
 
