@@ -166,9 +166,9 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         }
 
         // Set additional details
-        if (event.dresscode) {
+        if (event.dressCode) {
           setShowDressCode(true)
-          setDresscode(event.dresscode)
+          setDresscode(event.dressCode)
         }
         if (event.whatToBring) {
           setShowWhatToBring(true)
@@ -380,7 +380,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         virtualLink: isVirtual ? virtualLink : null,
         isVirtual,
         description,
-        dresscode: showDressCode ? dresscode : null,
+        dressCode: showDressCode ? dresscode : null,
         whatToBring: showWhatToBring ? whatToBring : null,
         additionalInfo: showAdditionalInfo ? description : null,
         privacy,

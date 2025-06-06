@@ -167,4 +167,34 @@ export function getSmartDate(
     console.error("Error formatting smart date:", error, timestamp);
     return fallback;
   }
+}
+
+/**
+ * Format a date specifically for vault items with better fallbacks
+ * 
+ * @param timestamp - The timestamp to format (various formats supported)
+ * @param formatString - Optional date-fns format string (default: "MMM d, yyyy")
+ * @returns Formatted date string with intelligent fallbacks
+ */
+export function formatVaultDate(
+  timestamp: TimestampType,
+  formatString = "MMM d, yyyy"
+): string {
+  try {
+    // Debug logging to understand what we're receiving
+    console.log("formatVaultDate received:", timestamp, typeof timestamp);
+    
+    const date = toDate(timestamp);
+    
+    if (!date) {
+      // If no date is available, show "Just now" for recent items
+      console.log("No valid date found, using fallback");
+      return "Recently added";
+    }
+    
+    return format(date, formatString);
+  } catch (error) {
+    console.error("Error formatting vault date:", error, timestamp);
+    return "Recently added";
+  }
 } 

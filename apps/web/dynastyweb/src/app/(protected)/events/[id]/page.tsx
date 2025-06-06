@@ -20,7 +20,8 @@ import {
   // ImageIcon,
   // Video,
   Loader2,
-  CalendarPlus
+  CalendarPlus,
+  Shirt
 } from "lucide-react"
 import { format, isPast, parseISO } from "date-fns"
 import { getEventDetails, updateEventRsvp, EventData, downloadEventCalendar } from "@/utils/eventUtils"
@@ -432,25 +433,35 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
 
               <Separator />
 
-              {(event.dresscode || event.whatToBring || event.additionalInfo) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                  {event.dresscode && (
-                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                      <h3 className="font-medium text-gray-900 mb-2">Dress Code</h3>
-                      <p className="text-gray-700 text-sm sm:text-base">{event.dresscode}</p>
+              {/* Additional Details */}
+              {(event.dressCode || event.whatToBring || event.additionalInfo) && (
+                <div className="space-y-4">
+                  {event.dressCode && (
+                    <div className="space-y-2">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-800 flex items-center">
+                        <Shirt className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-[#0A5C36]" />
+                        Dress Code
+                      </h3>
+                      <p className="text-gray-700 text-sm sm:text-base">{event.dressCode}</p>
                     </div>
                   )}
 
                   {event.whatToBring && (
-                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                      <h3 className="font-medium text-gray-900 mb-2">What to Bring</h3>
+                    <div className="space-y-2">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-800 flex items-center">
+                        <Shirt className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-[#0A5C36]" />
+                        What to Bring
+                      </h3>
                       <p className="text-gray-700 text-sm sm:text-base">{event.whatToBring}</p>
                     </div>
                   )}
 
                   {event.additionalInfo && (
-                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg md:col-span-2">
-                      <h3 className="font-medium text-gray-900 mb-2">Additional Information</h3>
+                    <div className="space-y-2">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-800 flex items-center">
+                        <HelpCircle className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-[#0A5C36]" />
+                        Additional Information
+                      </h3>
                       <p className="text-gray-700 text-sm sm:text-base">{event.additionalInfo}</p>
                     </div>
                   )}

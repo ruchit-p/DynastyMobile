@@ -144,7 +144,6 @@ export default function EventsPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
           <div className="mt-6">
             <h1 className="text-2xl font-bold text-gray-900">Family Events</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage and discover family gatherings</p>
           </div>
           <Link href="/create-event">
             <Button className="mt-4 md:mt-0 bg-[#0A5C36] hover:bg-[#084c2b]">
