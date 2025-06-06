@@ -4,7 +4,9 @@
 .env.test.local
 .env.production.local
 .env.development
-.env.production
+.env.prod*
+.env.*
+.env.staging
 .DS_Store
 
 node_modules
@@ -108,3 +110,4 @@ apps/firebase/emulator-data-backup/auth_export/config.json
 apps/firebase/emulator-data-backup/storage_export/buckets.json
 **/emulator-data-backup/**/*.json
 firebase-export-*/
+apps/web/dynastyweb/.env.prod
