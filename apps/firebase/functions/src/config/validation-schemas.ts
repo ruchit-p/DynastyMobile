@@ -25,7 +25,7 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
       {field: "invitedMemberIds", type: "array", maxSize: 100},
       {field: "capacity", type: "number"},
       {field: "shareEventLink", type: "boolean"},
-      {field: "coverPhotoId", type: "string"},
+      {field: "coverPhotoStoragePaths", type: "array", maxSize: 5},
     ],
     xssCheck: true,
   },
@@ -55,7 +55,7 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
       {field: "invitedMemberIds", type: "array", maxSize: 100},
       {field: "capacity", type: "number"},
       {field: "shareEventLink", type: "boolean"},
-      {field: "coverPhotoId", type: "string"},
+      {field: "coverPhotoStoragePaths", type: "array", maxSize: 5},
     ],
     xssCheck: true,
   },
@@ -142,7 +142,7 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
       {field: "storagePath", type: "string", required: true, maxLength: 500},
       {field: "fileType", type: "enum", required: true, enumValues: ["image", "video", "audio", "document", "other"]},
       {field: "size", type: "number", required: true},
-      {field: "mimeType", type: "string", required: true, maxLength: 100},
+      {field: "mimeType", type: "string", required: true, maxLength: 100, sanitize: false},
       {field: "parentId", type: "id"},
       {field: "isEncrypted", type: "boolean"},
       {field: "encryptionKeyId", type: "id"},
@@ -306,7 +306,7 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
     rules: [
       {field: "fileName", type: "string", required: true, maxLength: 255},
       {field: "fileSize", type: "number", required: true},
-      {field: "mimeType", type: "string", required: true, maxLength: 100},
+      {field: "mimeType", type: "string", required: true, maxLength: 100, sanitize: false},
       {field: "folderId", type: "id"},
       {field: "metadata", type: "object"},
       {field: "tags", type: "array", maxSize: 20},
@@ -382,7 +382,7 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
   getVaultUploadSignedUrl: {
     rules: [
       {field: "fileName", type: "string", required: true, maxLength: 255},
-      {field: "mimeType", type: "string", required: true, maxLength: 100},
+      {field: "mimeType", type: "string", required: true, maxLength: 100, sanitize: false},
       {field: "fileSize", type: "number", required: true},
       {field: "parentId", type: "id"},
       {field: "isEncrypted", type: "boolean"},
@@ -411,6 +411,7 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
   cleanupDeletedVaultItems: {
     rules: [
       {field: "olderThanDays", type: "number"},
+      {field: "force", type: "boolean"},
     ],
     xssCheck: false,
   },
