@@ -124,7 +124,7 @@ export function validateRequest(
         }
         break;
 
-      case "crypto_key":
+      case "crypto_key": {
         if (typeof value !== "string") {
           throw new Error("must be a string");
         }
@@ -138,6 +138,7 @@ export function validateRequest(
           throw new Error("invalid cryptographic key length");
         }
         break;
+      }
       }
 
       // Custom validation

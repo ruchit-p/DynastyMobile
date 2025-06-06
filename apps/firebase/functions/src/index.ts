@@ -55,6 +55,7 @@ export * from "./migrations/userDocumentConsistency"; // User document consisten
 export * from "./deviceFingerprint"; // Device fingerprinting and trust management
 export * from "./signal"; // Signal Protocol key management and verification
 export * from "./sms"; // Twilio SMS functions for invitations and notifications
+export * from "./support"; // Support ticket management with Notion integration
 
 // R2 Migration functions (only when enabled)
 if (process.env.ENABLE_R2_MIGRATION === "true") {

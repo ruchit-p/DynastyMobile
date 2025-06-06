@@ -78,7 +78,7 @@ export const publishSignalKeys = onCall(withAuth(async (request) => {
     return {success: true};
   } catch (error) {
     logger.error("Error publishing Signal keys:", error);
-    if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
+    if (error && typeof error === "object" && "code" in error && "message" in error) {
       throw error;
     }
     throw createError(ErrorCode.INTERNAL, "Failed to publish Signal keys");
@@ -173,7 +173,7 @@ export const getUserSignalBundle = onCall(withAuth(async (request) => {
     };
   } catch (error) {
     logger.error("Error getting Signal bundle:", error);
-    if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
+    if (error && typeof error === "object" && "code" in error && "message" in error) {
       throw error;
     }
     throw createError(ErrorCode.INTERNAL, "Failed to get Signal bundle");
@@ -215,7 +215,7 @@ export const publishSignedPreKey = onCall(withAuth(async (request) => {
     return {success: true};
   } catch (error) {
     logger.error("Error publishing signed prekey:", error);
-    if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
+    if (error && typeof error === "object" && "code" in error && "message" in error) {
       throw error;
     }
     throw createError(ErrorCode.INTERNAL, "Failed to publish signed prekey");
@@ -260,7 +260,7 @@ export const publishPreKeys = onCall(withAuth(async (request) => {
     return {success: true};
   } catch (error) {
     logger.error("Error publishing prekeys:", error);
-    if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
+    if (error && typeof error === "object" && "code" in error && "message" in error) {
       throw error;
     }
     throw createError(ErrorCode.INTERNAL, "Failed to publish prekeys");
@@ -297,7 +297,7 @@ export const markUserAsVerified = onCall(withAuth(async (request) => {
     return {success: true};
   } catch (error) {
     logger.error("Error marking user as verified:", error);
-    if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
+    if (error && typeof error === "object" && "code" in error && "message" in error) {
       throw error;
     }
     throw createError(ErrorCode.INTERNAL, "Failed to mark user as verified");
@@ -343,7 +343,7 @@ export const trustUserIdentity = onCall(withAuth(async (request) => {
     return {success: true};
   } catch (error) {
     logger.error("Error trusting user identity:", error);
-    if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
+    if (error && typeof error === "object" && "code" in error && "message" in error) {
       throw error;
     }
     throw createError(ErrorCode.INTERNAL, "Failed to trust user identity");
@@ -375,7 +375,7 @@ export const getPreKeyCount = onCall(withAuth(async (request) => {
     return {count: snapshot.data().count};
   } catch (error) {
     logger.error("Error getting prekey count:", error);
-    if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
+    if (error && typeof error === "object" && "code" in error && "message" in error) {
       throw error;
     }
     throw createError(ErrorCode.INTERNAL, "Failed to get prekey count");

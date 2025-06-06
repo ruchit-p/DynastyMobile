@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { Mail, Phone, MapPin, Send } from 'lucide-react';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/lib/firebase';
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -12,6 +14,7 @@ export default function ContactPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState<string>('Something went wrong. Please try again or email us directly.');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData({
@@ -23,15 +26,29 @@ export default function ContactPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setSubmitStatus('idle'); // Reset status
     
-    // TODO: Implement actual form submission logic
-    // For now, just simulate a submission
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const submitContactMessage = httpsCallable(functions, 'submitContactMessage');
+      await submitContactMessage({
+        name: formData.name,
+        email: formData.email,
+        subject: formData.subject, // Maps to category in backend
+        message: formData.message,
+      });
+      
       setSubmitStatus('success');
       setFormData({ name: '', email: '', subject: '', message: '' });
-    } catch {
+    } catch (error) {
       setSubmitStatus('error');
+      console.error('Contact form error:', error);
+      
+      // Handle rate limiting specifically
+      if (error instanceof Error && 'code' in error && error.code === "functions/resource-exhausted") {
+        setErrorMessage("You've reached the message limit. Please try again later.");
+      } else {
+        setErrorMessage('Something went wrong. Please try again or email us directly.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -191,7 +208,7 @@ export default function ContactPage() {
 
                   {submitStatus === 'error' && (
                     <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
-                      Something went wrong. Please try again or email us directly.
+                      {errorMessage}
                     </div>
                   )}
 

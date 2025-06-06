@@ -486,14 +486,20 @@ export function withAuth<T>(
   const {authLevel = "auth"} = config;
 
   return withErrorHandling(async (request: CallableRequest): Promise<T> => {
+    // Apply rate limiting if configured (before auth checks)
+    if (config.rateLimitConfig) {
+      if (authLevel === "none") {
+        // For public endpoints, use IP-based rate limiting
+        await checkRateLimitByIP(request, config.rateLimitConfig);
+      } else {
+        // For authenticated endpoints, use user-based rate limiting
+        await checkRateLimit(request, config.rateLimitConfig);
+      }
+    }
+
     // Skip auth for 'none' level
     if (authLevel === "none") {
       return await handler(request);
-    }
-
-    // Apply rate limiting if configured
-    if (config.rateLimitConfig) {
-      await checkRateLimit(request, config.rateLimitConfig);
     }
 
     // Apply appropriate auth check based on level

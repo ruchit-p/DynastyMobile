@@ -1235,7 +1235,7 @@ export const cleanupDeletedVaultItems = onCall(
       uid
     );
 
-    const { olderThanDays = 30, force = false } = validatedData;
+    const {olderThanDays = 30, force = false} = validatedData;
 
     logger.info("Starting cleanup of deleted vault items", createLogContext({
       olderThanDays,
@@ -1244,9 +1244,7 @@ export const cleanupDeletedVaultItems = onCall(
     }));
 
     const db = getFirestore();
-    const bucket = getStorage().bucket();
 
-    let query = db.collection("vaultItems")
     let firestoreQuery = db.collection("vaultItems").where("userId", "==", uid);
 
     // Filter by deletion status

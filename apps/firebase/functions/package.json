@@ -25,6 +25,7 @@
     "@aws-sdk/s3-request-presigner": "^3.817.0",
     "@fingerprintjs/fingerprintjs-pro-server-api": "^6.5.0",
     "@googlemaps/google-maps-services-js": "^3.4.1",
+    "@notionhq/client": "^2.3.0",
     "@sendgrid/mail": "^8.1.4",
     "@types/dotenv": "^6.1.1",
     "@upstash/ratelimit": "^2.0.5",

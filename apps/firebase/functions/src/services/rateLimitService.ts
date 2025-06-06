@@ -59,6 +59,13 @@ const rateLimiters = {
     limiter: Ratelimit.fixedWindow(3, "1 h"),
     prefix: "@dynasty/sms",
   }),
+
+  // Support messages: 3 per 6 hours
+  support: new Ratelimit({
+    redis,
+    limiter: Ratelimit.fixedWindow(3, "6 h"),
+    prefix: "@dynasty/support",
+  }),
 };
 
 export type RateLimitType = keyof typeof rateLimiters
@@ -184,6 +191,7 @@ export async function resetRateLimit(type: RateLimitType, identifier: string): P
     write: "@dynasty/write",
     sensitive: "@dynasty/sensitive",
     sms: "@dynasty/sms",
+    support: "@dynasty/support",
   };
 
   const prefix = prefixMap[type];
