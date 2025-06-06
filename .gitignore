@@ -111,3 +111,5 @@ apps/firebase/emulator-data-backup/storage_export/buckets.json
 **/emulator-data-backup/**/*.json
 firebase-export-*/
 apps/web/dynastyweb/.env.prod
+apps/web/dynastyweb/.env.prod
+apps/web/dynastyweb/.env.example
