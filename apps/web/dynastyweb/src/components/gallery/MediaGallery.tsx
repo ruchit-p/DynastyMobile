@@ -1,15 +1,13 @@
 "use client"
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef } from 'react'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { Navigation, Pagination, Keyboard, A11y, Thumbs } from 'swiper/modules'
 import type { Swiper as SwiperType } from 'swiper'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
-import { ChevronLeft, ChevronRight, X, Expand, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import AudioPlayer from '@/components/AudioPlayer'
-import VideoPlayer from '@/components/VideoPlayer'
 import { ensureAccessibleStorageUrl } from '@/utils/mediaUtils'
 import MediaGalleryLightbox from './MediaGalleryLightbox'
 import MediaGalleryItem from './MediaGalleryItem'
@@ -91,7 +89,6 @@ export default function MediaGallery({
   onItemClick,
   onRemoveItem,
   className,
-  autoPlay = false,
   loop = true,
 }: MediaGalleryProps) {
   const [activeIndex, setActiveIndex] = useState(0)
@@ -311,21 +308,55 @@ export default function MediaGallery({
       )}
 
       <style jsx global>{`
+        .media-gallery-swiper {
+          position: relative;
+        }
+
         .media-gallery-swiper .swiper-button-prev,
         .media-gallery-swiper .swiper-button-next {
           color: white;
           background-color: rgba(0, 0, 0, 0.5);
-          width: 40px;
-          height: 40px;
+          width: 48px;
+          height: 48px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
+          transition: all 0.2s ease;
+        }
+
+        .media-gallery-swiper .swiper-button-prev:hover,
+        .media-gallery-swiper .swiper-button-next:hover {
+          background-color: rgba(0, 0, 0, 0.7);
+          transform: scale(1.1);
         }
 
         .media-gallery-swiper .swiper-button-prev:after,
         .media-gallery-swiper .swiper-button-next:after {
-          font-size: 20px;
+          font-size: 0;
+          content: '';
+          display: block;
+          width: 24px;
+          height: 24px;
+          background-repeat: no-repeat;
+          background-position: center;
+          background-size: contain;
+        }
+
+        .media-gallery-swiper .swiper-button-prev:after {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='15 18 9 12 15 6'%3E%3C/polyline%3E%3C/svg%3E");
+        }
+
+        .media-gallery-swiper .swiper-button-next:after {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 18 15 12 9 6'%3E%3C/polyline%3E%3C/svg%3E");
+        }
+
+        .media-gallery-swiper .swiper-button-prev {
+          left: 16px;
+        }
+
+        .media-gallery-swiper .swiper-button-next {
+          right: 16px;
         }
 
         .media-gallery-swiper .swiper-pagination-bullet {
@@ -340,6 +371,20 @@ export default function MediaGallery({
 
         .media-gallery-thumbs .swiper-slide-thumb-active > div {
           border-color: #0A5C36 !important;
+        }
+
+        @media (max-width: 640px) {
+          .media-gallery-swiper .swiper-button-prev,
+          .media-gallery-swiper .swiper-button-next {
+            width: 40px;
+            height: 40px;
+          }
+          
+          .media-gallery-swiper .swiper-button-prev:after,
+          .media-gallery-swiper .swiper-button-next:after {
+            width: 20px;
+            height: 20px;
+          }
         }
       `}</style>
     </>

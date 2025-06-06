@@ -16,11 +16,9 @@ import {
   BookmarkIcon as Bookmark,  
   MessageSquare,
 } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/components/ui/use-toast"
 import AudioPlayer from "@/components/AudioPlayer"
-import VideoPlayer from "@/components/VideoPlayer"
 import ProtectedRoute from "@/components/ProtectedRoute"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
@@ -40,7 +38,6 @@ import {
   type CommentUser
 } from "@/utils/storyUtils"
 import { deleteStory } from "@/utils/functionUtils"
-import DynastyCarousel from "@/components/DynastyCarousel"
 import { MediaGallery, MediaItem } from "@/components/gallery"
 import eventManager, { LikeEventData } from "@/utils/eventUtils"
 import { formatDate, formatTimeAgo, getSmartDate } from "@/utils/dateUtils"
@@ -327,7 +324,7 @@ export default function StoryDetailsPage() {
             mediaItems.push({
               id: `${block.localId}-${index}`,
               url: getImageUrl(url),
-              type: block.type,
+              type: block.type as 'image' | 'video' | 'audio',
               alt: `${story.title} - ${block.type} ${index + 1}`,
             });
           });

@@ -2,7 +2,6 @@
 
 import { Heart, MessageSquare, MoreHorizontal, Bookmark, Lock, MapPin, FileText, Video, AudioLines, Image as ImageIcon } from "lucide-react"
 import Link from "next/link"
-import Image from "next/image"
 import { useState, useEffect } from "react"
 import { Button } from "./ui/button"
 import { Card, CardHeader, CardContent, CardFooter } from "./ui/card"
@@ -107,7 +106,7 @@ export function StoryCard({ story, currentUserId }: StoryProps) {
             mediaItems.push({
               id: `${block.localId}-${index}`,
               url: ensureAccessibleStorageUrl(url),
-              type: block.type,
+              type: block.type as 'image' | 'video' | 'audio',
               alt: `${story.title} - ${block.type} ${index + 1}`,
             });
           });

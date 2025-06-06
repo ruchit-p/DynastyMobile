@@ -6,7 +6,7 @@ import AudioPlayer from '@/components/AudioPlayer'
 import VideoPlayer from '@/components/VideoPlayer'
 import { MediaItem, MediaType } from './MediaGallery'
 import { cn } from '@/lib/utils'
-import { FileImage, FileVideo, FileAudio, FileQuestion } from 'lucide-react'
+import { FileAudio, FileQuestion } from 'lucide-react'
 
 interface MediaGalleryItemProps {
   item: MediaItem & { type?: MediaType }
@@ -90,10 +90,7 @@ export default function MediaGalleryItem({
           className={cn("relative w-full", className)}
           style={getContainerStyle()}
         >
-          <VideoPlayer 
-            url={item.url} 
-            className="w-full h-full"
-          />
+          <VideoPlayer url={item.url} />
           {item.caption && (
             <div className="mt-2 text-sm text-gray-600">{item.caption}</div>
           )}

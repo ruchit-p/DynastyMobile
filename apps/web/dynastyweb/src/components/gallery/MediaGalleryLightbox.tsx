@@ -71,6 +71,7 @@ export default function MediaGalleryLightbox({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, currentIndex, items.length])
 
   const navigatePrev = useCallback(() => {
@@ -200,6 +201,7 @@ export default function MediaGalleryLightbox({
                   )}
                 >
                   {item.type === 'image' ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={item.thumbnail || item.url}
                       alt={`Thumbnail ${index + 1}`}
@@ -231,7 +233,7 @@ export default function MediaGalleryLightbox({
       dynamic
       dynamicEl={galleryItems}
       index={currentIndex}
-      onCloseAfter={onClose}
+      onAfterClose={onClose}
       plugins={[lgZoom, lgVideo, lgFullscreen, lgAutoplay]}
       speed={500}
       download={true}

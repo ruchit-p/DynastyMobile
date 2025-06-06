@@ -33,8 +33,7 @@ import { FamilyMemberSelect } from "@/components/FamilyMemberSelect"
 import { createStory } from "@/utils/functionUtils"
 import Image from "next/image"
 import ImageCropper from "@/components/ImageCropper"
-import DynastyCarousel from "@/components/DynastyCarousel"
-import { MediaGallery, MediaItem } from "@/components/gallery"
+import { MediaGallery } from "@/components/gallery"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1211,7 +1210,7 @@ export default function CreateStoryPage() {
                                   items={(block.content as File[]).map((file, idx) => ({
                                     id: `${block.id}-${idx}`,
                                     url: URL.createObjectURL(file),
-                                    type: block.type,
+                                    type: block.type as 'image' | 'video' | 'audio',
                                     file: file,
                                     alt: `${block.type} ${idx + 1}`,
                                   }))}
