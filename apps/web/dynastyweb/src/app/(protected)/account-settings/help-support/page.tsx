@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/accordion"
 import { HelpCircle, Mail, MessageSquare, Loader2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
+import { httpsCallable } from 'firebase/functions'
+import { functions } from '@/lib/firebase'
 
 export default function HelpSupportPage() {
   const { toast } = useToast()
@@ -31,15 +33,36 @@ export default function HelpSupportPage() {
     
     setIsSending(true)
     
-    // Simulate sending a message
-    setTimeout(() => {
+    try {
+      const submitSupportMessage = httpsCallable(functions, 'submitSupportMessage')
+      await submitSupportMessage({
+        message: message.trim(),
+        // name and email will be fetched from user profile server-side
+      })
+      
       toast({
         title: "Message Sent",
-        description: "We'll get back to you soon.",
+        description: "Thank you! We'll get back to you soon.",
       })
       setMessage("")
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === "functions/resource-exhausted") {
+        toast({
+          title: "Rate Limit Reached",
+          description: "You've reached the support request limit. Please try again later.",
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to send message. Please try again.",
+          variant: "destructive",
+        })
+      }
+      console.error("Support message error:", error)
+    } finally {
       setIsSending(false)
-    }, 1500)
+    }
   }
   
   return (

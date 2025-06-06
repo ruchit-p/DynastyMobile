@@ -1261,4 +1261,26 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
     ],
     xssCheck: false,
   },
+
+  // Support Form Schemas
+  submitSupportMessage: {
+    rules: [
+      {field: "message", type: "string", required: true, maxLength: 2000},
+      {field: "name", type: "string", maxLength: 100},
+      {field: "email", type: "email"},
+      {field: "phone", type: "phone"},
+      {field: "category", type: "enum", enumValues: ["technical", "billing", "privacy", "feature", "other"]},
+    ],
+    xssCheck: true,
+  },
+
+  submitContactMessage: {
+    rules: [
+      {field: "name", type: "string", required: true, maxLength: 100},
+      {field: "email", type: "email", required: true},
+      {field: "subject", type: "enum", required: true, enumValues: ["technical", "billing", "privacy", "feature", "other"]},
+      {field: "message", type: "string", required: true, maxLength: 2000},
+    ],
+    xssCheck: true,
+  },
 };
