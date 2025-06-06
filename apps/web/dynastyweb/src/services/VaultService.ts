@@ -430,7 +430,7 @@ class VaultService {
                 updatedAt: this.convertTimestampToDate(item.updatedAt),
                 lastAccessedAt: item.lastAccessedAt ? this.convertTimestampToDate(item.lastAccessedAt) : undefined,
                 // Note: downloadURL is not provided by getVaultItems, need to fetch separately
-                url: item.url || item.downloadURL || undefined
+                url: item.url || undefined
               });
             }
           });
@@ -464,7 +464,7 @@ class VaultService {
       imageItems.map(async item => {
         try {
           await this.getDownloadUrl(item);
-        } catch (_error) {
+        } catch {
           console.warn('Failed to prefetch URL for item:', item.id);
         }
       })
@@ -652,16 +652,17 @@ class VaultService {
     // Handle Firestore Timestamp objects
     if (timestamp && typeof timestamp === 'object') {
       // Check for Firestore Timestamp format
-      if ('seconds' in timestamp && 'nanoseconds' in timestamp) {
-        return new Date(timestamp.seconds * 1000);
+      const timestampObj = timestamp as { seconds?: number; nanoseconds?: number; _seconds?: number; _nanoseconds?: number; toDate?: () => Date };
+      if (timestampObj.seconds !== undefined && timestampObj.nanoseconds !== undefined) {
+        return new Date(timestampObj.seconds * 1000);
       }
       // Check for _seconds format (sometimes returned by Firebase Functions)
-      if ('_seconds' in timestamp && '_nanoseconds' in timestamp) {
-        return new Date(timestamp._seconds * 1000);
+      if (timestampObj._seconds !== undefined && timestampObj._nanoseconds !== undefined) {
+        return new Date(timestampObj._seconds * 1000);
       }
       // Check for toDate method (Firestore Timestamp class)
-      if ('toDate' in timestamp && typeof timestamp.toDate === 'function') {
-        return timestamp.toDate();
+      if (timestampObj.toDate && typeof timestampObj.toDate === 'function') {
+        return timestampObj.toDate();
       }
     }
 

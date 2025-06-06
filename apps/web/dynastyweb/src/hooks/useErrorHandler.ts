@@ -17,7 +17,7 @@ export function useErrorHandler(options: UseErrorHandlerOptions = {}) {
       error,
       ErrorSeverity.MEDIUM,
       {
-        context: title,
+        context: { title },
         action: customMessage || 'Unknown action'
       } as ErrorMetadata
     );
@@ -34,7 +34,7 @@ export function useErrorHandler(options: UseErrorHandlerOptions = {}) {
     }
   }, [title, skipToast, toast]);
 
-  const withErrorHandling = useCallback(<T extends any[], R>(
+  const withErrorHandling = useCallback(<T extends unknown[], R>(
     fn: (...args: T) => Promise<R>
   ) => {
     return async (...args: T): Promise<R | undefined> => {

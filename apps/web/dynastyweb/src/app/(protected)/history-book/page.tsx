@@ -117,7 +117,7 @@ export default function HistoryBookPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F9FAFB] flex flex-col">
+      <div className="min-h-screen bg-gray-50 flex flex-col">
         <main className="container py-6 pb-6 flex-grow">
           <div className="text-center py-8">
             <Spinner size="lg" variant="primary" className="mb-4" />
@@ -130,7 +130,7 @@ export default function HistoryBookPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#F9FAFB] flex flex-col">
+      <div className="min-h-screen bg-gray-50 flex flex-col">
         <main className="container py-6 pb-6 flex-grow">
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md shadow-sm" role="alert">
             <p className="font-medium">Error</p>
@@ -142,7 +142,7 @@ export default function HistoryBookPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB] flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       <main className="container py-6 pb-6 flex-grow">
         <div className="flex justify-between my-6 items-center mb-6">
           <h1 className="text-2xl font-bold text-[#000000]">My History Book</h1>
