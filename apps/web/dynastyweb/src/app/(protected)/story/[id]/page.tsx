@@ -41,6 +41,7 @@ import {
 } from "@/utils/storyUtils"
 import { deleteStory } from "@/utils/functionUtils"
 import DynastyCarousel from "@/components/DynastyCarousel"
+import { MediaGallery, MediaItem } from "@/components/gallery"
 import eventManager, { LikeEventData } from "@/utils/eventUtils"
 import { formatDate, formatTimeAgo, getSmartDate } from "@/utils/dateUtils"
 import { Spinner } from "@/components/ui/spinner"
@@ -135,7 +136,6 @@ export default function StoryDetailsPage() {
   const [likeCount, setLikeCount] = useState(0);
   const [isBookmarked, setIsBookmarked] = useState(false);
   
-  const [expandedImage, setExpandedImage] = useState<number | null>(null);
   const [authorName, setAuthorName] = useState("Anonymous");
   const [authorImage, setAuthorImage] = useState("/placeholder.svg");
 
@@ -315,30 +315,34 @@ export default function StoryDetailsPage() {
       .map(block => block.data as string);
   }
 
-  const getStoryImages = () => {
+  const getMediaItems = (): MediaItem[] => {
     if (!story) return [];
     
-    const images: { url: string, alt: string, caption?: string }[] = [];
+    const mediaItems: MediaItem[] = [];
     
-    story.blocks.forEach(block => {
-      if (block.type === "image") {
+    story.blocks.forEach((block) => {
+      if (block.type === 'image' || block.type === 'video' || block.type === 'audio') {
         if (Array.isArray(block.data)) {
           block.data.forEach((url, index) => {
-            images.push({ 
-              url: getImageUrl(url), 
-              alt: `Story image ${index + 1}` 
+            mediaItems.push({
+              id: `${block.localId}-${index}`,
+              url: getImageUrl(url),
+              type: block.type,
+              alt: `${story.title} - ${block.type} ${index + 1}`,
             });
           });
-        } else if (typeof block.data === "string") {
-          images.push({ 
-            url: getImageUrl(block.data), 
-            alt: "Story image" 
+        } else if (typeof block.data === 'string') {
+          mediaItems.push({
+            id: block.localId,
+            url: getImageUrl(block.data),
+            type: block.type,
+            alt: `${story.title} - ${block.type}`,
           });
         }
       }
     });
     
-    return images;
+    return mediaItems;
   }
 
   // Get first audio URL if available
@@ -619,7 +623,8 @@ export default function StoryDetailsPage() {
       {paragraph}
     </p>
   ));
-  const images = getStoryImages();
+  const mediaItems = getMediaItems();
+  const hasMedia = mediaItems.length > 0;
   
   return (
     <ProtectedRoute>
@@ -833,98 +838,22 @@ export default function StoryDetailsPage() {
             ))}
           </div>
 
-          {/* Images */}
-          {images.length > 0 && (
-            <div className="mt-8 space-y-6">
-              {images.length > 1 ? (
-                <div className="rounded-lg overflow-hidden border">
-                  <DynastyCarousel
-                    items={images}
-                    type="image"
-                    imageHeight={500}
-                    emulateTouch={true}
-                    swipeable={true}
-                    useKeyboardArrows={true}
-                    onItemClick={(index) => setExpandedImage(expandedImage === index ? null : index)}
-                    className="w-full"
-                  />
-                </div>
-              ) : (
-                <div className="rounded-lg overflow-hidden border">
-                  <div
-                    className="relative cursor-pointer"
-                    onClick={() => setExpandedImage(expandedImage === 0 ? null : 0)}
-                  >
-                    <div className="relative w-full h-[500px]">
-                      <Image
-                        src={images[0].url}
-                        alt={images[0].alt || "Story image"}
-                        fill
-                        sizes="(max-width: 768px) 100vw, 800px"
-                        className="object-contain"
-                        unoptimized={process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true'}
-                        onError={(e) => {
-                          console.error("Image load error:", images[0].url);
-                          (e.target as HTMLImageElement).src = "/placeholder.svg";
-                        }}
-                      />
-                    </div>
-                    {images[0].caption && (
-                      <div className="p-4 bg-gray-50 text-sm text-gray-700">{images[0].caption}</div>
-                    )}
-                  </div>
-                </div>
-              )}
+          {/* Media Gallery */}
+          {hasMedia && (
+            <div className="mt-8">
+              <MediaGallery
+                items={mediaItems}
+                mode="detail"
+                enableLightbox={true}
+                showIndicators={true}
+                showArrows={true}
+                showThumbs={mediaItems.length > 3}
+                maxHeight={600}
+                aspectRatio="auto"
+                className="rounded-lg overflow-hidden border"
+              />
             </div>
           )}
-
-          {/* Media blocks that aren't text or already displayed images */}
-          <div className="space-y-8 mt-8">
-            {story.blocks.map((block) => {
-              if (block.type === "text") return null;
-              
-              if (block.type === "image") return null;
-              
-              return (
-                <div key={block.localId} className="rounded-lg overflow-hidden border">
-                  {block.type === "video" && !Array.isArray(block.data) && (
-                    <VideoPlayer url={block.data} />
-                  )}
-                  
-                  {block.type === "video" && Array.isArray(block.data) && (
-                    <div className="media-carousel">
-                      <DynastyCarousel
-                        items={block.data}
-                        type="video"
-                        emulateTouch={true}
-                        swipeable={true}
-                        useKeyboardArrows={true}
-                      />
-                    </div>
-                  )}
-                  
-                  {block.type === "audio" && !Array.isArray(block.data) && block.data !== audioUrl && (
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      <AudioPlayer url={block.data} />
-                    </div>
-                  )}
-                  
-                  {block.type === "audio" && Array.isArray(block.data) && (
-                    <div className="media-carousel">
-                      <DynastyCarousel
-                        items={block.data}
-                        type="audio"
-                        emulateTouch={true}
-                        swipeable={true}
-                        useKeyboardArrows={true}
-                        filterItem={(item) => item !== audioUrl}
-                      />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
         </div>
 
         {/* Comments Section */}

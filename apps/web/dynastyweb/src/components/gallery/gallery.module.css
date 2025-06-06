@@ -1,0 +1,179 @@
+/* Media Gallery Custom Styles */
+
+/* Swiper Overrides for Dynasty Theme */
+.mediaGallerySwiper :global(.swiper-button-prev),
+.mediaGallerySwiper :global(.swiper-button-next) {
+  color: white;
+  background-color: rgba(10, 92, 54, 0.8);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.mediaGallerySwiper :global(.swiper-button-prev):hover,
+.mediaGallerySwiper :global(.swiper-button-next):hover {
+  background-color: rgba(10, 92, 54, 0.95);
+  transform: scale(1.1);
+}
+
+.mediaGallerySwiper :global(.swiper-button-prev):after,
+.mediaGallerySwiper :global(.swiper-button-next):after {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+/* Pagination Dots */
+.mediaGallerySwiper :global(.swiper-pagination-bullet) {
+  background-color: white;
+  opacity: 0.6;
+  width: 8px;
+  height: 8px;
+  transition: all 0.2s ease;
+}
+
+.mediaGallerySwiper :global(.swiper-pagination-bullet-active) {
+  opacity: 1;
+  background-color: #0A5C36;
+  width: 24px;
+  border-radius: 4px;
+}
+
+/* Thumbnail Gallery */
+.mediaGalleryThumbs :global(.swiper-slide) {
+  opacity: 0.6;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.mediaGalleryThumbs :global(.swiper-slide-thumb-active) {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+.mediaGalleryThumbs :global(.swiper-slide-thumb-active) > div {
+  border-color: #0A5C36 !important;
+  box-shadow: 0 0 0 2px rgba(10, 92, 54, 0.3);
+}
+
+/* Feed Mode Specific Styles */
+.feedGallery {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.5rem;
+}
+
+.feedGallery:hover .galleryOverlay {
+  opacity: 1;
+}
+
+.galleryOverlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+  padding: 1rem;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+/* Detail Mode Specific Styles */
+.detailGallery {
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Creation Mode Specific Styles */
+.creationGallery {
+  border: 2px dashed #cbd5e1;
+  border-radius: 0.5rem;
+  transition: border-color 0.2s ease;
+}
+
+.creationGallery:hover {
+  border-color: #0A5C36;
+}
+
+.removeButton {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.creationGallery:hover .removeButton {
+  opacity: 1;
+}
+
+/* Lightbox Overrides */
+.lightboxOverlay {
+  background-color: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(10px);
+}
+
+/* Media Type Icons */
+.mediaTypeIcon {
+  background-color: rgba(10, 92, 54, 0.1);
+  color: #0A5C36;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+}
+
+/* Loading States */
+.mediaLoading {
+  background: linear-gradient(
+    90deg,
+    rgba(229, 231, 235, 0.5) 0%,
+    rgba(229, 231, 235, 0.3) 50%,
+    rgba(229, 231, 235, 0.5) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Mobile Optimizations */
+@media (max-width: 640px) {
+  .mediaGallerySwiper :global(.swiper-button-prev),
+  .mediaGallerySwiper :global(.swiper-button-next) {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .mediaGallerySwiper :global(.swiper-button-prev):after,
+  .mediaGallerySwiper :global(.swiper-button-next):after {
+    font-size: 14px;
+  }
+  
+  .mediaGallerySwiper :global(.swiper-pagination) {
+    bottom: 8px !important;
+  }
+}
+
+/* Touch Device Optimizations */
+@media (hover: none) {
+  .galleryOverlay {
+    opacity: 1;
+  }
+  
+  .removeButton {
+    opacity: 1;
+  }
+}
+
+/* High Resolution Display Support */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .mediaGallerySwiper :global(.swiper-button-prev),
+  .mediaGallerySwiper :global(.swiper-button-next) {
+    backdrop-filter: blur(10px);
+  }
+}
