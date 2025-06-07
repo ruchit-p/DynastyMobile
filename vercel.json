@@ -1,6 +1,7 @@
 {
+    "rootDirectory": "apps/web/dynastyweb",
     "buildCommand": "npm run build",
-    "outputDirectory": "apps/web/dynastyweb/.next",
+    "outputDirectory": ".next",
     "installCommand": "npm install --legacy-peer-deps",
     "framework": "nextjs"
 }
