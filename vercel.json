@@ -1,0 +1,6 @@
+{
+    "buildCommand": "cd apps/web/dynastyweb && npm install && npm run build",
+    "outputDirectory": "apps/web/dynastyweb/.next",
+    "installCommand": "npm install --legacy-peer-deps && cd apps/web/dynastyweb && npm install",
+    "framework": "nextjs"
+}
