@@ -30,7 +30,9 @@ firebase-debug.log
 pubsub-debug.log
 
 # Build artifacts
-lib/
+/lib/
+/functions/lib/
+/apps/firebase/functions/lib/
 *.tsbuildinfo
 coverage/
 firebase-export-*
