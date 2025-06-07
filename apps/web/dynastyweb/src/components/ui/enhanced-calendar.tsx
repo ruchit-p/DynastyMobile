@@ -1,62 +1,45 @@
 'use client';
 
 import * as React from 'react';
-import { DayPicker, DayPickerSingleProps } from 'react-day-picker';
+import { DayPicker } from 'react-day-picker';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-
-// MARK: - Helper Functions
-const getYearRange = (currentYear: number): number[] => {
-  const years: number[] = [];
-  // Show 100 years before and after current year
-  for (let year = currentYear - 100; year <= currentYear + 100; year++) {
-    years.push(year);
-  }
-  return years;
-};
-
-const months = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
 
 // MARK: - Component
 export type CalendarProps = React.ComponentProps<typeof DayPicker>;
+
+interface EnhancedCalendarProps {
+  className?: string;
+  classNames?: Partial<Record<string, string>>;
+  showOutsideDays?: boolean;
+  selected?: Date | undefined;
+  onSelect?: (date: Date | undefined) => void;
+  defaultMonth?: Date;
+  disabled?: boolean | ((date: Date) => boolean);
+  fromDate?: Date;
+  toDate?: Date;
+}
 
 function EnhancedCalendar({
   className,
   classNames,
   showOutsideDays = true,
   selected,
-  mode = "single",
-  ...props
-}: DayPickerSingleProps) {
+  onSelect,
+  defaultMonth,
+  disabled,
+  fromDate,
+  toDate,
+}: EnhancedCalendarProps) {
   const currentDate = new Date();
-  const years = getYearRange(currentDate.getFullYear());
   
   // Initialize month state with selected date if available, otherwise use defaultMonth or current date
   const [month, setMonth] = React.useState<Date>(() => {
     if (selected instanceof Date) {
       return selected;
     }
-    return props.defaultMonth || currentDate;
+    return defaultMonth || currentDate;
   });
 
   // Update month when selected date changes
@@ -68,7 +51,7 @@ function EnhancedCalendar({
 
   return (
     <DayPicker
-      mode={mode}
+      mode="single"
       showOutsideDays={showOutsideDays}
       className={cn('p-3', className)}
       month={month}
@@ -108,58 +91,18 @@ function EnhancedCalendar({
         ...classNames,
       }}
       components={{
-        Caption: ({ displayMonth }) => {
-          return (
-            <div className="flex justify-center items-center gap-2">
-              <Select
-                value={displayMonth.getMonth().toString()}
-                onValueChange={(value) => {
-                  const newDate = new Date(displayMonth);
-                  newDate.setMonth(parseInt(value));
-                  setMonth(newDate);
-                }}
-              >
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue>
-                    {months[displayMonth.getMonth()]}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {months.map((month, index) => (
-                    <SelectItem key={month} value={index.toString()}>
-                      {month}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={displayMonth.getFullYear().toString()}
-                onValueChange={(value) => {
-                  const newDate = new Date(displayMonth);
-                  newDate.setFullYear(parseInt(value));
-                  setMonth(newDate);
-                }}
-              >
-                <SelectTrigger className="w-[100px]">
-                  <SelectValue>
-                    {displayMonth.getFullYear()}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {years.map((year) => (
-                    <SelectItem key={year} value={year.toString()}>
-                      {year}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          );
-        },
+        Chevron: ({ orientation }) =>
+          orientation === "left" ? (
+            <ChevronLeft className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          ),
       }}
       onMonthChange={setMonth}
-      {...props}
+      onSelect={onSelect}
+      disabled={disabled}
+      fromDate={fromDate}
+      toDate={toDate}
     />
   );
 }
