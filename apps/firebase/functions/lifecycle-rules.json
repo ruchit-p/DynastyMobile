@@ -1,0 +1,55 @@
+{
+  "rules": [
+    {
+      "id": "deleted-items-retention",
+      "status": "enabled",
+      "filter": {
+        "prefix": "deleted/"
+      },
+      "expiration": {
+        "days": 30
+      }
+    },
+    {
+      "id": "incomplete-multipart-uploads",
+      "status": "enabled",
+      "filter": {},
+      "abortIncompleteMultipartUpload": {
+        "daysAfterInitiation": 7
+      }
+    },
+    {
+      "id": "temp-files-cleanup",
+      "status": "enabled",
+      "filter": {
+        "prefix": "temp/"
+      },
+      "expiration": {
+        "days": 1
+      }
+    },
+    {
+      "id": "audit-logs-archive",
+      "status": "enabled",
+      "filter": {
+        "prefix": "audit-logs/"
+      },
+      "transitions": [
+        {
+          "days": 90,
+          "storageClass": "STANDARD_IA"
+        }
+      ]
+    },
+    {
+      "id": "share-links-expiration",
+      "status": "enabled",
+      "filter": {
+        "prefix": "shared/"
+      },
+      "expiration": {
+        "days": 90
+      }
+    }
+  ]
+}

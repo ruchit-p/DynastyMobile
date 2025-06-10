@@ -1,10 +1,23 @@
 #!/bin/bash
 
-# Setup CORS for R2 buckets
-# This script configures CORS for both dev and prod buckets
+# CORS Setup for R2 buckets - NOT REQUIRED FOR SIGNED URLs
+# This script is kept for reference but is not needed when using signed URLs
 
-echo "🔧 Setting up R2 CORS policies"
-echo "=============================="
+echo "ℹ️  CORS Setup Not Required for Signed URLs"
+echo "=========================================="
+echo ""
+echo "This application uses signed URLs for R2 uploads/downloads,"
+echo "which bypass CORS restrictions. You don't need to run this script."
+echo ""
+echo "CORS would only be needed if you were:"
+echo "- Making direct browser requests to R2 without signed URLs"
+echo "- Using public bucket URLs for images"
+echo ""
+echo "Current setup uses signed URLs = No CORS needed! ✅"
+echo ""
+exit 0
+
+# Original CORS setup code below (kept for reference)
 
 # Check if AWS CLI is installed
 if ! command -v aws &> /dev/null; then
@@ -16,20 +29,44 @@ fi
 # Set your R2 credentials
 export AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}"
 export AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}"
+
+# Ensure R2_ACCOUNT_ID is set correctly (no line breaks)
+if [ -z "$R2_ACCOUNT_ID" ]; then
+    R2_ACCOUNT_ID="c6889114b3f2b097475be8a5c7628cd0"
+fi
+
 R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
-# Apply CORS to development bucket
-echo "📦 Applying CORS to dynastydev bucket..."
+echo "Using R2 endpoint: $R2_ENDPOINT"
+echo ""
+
+# Apply CORS to local development bucket
+echo "📦 Applying CORS to dynastylocal bucket..."
 aws s3api put-bucket-cors \
-  --bucket dynastydev \
-  --cors-configuration file://r2-cors-config.json \
+  --bucket dynastylocal \
+  --cors-configuration file://r2-cors-aws-format.json \
   --endpoint-url "$R2_ENDPOINT" \
   --region auto
 
 if [ $? -eq 0 ]; then
-    echo "✅ CORS applied to dynastydev"
+    echo "✅ CORS applied to dynastylocal"
 else
-    echo "❌ Failed to apply CORS to dynastydev"
+    echo "❌ Failed to apply CORS to dynastylocal"
+fi
+
+# Apply CORS to staging bucket
+echo ""
+echo "📦 Applying CORS to dynastytest bucket..."
+aws s3api put-bucket-cors \
+  --bucket dynastytest \
+  --cors-configuration file://r2-cors-aws-format.json \
+  --endpoint-url "$R2_ENDPOINT" \
+  --region auto
+
+if [ $? -eq 0 ]; then
+    echo "✅ CORS applied to dynastytest"
+else
+    echo "❌ Failed to apply CORS to dynastytest"
 fi
 
 # Apply CORS to production bucket (when ready)
@@ -37,7 +74,7 @@ echo ""
 echo "📦 Applying CORS to dynastyprod bucket..."
 aws s3api put-bucket-cors \
   --bucket dynastyprod \
-  --cors-configuration file://r2-cors-config.json \
+  --cors-configuration file://r2-cors-aws-format.json \
   --endpoint-url "$R2_ENDPOINT" \
   --region auto
 
@@ -50,9 +87,16 @@ fi
 # Verify CORS configuration
 echo ""
 echo "🔍 Verifying CORS configuration..."
-echo "Development bucket:"
+echo "Local bucket:"
 aws s3api get-bucket-cors \
-  --bucket dynastydev \
+  --bucket dynastylocal \
+  --endpoint-url "$R2_ENDPOINT" \
+  --region auto
+
+echo ""
+echo "Staging bucket:"
+aws s3api get-bucket-cors \
+  --bucket dynastytest \
   --endpoint-url "$R2_ENDPOINT" \
   --region auto
 

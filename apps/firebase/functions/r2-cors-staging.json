@@ -1,0 +1,33 @@
+[
+  {
+    "AllowedOrigins": [
+      "https://dynastytest.com",
+      "https://www.dynastytest.com",
+      "https://dynasty-staging.vercel.app",
+      "https://*.vercel.app",
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://localhost:5173",
+      "http://localhost:8081"
+    ],
+    "AllowedMethods": [
+      "GET",
+      "PUT",
+      "DELETE",
+      "HEAD",
+      "POST"
+    ],
+    "AllowedHeaders": [
+      "*"
+    ],
+    "ExposeHeaders": [
+      "ETag",
+      "Content-Length",
+      "Content-Type",
+      "x-amz-server-side-encryption",
+      "x-amz-request-id",
+      "x-amz-id-2"
+    ],
+    "MaxAgeSeconds": 3600
+  }
+]

@@ -8,6 +8,11 @@ export interface R2Config {
   accessKeyId: string;
   secretAccessKey: string;
   endpoint?: string;
+  retry?: {
+    enabled: boolean;
+    maxRetries?: number;
+    initialDelay?: number;
+  };
 }
 
 export interface R2UploadOptions {
@@ -27,10 +32,22 @@ export interface R2DownloadOptions {
 export class R2Service {
   private s3Client: S3Client;
   private config: R2Config;
+  private retryConfig: {
+    enabled: boolean;
+    maxRetries: number;
+    initialDelay: number;
+  };
 
   constructor(config?: R2Config) {
     // Use provided config or get from Firebase/env
     this.config = config || getR2Config();
+
+    // Set retry configuration with defaults
+    this.retryConfig = {
+      enabled: this.config.retry?.enabled ?? true,
+      maxRetries: this.config.retry?.maxRetries ?? 3,
+      initialDelay: this.config.retry?.initialDelay ?? 1000,
+    };
 
     const endpoint = this.config.endpoint ||
       `https://${this.config.accountId}.r2.cloudflarestorage.com`;
@@ -44,69 +61,118 @@ export class R2Service {
       },
     });
 
-    logger.info("R2Service initialized", {endpoint});
+    logger.info("R2Service initialized", {
+      endpoint,
+      retryEnabled: this.retryConfig.enabled,
+      maxRetries: this.retryConfig.maxRetries,
+    });
+  }
+
+  /**
+   * Wrap an operation with retry logic
+   */
+  private async withRetry<T>(
+    operation: () => Promise<T>,
+    operationName: string
+  ): Promise<T> {
+    if (!this.retryConfig.enabled) {
+      return operation();
+    }
+
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= this.retryConfig.maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error: any) {
+        lastError = error;
+
+        // Don't retry on client errors (4xx)
+        if (error.$metadata?.httpStatusCode >= 400 && error.$metadata?.httpStatusCode < 500) {
+          throw error;
+        }
+
+        if (attempt < this.retryConfig.maxRetries) {
+          const delay = this.retryConfig.initialDelay * Math.pow(2, attempt - 1); // Exponential backoff
+          logger.warn(`R2 ${operationName} failed (attempt ${attempt}/${this.retryConfig.maxRetries}), retrying in ${delay}ms`, {
+            error: error.message,
+            statusCode: error.$metadata?.httpStatusCode,
+          });
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    logger.error(`R2 ${operationName} failed after ${this.retryConfig.maxRetries} attempts`, {error: lastError});
+    throw lastError;
   }
 
   /**
    * Generate a signed URL for uploading a file to R2
    */
   async generateUploadUrl(options: R2UploadOptions): Promise<string> {
-    const {bucket, key, contentType, metadata, expiresIn = 3600} = options;
+    return this.withRetry(async () => {
+      const {bucket, key, contentType, metadata, expiresIn = 3600} = options;
 
-    const command = new PutObjectCommand({
-      Bucket: bucket,
-      Key: key,
-      ContentType: contentType,
-      Metadata: metadata,
-    });
+      const command = new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        ContentType: contentType,
+        Metadata: metadata,
+      });
 
-    try {
-      const signedUrl = await getSignedUrl(this.s3Client, command, {expiresIn});
-      logger.info("Generated upload URL", {bucket, key, expiresIn});
-      return signedUrl;
-    } catch (error) {
-      logger.error("Failed to generate upload URL", {bucket, key, error});
-      throw error;
-    }
+      try {
+        const signedUrl = await getSignedUrl(this.s3Client, command, {expiresIn});
+        logger.info("Generated upload URL", {bucket, key, expiresIn});
+        return signedUrl;
+      } catch (error) {
+        logger.error("Failed to generate upload URL", {bucket, key, error});
+        throw error;
+      }
+    }, "generateUploadUrl");
   }
 
   /**
    * Generate a signed URL for downloading a file from R2
    */
   async generateDownloadUrl(options: R2DownloadOptions): Promise<string> {
-    const {bucket, key, expiresIn = 3600} = options;
+    return this.withRetry(async () => {
+      const {bucket, key, expiresIn = 3600} = options;
 
-    const command = new GetObjectCommand({
-      Bucket: bucket,
-      Key: key,
-    });
+      const command = new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+      });
 
-    try {
-      const signedUrl = await getSignedUrl(this.s3Client, command, {expiresIn});
-      logger.info("Generated download URL", {bucket, key, expiresIn});
-      return signedUrl;
-    } catch (error) {
-      logger.error("Failed to generate download URL", {bucket, key, error});
-      throw error;
-    }
+      try {
+        const signedUrl = await getSignedUrl(this.s3Client, command, {expiresIn});
+        logger.info("Generated download URL", {bucket, key, expiresIn});
+        return signedUrl;
+      } catch (error) {
+        logger.error("Failed to generate download URL", {bucket, key, error});
+        throw error;
+      }
+    }, "generateDownloadUrl");
   }
 
   /**
    * Delete an object from R2
    */
   async deleteObject(bucket: string, key: string): Promise<void> {
-    const command = new DeleteObjectCommand({
-      Bucket: bucket,
-      Key: key,
-    });
+    return this.withRetry(async () => {
+      const command = new DeleteObjectCommand({
+        Bucket: bucket,
+        Key: key,
+      });
 
-    try {
-      await this.s3Client.send(command);
-      logger.info("Deleted object from R2", {bucket, key});
-    } catch (error) {
-      logger.error("Failed to delete object", {bucket, key, error});
-      throw error;
-    }
+      try {
+        await this.s3Client.send(command);
+        logger.info("Deleted object from R2", {bucket, key});
+      } catch (error) {
+        logger.error("Failed to delete object", {bucket, key, error});
+        throw error;
+      }
+    }, "deleteObject");
   }
 
   /**
@@ -165,16 +231,50 @@ export class R2Service {
   }
 
   /**
+   * Check if R2 service is reachable
+   * @param timeout - Maximum time to wait for connection in milliseconds (default: 5000)
+   * @returns true if R2 is reachable, false otherwise
+   */
+  async checkConnectivity(timeout: number = 5000): Promise<boolean> {
+    try {
+      const config = getR2Config();
+      const bucket = config.baseBucket;
+      
+      // Try to list objects with a very small limit to test connectivity
+      const command = new ListObjectsV2Command({
+        Bucket: bucket,
+        MaxKeys: 1,
+      });
+      
+      // Create a promise that rejects after timeout
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("R2 connectivity check timeout")), timeout);
+      });
+      
+      // Race between the actual request and timeout
+      await Promise.race([
+        this.s3Client.send(command),
+        timeoutPromise,
+      ]);
+      
+      logger.info("R2 connectivity check succeeded", { bucket });
+      return true;
+    } catch (error) {
+      logger.warn("R2 connectivity check failed", { 
+        error: error instanceof Error ? error.message : "Unknown error",
+        timeout 
+      });
+      return false;
+    }
+  }
+
+  /**
    * Get bucket name for different content types
    */
   static getBucketName(): string {
-    // Use environment-specific bucket naming
-    const env = process.env.NODE_ENV === "production" ? "prod" : "dev";
-    const baseBucket = process.env.R2_BASE_BUCKET || "dynasty";
-
-    // For now, use single bucket with folder structure
-    // In production, you might want separate buckets for different content types
-    return `${baseBucket}${env}`;
+    // Get the bucket name from centralized configuration
+    const config = getR2Config();
+    return config.baseBucket;
   }
 
   /**

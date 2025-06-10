@@ -1,6 +1,7 @@
 import { storage } from '@/lib/firebase';
 import { ref, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import { getAuth } from 'firebase/auth';
+import { r2MediaService } from '@/services/R2MediaService';
 
 /**
  * Compresses an image by:
@@ -192,7 +193,7 @@ interface UploadProgressCallback {
 }
 
 /**
- * Uploads a media file to Firebase Storage with compression and progress tracking
+ * Uploads a media file to R2/Firebase Storage with compression and progress tracking
  */
 export const uploadMedia = async (
   file: File,
@@ -201,92 +202,8 @@ export const uploadMedia = async (
   callbacks?: UploadProgressCallback
 ): Promise<string> => {
   try {
-    let compressedBlob: Blob;
-    let extension: string;
-    let contentType: string;
-
-    // Compress based on media type
-    try {
-      switch (type) {
-        case 'image':
-          compressedBlob = await compressImage(file);
-          extension = 'jpg';
-          contentType = 'image/jpeg';
-          break;
-        case 'video':
-          if (file.size > 500 * 1024 * 1024) { // 500MB
-            throw new Error('Video file size must be less than 500MB');
-          }
-          compressedBlob = await compressVideo(file);
-          extension = 'webm';
-          contentType = 'video/webm';
-          break;
-        case 'audio':
-          if (file.size > 100 * 1024 * 1024) { // 100MB
-            throw new Error('Audio file size must be less than 100MB');
-          }
-          compressedBlob = await compressAudio(file);
-          extension = 'wav';
-          contentType = 'audio/wav';
-          break;
-        default:
-          throw new Error('Unsupported media type');
-      }
-    } catch (error) {
-      const typedError = error as Error;
-      const compressionError = new Error(
-        `Failed to compress ${type}: ${typedError.message || 'Unknown error'}`
-      );
-      callbacks?.onError?.(compressionError);
-      throw compressionError;
-    }
-
-    // Create a unique filename
-    const filename = `${type}_${Date.now()}_${Math.random().toString(36).substring(2)}.${extension}`;
-    const storageRef = ref(storage, `stories/${storyId}/media/${filename}`);
-
-    // Get the current user
-    const auth = getAuth();
-    const userId = auth.currentUser?.uid;
-
-    // Upload the compressed file with progress tracking
-    return new Promise((resolve, reject) => {
-      const uploadTask = uploadBytesResumable(storageRef, compressedBlob, {
-        contentType: contentType,
-        customMetadata: {
-          uploadedBy: userId || 'unknown',
-          storyId: storyId,
-          mediaType: type
-        }
-      });
-
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          callbacks?.onProgress?.(progress);
-        },
-        (error) => {
-          const uploadError = new Error(
-            `Failed to upload ${type}: ${error.message || 'Unknown error'}`
-          );
-          callbacks?.onError?.(uploadError);
-          reject(uploadError);
-        },
-        async () => {
-          try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            resolve(downloadURL);
-          } catch (error) {
-            const urlError = new Error(
-              `Failed to get download URL for ${type}: ${(error as Error).message || 'Unknown error'}`
-            );
-            callbacks?.onError?.(urlError);
-            reject(urlError);
-          }
-        }
-      );
-    });
+    // Use R2MediaService for uploads
+    return await r2MediaService.uploadStoryMedia(file, storyId, type, callbacks);
   } catch (error) {
     const finalError = error as Error;
     callbacks?.onError?.(finalError);
@@ -295,7 +212,7 @@ export const uploadMedia = async (
 };
 
 /**
- * Uploads a profile picture blob to Firebase Storage with progress tracking
+ * Uploads a profile picture blob to R2/Firebase Storage with progress tracking
  * This function is designed to work with Blob objects from image cropping
  */
 export const uploadProfilePicture = async (
@@ -304,56 +221,8 @@ export const uploadProfilePicture = async (
   callbacks?: UploadProgressCallback
 ): Promise<string> => {
   try {
-    // Create a unique filename with timestamp
-    const timestamp = Date.now();
-    const randomString = Math.random().toString(36).substring(2);
-    const filename = `profile_${timestamp}_${randomString}.jpg`;
-    const storageRef = ref(storage, `profilePictures/${userId}/${filename}`);
-
-    // Upload the blob with progress tracking
-    return new Promise((resolve, reject) => {
-      const uploadTask = uploadBytesResumable(storageRef, imageBlob, {
-        contentType: 'image/jpeg',
-        customMetadata: {
-          uploadedBy: userId,
-          uploadedAt: new Date().toISOString(),
-          mediaType: 'profile'
-        }
-      });
-
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          callbacks?.onProgress?.(progress);
-        },
-        (error) => {
-          const uploadError = new Error(
-            `Failed to upload profile picture: ${error.message || 'Unknown error'}`
-          );
-          callbacks?.onError?.(uploadError);
-          reject(uploadError);
-        },
-        async () => {
-          try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            
-            // Ensure the URL has the alt=media parameter for direct viewing
-            const formattedUrl = downloadURL.includes('?') 
-              ? (downloadURL.includes('alt=media') ? downloadURL : `${downloadURL}&alt=media`)
-              : `${downloadURL}?alt=media`;
-              
-            resolve(formattedUrl);
-          } catch (error) {
-            const urlError = new Error(
-              `Failed to get download URL for profile picture: ${(error as Error).message || 'Unknown error'}`
-            );
-            callbacks?.onError?.(urlError);
-            reject(urlError);
-          }
-        }
-      );
-    });
+    // Use R2MediaService for uploads
+    return await r2MediaService.uploadProfilePicture(imageBlob, userId, callbacks);
   } catch (error) {
     const finalError = error as Error;
     callbacks?.onError?.(finalError);
@@ -392,7 +261,7 @@ export const ensureAccessibleStorageUrl = (url: string): string => {
 };
 
 /**
- * Uploads event cover photos to the correct storage path for temporary events
+ * Uploads event cover photos to R2/Firebase Storage
  * Uses the same path pattern as the backend: events/{eventId}/covers/{filename}
  * This is for temporary uploads before event creation - backend API requires existing eventId
  */
@@ -402,57 +271,8 @@ export const uploadEventCoverPhoto = async (
   callbacks?: UploadProgressCallback
 ): Promise<string> => {
   try {
-    // First compress the image
-    const compressedBlob = await compressImage(file);
-    
-    // Create filename following backend pattern
-    const sanitizedFileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "")}`;
-    
-    // Use the same storage path as backend: events/{eventId}/covers/{filename}
-    const storageRef = ref(storage, `events/${eventId}/covers/${sanitizedFileName}`);
-
-    // Get the current user
-    const auth = getAuth();
-    const userId = auth.currentUser?.uid;
-
-    // Upload the compressed file with progress tracking
-    return new Promise((resolve, reject) => {
-      const uploadTask = uploadBytesResumable(storageRef, compressedBlob, {
-        contentType: 'image/jpeg',
-        customMetadata: {
-          uploadedBy: userId || 'unknown',
-          eventId: eventId,
-          mediaType: 'cover'
-        }
-      });
-
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          callbacks?.onProgress?.(progress);
-        },
-        (error) => {
-          const uploadError = new Error(
-            `Failed to upload cover photo: ${error.message || 'Unknown error'}`
-          );
-          callbacks?.onError?.(uploadError);
-          reject(uploadError);
-        },
-        async () => {
-          try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            resolve(downloadURL);
-          } catch (error) {
-            const urlError = new Error(
-              `Failed to get download URL: ${(error as Error).message || 'Unknown error'}`
-            );
-            callbacks?.onError?.(urlError);
-            reject(urlError);
-          }
-        }
-      );
-    });
+    // Use R2MediaService for uploads
+    return await r2MediaService.uploadEventCoverPhoto(file, eventId, callbacks);
   } catch (error) {
     const finalError = error as Error;
     callbacks?.onError?.(finalError);
