@@ -208,8 +208,8 @@ const finalConfig = shouldUseSentry ? withSentryConfig(
     // For all available options, see:
     // https://www.npmjs.com/package/@sentry/webpack-plugin#options
 
-    org: "mydynastyapp",
-    project: "dynasty",
+    org: process.env.SENTRY_ORG || "dynasty-platforms",
+    project: process.env.SENTRY_PROJECT || "dynastytest",
 
     // Only print logs for uploading source maps in CI
     silent: !process.env.CI,
