@@ -12,8 +12,6 @@
       "capacitor://localhost",
       "ionic://localhost",
       "https://mydynastyapp.com",
-      "https://*.mydynastyapp.com",
-      "https://app.mydynastyapp.com",
       "https://www.mydynastyapp.com"
     ],
     "AllowedMethods": [
@@ -24,7 +22,16 @@
       "HEAD"
     ],
     "AllowedHeaders": [
-      "*"
+      "Content-Type",
+      "Content-Length",
+      "Content-MD5",
+      "Cache-Control",
+      "Authorization",
+      "x-amz-content-sha256",
+      "x-amz-date",
+      "x-amz-security-token",
+      "x-amz-user-agent",
+      "x-amz-meta-*"
     ],
     "ExposeHeaders": [
       "ETag",
