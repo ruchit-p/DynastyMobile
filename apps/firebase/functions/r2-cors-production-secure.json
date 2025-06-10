@@ -2,9 +2,7 @@
   {
     "AllowedOrigins": [
       "https://mydynastyapp.com",
-      "https://www.mydynastyapp.com",
-      "https://app.mydynastyapp.com",
-      "https://api.mydynastyapp.com"
+      "https://www.mydynastyapp.com"
     ],
     "AllowedMethods": [
       "GET",

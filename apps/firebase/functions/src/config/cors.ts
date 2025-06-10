@@ -31,7 +31,6 @@ export function getCorsConfig() {
     const defaultOrigins = [
       "https://mydynastyapp.com",
       "https://www.mydynastyapp.com",
-      "https://app.mydynastyapp.com",
     ];
 
     // Combine and deduplicate origins

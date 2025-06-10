@@ -1,7 +1,10 @@
 [
   {
     "AllowedOrigins": [
-      "*"
+      "capacitor://localhost",
+      "http://localhost",
+      "https://mydynastyapp.com",
+      "https://www.mydynastyapp.com"
     ],
     "AllowedMethods": [
       "GET",
