@@ -7,7 +7,7 @@ import {withAuth} from "./middleware/auth";
 import {validateRequest} from "./utils/request-validator";
 import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
-import {StorageAdapter} from "./utils/storage-adapter";
+import {getStorageAdapter} from "./services/storageAdapter";
 
 // Initialize if not already done
 if (!admin.apps.length) {
@@ -591,7 +591,7 @@ async function deleteFromStorage(
   provider: string
 ): Promise<void> {
   try {
-    const storageAdapter = new StorageAdapter();
+    const storageAdapter = getStorageAdapter();
 
     if (provider === "r2") {
       // Extract bucket and key from path
@@ -606,8 +606,10 @@ async function deleteFromStorage(
       });
     } else {
       // Firebase Storage
-      const bucket = admin.storage().bucket();
-      await bucket.file(storagePath).delete();
+      await storageAdapter.deleteFile({
+        path: storagePath,
+        provider: "firebase",
+      });
     }
   } catch (error) {
     logger.error("Failed to delete from storage:", error);
