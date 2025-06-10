@@ -60,9 +60,9 @@ if [ "$ENV_CHOICE" = "1" ]; then
     
     # Get configuration values
     prompt_with_default "Email provider" "ses" EMAIL_PROVIDER
-    prompt_with_default "AWS Region" "us-east-1" AWS_REGION
+    prompt_with_default "AWS Region" "us-east-2" AWS_REGION
     prompt_with_default "From Email Address" "noreply@mydynastyapp.com" SES_FROM_EMAIL
-    prompt_with_default "From Name" "Dynasty App" SES_FROM_NAME
+    prompt_with_default "From Name" "My Dynasty App" SES_FROM_NAME
     
     echo ""
     read -p "Do you want to add AWS credentials for local testing? (y/n): " ADD_CREDS
@@ -117,9 +117,9 @@ elif [ "$ENV_CHOICE" = "2" ]; then
     
     # Get configuration values
     prompt_with_default "Email provider" "ses" EMAIL_PROVIDER
-    prompt_with_default "AWS Region" "us-east-1" AWS_REGION
+    prompt_with_default "AWS Region" "us-east-2" AWS_REGION
     prompt_with_default "From Email Address" "noreply@mydynastyapp.com" SES_FROM_EMAIL
-    prompt_with_default "From Name" "Dynasty App" SES_FROM_NAME
+    prompt_with_default "From Name" "My Dynasty App" SES_FROM_NAME
     
     echo ""
     echo "📋 Configuration Summary:"
