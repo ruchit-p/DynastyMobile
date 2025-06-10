@@ -14,6 +14,7 @@ import {SECURITY_CONFIG} from "./config/security-config";
 import {getStorageAdapter} from "./services/storageAdapter";
 import {validateUploadRequest, checkUserStorageCapacity} from "./config/r2Security";
 import {R2_CONFIG} from "./config/r2Secrets";
+import {R2Service} from "./services/r2Service";
 import {createLogContext, formatErrorForLogging} from "./utils/sanitization";
 import {validateRequest} from "./utils/request-validator";
 import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
@@ -26,7 +27,6 @@ import {
   sanitizeSharePassword,
   validateItemId,
   validateShareId,
-  validateFileSize,
 } from "./utils/vault-sanitization";
 
 // MARK: - Types
@@ -419,17 +419,19 @@ export const getVaultUploadSignedUrl = onCall(
       r2Bucket = R2Service.getBucketName();
       r2Key = R2Service.generateStorageKey("vault", uid, sanitizedFileName, parentId || undefined);
 
-      const result = await storageAdapter.generateUploadUrl(
-        r2Key,
-        sanitizedMimeType,
-        300, // 5 minutes
-        {
+      const result = await storageAdapter.generateUploadUrl({
+        path: r2Key,
+        contentType: sanitizedMimeType,
+        expiresIn: 300, // 5 minutes
+        metadata: {
           uploadedBy: uid,
           originalName: sanitizedFileName,
           parentId: parentId || "root",
           isEncrypted: isEncrypted.toString(),
-        }
-      );
+        },
+        bucket: r2Bucket,
+        provider: "r2",
+      });
 
       signedUrl = result.signedUrl;
       storagePath = r2Key; // For R2, storagePath is the key
@@ -490,7 +492,7 @@ export const getVaultUploadSignedUrl = onCall(
     };
   }, "getVaultUploadSignedUrl", {
     authLevel: "onboarded",
-    rateLimitConfig: SECURITY_CONFIG.rateLimits.upload,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.mediaUpload,
   })
 );
 
@@ -2356,7 +2358,7 @@ export const updateVaultFile = onCall(
     return {success: true, itemId};
   }, "updateVaultFile", {
     authLevel: "onboarded",
-    rateLimitConfig: SECURITY_CONFIG.rateLimits.upload,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.mediaUpload,
   })
 );
 
@@ -3596,13 +3598,13 @@ async function internalGetVaultDownloadUrl(uid: string, itemId: string): Promise
 
   // Generate signed URL using StorageAdapter
   const storageAdapter = getStorageAdapter();
-  
-  const downloadUrl = await storageAdapter.generateDownloadUrl(
+
+  const result = await storageAdapter.generateDownloadUrl(
     item.storagePath!,
     3600 // 1 hour
   );
 
-  return downloadUrl;
+  return result.signedUrl;
 }
 
 // Vault security monitoring
@@ -3993,6 +3995,6 @@ export const getMediaUploadUrl = onCall(
     };
   }, "getMediaUploadUrl", {
     authLevel: "verified",
-    rateLimitConfig: SECURITY_CONFIG.rateLimits.upload,
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.mediaUpload,
   })
 );
