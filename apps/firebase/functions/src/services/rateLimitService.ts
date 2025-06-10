@@ -67,7 +67,7 @@ function getRateLimiters() {
         limiter: Ratelimit.slidingWindow(10, "5 m"),
         prefix: "@dynasty/media",
       }),
-      
+
       // Alias for media (backward compatibility)
       upload: new Ratelimit({
         redis,
@@ -146,14 +146,14 @@ function getRateLimiters() {
   return rateLimiters;
 }
 
-export type RateLimitType = 
-  | "auth" 
-  | "api" 
-  | "media" 
-  | "upload" 
-  | "write" 
-  | "sensitive" 
-  | "sms" 
+export type RateLimitType =
+  | "auth"
+  | "api"
+  | "media"
+  | "upload"
+  | "write"
+  | "sensitive"
+  | "sms"
   | "support"
   | "signalKeyPublish"
   | "signalKeyRetrieve"

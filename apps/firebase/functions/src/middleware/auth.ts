@@ -359,7 +359,7 @@ export async function checkRateLimit(
     [RateLimitType.EMAIL_VERIFICATION_SEND]: "emailVerificationSend",
     [RateLimitType.EMAIL_VERIFICATION_VERIFY]: "emailVerificationVerify",
   };
-  
+
   const redisType = rateLimitTypeMap[type];
 
   // Check if user is admin and admin bypass is enabled
@@ -444,7 +444,7 @@ export async function checkRateLimitByIP(
     [RateLimitType.EMAIL_VERIFICATION_SEND]: "emailVerificationSend",
     [RateLimitType.EMAIL_VERIFICATION_VERIFY]: "emailVerificationVerify",
   };
-  
+
   const redisType = rateLimitTypeMap[type];
 
   try {

@@ -13,7 +13,7 @@ export const STORAGE_PLANS = {
     storageLimit: 5 * 1024 * 1024 * 1024, // 5GB
   },
   premium: {
-    name: "Premium", 
+    name: "Premium",
     storageLimit: 100 * 1024 * 1024 * 1024, // 100GB
   },
   enterprise: {
@@ -25,23 +25,20 @@ export const STORAGE_PLANS = {
 export const R2_CONFIG = {
   // CORS configuration for R2 bucket
   cors: {
-    allowedOrigins: process.env.NODE_ENV === "production" 
-      ? [
-          "https://mydynastyapp.com",
-          "https://www.mydynastyapp.com",
-          "https://app.mydynastyapp.com",
-          "https://api.mydynastyapp.com",
-        ]
-      : [
-          "https://mydynastyapp.com",
-          "https://app.mydynastyapp.com",
-          "https://dynastytest.com",
-          "https://www.dynastytest.com",
-          "capacitor://localhost", // iOS
-          "http://localhost", // Android
-          "http://localhost:3000", // Dev
-          "http://localhost:3001", // Dev alternate
-        ],
+    allowedOrigins: process.env.NODE_ENV === "production" ?
+      [
+        "https://mydynastyapp.com",
+        "https://www.mydynastyapp.com",
+      ] :
+      [
+        "https://mydynastyapp.com",
+        "https://dynastytest.com",
+        "https://www.dynastytest.com",
+        "capacitor://localhost", // iOS
+        "http://localhost", // Android
+        "http://localhost:3000", // Dev
+        "http://localhost:3001", // Dev alternate
+      ],
     allowedMethods: ["GET", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Content-Length", "x-amz-meta-*"],
     exposeHeaders: ["ETag"],
@@ -51,10 +48,20 @@ export const R2_CONFIG = {
   // Content Security Policy for downloads
   csp: {
     "default-src": ["'self'"],
-    "img-src": ["'self'", "data:", "https://cdn.mydynastyapp.com"],
-    "media-src": ["'self'", "https://cdn.mydynastyapp.com"],
+    "img-src": ["'self'", "data:", "https://mydynastyapp.com"],
+    "media-src": ["'self'", "https://mydynastyapp.com"],
     "object-src": ["'none'"],
     "script-src": ["'none'"],
+  },
+
+  // Security headers for R2 responses
+  securityHeaders: {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Cache-Control": "private, no-cache, no-store, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
   },
 
   // Upload validation (no size limits - checked against user storage)
@@ -113,8 +120,8 @@ export const R2_CONFIG = {
     blockedExtensions: [
       ".exe", ".bat", ".cmd", ".sh", ".ps1",
       ".app", ".dmg", ".pkg", ".deb", ".rpm",
-      ".jar", ".com", ".pif", ".scr", ".vbs", 
-      ".wsf", ".html", ".htm", ".js", ".php", 
+      ".jar", ".com", ".pif", ".scr", ".vbs",
+      ".wsf", ".html", ".htm", ".js", ".php",
       ".asp", ".aspx", ".jsp", ".py", ".rb",
     ],
   },
@@ -153,6 +160,7 @@ export const R2_CONFIG = {
  * Get user's storage plan and limits
  * TODO: Implement actual plan lookup from user document or subscription
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function getUserStoragePlan(userId: string): Promise<{
   plan: keyof typeof STORAGE_PLANS;
   storageLimit: number;
@@ -171,7 +179,7 @@ export async function getUserStoragePlan(userId: string): Promise<{
  */
 export async function getUserStorageUsage(userId: string): Promise<number> {
   const db = getFirestore();
-  
+
   try {
     // Query all user's vault items
     const vaultItems = await db.collection("vaultItems")
@@ -280,9 +288,9 @@ export function getSignedUrlOptions(
   requestIp?: string
 ): any {
   const isUpload = action === "write";
-  const expiry = isUpload 
-    ? R2_CONFIG.signedUrls.uploadExpiry 
-    : R2_CONFIG.signedUrls.downloadExpiry;
+  const expiry = isUpload ?
+    R2_CONFIG.signedUrls.uploadExpiry :
+    R2_CONFIG.signedUrls.downloadExpiry;
 
   const options: any = {
     version: "v4",
@@ -342,4 +350,44 @@ function formatBytes(bytes: number): string {
   const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
+
+/**
+ * Generate Content Security Policy header for R2 file responses
+ * @param fileType The type of file being served
+ * @returns CSP header value
+ */
+export function generateR2CSPHeader(fileType?: string): string {
+  const baseCSP = [
+    "default-src 'none'",
+    "object-src 'none'",
+    "script-src 'none'",
+    "style-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+  ];
+
+  // Add specific directives based on file type
+  if (fileType?.startsWith("image/")) {
+    baseCSP.push("img-src 'self'");
+  } else if (fileType?.startsWith("video/") || fileType?.startsWith("audio/")) {
+    baseCSP.push("media-src 'self'");
+  } else if (fileType === "application/pdf") {
+    baseCSP.push("object-src 'self'");
+  }
+
+  return baseCSP.join("; ");
+}
+
+/**
+ * Get security headers for R2 responses
+ * @param fileType Optional file type for CSP customization
+ * @returns Object containing security headers
+ */
+export function getR2SecurityHeaders(fileType?: string): Record<string, string> {
+  return {
+    ...R2_CONFIG.securityHeaders,
+    "Content-Security-Policy": generateR2CSPHeader(fileType),
+  };
 }

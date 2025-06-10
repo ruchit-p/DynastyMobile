@@ -13,7 +13,7 @@ export function getEnvironmentBucketName(): string {
   if (process.env.R2_BASE_BUCKET) {
     return process.env.R2_BASE_BUCKET;
   }
-  
+
   // Use environment-specific buckets
   if (process.env.NODE_ENV === "production") {
     return "dynastyprod";
