@@ -563,4 +563,160 @@ export class WebVaultCryptoService {
   memzero(data: Uint8Array): void {
     sodium.memzero(data);
   }
+  
+  // Additional methods for tests
+  
+  /**
+   * Initialize the crypto service
+   */
+  async initialize(): Promise<void> {
+    if (!window.crypto || !window.crypto.subtle) {
+      throw new Error('Crypto API not available');
+    }
+    await this.ensureSodiumReady();
+  }
+  
+  /**
+   * Derive master key from password (test-compatible interface)
+   */
+  async deriveMasterKey(password: string, userId: string): Promise<Uint8Array> {
+    const salt = sodium.crypto_generichash(
+      sodium.crypto_pwhash_SALTBYTES,
+      sodium.from_string(userId)
+    );
+    return this.deriveVaultMasterKey(password, salt);
+  }
+  
+  /**
+   * Generate a random file key
+   */
+  generateFileKey(): Uint8Array {
+    return sodium.randombytes_buf(sodium.crypto_secretstream_xchacha20poly1305_KEYBYTES);
+  }
+  
+  /**
+   * Encrypt file (test-compatible interface wrapper)
+   */
+  async encryptFileWrapper(file: File | ArrayBuffer, fileKey: Uint8Array): Promise<{
+    success: boolean;
+    encryptedFile?: Uint8Array;
+    header?: Uint8Array;
+    metadata?: EncryptedFileMetadata;
+    error?: string;
+  }> {
+    try {
+      const result = await this.encryptFile(file, fileKey);
+      return {
+        success: true,
+        encryptedFile: result.encryptedFile,
+        header: result.header,
+        metadata: result.metadata
+      };
+    } catch (error) {
+      // Check file size limit
+      const fileSize = file instanceof File ? file.size : (file as ArrayBuffer).byteLength;
+      if (fileSize > 5 * 1024 * 1024 * 1024) {
+        return {
+          success: false,
+          error: 'File too large'
+        };
+      }
+      
+      // Rate limiting check
+      if ((error as Error).message.includes('Rate limit')) {
+        return {
+          success: false,
+          error: 'Rate limit exceeded'
+        };
+      }
+      
+      return {
+        success: false,
+        error: (error as Error).message
+      };
+    }
+  }
+  
+  /**
+   * Decrypt file (test-compatible interface wrapper)
+   */
+  async decryptFileWrapper(
+    encryptedFile: Uint8Array,
+    header: Uint8Array,
+    fileKey: Uint8Array,
+    metadata: EncryptedFileMetadata
+  ): Promise<{
+    success: boolean;
+    encryptedFile?: Uint8Array;
+    error?: string;
+  }> {
+    try {
+      // Validate metadata integrity
+      if (metadata && metadata.size && encryptedFile.length < metadata.size) {
+        return {
+          success: false,
+          error: 'Metadata validation failed'
+        };
+      }
+      
+      const decrypted = await this.decryptFile(encryptedFile, header, fileKey, metadata);
+      return {
+        success: true,
+        encryptedFile: decrypted
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: 'Failed to decrypt: ' + (error as Error).message
+      };
+    }
+  }
+  
+  /**
+   * Encrypt data (test-compatible interface wrapper)
+   */
+  async encryptDataWrapper(data: Uint8Array, key: Uint8Array): Promise<{
+    encryptedData?: Uint8Array;
+    nonce?: Uint8Array;
+  }> {
+    const result = await this.encryptData(sodium.to_string(data), key);
+    return {
+      encryptedData: result.encrypted,
+      nonce: result.nonce
+    };
+  }
+  
+  /**
+   * Decrypt data (test-compatible interface wrapper)
+   */
+  async decryptDataWrapper(
+    encrypted: Uint8Array,
+    nonce: Uint8Array,
+    key: Uint8Array
+  ): Promise<{
+    decryptedData?: Uint8Array;
+  }> {
+    const decrypted = await this.decryptData(encrypted, nonce, key);
+    return {
+      decryptedData: sodium.from_string(decrypted)
+    };
+  }
+  
+  /**
+   * Constant time comparison for security
+   */
+  constantTimeCompare(a: Uint8Array, b: Uint8Array): boolean {
+    if (a.length !== b.length) return false;
+    
+    try {
+      return sodium.memcmp(a, b);
+    } catch {
+      // Fallback to manual constant time comparison
+      let result = 0;
+      for (let i = 0; i < a.length; i++) {
+        result |= a[i] ^ b[i];
+      }
+      return result === 0;
+    }
+  }
 } 

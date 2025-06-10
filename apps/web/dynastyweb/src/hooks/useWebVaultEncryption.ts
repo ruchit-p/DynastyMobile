@@ -468,6 +468,20 @@ export function useWebVaultEncryption(userId: string) {
     setState(prev => ({ ...prev, error: null }));
   }, []);
 
+  // Get current encryption key ID
+  const getCurrentKeyId = useCallback(async (): Promise<string> => {
+    try {
+      const config = await keyManager.current.retrieveVaultConfiguration(userId);
+      return config?.currentKeyId || 'default';
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.LOW, {
+        action: 'get-current-key-id',
+        userId
+      });
+      return 'default';
+    }
+  }, [userId]);
+
   return {
     // State
     ...state,
@@ -482,6 +496,7 @@ export function useWebVaultEncryption(userId: string) {
     decryptFile,
     encryptFiles,
     checkVaultStatus,
+    getCurrentKeyId,
 
     // Utilities
     clearProgress,

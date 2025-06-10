@@ -40,7 +40,7 @@ DB_ENCRYPTION_KEY=$(grep "DB_ENCRYPTION_KEY=" .env.production.template | cut -d'
 echo -e "${YELLOW}External service configuration needed:${NC}"
 echo ""
 
-read -p "Enter SendGrid API Key: " SENDGRID_API_KEY
+# Email configuration is now handled by Firebase Secrets (EMAIL_PROVIDER and SES_CONFIG)
 read -p "Enter Twilio Account SID: " TWILIO_ACCOUNT_SID
 read -s -p "Enter Twilio Auth Token: " TWILIO_AUTH_TOKEN
 echo ""
@@ -69,7 +69,6 @@ firebase functions:config:set \
 # Set external service configuration
 echo -e "${BLUE}Setting external service configuration...${NC}"
 firebase functions:config:set \
-  sendgrid.api_key="$SENDGRID_API_KEY" \
   twilio.account_sid="$TWILIO_ACCOUNT_SID" \
   twilio.auth_token="$TWILIO_AUTH_TOKEN" \
   fingerprint.server_api_key="$FINGERPRINT_SERVER_API_KEY" \

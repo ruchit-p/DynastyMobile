@@ -7,8 +7,7 @@ import type {SignupData} from "../../utils/validation";
 import {createError, ErrorCode} from "../../utils/errors";
 import {createLogContext} from "../../utils";
 import {UserDocument} from "../types/user";
-import {initSendGrid} from "../config/sendgrid";
-import {SENDGRID_CONFIG, FRONTEND_URL} from "../config/secrets";
+import {FRONTEND_URL} from "../config/secrets";
 import {generateSecureToken, hashToken} from "../utils/tokens";
 import {validateRequest} from "../../utils/request-validator";
 import {VALIDATION_SCHEMAS} from "../../config/validation-schemas";
@@ -157,9 +156,6 @@ export const handleSignUp = onCall({
     }));
 
     try {
-    // Initialize SendGrid
-      initSendGrid();
-
       const auth = getAuth();
       const db = getFirestore();
 

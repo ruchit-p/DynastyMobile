@@ -6,7 +6,6 @@ import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "../../common";
 import {createError, withErrorHandling, ErrorCode} from "../../utils/errors";
 import {InvitationData, FamilyInvitation} from "../types/invitation";
 import {UserDocument} from "../types/user";
-import {initSendGrid} from "../config/sendgrid";
 import {FRONTEND_URL} from "../config/secrets";
 import {TOKEN_EXPIRY} from "../config/constants";
 import {generateSecureToken, hashToken} from "../utils/tokens";
@@ -34,7 +33,6 @@ export const sendFamilyTreeInvitation = onCall({
 
   try {
     // Initialize SendGrid
-    initSendGrid();
 
     // Verify that the inviter is the authenticated user
     const auth = request.auth;
@@ -282,7 +280,6 @@ export const inviteUserToFamily = onCall(
       relationshipToInviter, // e.g., "child", "spouse", "parent"
     } = validatedData;
 
-    initSendGrid();
     const db = getFirestore();
     const inviterId = auth.uid;
 

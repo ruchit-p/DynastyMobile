@@ -54,14 +54,23 @@ firebase functions:config:set \
     security.api_salt="$API_KEY_SALT" \
     $STAGING_PROJECT
 
-# SendGrid configuration (JSON format as used in your app)
-if [ ! -z "$SENDGRID_CONFIG" ]; then
-    echo "Setting SendGrid configuration..."
-    firebase functions:config:set \
-        sendgrid.config="$SENDGRID_CONFIG" \
-        $STAGING_PROJECT
+# AWS SES configuration (using Firebase Secrets for staging)
+if [ ! -z "$EMAIL_PROVIDER" ]; then
+    echo "Setting email provider configuration..."
+    echo "$EMAIL_PROVIDER" | firebase functions:secrets:set EMAIL_PROVIDER --project "$FIREBASE_PROJECT_ID"
+    
+    # Create SES config JSON
+    SES_CONFIG_JSON=$(cat <<EOF
+{
+  "region": "${SES_REGION:-us-east-1}",
+  "fromEmail": "${SES_FROM_EMAIL:-noreply@dynastytest.com}",
+  "fromName": "${SES_FROM_NAME:-Dynasty App}"
+}
+EOF
+)
+    echo "$SES_CONFIG_JSON" | firebase functions:secrets:set SES_CONFIG --project "$FIREBASE_PROJECT_ID"
 else
-    echo "⚠️  SendGrid config not provided - email functionality will be disabled"
+    echo "⚠️  Email provider not configured - using default AWS SES"
 fi
 
 # FingerprintJS configuration
