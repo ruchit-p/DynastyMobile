@@ -4,8 +4,7 @@ import {getAuth} from "firebase-admin/auth";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "../../common";
 import {createError, ErrorCode} from "../../utils/errors";
 import {withAuth} from "../../middleware";
-import {initSendGrid} from "../config/sendgrid";
-import {SENDGRID_CONFIG} from "../config/secrets";
+import {EMAIL_PROVIDER, SES_CONFIG} from "../config/secrets";
 import {sanitizeUserId, sanitizeEmail, createLogContext} from "../../utils/sanitization";
 import {validateRequest} from "../../utils/request-validator";
 import {VALIDATION_SCHEMAS} from "../../config/validation-schemas";
@@ -62,13 +61,13 @@ export const updateUserPassword = onCall(
 /**
  * Initiates password reset process by:
  * - Generating a password reset link
- * - Sending the reset email via SendGrid
+ * - Sending the reset email via AWS SES
  */
 export const initiatePasswordReset = onCall({
   region: DEFAULT_REGION,
   memory: "512MiB",
   timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
-  secrets: [SENDGRID_CONFIG],
+  secrets: [EMAIL_PROVIDER, SES_CONFIG],
 }, withAuth(
   async (request) => {
   // Validate and sanitize input using centralized validator
@@ -82,9 +81,6 @@ export const initiatePasswordReset = onCall({
     try {
       logger.info("Initiating password reset", createLogContext({email}));
 
-      // Initialize SendGrid
-      initSendGrid();
-
       const auth = getAuth();
 
       // Generate the password reset link
@@ -94,9 +90,9 @@ export const initiatePasswordReset = onCall({
       const userRecord = await auth.getUserByEmail(email);
       const displayName = userRecord.displayName || "User";
 
-      // Send email using helper
-      const {sendEmail} = await import("../utils/sendgridHelper");
-      await sendEmail({
+      // Send email using universal helper (routes to SendGrid or SES based on config)
+      const {sendEmailUniversal} = await import("../config/emailConfig");
+      await sendEmailUniversal({
         to: email,
         templateType: "passwordReset",
         dynamicTemplateData: {

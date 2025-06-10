@@ -7,7 +7,7 @@ import {createError, withErrorHandling, ErrorCode} from "../../utils/errors";
 import {InvitationData, FamilyInvitation} from "../types/invitation";
 import {UserDocument} from "../types/user";
 import {initSendGrid} from "../config/sendgrid";
-import {SENDGRID_CONFIG, FRONTEND_URL} from "../config/secrets";
+import {FRONTEND_URL} from "../config/secrets";
 import {TOKEN_EXPIRY} from "../config/constants";
 import {generateSecureToken, hashToken} from "../utils/tokens";
 import {validateRequest} from "../../utils/request-validator";
@@ -20,7 +20,7 @@ export const sendFamilyTreeInvitation = onCall({
   region: DEFAULT_REGION,
   memory: "512MiB",
   timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
-  secrets: [SENDGRID_CONFIG, FRONTEND_URL],
+  secrets: [FRONTEND_URL],
 }, async (request) => {
   // Validate and sanitize input using centralized validator
   const validatedData = validateRequest(
@@ -95,8 +95,8 @@ export const sendFamilyTreeInvitation = onCall({
     const invitationLink = `${FRONTEND_URL.value()}/signup/invited?token=${invitationToken}&id=${invitationRef.id}`;
 
     // Send invitation email using helper
-    const {sendEmail} = await import("../utils/sendgridHelper");
-    await sendEmail({
+    const {sendEmailUniversal} = await import("../config/emailConfig");
+    await sendEmailUniversal({
       to: invitationData.inviteeEmail,
       templateType: "invite",
       dynamicTemplateData: {
@@ -252,7 +252,7 @@ export const inviteUserToFamily = onCall(
   {
     region: DEFAULT_REGION,
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
-    secrets: [SENDGRID_CONFIG, FRONTEND_URL],
+    secrets: [FRONTEND_URL],
   },
   withErrorHandling(async (request) => {
     const {auth} = request;
@@ -343,8 +343,8 @@ export const inviteUserToFamily = onCall(
     const acceptLink = `${frontendUrlValue}/accept-invitation?token=${invitationToken}`;
 
     // Send invitation email using helper
-    const {sendEmail} = await import("../utils/sendgridHelper");
-    await sendEmail({
+    const {sendEmailUniversal} = await import("../config/emailConfig");
+    await sendEmailUniversal({
       to: inviteeEmail,
       templateType: "invite",
       dynamicTemplateData: {

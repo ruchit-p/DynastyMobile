@@ -5,8 +5,8 @@ import * as crypto from "crypto";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT, DEFAULT_MEMORY} from "./common";
 import {createError, ErrorCode} from "./utils/errors";
 import {withAuth, withResourceAccess, PermissionLevel, RateLimitType} from "./middleware";
-import {SENDGRID_CONFIG, FRONTEND_URL} from "./auth/config/secrets";
-import {sendEmail} from "./auth/utils/sendgridHelper";
+import {FRONTEND_URL} from "./auth/config/secrets";
+import {sendEmailUniversal} from "./auth/config/emailConfig";
 import {validateRequest} from "./utils/request-validator";
 import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
 
@@ -344,7 +344,7 @@ export const createFamilyMember = onCall(
     region: DEFAULT_REGION,
     memory: DEFAULT_MEMORY.SHORT,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-    secrets: [SENDGRID_CONFIG, FRONTEND_URL],
+    secrets: [FRONTEND_URL],
   },
   withResourceAccess(async (request, selectedNode) => {
     const auth = request.auth!;
@@ -542,7 +542,7 @@ export const createFamilyMember = onCall(
 
         // Initialize SendGrid before sending email
         // Send invitation email
-        await sendEmail({
+        await sendEmailUniversal({
           to: invitationData.inviteeEmail,
           templateType: "invite",
           dynamicTemplateData: {
@@ -834,7 +834,7 @@ export const updateFamilyMember = onCall(
     region: DEFAULT_REGION,
     memory: DEFAULT_MEMORY.SHORT,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-    secrets: [SENDGRID_CONFIG, FRONTEND_URL],
+    secrets: [FRONTEND_URL],
   },
   withResourceAccess(async (request, member) => {
     const auth = request.auth!;
@@ -967,7 +967,7 @@ export const updateFamilyMember = onCall(
         const invitationLink = `${FRONTEND_URL.value()}/signup/invited?token=${invitationToken}&id=${invitationRef.id}`;
 
         // Send invitation email
-        await sendEmail({
+        await sendEmailUniversal({
           to: updates.email,
           templateType: "invite",
           dynamicTemplateData: {

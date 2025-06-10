@@ -11,22 +11,29 @@ import {
 } from "./utils/errors";
 import {withAuth, requireAuth} from "./middleware";
 import {SECURITY_CONFIG} from "./config/security-config";
-import {StorageAdapter} from "./services/storageAdapter";
-import {R2Service} from "./services/r2Service";
-import {validateUploadRequest} from "./config/r2Security";
-// import {fileSecurityService} from "./services/fileSecurityService"; // Commented out - security checks disabled
+import {getStorageAdapter} from "./services/storageAdapter";
+import {validateUploadRequest, checkUserStorageCapacity} from "./config/r2Security";
 import {R2_CONFIG} from "./config/r2Secrets";
 import {createLogContext, formatErrorForLogging} from "./utils/sanitization";
-import {sanitizeFilename} from "./utils/xssSanitization";
 import {validateRequest} from "./utils/request-validator";
 import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
 import {getCorsOptions} from "./config/cors";
-// import {vaultSecurityService} from "./services/vaultSecurityService";
+import {getR2VaultMigration} from "./migrations/r2VaultMigration";
+import {
+  sanitizeFileName,
+  sanitizeFolderName,
+  sanitizeMimeType,
+  sanitizeSharePassword,
+  validateItemId,
+  validateShareId,
+  validateFileSize,
+} from "./utils/vault-sanitization";
 
 // MARK: - Types
 interface VaultItem {
   id: string;
   userId: string;
+  ownerId: string; // Added for clarity - same as userId
   name: string;
   type: "folder" | "file";
   parentId: string | null;
@@ -60,6 +67,19 @@ interface VaultItem {
   cachedUploadUrlExpiry?: Timestamp;
   cachedDownloadUrl?: string;
   cachedDownloadUrlExpiry?: Timestamp;
+}
+
+interface VaultShareLink {
+  shareId: string;
+  itemId: string;
+  ownerId: string;
+  expiresAt: Timestamp | null;
+  allowDownload: boolean;
+  passwordHash: string | null;
+  createdAt: Timestamp;
+  accessCount: number;
+  maxAccessCount: number | null;
+  lastAccessedAt?: Timestamp;
 }
 
 const MAX_UPDATE_DEPTH = 10;
@@ -209,6 +229,133 @@ async function updateDescendantPathsRecursive(
 // MARK: - Cloud Functions
 
 /**
+ * Get vault encryption status for a user
+ */
+export const getVaultEncryptionStatus = onCall(
+  {
+    ...getCorsOptions(),
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    const db = getFirestore();
+
+    try {
+      // Check if user has encryption enabled
+      const userDoc = await db.collection("users").doc(uid).get();
+      const userData = userDoc.data();
+
+      const encryptionEnabled = userData?.vaultEncryptionEnabled || false;
+
+      return {encryptionEnabled};
+    } catch (error) {
+      const {message, context} = formatErrorForLogging(error, {userId: uid});
+      logger.error("Error getting encryption status", {message, ...context});
+      return {encryptionEnabled: false};
+    }
+  }, "getVaultEncryptionStatus", {
+    authLevel: "auth",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.read,
+  })
+);
+
+/**
+ * Store encryption metadata for a vault item
+ */
+export const storeVaultItemEncryptionMetadata = onCall(
+  {
+    ...getCorsOptions(),
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.storeVaultItemEncryptionMetadata,
+      uid
+    );
+
+    const {itemId, encryptionMetadata} = validatedData;
+
+    const db = getFirestore();
+
+    // Verify ownership
+    const itemDoc = await db.collection("vaultItems").doc(itemId).get();
+    if (!itemDoc.exists || itemDoc.data()?.userId !== uid) {
+      throw createError(ErrorCode.PERMISSION_DENIED, "Not authorized to update this item");
+    }
+
+    // Store encryption metadata in a separate collection
+    await db.collection("vaultEncryptionMetadata").doc(itemId).set({
+      userId: uid,
+      itemId,
+      encryptionMetadata,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    logger.info("Stored encryption metadata", createLogContext({
+      itemId,
+      userId: uid,
+    }));
+
+    return {success: true};
+  }, "storeVaultItemEncryptionMetadata", {
+    authLevel: "onboarded",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  })
+);
+
+/**
+ * Get encryption metadata for a vault item
+ */
+export const getVaultItemEncryptionMetadata = onCall(
+  {
+    ...getCorsOptions(),
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getVaultItemEncryptionMetadata,
+      uid
+    );
+
+    const {itemId} = validatedData;
+
+    const db = getFirestore();
+
+    // Verify access to item
+    const accessCheck = await verifyVaultItemAccess(db, itemId, uid, "read");
+    if (!accessCheck.hasAccess) {
+      throw createError(ErrorCode.PERMISSION_DENIED, accessCheck.reason || "Not authorized");
+    }
+
+    // Get encryption metadata
+    const metadataDoc = await db.collection("vaultEncryptionMetadata").doc(itemId).get();
+
+    if (!metadataDoc.exists) {
+      throw createError(ErrorCode.NOT_FOUND, "Encryption metadata not found");
+    }
+
+    return metadataDoc.data();
+  }, "getVaultItemEncryptionMetadata", {
+    authLevel: "onboarded",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.read,
+  })
+);
+
+/**
  * Get a V4 signed URL for uploading a file to the vault.
  */
 export const getVaultUploadSignedUrl = onCall(
@@ -231,8 +378,18 @@ export const getVaultUploadSignedUrl = onCall(
 
     const {fileName, mimeType, parentId = null, isEncrypted = false, fileSize} = validatedData;
 
-    // Additional validation with security rules
-    const validation = validateUploadRequest(fileName, mimeType, fileSize);
+    // Sanitize inputs
+    const sanitizedFileName = sanitizeFileName(fileName);
+    const sanitizedMimeType = sanitizeMimeType(mimeType);
+
+    // Check user's storage capacity
+    const storageCheck = await checkUserStorageCapacity(uid, fileSize);
+    if (!storageCheck.allowed) {
+      throw createError(ErrorCode.RESOURCE_EXHAUSTED, storageCheck.reason || "Insufficient storage capacity");
+    }
+
+    // Validate file for security (MIME type, extensions)
+    const validation = validateUploadRequest(sanitizedFileName, sanitizedMimeType);
     if (!validation.valid) {
       throw createError(ErrorCode.INVALID_REQUEST, validation.error || "Invalid upload request");
     }
@@ -248,8 +405,9 @@ export const getVaultUploadSignedUrl = onCall(
     }
 
     // Initialize storage adapter
-    const storageAdapter = new StorageAdapter();
-    const storageProvider = process.env.STORAGE_PROVIDER === "r2" ? "r2" : "firebase";
+    const storageAdapter = getStorageAdapter();
+    // Default to R2, fallback to Firebase only for local emulator without R2
+    const storageProvider = process.env.STORAGE_PROVIDER === "firebase" ? "firebase" : "r2";
 
     let signedUrl: string;
     let storagePath: string;
@@ -259,15 +417,15 @@ export const getVaultUploadSignedUrl = onCall(
     if (storageProvider === "r2") {
       // Use R2 storage
       r2Bucket = R2Service.getBucketName();
-      r2Key = R2Service.generateStorageKey("vault", uid, fileName, parentId || undefined);
+      r2Key = R2Service.generateStorageKey("vault", uid, sanitizedFileName, parentId || undefined);
 
       const result = await storageAdapter.generateUploadUrl(
         r2Key,
-        mimeType,
+        sanitizedMimeType,
         300, // 5 minutes
         {
           uploadedBy: uid,
-          originalName: fileName,
+          originalName: sanitizedFileName,
           parentId: parentId || "root",
           isEncrypted: isEncrypted.toString(),
         }
@@ -278,7 +436,7 @@ export const getVaultUploadSignedUrl = onCall(
     } else {
       // Use Firebase Storage (existing logic)
       const effectiveParentIdForStorage = parentId || "root";
-      storagePath = `vault/${uid}/${effectiveParentIdForStorage}/${fileName}`;
+      storagePath = `vault/${uid}/${effectiveParentIdForStorage}/${sanitizedFileName}`;
 
       const fiveMinutesInSeconds = 5 * 60;
       const expires = Date.now() + fiveMinutesInSeconds * 1000;
@@ -290,7 +448,7 @@ export const getVaultUploadSignedUrl = onCall(
           version: "v4",
           action: "write",
           expires,
-          contentType: mimeType,
+          contentType: sanitizedMimeType,
         });
 
       signedUrl = url;
@@ -299,14 +457,14 @@ export const getVaultUploadSignedUrl = onCall(
     // Pre-create the vault item with cached upload URL
     const vaultItem: Partial<VaultItem> = {
       userId: uid,
-      name: fileName,
+      name: sanitizedFileName,
       type: "file",
       parentId,
-      path: parentPath ? `${parentPath}/${fileName}` : `/${fileName}`,
+      path: parentPath ? `${parentPath}/${sanitizedFileName}` : `/${sanitizedFileName}`,
       createdAt: FieldValue.serverTimestamp() as Timestamp,
       updatedAt: FieldValue.serverTimestamp() as Timestamp,
       size: fileSize,
-      mimeType,
+      mimeType: sanitizedMimeType,
       isDeleted: false,
       isEncrypted,
       storageProvider,
@@ -405,8 +563,8 @@ export const createVaultFolder = onCall(
     const {name, parentFolderId} = validatedData;
     const parentId = parentFolderId ?? null;
 
-    // Additional sanitization for filename
-    const sanitizedName = sanitizeFilename(name);
+    // Additional sanitization for folder name
+    const sanitizedName = sanitizeFolderName(name);
 
     const db = getFirestore();
     // Build path with sanitized name
@@ -523,7 +681,7 @@ export const addVaultFile = onCall(
 
         if (existingItem.storageProvider === "r2" && existingItem.r2Key) {
           // Download from R2
-          const storageAdapter = new StorageAdapter();
+          const storageAdapter = getStorageAdapter();
           const downloadUrl = await storageAdapter.generateDownloadUrl({
             path: existingItem.r2Key,
             expiresIn: 300, // 5 minutes expiry
@@ -575,7 +733,7 @@ export const addVaultFile = onCall(
           // Delete the file from storage
           if (existingItem.storageProvider === "r2" && existingItem.r2Key) {
             try {
-              const storageAdapter = new StorageAdapter();
+              const storageAdapter = getStorageAdapter();
               await storageAdapter.deleteFile({
                 path: existingItem.r2Key,
                 bucket: existingItem.r2Bucket,
@@ -630,7 +788,7 @@ export const addVaultFile = onCall(
         // For security, we'll fail closed (reject the file)
         if (existingItem.storageProvider === "r2" && existingItem.r2Key) {
           try {
-            const storageAdapter = new StorageAdapter();
+            const storageAdapter = getStorageAdapter();
             await storageAdapter.deleteFile({
               path: existingItem.r2Key,
               bucket: existingItem.r2Bucket,
@@ -796,7 +954,7 @@ export const renameVaultItem = onCall(
     const {itemId, newName} = validatedData;
 
     // Additional sanitization for filename
-    const sanitizedName = sanitizeFilename(newName);
+    const sanitizedName = sanitizeFileName(newName);
 
     const db = getFirestore();
     const docRef = db.collection("vaultItems").doc(itemId);
@@ -985,7 +1143,7 @@ export const deleteVaultItem = onCall(
           gcsDeletePromises.push(
             (async () => {
               try {
-                const storageAdapter = new StorageAdapter();
+                const storageAdapter = getStorageAdapter();
                 await storageAdapter.deleteFile({
                   path: r2Key,
                   bucket: r2Bucket,
@@ -1228,78 +1386,78 @@ export const cleanupDeletedVaultItems = onSchedule({
   timeoutSeconds: FUNCTION_TIMEOUT.LONG,
   retryCount: 3,
 }, async (event) => {
-    const olderThanDays = 30; // Always clean up items older than 30 days
+  const olderThanDays = 30; // Always clean up items older than 30 days
 
-    logger.info("Starting scheduled cleanup of deleted vault items", createLogContext({
+  logger.info("Starting scheduled cleanup of deleted vault items", createLogContext({
+    olderThanDays,
+    scheduledTime: event.scheduleTime,
+  }));
+
+  const db = getFirestore();
+
+  // Query for ALL deleted items older than specified days across all users
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+
+  const deletedItemsQuery = db.collection("vaultItems")
+    .where("isDeleted", "==", true)
+    .where("deletedAt", "<=", cutoffDate);
+
+  const snapshot = await deletedItemsQuery.get();
+
+  if (snapshot.empty) {
+    logger.info("No deleted items to clean up", createLogContext({
       olderThanDays,
-      scheduledTime: event.scheduleTime,
+      totalChecked: 0,
     }));
+    return;
+  }
 
-    const db = getFirestore();
+  // Batch delete items and their storage files
+  const batch = db.batch();
+  const filesToDelete: string[] = [];
+  let deletedCount = 0;
 
-    // Query for ALL deleted items older than specified days across all users
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+  for (const doc of snapshot.docs) {
+    const data = doc.data() as VaultItem;
 
-    const deletedItemsQuery = db.collection("vaultItems")
-      .where("isDeleted", "==", true)
-      .where("deletedAt", "<=", cutoffDate);
-
-    const snapshot = await deletedItemsQuery.get();
-
-    if (snapshot.empty) {
-      logger.info("No deleted items to clean up", createLogContext({
-        olderThanDays,
-        totalChecked: 0,
-      }));
-      return;
+    // Collect storage paths for deletion
+    if (data.type === "file" && data.storagePath) {
+      filesToDelete.push(data.storagePath);
     }
 
-    // Batch delete items and their storage files
-    const batch = db.batch();
-    const filesToDelete: string[] = [];
-    let deletedCount = 0;
+    // Delete Firestore document
+    batch.delete(doc.ref);
+    deletedCount++;
+  }
 
-    for (const doc of snapshot.docs) {
-      const data = doc.data() as VaultItem;
-      
-      // Collect storage paths for deletion
-      if (data.type === "file" && data.storagePath) {
-        filesToDelete.push(data.storagePath);
+  // Commit batch delete
+  await batch.commit();
+
+  // Delete files from storage (R2)
+  if (filesToDelete.length > 0) {
+    const storageAdapter = getStorageAdapter();
+    const deletePromises = filesToDelete.map(async (path) => {
+      try {
+        await storageAdapter.deleteFile({
+          path: path,
+        });
+      } catch (error) {
+        logger.warn("Failed to delete file from storage", createLogContext({
+          path,
+          error: error instanceof Error ? error.message : "Unknown error",
+        }));
       }
-      
-      // Delete Firestore document
-      batch.delete(doc.ref);
-      deletedCount++;
-    }
+    });
 
-    // Commit batch delete
-    await batch.commit();
+    await Promise.all(deletePromises);
+  }
 
-    // Delete files from storage (R2)
-    if (filesToDelete.length > 0) {
-      const storageAdapter = new StorageAdapter();
-      const deletePromises = filesToDelete.map(async (path) => {
-        try {
-          await storageAdapter.deleteFile({
-            path: path,
-          });
-        } catch (error) {
-          logger.warn("Failed to delete file from storage", createLogContext({
-            path,
-            error: error instanceof Error ? error.message : "Unknown error",
-          }));
-        }
-      });
-      
-      await Promise.all(deletePromises);
-    }
-
-    logger.info("Scheduled cleanup completed", createLogContext({
-      deletedCount,
-      filesDeleted: filesToDelete.length,
-      cutoffDate: cutoffDate.toISOString(),
-    }));
+  logger.info("Scheduled cleanup completed", createLogContext({
+    deletedCount,
+    filesDeleted: filesToDelete.length,
+    cutoffDate: cutoffDate.toISOString(),
+  }));
 });
 
 /**
@@ -1758,7 +1916,7 @@ export const getVaultDownloadUrl = onCall(
       // Generate new URL based on storage provider
       if (vaultItem?.storageProvider === "r2" && vaultItem?.r2Bucket && vaultItem?.r2Key) {
         // Use R2 for download
-        const storageAdapter = new StorageAdapter();
+        const storageAdapter = getStorageAdapter();
         const result = await storageAdapter.generateDownloadUrl(
           vaultItem.r2Key,
           3600 // 1 hour
@@ -1822,6 +1980,191 @@ export const getVaultDownloadUrl = onCall(
 );
 
 /**
+ * Create a secure share link for a vault item
+ */
+export const createVaultShareLink = onCall(
+  {
+    ...getCorsOptions(),
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.createVaultShareLink,
+      uid
+    );
+
+    const {itemId, expiresAt, allowDownload, password} = validatedData;
+
+    // Validate item ID
+    if (!validateItemId(itemId)) {
+      throw createError(ErrorCode.INVALID_REQUEST, "Invalid item ID format");
+    }
+
+    // Sanitize password if provided
+    const sanitizedPassword = password ? sanitizeSharePassword(password) : null;
+
+    const db = getFirestore();
+
+    // Verify ownership
+    const itemRef = db.collection("vaultItems").doc(itemId);
+    const itemDoc = await itemRef.get();
+
+    if (!itemDoc.exists || itemDoc.data()?.userId !== uid) {
+      throw createError(ErrorCode.PERMISSION_DENIED, "Not authorized to share this item");
+    }
+
+    // Import required modules at the top of the function
+    const nanoid = (await import("nanoid")).nanoid;
+    const crypto = await import("crypto");
+
+    // Generate share ID
+    const shareId = nanoid(24);
+
+    // Hash password if provided
+    let passwordHash = null;
+    if (sanitizedPassword) {
+      const salt = crypto.randomBytes(16).toString("hex");
+      const hash = crypto.pbkdf2Sync(sanitizedPassword, salt, 100000, 64, "sha512").toString("hex");
+      passwordHash = `${salt}:${hash}`;
+    }
+
+    // Create share document
+    const shareData: VaultShareLink = {
+      shareId,
+      itemId,
+      ownerId: uid,
+      expiresAt: expiresAt ? Timestamp.fromDate(new Date(expiresAt)) : null,
+      allowDownload: allowDownload ?? true,
+      passwordHash,
+      createdAt: FieldValue.serverTimestamp() as Timestamp,
+      accessCount: 0,
+      maxAccessCount: null,
+    };
+
+    await db.collection("vaultSharedLinks").doc(shareId).set(shareData);
+
+    // Construct share URL
+    const shareLink = `${process.env.FRONTEND_URL || "https://app.mydynastyapp.com"}/vault/share/${shareId}`;
+
+    // Audit log
+    await db.collection("vaultAuditLogs").add({
+      itemId,
+      userId: uid,
+      action: "create_share_link",
+      timestamp: FieldValue.serverTimestamp(),
+      metadata: {shareId, expiresAt, passwordProtected: !!password},
+    });
+
+    logger.info("Created vault share link", createLogContext({
+      itemId,
+      shareId,
+      userId: uid,
+      passwordProtected: !!password,
+    }));
+
+    return {shareId, shareLink};
+  }, "createVaultShareLink", {
+    authLevel: "onboarded",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  })
+);
+
+/**
+ * Access a vault item via share link
+ */
+export const accessVaultShareLink = onCall(
+  {
+    ...getCorsOptions(),
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withErrorHandling(async (request) => {
+    const {shareId, password} = request.data;
+
+    if (!shareId) {
+      throw createError(ErrorCode.MISSING_PARAMETERS, "Share ID is required");
+    }
+
+    // Validate share ID format
+    if (!validateShareId(shareId)) {
+      throw createError(ErrorCode.INVALID_REQUEST, "Invalid share ID format");
+    }
+
+    // Sanitize password if provided
+    const sanitizedPassword = password ? sanitizeSharePassword(password) : null;
+
+    const db = getFirestore();
+
+    // Get share document
+    const shareDoc = await db.collection("vaultSharedLinks").doc(shareId).get();
+
+    if (!shareDoc.exists) {
+      throw createError(ErrorCode.NOT_FOUND, "Share link not found");
+    }
+
+    const shareData = shareDoc.data() as VaultShareLink;
+
+    // Check expiration
+    if (shareData.expiresAt && shareData.expiresAt.toMillis() < Date.now()) {
+      throw createError(ErrorCode.PERMISSION_DENIED, "Share link has expired");
+    }
+
+    // Check password
+    if (shareData.passwordHash) {
+      if (!sanitizedPassword) {
+        throw createError(ErrorCode.PERMISSION_DENIED, "Password required");
+      }
+
+      const crypto = await import("crypto");
+      // Verify password
+      const [salt, storedHash] = shareData.passwordHash.split(":");
+      const hash = crypto.pbkdf2Sync(sanitizedPassword, salt, 100000, 64, "sha512").toString("hex");
+      const isValid = hash === storedHash;
+
+      if (!isValid) {
+        throw createError(ErrorCode.PERMISSION_DENIED, "Invalid password");
+      }
+    }
+
+    // Check access count
+    if (shareData.maxAccessCount && shareData.accessCount >= shareData.maxAccessCount) {
+      throw createError(ErrorCode.PERMISSION_DENIED, "Access limit exceeded");
+    }
+
+    // Get download URL using the owner's permissions
+    const downloadUrl = await internalGetVaultDownloadUrl(shareData.ownerId, shareData.itemId);
+
+    // Update access count
+    await shareDoc.ref.update({
+      accessCount: FieldValue.increment(1),
+      lastAccessedAt: FieldValue.serverTimestamp(),
+    });
+
+    // Audit log
+    await db.collection("vaultAuditLogs").add({
+      itemId: shareData.itemId,
+      userId: request.auth?.uid || "anonymous",
+      action: "access_share_link",
+      timestamp: FieldValue.serverTimestamp(),
+      metadata: {shareId, ip: request.rawRequest.ip},
+    });
+
+    // Return download URL and metadata
+    return {
+      downloadUrl,
+      allowDownload: shareData.allowDownload,
+      itemId: shareData.itemId,
+    };
+  }, "accessVaultShareLink")
+);
+
+/**
  * Get audit logs for the user's vault activities
  */
 export const getVaultAuditLogs = onCall(
@@ -1830,11 +2173,8 @@ export const getVaultAuditLogs = onCall(
     memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
-    }
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
 
     // Validate and sanitize input using centralized validator
     const validatedData = validateRequest(
@@ -1866,7 +2206,10 @@ export const getVaultAuditLogs = onCall(
       userId: uid,
     }));
     return {logs};
-  }, "getVaultAuditLogs")
+  }, "getVaultAuditLogs", {
+    authLevel: "verified",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.vault_audit_logs,
+  })
 );
 
 /**
@@ -1992,7 +2335,7 @@ export const updateVaultFile = onCall(
 
       // Upload new file
       // const buffer = Buffer.from(fileData, "base64");
-      const newStoragePath = `vault/${uid}/${itemId}/${sanitizeFilename(fileName)}`;
+      const newStoragePath = `vault/${uid}/${itemId}/${sanitizeFileName(fileName)}`;
 
       // await r2Service.uploadObject(newStoragePath, buffer, {
       //   contentType: item.mimeType,
@@ -2122,36 +2465,36 @@ export const permanentlyDeleteVaultItem = onCall(
         VALIDATION_SCHEMAS.permanentlyDeleteVaultItems,
         uid
       );
-      
+
       const {confirmDelete: confirm} = vData;
-      
+
       if (!confirm) {
         throw createError(ErrorCode.INVALID_ARGUMENT, "Must confirm permanent deletion");
       }
-      
+
       // Rest of the logic from permanentlyDeleteVaultItems...
       // (This is just for the single item, so we'll directly handle it here)
       const db = getFirestore();
       const itemRef = db.collection("vaultItems").doc(itemId);
       const doc = await itemRef.get();
-      
+
       if (!doc.exists) {
         throw createError(ErrorCode.NOT_FOUND, "Vault item not found");
       }
-      
+
       const item = doc.data() as VaultItem;
       if (item.userId !== uid) {
         throw createError(ErrorCode.PERMISSION_DENIED, "You don't have permission to delete this item");
       }
-      
+
       if (!item.isDeleted) {
         throw createError(ErrorCode.FAILED_PRECONDITION, "Item must be in trash before permanent deletion");
       }
-      
+
       // Delete from storage
       if (item.type === "file") {
         try {
-          const storageAdapter = new StorageAdapter();
+          const storageAdapter = getStorageAdapter();
           if (item.storageProvider === "r2" && item.r2Bucket && item.r2Key) {
             await storageAdapter.deleteFile({
               path: item.r2Key,
@@ -2170,24 +2513,24 @@ export const permanentlyDeleteVaultItem = onCall(
           }));
         }
       }
-      
+
       // Delete children if folder
       if (item.type === "folder") {
         const childrenSnapshot = await db.collection("vaultItems")
           .where("path", ">=", item.path)
           .where("path", "<", item.path + "\uffff")
           .get();
-        
+
         const batch = db.batch();
         childrenSnapshot.forEach((childDoc) => {
           batch.delete(childDoc.ref);
         });
         await batch.commit();
       }
-      
+
       // Delete the item
       await itemRef.delete();
-      
+
       // Create audit log
       await db.collection("vaultAuditLogs").add({
         itemId,
@@ -2200,16 +2543,16 @@ export const permanentlyDeleteVaultItem = onCall(
           itemPath: item.path,
         },
       });
-      
+
       logger.info("Permanently deleted vault item", createLogContext({
         itemId,
         userId: uid,
         itemType: item.type,
       }));
-      
+
       return {success: true};
     };
-    
+
     return await deleteLogic(multiItemRequest);
   }, "permanentlyDeleteVaultItem", {
     authLevel: "onboarded",
@@ -2258,30 +2601,30 @@ export const permanentlyDeleteVaultItems = onCall(
       const deletedItemsQuery = db.collection("vaultItems")
         .where("userId", "==", uid)
         .where("isDeleted", "==", true);
-      
+
       const snapshot = await deletedItemsQuery.get();
       itemsToDelete = snapshot.docs;
     } else {
       // Get specific items
       const itemRefs = itemIds.map((id: string) => db.collection("vaultItems").doc(id));
       const docs = await Promise.all(itemRefs.map((ref: FirebaseFirestore.DocumentReference) => ref.get()));
-      
+
       // Filter and validate items
       for (let i = 0; i < docs.length; i++) {
         const doc = docs[i];
         if (!doc.exists) {
           throw createError(ErrorCode.NOT_FOUND, `Vault item not found: ${itemIds[i]}`);
         }
-        
+
         const item = doc.data() as VaultItem;
         if (item.userId !== uid) {
           throw createError(ErrorCode.PERMISSION_DENIED, `You don't have permission to delete item: ${itemIds[i]}`);
         }
-        
+
         if (!item.isDeleted) {
           throw createError(ErrorCode.FAILED_PRECONDITION, `Item must be in trash before permanent deletion: ${itemIds[i]}`);
         }
-        
+
         itemsToDelete.push(doc);
       }
     }
@@ -2295,7 +2638,7 @@ export const permanentlyDeleteVaultItems = onCall(
 
     // Process deletions
     const batch = db.batch();
-    const storageAdapter = new StorageAdapter();
+    const storageAdapter = getStorageAdapter();
     const filesToDelete: Array<{path: string, bucket?: string, provider?: string}> = [];
     const folderPaths: string[] = [];
     let deletedCount = 0;
@@ -2303,7 +2646,7 @@ export const permanentlyDeleteVaultItems = onCall(
     // Collect items to delete and prepare batch
     for (const doc of itemsToDelete) {
       const item = doc.data() as VaultItem;
-      
+
       // Collect storage files for deletion
       if (item.type === "file") {
         if (item.storageProvider === "r2" && item.r2Bucket && item.r2Key) {
@@ -2321,7 +2664,7 @@ export const permanentlyDeleteVaultItems = onCall(
         // Collect folder paths to delete children
         folderPaths.push(item.path);
       }
-      
+
       // Add to batch delete
       batch.delete(doc.ref);
       deletedCount++;
@@ -2334,10 +2677,10 @@ export const permanentlyDeleteVaultItems = onCall(
           .where("path", ">=", folderPath)
           .where("path", "<", folderPath + "\uffff")
           .get();
-        
+
         childrenSnapshot.forEach((childDoc) => {
           const childItem = childDoc.data() as VaultItem;
-          
+
           // Add child files to deletion list
           if (childItem.type === "file") {
             if (childItem.storageProvider === "r2" && childItem.r2Bucket && childItem.r2Key) {
@@ -2352,7 +2695,7 @@ export const permanentlyDeleteVaultItems = onCall(
               });
             }
           }
-          
+
           batch.delete(childDoc.ref);
           deletedCount++;
         });
@@ -2387,12 +2730,12 @@ export const permanentlyDeleteVaultItems = onCall(
           }));
         }
       });
-      
+
       await Promise.all(deletePromises);
     }
 
     // Create audit logs for all deleted items
-    const auditPromises = itemsToDelete.map(doc => {
+    const auditPromises = itemsToDelete.map((doc) => {
       const item = doc.data() as VaultItem;
       return db.collection("vaultAuditLogs").add({
         itemId: doc.id,
@@ -2407,7 +2750,7 @@ export const permanentlyDeleteVaultItems = onCall(
         },
       });
     });
-    
+
     await Promise.all(auditPromises);
 
     logger.info("Permanently deleted vault items", createLogContext({
@@ -2425,5 +2768,1231 @@ export const permanentlyDeleteVaultItems = onCall(
   }, "permanentlyDeleteVaultItems", {
     authLevel: "onboarded",
     rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
+  })
+);
+
+// MARK: - R2 Migration Functions
+
+/**
+ * Start a vault migration from Firebase Storage to R2
+ */
+export const startVaultMigration = onCall(
+  {
+    ...getCorsOptions(),
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.startVaultMigration,
+      uid
+    );
+
+    const {
+      userId,
+      batchSize,
+      maxRetries,
+      dryRun,
+      filter,
+    } = validatedData;
+
+    // Verify permissions - only allow users to migrate their own files unless admin
+    if (userId && userId !== uid) {
+      const isAdmin = await checkAdminRole(uid);
+      if (!isAdmin) {
+        throw createError(ErrorCode.PERMISSION_DENIED, "Can only migrate your own files");
+      }
+    }
+
+    try {
+      const migrationService = getR2VaultMigration();
+
+      // Create migration batch
+      const batchId = await migrationService.createMigrationBatch({
+        userId: userId || uid, // Default to current user
+        batchSize,
+        maxRetries,
+        dryRun,
+        filter: filter ? {
+          minSize: filter.minSize,
+          maxSize: filter.maxSize,
+          fileTypes: filter.fileTypes,
+          createdBefore: filter.createdBefore ? new Date(filter.createdBefore) : undefined,
+          createdAfter: filter.createdAfter ? new Date(filter.createdAfter) : undefined,
+        } : undefined,
+      });
+
+      // Start migration
+      await migrationService.startMigration(batchId);
+
+      logger.info("Started vault migration", createLogContext({
+        batchId,
+        userId: userId || uid,
+        dryRun,
+      }));
+
+      return {batchId, status: "started"};
+    } catch (error) {
+      const {message, context} = formatErrorForLogging(error, {
+        userId: userId || uid,
+        dryRun,
+      });
+      logger.error("Failed to start vault migration", {message, ...context});
+      throw error;
+    }
+  }, "startVaultMigration", {
+    authLevel: "onboarded",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  })
+);
+
+/**
+ * Get migration status
+ */
+export const getVaultMigrationStatus = onCall(
+  {
+    ...getCorsOptions(),
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getVaultMigrationStatus,
+      uid
+    );
+
+    const {batchId} = validatedData;
+
+    try {
+      const migrationService = getR2VaultMigration();
+      const status = await migrationService.getMigrationStatus(batchId);
+
+      // Verify user has permission to view this batch
+      if (status.userId !== uid) {
+        const isAdmin = await checkAdminRole(uid);
+        if (!isAdmin) {
+          throw createError(ErrorCode.PERMISSION_DENIED, "You don't have permission to view this migration batch");
+        }
+      }
+
+      return status;
+    } catch (error) {
+      const {message, context} = formatErrorForLogging(error, {batchId});
+      logger.error("Failed to get migration status", {message, ...context});
+      throw error;
+    }
+  }, "getVaultMigrationStatus", {
+    authLevel: "onboarded",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.read,
+  })
+);
+
+/**
+ * Cancel a migration
+ */
+export const cancelVaultMigration = onCall(
+  {
+    ...getCorsOptions(),
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.cancelVaultMigration,
+      uid
+    );
+
+    const {batchId} = validatedData;
+
+    try {
+      const migrationService = getR2VaultMigration();
+      await migrationService.cancelMigration(batchId);
+
+      logger.info("Cancelled vault migration", createLogContext({
+        batchId,
+        userId: uid,
+      }));
+
+      return {success: true};
+    } catch (error) {
+      const {message, context} = formatErrorForLogging(error, {batchId});
+      logger.error("Failed to cancel migration", {message, ...context});
+      throw error;
+    }
+  }, "cancelVaultMigration", {
+    authLevel: "onboarded",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  })
+);
+
+/**
+ * Verify migration integrity for a specific item
+ */
+export const verifyVaultMigration = onCall(
+  {
+    ...getCorsOptions(),
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.verifyVaultMigration,
+      uid
+    );
+
+    const {itemId} = validatedData;
+
+    // Verify ownership
+    const db = getFirestore();
+    const itemDoc = await db.collection("vaultItems").doc(itemId).get();
+    if (!itemDoc.exists || itemDoc.data()?.userId !== uid) {
+      throw createError(ErrorCode.PERMISSION_DENIED, "Not authorized to verify this item");
+    }
+
+    try {
+      const migrationService = getR2VaultMigration();
+      const result = await migrationService.verifyMigration(itemId);
+
+      logger.info("Verified vault migration", createLogContext({
+        itemId,
+        valid: result.valid,
+        userId: uid,
+      }));
+
+      return result;
+    } catch (error) {
+      const {message, context} = formatErrorForLogging(error, {itemId});
+      logger.error("Failed to verify migration", {message, ...context});
+      throw error;
+    }
+  }, "verifyVaultMigration", {
+    authLevel: "onboarded",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.read,
+  })
+);
+
+/**
+ * Rollback a migration for a specific item
+ */
+export const rollbackVaultMigration = onCall(
+  {
+    ...getCorsOptions(),
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.rollbackVaultMigration,
+      uid
+    );
+
+    const {itemId} = validatedData;
+
+    // Verify ownership
+    const db = getFirestore();
+    const itemDoc = await db.collection("vaultItems").doc(itemId).get();
+    if (!itemDoc.exists || itemDoc.data()?.userId !== uid) {
+      throw createError(ErrorCode.PERMISSION_DENIED, "Not authorized to rollback this item");
+    }
+
+    try {
+      const migrationService = getR2VaultMigration();
+      await migrationService.rollbackMigration(itemId);
+
+      logger.info("Rolled back vault migration", createLogContext({
+        itemId,
+        userId: uid,
+      }));
+
+      return {success: true};
+    } catch (error) {
+      const {message, context} = formatErrorForLogging(error, {itemId});
+      logger.error("Failed to rollback migration", {message, ...context});
+      throw error;
+    }
+  }, "rollbackVaultMigration", {
+    authLevel: "onboarded",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+  })
+);
+
+// MARK: - Encryption Monitoring & Analytics
+
+/**
+ * Get vault encryption statistics for the current user
+ */
+export const getVaultEncryptionStats = onCall(
+  {
+    ...getCorsOptions(),
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+    const db = getFirestore();
+
+    try {
+      // Get all user's vault items
+      const itemsSnapshot = await db.collection("vaultItems")
+        .where("userId", "==", uid)
+        .where("isDeleted", "==", false)
+        .get();
+
+      let totalItems = 0;
+      let encryptedItems = 0;
+      let totalSize = 0;
+      let encryptedSize = 0;
+      const encryptionKeyUsage = new Map<string, number>();
+
+      itemsSnapshot.forEach((doc) => {
+        const item = doc.data();
+        totalItems++;
+        totalSize += item.size || 0;
+
+        if (item.isEncrypted) {
+          encryptedItems++;
+          encryptedSize += item.size || 0;
+
+          // Track key usage
+          if (item.encryptionKeyId) {
+            encryptionKeyUsage.set(
+              item.encryptionKeyId,
+              (encryptionKeyUsage.get(item.encryptionKeyId) || 0) + 1
+            );
+          }
+        }
+      });
+
+      // Get key rotation history
+      const keyRotationSnapshot = await db.collection("vaultKeyRotations")
+        .where("userId", "==", uid)
+        .orderBy("rotatedAt", "desc")
+        .limit(10)
+        .get();
+
+      const keyRotationHistory = keyRotationSnapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          keyId: doc.id,
+          rotatedAt: data.rotatedAt || data.createdAt,
+          ...data,
+        };
+      });
+
+      // Get share link stats
+      const shareLinksSnapshot = await db.collection("vaultSharedLinks")
+        .where("ownerId", "==", uid)
+        .get();
+
+      let activeShareLinks = 0;
+      let expiredShareLinks = 0;
+      let totalAccessCount = 0;
+
+      const now = Date.now();
+      shareLinksSnapshot.forEach((doc) => {
+        const share = doc.data();
+        if (share.expiresAt && share.expiresAt.toMillis() < now) {
+          expiredShareLinks++;
+        } else {
+          activeShareLinks++;
+        }
+        totalAccessCount += share.accessCount || 0;
+      });
+
+      const stats = {
+        encryption: {
+          totalItems,
+          encryptedItems,
+          encryptionPercentage: totalItems > 0 ? (encryptedItems / totalItems * 100).toFixed(2) : 0,
+          totalSize,
+          encryptedSize,
+          encryptedSizePercentage: totalSize > 0 ? (encryptedSize / totalSize * 100).toFixed(2) : 0,
+          keyUsage: Array.from(encryptionKeyUsage.entries()).map(([keyId, count]) => ({
+            keyId,
+            itemCount: count,
+          })),
+        },
+        keyRotation: {
+          lastRotation: keyRotationHistory[0]?.rotatedAt || null,
+          rotationCount: keyRotationHistory.length,
+          history: keyRotationHistory,
+        },
+        shareLinks: {
+          active: activeShareLinks,
+          expired: expiredShareLinks,
+          totalAccessCount,
+        },
+      };
+
+      logger.info("Retrieved vault encryption stats", createLogContext({
+        userId: uid,
+        encryptedItems,
+        totalItems,
+      }));
+
+      return stats;
+    } catch (error) {
+      const {message, context} = formatErrorForLogging(error, {userId: uid});
+      logger.error("Failed to get encryption stats", {message, ...context});
+      throw error;
+    }
+  }, "getVaultEncryptionStats", {
+    authLevel: "onboarded",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.read,
+  })
+);
+
+/**
+ * Get key rotation status and recommendations
+ */
+export const getKeyRotationStatus = onCall(
+  {
+    ...getCorsOptions(),
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+    const db = getFirestore();
+
+    try {
+      // Get current vault key
+      const vaultKeyDoc = await db.collection("vaultKeys").doc(uid).get();
+
+      if (!vaultKeyDoc.exists) {
+        return {
+          hasVaultKey: false,
+          requiresRotation: false,
+          lastRotation: null,
+          nextRotationDue: null,
+        };
+      }
+
+      const vaultKey = vaultKeyDoc.data()!;
+      const lastRotation = vaultKey.lastRotatedAt || vaultKey.createdAt;
+      const rotationIntervalDays = 30; // 30-day rotation policy
+      const rotationIntervalMs = rotationIntervalDays * 24 * 60 * 60 * 1000;
+      const nextRotationDue = new Date(lastRotation.toMillis() + rotationIntervalMs);
+      const now = new Date();
+
+      // Check if any items are using old keys
+      const oldKeyItemsSnapshot = await db.collection("vaultItems")
+        .where("userId", "==", uid)
+        .where("isEncrypted", "==", true)
+        .where("encryptionKeyId", "!=", vaultKey.currentKeyId)
+        .limit(1)
+        .get();
+
+      const hasItemsWithOldKeys = !oldKeyItemsSnapshot.empty;
+
+      // Get rotation recommendations
+      const recommendations = [];
+
+      if (now >= nextRotationDue) {
+        recommendations.push({
+          priority: "high",
+          message: "Your vault encryption key is due for rotation",
+          action: "rotate_key",
+        });
+      } else if (now >= new Date(nextRotationDue.getTime() - 7 * 24 * 60 * 60 * 1000)) {
+        recommendations.push({
+          priority: "medium",
+          message: `Key rotation due in ${Math.ceil((nextRotationDue.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))} days`,
+          action: "schedule_rotation",
+        });
+      }
+
+      if (hasItemsWithOldKeys) {
+        recommendations.push({
+          priority: "medium",
+          message: "Some vault items are encrypted with old keys",
+          action: "re_encrypt_items",
+        });
+      }
+
+      return {
+        hasVaultKey: true,
+        currentKeyId: vaultKey.currentKeyId,
+        requiresRotation: now >= nextRotationDue,
+        lastRotation: lastRotation.toMillis(),
+        nextRotationDue: nextRotationDue.toISOString(),
+        hasItemsWithOldKeys,
+        recommendations,
+      };
+    } catch (error) {
+      const {message, context} = formatErrorForLogging(error, {userId: uid});
+      logger.error("Failed to get key rotation status", {message, ...context});
+      throw error;
+    }
+  }, "getKeyRotationStatus", {
+    authLevel: "onboarded",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.read,
+  })
+);
+
+/**
+ * Get share link analytics
+ */
+export const getShareLinkAnalytics = onCall(
+  {
+    ...getCorsOptions(),
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+    const db = getFirestore();
+
+    try {
+      // Get time range (default to last 30 days)
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+
+      // Get all share links created in the time range
+      const shareLinksSnapshot = await db.collection("vaultSharedLinks")
+        .where("ownerId", "==", uid)
+        .where("createdAt", ">=", Timestamp.fromDate(startDate))
+        .where("createdAt", "<=", Timestamp.fromDate(endDate))
+        .orderBy("createdAt", "desc")
+        .get();
+
+      // Get share access logs
+      const accessLogsSnapshot = await db.collection("vaultShareAccessLogs")
+        .where("ownerId", "==", uid)
+        .where("timestamp", ">=", Timestamp.fromDate(startDate))
+        .where("timestamp", "<=", Timestamp.fromDate(endDate))
+        .orderBy("timestamp", "desc")
+        .get();
+
+      // Analyze data
+      const shareLinks = shareLinksSnapshot.docs.map((doc) => {
+        const data = doc.data() as VaultShareLink;
+        return {
+          ...data,
+          shareId: doc.id,
+        };
+      });
+
+      const accessLogs = accessLogsSnapshot.docs.map((doc) => doc.data());
+
+      // Calculate daily statistics
+      const dailyStats = new Map<string, {
+        created: number;
+        accessed: number;
+        uniqueAccessors: Set<string>;
+      }>();
+
+      // Process share link creation
+      shareLinks.forEach((link) => {
+        const date = new Date(link.createdAt.toMillis()).toISOString().split("T")[0];
+        if (!dailyStats.has(date)) {
+          dailyStats.set(date, {created: 0, accessed: 0, uniqueAccessors: new Set()});
+        }
+        const stats = dailyStats.get(date)!;
+        stats.created++;
+      });
+
+      // Process access logs
+      accessLogs.forEach((log) => {
+        const date = new Date(log.timestamp.toMillis()).toISOString().split("T")[0];
+        if (!dailyStats.has(date)) {
+          dailyStats.set(date, {created: 0, accessed: 0, uniqueAccessors: new Set()});
+        }
+        const stats = dailyStats.get(date)!;
+        stats.accessed++;
+        if (log.accessorId) {
+          stats.uniqueAccessors.add(log.accessorId);
+        }
+      });
+
+      // Convert to array and sort by date
+      const dailyAnalytics = Array.from(dailyStats.entries())
+        .map(([date, stats]) => ({
+          date,
+          created: stats.created,
+          accessed: stats.accessed,
+          uniqueAccessors: stats.uniqueAccessors.size,
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      // Get top accessed items
+      const itemAccessCount = new Map<string, number>();
+      accessLogs.forEach((log) => {
+        const count = itemAccessCount.get(log.itemId) || 0;
+        itemAccessCount.set(log.itemId, count + 1);
+      });
+
+      const topAccessedItems = Array.from(itemAccessCount.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([itemId, count]) => ({itemId, accessCount: count}));
+
+      return {
+        summary: {
+          totalShareLinks: shareLinks.length,
+          totalAccesses: accessLogs.length,
+          activeLinks: shareLinks.filter((link) =>
+            !link.expiresAt || link.expiresAt.toMillis() > Date.now()
+          ).length,
+          passwordProtectedLinks: shareLinks.filter((link) => link.passwordHash).length,
+        },
+        dailyAnalytics,
+        topAccessedItems,
+        recentShares: shareLinks.slice(0, 10),
+      };
+    } catch (error) {
+      const {message, context} = formatErrorForLogging(error, {userId: uid});
+      logger.error("Failed to get share link analytics", {message, ...context});
+      throw error;
+    }
+  }, "getShareLinkAnalytics", {
+    authLevel: "onboarded",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.read,
+  })
+);
+
+/**
+ * Admin function to get system-wide vault encryption statistics
+ * Requires admin role
+ */
+export const getSystemVaultStats = onCall(
+  {
+    ...getCorsOptions(),
+    region: DEFAULT_REGION,
+    memory: "512MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+    const db = getFirestore();
+
+    // Check if user is admin
+    const userDoc = await db.collection("users").doc(uid).get();
+    const userData = userDoc.data();
+
+    if (!userData?.isAdmin) {
+      throw createError(ErrorCode.PERMISSION_DENIED, "Admin access required");
+    }
+
+    try {
+      // Get overall statistics
+      const stats = {
+        users: {
+          total: 0,
+          withVaultEncryption: 0,
+          withActiveKeys: 0,
+        },
+        items: {
+          total: 0,
+          encrypted: 0,
+          unencrypted: 0,
+          totalSize: 0,
+          encryptedSize: 0,
+        },
+        keys: {
+          total: 0,
+          rotatedLastMonth: 0,
+          overdue: 0,
+        },
+        shareLinks: {
+          total: 0,
+          active: 0,
+          expired: 0,
+          passwordProtected: 0,
+        },
+        storage: {
+          firebase: {count: 0, size: 0},
+          r2: {count: 0, size: 0},
+        },
+      };
+
+      // Get user stats
+      const usersSnapshot = await db.collection("users")
+        .where("hasVaultAccess", "==", true)
+        .get();
+
+      stats.users.total = usersSnapshot.size;
+
+      // Get vault keys stats
+      const vaultKeysSnapshot = await db.collection("vaultKeys").get();
+      stats.users.withVaultEncryption = vaultKeysSnapshot.size;
+
+      const now = Date.now();
+      const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+
+      vaultKeysSnapshot.forEach((doc) => {
+        const key = doc.data();
+        stats.keys.total++;
+
+        if (key.currentKeyId) {
+          stats.users.withActiveKeys++;
+        }
+
+        const lastRotation = key.lastRotatedAt?.toMillis() || key.createdAt?.toMillis() || 0;
+        if (lastRotation > thirtyDaysAgo) {
+          stats.keys.rotatedLastMonth++;
+        } else if (now - lastRotation > 30 * 24 * 60 * 60 * 1000) {
+          stats.keys.overdue++;
+        }
+      });
+
+      // Get vault items stats (with pagination for large datasets)
+      let lastDoc = null;
+      const batchSize = 1000;
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        let query = db.collection("vaultItems")
+          .where("type", "==", "file")
+          .orderBy("__name__")
+          .limit(batchSize);
+
+        if (lastDoc) {
+          query = query.startAfter(lastDoc);
+        }
+
+        const snapshot = await query.get();
+
+        if (snapshot.empty) break;
+
+        snapshot.forEach((doc) => {
+          const item = doc.data();
+          stats.items.total++;
+          stats.items.totalSize += item.size || 0;
+
+          if (item.isEncrypted) {
+            stats.items.encrypted++;
+            stats.items.encryptedSize += item.size || 0;
+          } else {
+            stats.items.unencrypted++;
+          }
+
+          // Storage provider stats
+          if (item.storageProvider === "r2") {
+            stats.storage.r2.count++;
+            stats.storage.r2.size += item.size || 0;
+          } else {
+            stats.storage.firebase.count++;
+            stats.storage.firebase.size += item.size || 0;
+          }
+        });
+
+        lastDoc = snapshot.docs[snapshot.docs.length - 1];
+
+        if (snapshot.size < batchSize) break;
+      }
+
+      // Get share links stats
+      const shareLinksSnapshot = await db.collection("vaultSharedLinks").get();
+
+      shareLinksSnapshot.forEach((doc) => {
+        const share = doc.data();
+        stats.shareLinks.total++;
+
+        if (!share.expiresAt || share.expiresAt.toMillis() > now) {
+          stats.shareLinks.active++;
+        } else {
+          stats.shareLinks.expired++;
+        }
+
+        if (share.passwordHash) {
+          stats.shareLinks.passwordProtected++;
+        }
+      });
+
+      // Calculate percentages
+      const summary = {
+        encryptionAdoption: stats.users.total > 0 ?
+          (stats.users.withVaultEncryption / stats.users.total * 100).toFixed(2) + "%" :
+          "0%",
+        itemEncryptionRate: stats.items.total > 0 ?
+          (stats.items.encrypted / stats.items.total * 100).toFixed(2) + "%" :
+          "0%",
+        sizeEncryptionRate: stats.items.totalSize > 0 ?
+          (stats.items.encryptedSize / stats.items.totalSize * 100).toFixed(2) + "%" :
+          "0%",
+        keyRotationCompliance: stats.keys.total > 0 ?
+          ((stats.keys.total - stats.keys.overdue) / stats.keys.total * 100).toFixed(2) + "%" :
+          "0%",
+        r2MigrationProgress: stats.items.total > 0 ?
+          (stats.storage.r2.count / stats.items.total * 100).toFixed(2) + "%" :
+          "0%",
+      };
+
+      logger.info("Retrieved system vault stats", createLogContext({
+        adminId: uid,
+        totalUsers: stats.users.total,
+        totalItems: stats.items.total,
+      }));
+
+      return {stats, summary};
+    } catch (error) {
+      const {message, context} = formatErrorForLogging(error, {adminId: uid});
+      logger.error("Failed to get system vault stats", {message, ...context});
+      throw error;
+    }
+  }, "getSystemVaultStats", {
+    authLevel: "onboarded",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.read,
+  })
+);
+
+
+// Helper function to check if user has admin role
+async function checkAdminRole(uid: string): Promise<boolean> {
+  const db = getFirestore();
+  const userDoc = await db.collection("users").doc(uid).get();
+  if (!userDoc.exists) {
+    return false;
+  }
+  const userData = userDoc.data();
+  return userData?.roles?.includes("admin") || false;
+}
+
+// Internal function to get download URL
+async function internalGetVaultDownloadUrl(uid: string, itemId: string): Promise<string> {
+  const db = getFirestore();
+  const docRef = db.collection("vaultItems").doc(itemId);
+  const doc = await docRef.get();
+
+  if (!doc.exists) {
+    throw createError(ErrorCode.NOT_FOUND, "Vault item not found");
+  }
+
+  const item = doc.data() as VaultItem;
+
+  // Check permission
+  if (item.ownerId !== uid && (!item.sharedWith || !item.sharedWith.includes(uid))) {
+    throw createError(ErrorCode.PERMISSION_DENIED, "No access to this vault item");
+  }
+
+  if (item.type !== "file") {
+    throw createError(ErrorCode.INVALID_ARGUMENT, "Can only download files");
+  }
+
+  // Generate signed URL using StorageAdapter
+  const storageAdapter = getStorageAdapter();
+  
+  const downloadUrl = await storageAdapter.generateDownloadUrl(
+    item.storagePath!,
+    3600 // 1 hour
+  );
+
+  return downloadUrl;
+}
+
+// Vault security monitoring
+export const reportSecurityIncident = onCall(
+  {
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    // Validate and sanitize input
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.reportSecurityIncident,
+      uid
+    );
+
+    const {type, severity, details, affectedItemId, metadata} = validatedData;
+
+    const db = getFirestore();
+
+    try {
+      // Create security incident record
+      const incident = {
+        userId: uid,
+        type, // 'suspicious_access', 'rate_limit_violation', 'encryption_failure', etc.
+        severity, // 'low', 'medium', 'high', 'critical'
+        details,
+        affectedItemId,
+        metadata,
+        timestamp: FieldValue.serverTimestamp(),
+        status: "pending",
+        userAgent: request.rawRequest.headers["user-agent"],
+        ipAddress: request.rawRequest.ip,
+      };
+
+      await db.collection("vaultSecurityIncidents").add(incident);
+
+      // If high severity, notify admins
+      if (severity === "high" || severity === "critical") {
+        await notifyAdminsOfSecurityIncident(incident);
+      }
+
+      return {success: true};
+    } catch (error) {
+      logger.error("Failed to report security incident:", error);
+      throw createError(ErrorCode.INTERNAL, "Failed to report security incident");
+    }
+  }, "reportSecurityIncident", {
+    authLevel: "verified",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.security_incident_report,
+  })
+);
+
+// Get security monitoring dashboard data
+export const getSecurityMonitoringData = onCall(
+  {
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    const db = getFirestore();
+
+    try {
+      const isAdmin = await checkAdminRole(uid);
+
+      if (!isAdmin) {
+        throw createError(ErrorCode.PERMISSION_DENIED, "Admin access required");
+      }
+
+      const now = new Date();
+      const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      // Get security incidents
+      const [incidentsSnapshot, auditLogsSnapshot, rateLimitSnapshot] = await Promise.all([
+        // Security incidents
+        db.collection("vaultSecurityIncidents")
+          .where("timestamp", ">=", last7Days)
+          .get(),
+
+        // Suspicious audit logs
+        db.collection("vaultAuditLogs")
+          .where("timestamp", ">=", last24Hours)
+          .where("suspicious", "==", true)
+          .get(),
+
+        // Rate limit violations
+        db.collection("rateLimitViolations")
+          .where("timestamp", ">=", last24Hours)
+          .get(),
+      ]);
+
+      // Aggregate data
+      const incidentsByType: Record<string, number> = {};
+      const incidentsBySeverity = {low: 0, medium: 0, high: 0, critical: 0};
+      const incidentsTrend: Array<{ date: string; incidents: number }> = [];
+
+      incidentsSnapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        const type = data.type as string;
+        const severity = data.severity as "low" | "medium" | "high" | "critical";
+        incidentsByType[type] = (incidentsByType[type] || 0) + 1;
+        incidentsBySeverity[severity] = (incidentsBySeverity[severity] || 0) + 1;
+      });
+
+      // Group incidents by day for trend
+      const incidentsByDay: Record<string, number> = {};
+      incidentsSnapshot.docs.forEach((doc) => {
+        const timestamp = doc.data().timestamp?.toDate();
+        if (timestamp) {
+          const day = timestamp.toISOString().split("T")[0];
+          incidentsByDay[day] = (incidentsByDay[day] || 0) + 1;
+        }
+      });
+
+      Object.entries(incidentsByDay).forEach(([day, count]) => {
+        incidentsTrend.push({date: day, incidents: count});
+      });
+
+      // Get top suspicious users
+      const suspiciousUsers: Record<string, number> = {};
+      auditLogsSnapshot.docs.forEach((doc) => {
+        const userId = doc.data().userId;
+        suspiciousUsers[userId] = (suspiciousUsers[userId] || 0) + 1;
+      });
+
+      const topSuspiciousUsers = Object.entries(suspiciousUsers)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 10)
+        .map(([userId, count]) => ({userId, suspiciousActions: count}));
+
+      // Rate limit violations by operation
+      const rateLimitByOperation: Record<string, number> = {};
+      rateLimitSnapshot.docs.forEach((doc) => {
+        const operation = doc.data().operation;
+        rateLimitByOperation[operation] = (rateLimitByOperation[operation] || 0) + 1;
+      });
+
+      return {
+        summary: {
+          totalIncidents: incidentsSnapshot.size,
+          criticalIncidents: incidentsBySeverity.critical,
+          suspiciousActions: auditLogsSnapshot.size,
+          rateLimitViolations: rateLimitSnapshot.size,
+        },
+        incidents: {
+          byType: incidentsByType,
+          bySeverity: incidentsBySeverity,
+          trend: incidentsTrend,
+        },
+        suspiciousUsers: topSuspiciousUsers,
+        rateLimitViolations: rateLimitByOperation,
+        lastUpdated: now.toISOString(),
+      };
+    } catch (error) {
+      logger.error("Failed to get security monitoring data:", error);
+      throw createError(ErrorCode.INTERNAL, "Failed to get security monitoring data");
+    }
+  }, "getSecurityMonitoringData", {
+    authLevel: "onboarded",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.security_monitoring_data,
+  })
+);
+
+// Security alert configuration
+export const configureSecurityAlerts = onCall(
+  {
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    const db = getFirestore();
+
+    try {
+      const isAdmin = await checkAdminRole(uid);
+
+      if (!isAdmin) {
+        throw createError(ErrorCode.PERMISSION_DENIED, "Admin access required");
+      }
+
+      // Validate and sanitize input
+      const validatedData = validateRequest(
+        request.data,
+        VALIDATION_SCHEMAS.configureSecurityAlerts,
+        uid
+      );
+
+      const {alertType, enabled, threshold, channels} = validatedData;
+
+      await db.collection("securityAlertConfig").doc(alertType).set({
+        enabled,
+        threshold,
+        channels, // ['email', 'slack', 'pagerduty']
+        updatedBy: uid,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+
+      return {success: true};
+    } catch (error) {
+      logger.error("Failed to configure security alerts:", error);
+      throw createError(ErrorCode.INTERNAL, "Failed to configure security alerts");
+    }
+  }, "configureSecurityAlerts", {
+    authLevel: "onboarded",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.security_alert_config,
+  })
+);
+
+// Helper function to notify admins of security incidents
+async function notifyAdminsOfSecurityIncident(incident: any): Promise<void> {
+  const db = getFirestore();
+
+  try {
+    // Get admin users
+    const adminsSnapshot = await db.collection("users")
+      .where("roles", "array-contains", "admin")
+      .get();
+
+    const adminEmails = adminsSnapshot.docs
+      .map((doc) => doc.data().email)
+      .filter((email) => email);
+
+    // Send notification to admins
+    const {sendEmailUniversal} = await import("./auth/config/emailConfig");
+
+    // Send email to each admin
+    const emailPromises = adminEmails.map(async (adminEmail) => {
+      try {
+        await sendEmailUniversal({
+          to: adminEmail,
+          templateType: "securityAlert" as any, // Cast as security alerts might not be in the type yet
+          dynamicTemplateData: {
+            incidentType: incident.type,
+            severity: incident.severity,
+            userId: incident.userId || "Unknown",
+            timestamp: new Date(incident.timestamp).toISOString(),
+            details: incident.details,
+            actionRequired: incident.severity === "critical" || incident.severity === "high",
+          },
+          fromName: "Dynasty Security Team",
+        });
+      } catch (emailError) {
+        // Log individual email failures but don't throw
+        logger.error("Failed to send security alert email:", {
+          adminEmail,
+          error: emailError,
+        });
+      }
+    });
+
+    await Promise.allSettled(emailPromises);
+
+    logger.warn("Security incident notification sent:", {
+      type: incident.type,
+      severity: incident.severity,
+      userId: incident.userId,
+      notifiedAdmins: adminEmails.length,
+    });
+  } catch (error) {
+    logger.error("Failed to notify admins of security incident:", error);
+  }
+}
+
+// Log audit events helper
+export async function logVaultAuditEvent(
+  userId: string,
+  action: string,
+  itemId?: string,
+  metadata?: any,
+  suspicious = false
+): Promise<void> {
+  const db = getFirestore();
+
+  try {
+    await db.collection("vaultAuditLogs").add({
+      userId,
+      action,
+      itemId,
+      metadata,
+      suspicious,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+  } catch (error) {
+    logger.error("Failed to log audit event:", error);
+  }
+}
+
+/**
+ * Get signed URL for media uploads (profile pictures, story media, event covers)
+ * This is a generic media upload endpoint that uses R2 by default
+ */
+export const getMediaUploadUrl = onCall(
+  {
+    ...getCorsOptions(),
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    const {path, contentType, fileSize, metadata} = request.data as {
+      path: string;
+      contentType: string;
+      fileSize: number;
+      metadata?: Record<string, string>;
+    };
+
+    // Validate input
+    if (!path || !contentType || !fileSize) {
+      throw createError(ErrorCode.INVALID_ARGUMENT, "Missing required fields");
+    }
+
+    // Check user's storage capacity
+    const storageCheck = await checkUserStorageCapacity(uid, fileSize);
+    if (!storageCheck.allowed) {
+      throw createError(ErrorCode.RESOURCE_EXHAUSTED, storageCheck.reason || "Insufficient storage capacity");
+    }
+
+    // Sanitize path
+    const sanitizedPath = path.replace(/[^a-zA-Z0-9\-_/.]/g, "_");
+
+    // Initialize storage adapter
+    const storageAdapter = getStorageAdapter();
+    // Default to R2, fallback to Firebase only for local emulator without R2
+    const storageProvider = process.env.STORAGE_PROVIDER === "firebase" ? "firebase" : "r2";
+
+    let signedUrl: string;
+    let storagePath: string;
+
+    if (storageProvider === "r2") {
+      // Use R2 storage
+      const r2Key = sanitizedPath;
+
+      const result = await storageAdapter.generateUploadUrl(
+        r2Key,
+        contentType,
+        300, // 5 minutes
+        {
+          uploadedBy: uid,
+          ...metadata,
+        }
+      );
+
+      signedUrl = result.signedUrl;
+      storagePath = r2Key;
+    } else {
+      // Use Firebase Storage
+      storagePath = sanitizedPath;
+
+      const fiveMinutesInSeconds = 5 * 60;
+      const expires = Date.now() + fiveMinutesInSeconds * 1000;
+
+      const [url] = await getStorage()
+        .bucket()
+        .file(storagePath)
+        .getSignedUrl({
+          version: "v4",
+          action: "write",
+          expires,
+          contentType,
+        });
+
+      signedUrl = url;
+    }
+
+    // Log the upload request
+    await logVaultAuditEvent(uid, "media_upload_requested", undefined, {
+      path: sanitizedPath,
+      contentType,
+      fileSize,
+      storageProvider,
+    });
+
+    return {
+      signedUrl,
+      storagePath,
+      storageProvider,
+    };
+  }, "getMediaUploadUrl", {
+    authLevel: "verified",
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.upload,
   })
 );
