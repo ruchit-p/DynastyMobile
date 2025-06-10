@@ -198,9 +198,9 @@ const nextConfig = {
 // Injected content via Sentry wizard below
 const { withSentryConfig } = require("@sentry/nextjs");
 
-// Only apply Sentry configuration in production with auth token
-const shouldUseSentry = process.env.NODE_ENV === 'production' && 
-                       process.env.SENTRY_AUTH_TOKEN;
+// Only apply Sentry configuration if auth token is available
+// This prevents build failures when SENTRY_AUTH_TOKEN is not set
+const shouldUseSentry = !!process.env.SENTRY_AUTH_TOKEN;
 
 const finalConfig = shouldUseSentry ? withSentryConfig(
   nextConfig,
