@@ -1,6 +1,3 @@
-import { storage } from '@/lib/firebase';
-import { ref, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
-import { getAuth } from 'firebase/auth';
 import { r2MediaService } from '@/services/R2MediaService';
 
 /**

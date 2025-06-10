@@ -253,7 +253,7 @@ class VaultService {
     action: string;
     itemId?: string;
     timestamp: Date;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
   }>> {
     try {
       const result = await this.functionsClient.callFunction('getVaultAuditLogs', {
@@ -264,7 +264,14 @@ class VaultService {
         limit: options?.limit || 100
       });
       
-      const data = result.data as { logs: any[] };
+      const data = result.data as { logs: Array<{
+        id: string;
+        userId: string;
+        action: string;
+        itemId?: string;
+        timestamp: string | Date;
+        metadata?: Record<string, unknown>;
+      }> };
       return data.logs.map(log => ({
         ...log,
         timestamp: new Date(log.timestamp)
@@ -278,13 +285,21 @@ class VaultService {
   }
   
   // Access share link (for testing)
-  async accessShareLink(shareId: string, password?: string): Promise<any> {
+  async accessShareLink(shareId: string, password?: string): Promise<{
+    item: VaultItem;
+    allowDownload: boolean;
+    expiresAt: Date | null;
+  }> {
     try {
       const result = await this.functionsClient.callFunction('accessVaultShareLink', {
         shareId,
         password
       });
-      return result.data;
+      return result.data as {
+        item: VaultItem;
+        allowDownload: boolean;
+        expiresAt: Date | null;
+      };
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
         action: 'vault-access-share-link',
@@ -295,10 +310,21 @@ class VaultService {
   }
   
   // Access share link with data (for testing)
-  async accessShareLinkWithData(data: any): Promise<any> {
+  async accessShareLinkWithData(data: {
+    shareId: string;
+    password?: string;
+  }): Promise<{
+    item: VaultItem;
+    allowDownload: boolean;
+    expiresAt: Date | null;
+  }> {
     try {
       const result = await this.functionsClient.callFunction('accessVaultShareLink', data);
-      return result.data;
+      return result.data as {
+        item: VaultItem;
+        allowDownload: boolean;
+        expiresAt: Date | null;
+      };
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
         action: 'vault-access-share-link-data'
@@ -308,12 +334,24 @@ class VaultService {
   }
 
   // Get encryption metadata for a file
-  async getEncryptionMetadata(itemId: string): Promise<any> {
+  async getEncryptionMetadata(itemId: string): Promise<{
+    encryptionMetadata: {
+      header: number[];
+      metadata: Record<string, unknown>;
+      encryptionKeyId: string;
+    };
+  }> {
     try {
       const result = await this.functionsClient.callFunction('getVaultItemEncryptionMetadata', {
         itemId
       });
-      return result.data;
+      return result.data as {
+        encryptionMetadata: {
+          header: number[];
+          metadata: Record<string, unknown>;
+          encryptionKeyId: string;
+        };
+      };
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
         action: 'get-encryption-metadata',
@@ -351,7 +389,11 @@ class VaultService {
       // Check if encryption is enabled and handle encryption
       const encryptionEnabled = await this.isEncryptionEnabled();
       let uploadData: File | Blob = file;
-      let encryptionMetadata: any = null;
+      let encryptionMetadata: {
+        header: number[];
+        metadata: Record<string, unknown>;
+        encryptionKeyId: string;
+      } | null = null;
       let encryptionKeyId: string | null = null;
 
       // Pre-generate item ID for encryption
@@ -394,9 +436,7 @@ class VaultService {
         signedUrl, 
         storagePath, 
         itemId, 
-        storageProvider,
-        r2Bucket,
-        r2Key 
+        storageProvider
       } = data as { 
         signedUrl: string; 
         storagePath: string; 
@@ -502,8 +542,8 @@ class VaultService {
                 
                 this.uploadTasks.delete(uploadId);
                 resolve(vaultItem);
-              } catch (error) {
-                reject(error);
+              } catch (innerError) {
+                reject(innerError);
               }
             }
           );
@@ -527,7 +567,11 @@ class VaultService {
     parentId: string | null,
     isEncrypted: boolean,
     encryptionKeyId: string | null,
-    encryptionMetadata: any,
+    encryptionMetadata: {
+      header: number[];
+      metadata: Record<string, unknown>;
+      encryptionKeyId: string;
+    } | null,
     onProgress?: (progress: UploadProgress) => void,
     uploadId?: string
   ): Promise<VaultItem> {
@@ -600,8 +644,8 @@ class VaultService {
               }
               
               resolve(vaultItem);
-            } catch (error) {
-              reject(error);
+            } catch (innerError) {
+              reject(innerError);
             }
           } else {
             reject(new Error(`Upload failed with status: ${xhr.status}`));
@@ -901,8 +945,8 @@ class VaultService {
       const result = await cacheService.getOrSet(
         cacheKey,
         async () => {
-          const result = await this.functionsClient.callFunction('getVaultItems', { parentId, includeDeleted });
-          const data = result.data as { items: VaultItemData[] };
+          const innerResult = await this.functionsClient.callFunction('getVaultItems', { parentId, includeDeleted });
+          const data = innerResult.data as { items: VaultItemData[] };
           
           // Separate files and folders
           const items: VaultItem[] = [];
@@ -1056,7 +1100,7 @@ class VaultService {
     try {
       // If sharing with specific users, use the existing shareVaultItem function
       if (options.userIds && options.userIds.length > 0) {
-        const result = await this.functionsClient.callFunction('shareVaultItem', {
+        await this.functionsClient.callFunction('shareVaultItem', {
           itemId,
           userIds: options.userIds
         });
@@ -1155,10 +1199,28 @@ class VaultService {
     }
   }
 
-  async getMigrationStatus(batchId: string): Promise<any> {
+  async getMigrationStatus(batchId: string): Promise<{
+    batchId: string;
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+    totalItems: number;
+    processedItems: number;
+    failedItems: number;
+    startedAt: Date;
+    completedAt?: Date;
+    errors?: Array<{ itemId: string; error: string }>;
+  }> {
     try {
       const result = await this.functionsClient.callFunction('getVaultMigrationStatus', { batchId });
-      return result.data;
+      return result.data as {
+        batchId: string;
+        status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+        totalItems: number;
+        processedItems: number;
+        failedItems: number;
+        startedAt: Date;
+        completedAt?: Date;
+        errors?: Array<{ itemId: string; error: string }>;
+      };
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.LOW, {
         action: 'vault-migration-status',
@@ -1230,7 +1292,12 @@ class VaultService {
     keyRotation: {
       lastRotation: Date | null;
       rotationCount: number;
-      history: any[];
+      history: Array<{
+        rotatedAt: Date;
+        oldKeyId: string;
+        newKeyId: string;
+        itemsUpdated: number;
+      }>;
     };
     shareLinks: {
       active: number;
@@ -1240,7 +1307,32 @@ class VaultService {
   }> {
     try {
       const result = await this.functionsClient.callFunction('getVaultEncryptionStats', {});
-      return result.data as any;
+      return result.data as {
+        encryption: {
+          totalItems: number;
+          encryptedItems: number;
+          encryptionPercentage: string;
+          totalSize: number;
+          encryptedSize: number;
+          encryptedSizePercentage: string;
+          keyUsage: Array<{ keyId: string; itemCount: number }>;
+        };
+        keyRotation: {
+          lastRotation: Date | null;
+          rotationCount: number;
+          history: Array<{
+            rotatedAt: Date;
+            oldKeyId: string;
+            newKeyId: string;
+            itemsUpdated: number;
+          }>;
+        };
+        shareLinks: {
+          active: number;
+          expired: number;
+          totalAccessCount: number;
+        };
+      };
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.LOW, {
         action: 'vault-encryption-stats'
@@ -1264,7 +1356,19 @@ class VaultService {
   }> {
     try {
       const result = await this.functionsClient.callFunction('getKeyRotationStatus', {});
-      return result.data as any;
+      return result.data as {
+        hasVaultKey: boolean;
+        currentKeyId?: string;
+        requiresRotation: boolean;
+        lastRotation: number | null;
+        nextRotationDue: string | null;
+        hasItemsWithOldKeys?: boolean;
+        recommendations?: Array<{
+          priority: 'high' | 'medium' | 'low';
+          message: string;
+          action: string;
+        }>;
+      };
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.LOW, {
         action: 'vault-key-rotation-status'
@@ -1290,14 +1394,44 @@ class VaultService {
       itemId: string;
       accessCount: number;
     }>;
-    recentShares: any[];
+    recentShares: Array<{
+      shareId: string;
+      itemId: string;
+      createdAt: Date;
+      accessCount: number;
+      expiresAt?: Date;
+    }>;
   }> {
     try {
       const result = await this.functionsClient.callFunction('getShareLinkAnalytics', {
         startDate: startDate?.toISOString(),
         endDate: endDate?.toISOString()
       });
-      return result.data as any;
+      return result.data as {
+        summary: {
+          totalShareLinks: number;
+          totalAccesses: number;
+          activeLinks: number;
+          passwordProtectedLinks: number;
+        };
+        dailyAnalytics: Array<{
+          date: string;
+          created: number;
+          accessed: number;
+          uniqueAccessors: number;
+        }>;
+        topAccessedItems: Array<{
+          itemId: string;
+          accessCount: number;
+        }>;
+        recentShares: Array<{
+          shareId: string;
+          itemId: string;
+          createdAt: Date;
+          accessCount: number;
+          expiresAt?: Date;
+        }>;
+      };
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.LOW, {
         action: 'vault-share-analytics'
@@ -1346,7 +1480,44 @@ class VaultService {
   }> {
     try {
       const result = await this.functionsClient.callFunction('getSystemVaultStats', {});
-      return result.data as any;
+      return result.data as {
+        stats: {
+          users: {
+            total: number;
+            withVaultEncryption: number;
+            withActiveKeys: number;
+          };
+          items: {
+            total: number;
+            encrypted: number;
+            unencrypted: number;
+            totalSize: number;
+            encryptedSize: number;
+          };
+          keys: {
+            total: number;
+            rotatedLastMonth: number;
+            overdue: number;
+          };
+          shareLinks: {
+            total: number;
+            active: number;
+            expired: number;
+            passwordProtected: number;
+          };
+          storage: {
+            firebase: { count: number; size: number };
+            r2: { count: number; size: number };
+          };
+        };
+        summary: {
+          encryptionAdoption: string;
+          itemEncryptionRate: string;
+          sizeEncryptionRate: string;
+          keyRotationCompliance: string;
+          r2MigrationProgress: string;
+        };
+      };
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
         action: 'vault-system-stats'

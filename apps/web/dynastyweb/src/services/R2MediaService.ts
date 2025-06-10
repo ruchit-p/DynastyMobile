@@ -118,8 +118,7 @@ class R2MediaService {
       const { 
         signedUrl, 
         storagePath, 
-        storageProvider,
-        itemId
+        storageProvider
       } = uploadData as { 
         signedUrl: string; 
         storagePath: string;
@@ -184,9 +183,9 @@ class R2MediaService {
           
           // Extract the key from the signed URL
           // R2 signed URLs contain the full path in the URL
-          const url = new URL(signedUrl);
-          const pathParts = url.pathname.split('/');
-          const key = pathParts.slice(2).join('/'); // Remove bucket name
+          // const url = new URL(signedUrl);
+          // const pathParts = url.pathname.split('/');
+          // const key = pathParts.slice(2).join('/'); // Remove bucket name
           
           // Generate public URL (assuming public bucket or signed URL will be generated on access)
           const publicUrl = signedUrl.split('?')[0]; // Remove query params
