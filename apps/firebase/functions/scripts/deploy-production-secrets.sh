@@ -42,13 +42,23 @@ firebase functions:config:set \
     security.database_secret="$DB_ENCRYPTION_KEY" \
     security.api_salt="$API_KEY_SALT"
 
-# SendGrid configuration (JSON format as used in your app)
-if [ ! -z "$SENDGRID_CONFIG" ]; then
-    echo "Setting SendGrid configuration..."
-    firebase functions:config:set \
-        sendgrid.config="$SENDGRID_CONFIG"
+# AWS SES configuration (using Firebase Secrets for production)
+if [ ! -z "$EMAIL_PROVIDER" ]; then
+    echo "Setting email provider configuration..."
+    echo "$EMAIL_PROVIDER" | firebase functions:secrets:set EMAIL_PROVIDER
+    
+    # Create SES config JSON
+    SES_CONFIG_JSON=$(cat <<EOF
+{
+  "region": "${SES_REGION:-us-east-1}",
+  "fromEmail": "${SES_FROM_EMAIL:-noreply@mydynastyapp.com}",
+  "fromName": "${SES_FROM_NAME:-Dynasty App}"
+}
+EOF
+)
+    echo "$SES_CONFIG_JSON" | firebase functions:secrets:set SES_CONFIG
 else
-    echo "⚠️  SendGrid config not provided - email functionality will be disabled"
+    echo "⚠️  Email provider not configured - using default AWS SES"
 fi
 
 # FingerprintJS configuration

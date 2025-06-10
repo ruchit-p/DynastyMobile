@@ -274,5 +274,50 @@ service cloud.firestore {
       allow read: if isSignedIn() && userId == request.auth.uid;
       allow write: if false; // Only through Cloud Functions
     }
+    
+    // Vault Items
+    match /vaultItems/{itemId} {
+      allow read: if isSignedIn() && 
+        (resource.data.userId == request.auth.uid ||
+         request.auth.uid in resource.data.sharedWith);
+      allow write: if isSignedIn() && 
+        request.auth.uid == resource.data.userId;
+    }
+    
+    // Vault Encryption Keys
+    match /vaultKeys/{userId} {
+      allow read, write: if isSignedIn() && 
+        request.auth.uid == userId;
+    }
+    
+    // Vault Audit Logs
+    match /vaultAuditLogs/{logId} {
+      allow read: if isSignedIn() && 
+        resource.data.userId == request.auth.uid;
+      allow write: if false; // Only through functions
+    }
+    
+    // Vault Security Incidents
+    match /vaultSecurityIncidents/{incidentId} {
+      allow read: if isSignedIn() && 
+        request.auth.uid in resource.data.admins;
+      allow write: if false; // Only through functions
+    }
+    
+    // Vault Share Links
+    match /vaultShareLinks/{linkId} {
+      allow read: if isSignedIn() && 
+        (resource.data.createdBy == request.auth.uid ||
+         resource.data.isPublic == true);
+      allow write: if false; // Only through functions
+    }
+    
+    // Vault File Metadata
+    match /vaultFileMetadata/{fileId} {
+      allow read: if isSignedIn() && 
+        (resource.data.ownerId == request.auth.uid ||
+         request.auth.uid in resource.data.sharedWith);
+      allow write: if false; // Only through functions
+    }
   }
 }

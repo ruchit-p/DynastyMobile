@@ -1,7 +1,6 @@
 import {onCall} from "firebase-functions/v2/https";
 import {getFirestore, Timestamp, FieldValue} from "firebase-admin/firestore";
 import {logger} from "firebase-functions/v2";
-// import * as functions from "firebase-functions/v1"; // No longer needed for HttpsError
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
 import {ErrorCode, createError, withErrorHandling} from "./utils/errors";
 import {withAuth, withResourceAccess, PermissionLevel, RateLimitType} from "./middleware";

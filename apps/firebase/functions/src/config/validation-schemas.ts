@@ -408,6 +408,48 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
     xssCheck: false,
   },
 
+  storeVaultItemEncryptionMetadata: {
+    rules: [
+      {field: "itemId", type: "id", required: true},
+      {field: "encryptionMetadata", type: "object", required: true},
+    ],
+    xssCheck: false,
+  },
+
+  getVaultItemEncryptionMetadata: {
+    rules: [
+      {field: "itemId", type: "id", required: true},
+    ],
+    xssCheck: false,
+  },
+
+  createVaultShareLink: {
+    rules: [
+      {field: "itemId", type: "id", required: true},
+      {field: "expiresAt", type: "string"},
+      {field: "allowDownload", type: "boolean"},
+      {field: "password", type: "string", maxLength: 100},
+    ],
+    xssCheck: false,
+  },
+
+  accessVaultShareLink: {
+    rules: [
+      {field: "shareId", type: "string", required: true, maxLength: 50},
+      {field: "password", type: "string", maxLength: 100},
+    ],
+    xssCheck: false,
+  },
+
+
+  getVaultDownloadUrl: {
+    rules: [
+      {field: "itemId", type: "id"},
+      {field: "storagePath", type: "string", maxLength: 500},
+    ],
+    xssCheck: false,
+  },
+
   cleanupDeletedVaultItems: {
     rules: [
       {field: "olderThanDays", type: "number"},
@@ -1291,5 +1333,104 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
       {field: "message", type: "string", required: true, maxLength: 2000},
     ],
     xssCheck: true,
+  },
+
+  // R2 Migration Schemas
+  startVaultMigration: {
+    rules: [
+      {field: "userId", type: "id"},
+      {field: "batchSize", type: "number"},
+      {field: "maxRetries", type: "number"},
+      {field: "dryRun", type: "boolean"},
+      {field: "filter", type: "object"},
+    ],
+    xssCheck: false,
+  },
+
+  getVaultMigrationStatus: {
+    rules: [
+      {field: "batchId", type: "string", required: true, maxLength: 100},
+    ],
+    xssCheck: false,
+  },
+
+  cancelVaultMigration: {
+    rules: [
+      {field: "batchId", type: "string", required: true, maxLength: 100},
+    ],
+    xssCheck: false,
+  },
+
+  verifyVaultMigration: {
+    rules: [
+      {field: "itemId", type: "id", required: true},
+    ],
+    xssCheck: false,
+  },
+
+  rollbackVaultMigration: {
+    rules: [
+      {field: "itemId", type: "id", required: true},
+    ],
+    xssCheck: false,
+  },
+
+  // Vault Monitoring & Analytics Schemas
+  getVaultEncryptionStats: {
+    rules: [],
+    xssCheck: false,
+  },
+
+  getKeyRotationStatus: {
+    rules: [],
+    xssCheck: false,
+  },
+
+  getShareLinkAnalytics: {
+    rules: [
+      {field: "startDate", type: "date"},
+      {field: "endDate", type: "date"},
+    ],
+    xssCheck: false,
+  },
+
+  getSystemVaultStats: {
+    rules: [],
+    xssCheck: false,
+  },
+
+  // Vault security monitoring
+  getVaultAuditLogs: {
+    rules: [
+      {field: "startDate", type: "string"},
+      {field: "endDate", type: "string"},
+      {field: "action", type: "string", maxLength: 50},
+      {field: "itemId", type: "id"},
+      {field: "limit", type: "number"},
+    ],
+    xssCheck: false,
+  },
+
+  reportSecurityIncident: {
+    rules: [
+      {field: "type", type: "enum", required: true,
+        enumValues: ["suspicious_access", "rate_limit_violation", "encryption_failure", "unauthorized_attempt", "data_breach_attempt"]},
+      {field: "severity", type: "enum", required: true,
+        enumValues: ["low", "medium", "high", "critical"]},
+      {field: "details", type: "string", required: true, maxLength: 1000},
+      {field: "affectedItemId", type: "id"},
+      {field: "metadata", type: "object"},
+    ],
+    xssCheck: true,
+  },
+
+  configureSecurityAlerts: {
+    rules: [
+      {field: "alertType", type: "string", required: true, maxLength: 50},
+      {field: "enabled", type: "boolean", required: true},
+      {field: "threshold", type: "number"},
+      {field: "channels", type: "array", required: true, maxSize: 10},
+    ],
+    xssCheck: false,
   },
 };

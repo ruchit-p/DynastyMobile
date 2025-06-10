@@ -55,6 +55,32 @@ export function getCorsConfig() {
     return validOrigins;
   }
 
+  // In staging, use specific allowed origins
+  if (process.env.NODE_ENV === "staging") {
+    const envOrigins = process.env.ALLOWED_ORIGINS?.split(",").map((origin) => origin.trim()).filter(Boolean) || [];
+
+    // Default staging origins
+    const defaultOrigins = [
+      "https://dynastytest.com",
+      "https://www.dynastytest.com",
+      "https://dynasty-staging.vercel.app",
+    ];
+
+    // Combine and deduplicate origins
+    const allOrigins = [...new Set([...envOrigins, ...defaultOrigins])];
+
+    // Filter out invalid origins
+    const validOrigins = allOrigins.filter(isValidOrigin);
+
+    if (validOrigins.length === 0) {
+      logger.error("No valid CORS origins configured for staging, falling back to defaults");
+      return defaultOrigins;
+    }
+
+    logger.info("CORS configured for staging origins", {validOrigins});
+    return validOrigins;
+  }
+
   // In development, allow all origins
   logger.debug("CORS configured for development (all origins)");
   return true;

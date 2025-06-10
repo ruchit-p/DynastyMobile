@@ -1,74 +1,166 @@
 import {Ratelimit} from "@upstash/ratelimit";
 import {Redis} from "@upstash/redis";
-import * as functions from "firebase-functions";
+import {defineSecret} from "firebase-functions/params";
 import {SecurityError} from "../utils/errors";
 
-// Initialize Redis client
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL || functions.config().upstash?.redis_url || "";
-const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || functions.config().upstash?.redis_token || "";
+// Define secrets for Upstash Redis
+export const UPSTASH_REDIS_REST_URL = defineSecret("UPSTASH_REDIS_REST_URL");
+export const UPSTASH_REDIS_REST_TOKEN = defineSecret("UPSTASH_REDIS_REST_TOKEN");
 
-if (!redisUrl || !redisToken) {
-  throw new Error("Redis configuration is missing. Please set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables.");
+// Lazy initialization of Redis client
+let redis: Redis | null = null;
+let isInitialized = false;
+
+function getRedisClient(): Redis {
+  if (!isInitialized) {
+    // Try to get config from environment first (for local development)
+    let redisUrl = process.env.UPSTASH_REDIS_REST_URL || "";
+    let redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || "";
+
+    // In production, use the secret values
+    if (UPSTASH_REDIS_REST_URL.value()) {
+      redisUrl = UPSTASH_REDIS_REST_URL.value();
+    }
+    if (UPSTASH_REDIS_REST_TOKEN.value()) {
+      redisToken = UPSTASH_REDIS_REST_TOKEN.value();
+    }
+
+    if (!redisUrl || !redisToken) {
+      throw new Error("Redis configuration is missing. Please set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables or secrets.");
+    }
+
+    redis = new Redis({
+      url: redisUrl,
+      token: redisToken,
+    });
+    isInitialized = true;
+  }
+
+  return redis!;
 }
 
-const redis = new Redis({
-  url: redisUrl,
-  token: redisToken,
-});
+// Lazy initialization of rate limiters
+let rateLimiters: Record<string, Ratelimit> | null = null;
 
-// Different rate limiters for different operations
-const rateLimiters = {
-  // Auth operations: 5 attempts per 15 minutes
-  auth: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(5, "15 m"),
-    prefix: "@dynasty/auth",
-  }),
+function getRateLimiters() {
+  if (!rateLimiters) {
+    const redis = getRedisClient();
 
-  // API calls: 100 requests per minute
-  api: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(100, "1 m"),
-    prefix: "@dynasty/api",
-  }),
+    rateLimiters = {
+      // Auth operations: 5 attempts per 5 minutes (aligned with security-config)
+      auth: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(5, "5 m"),
+        prefix: "@dynasty/auth",
+      }),
 
-  // Media uploads: 10 per hour
-  media: new Ratelimit({
-    redis,
-    limiter: Ratelimit.tokenBucket(10, "1 h", 10),
-    prefix: "@dynasty/media",
-  }),
+      // API calls: 60 requests per minute (aligned with security-config)
+      api: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(60, "1 m"),
+        prefix: "@dynasty/api",
+      }),
 
-  // Write operations: 30 per minute
-  write: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(30, "1 m"),
-    prefix: "@dynasty/write",
-  }),
+      // Media/Upload operations: 10 per 5 minutes (aligned with security-config)
+      media: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(10, "5 m"),
+        prefix: "@dynasty/media",
+      }),
+      
+      // Alias for media (backward compatibility)
+      upload: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(10, "5 m"),
+        prefix: "@dynasty/media",
+      }),
 
-  // Sensitive operations (password reset, etc): 3 per hour
-  sensitive: new Ratelimit({
-    redis,
-    limiter: Ratelimit.fixedWindow(3, "1 h"),
-    prefix: "@dynasty/sensitive",
-  }),
+      // Write operations: 30 per minute (already aligned)
+      write: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(30, "1 m"),
+        prefix: "@dynasty/write",
+      }),
 
-  // SMS/Phone verification: 3 per hour
-  sms: new Ratelimit({
-    redis,
-    limiter: Ratelimit.fixedWindow(3, "1 h"),
-    prefix: "@dynasty/sms",
-  }),
+      // Sensitive operations (password reset, etc): 3 per hour
+      sensitive: new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(3, "1 h"),
+        prefix: "@dynasty/sensitive",
+      }),
 
-  // Support messages: 3 per 6 hours
-  support: new Ratelimit({
-    redis,
-    limiter: Ratelimit.fixedWindow(3, "6 h"),
-    prefix: "@dynasty/support",
-  }),
-};
+      // SMS/Phone verification: 3 per hour
+      sms: new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(3, "1 h"),
+        prefix: "@dynasty/sms",
+      }),
 
-export type RateLimitType = keyof typeof rateLimiters
+      // Support messages: 3 per 6 hours
+      support: new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(3, "6 h"),
+        prefix: "@dynasty/support",
+      }),
+
+      // Signal Protocol rate limits
+      signalKeyPublish: new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(3, "1 h"),
+        prefix: "@dynasty/signal/key-publish",
+      }),
+
+      signalKeyRetrieve: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(20, "1 h"),
+        prefix: "@dynasty/signal/key-retrieve",
+      }),
+
+      signalVerification: new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(5, "24 h"),
+        prefix: "@dynasty/signal/verification",
+      }),
+
+      signalMaintenance: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(10, "1 m"),
+        prefix: "@dynasty/signal/maintenance",
+      }),
+
+      // Email verification rate limits
+      emailVerificationSend: new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(3, "1 h"),
+        prefix: "@dynasty/email/send",
+      }),
+
+      emailVerificationVerify: new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(10, "1 h"),
+        prefix: "@dynasty/email/verify",
+      }),
+    };
+  }
+
+  return rateLimiters;
+}
+
+export type RateLimitType = 
+  | "auth" 
+  | "api" 
+  | "media" 
+  | "upload" 
+  | "write" 
+  | "sensitive" 
+  | "sms" 
+  | "support"
+  | "signalKeyPublish"
+  | "signalKeyRetrieve"
+  | "signalVerification"
+  | "signalMaintenance"
+  | "emailVerificationSend"
+  | "emailVerificationVerify"
 
 interface RateLimitOptions {
   type: RateLimitType
@@ -96,7 +188,8 @@ export async function checkRateLimit(options: RateLimitOptions): Promise<{
     };
   }
 
-  const rateLimiter = rateLimiters[type];
+  const limiters = getRateLimiters();
+  const rateLimiter = limiters[type];
   if (!rateLimiter) {
     throw new Error(`Invalid rate limit type: ${type}`);
   }
@@ -188,16 +281,24 @@ export async function resetRateLimit(type: RateLimitType, identifier: string): P
     auth: "@dynasty/auth",
     api: "@dynasty/api",
     media: "@dynasty/media",
+    upload: "@dynasty/media", // Same as media
     write: "@dynasty/write",
     sensitive: "@dynasty/sensitive",
     sms: "@dynasty/sms",
     support: "@dynasty/support",
+    signalKeyPublish: "@dynasty/signal/key-publish",
+    signalKeyRetrieve: "@dynasty/signal/key-retrieve",
+    signalVerification: "@dynasty/signal/verification",
+    signalMaintenance: "@dynasty/signal/maintenance",
+    emailVerificationSend: "@dynasty/email/send",
+    emailVerificationVerify: "@dynasty/email/verify",
   };
 
   const prefix = prefixMap[type];
   const key = `${prefix}:${identifier}`;
 
   try {
+    const redis = getRedisClient();
     await redis.del(key);
   } catch (error) {
     console.error("Failed to reset rate limit:", error);
@@ -211,7 +312,8 @@ export async function getRateLimitStatus(type: RateLimitType, identifier: string
   remaining: number
   reset: number
 }> {
-  const rateLimiter = rateLimiters[type];
+  const limiters = getRateLimiters();
+  const rateLimiter = limiters[type];
 
   try {
     // Check without consuming

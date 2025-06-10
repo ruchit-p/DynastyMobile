@@ -107,10 +107,10 @@ export class NotionService {
       const logRef = db.collection("supportTicketLogs").doc();
       const ticketLog: SupportTicketLog = {
         id: logRef.id,
-        ...(data.userId && { userId: data.userId }),
+        ...(data.userId && {userId: data.userId}),
         name: data.name,
-        ...(data.email && { email: data.email }),
-        ...(data.phone && { phone: data.phone }),
+        ...(data.email && {email: data.email}),
+        ...(data.phone && {phone: data.phone}),
         category: data.category || "other",
         message: data.message,
         status: "submitted",
