@@ -28,6 +28,7 @@ import {
   validateItemId,
   validateShareId,
 } from "./utils/vault-sanitization";
+import {fileSecurityService} from "./services/fileSecurityService";
 
 // MARK: - Types
 interface VaultItem {
@@ -668,9 +669,6 @@ export const addVaultFile = onCall(
 
       await itemRef.update(updateData);
 
-      // SECURITY SCAN DISABLED FOR DEVELOPMENT
-      // Comment out the entire security scan block to allow file uploads
-      /*
       // Perform security scan on the uploaded file
       try {
         logger.info("Starting security scan for file", createLogContext({
@@ -822,15 +820,10 @@ export const addVaultFile = onCall(
           "File security scan failed. File has been rejected for safety."
         );
       }
-      */
 
-      // Skip security scan for development - directly update as safe
-      await itemRef.update({
-        lastScannedAt: FieldValue.serverTimestamp(),
-        scanResult: "safe",
-      });
+      // Security scan completed successfully
 
-      logger.info("File upload completed (security scan bypassed for development)", createLogContext({
+      logger.info("File upload completed with security scan", createLogContext({
         fileName: existingItem.name,
         userId: uid,
       }));
@@ -2051,7 +2044,7 @@ export const createVaultShareLink = onCall(
     await db.collection("vaultSharedLinks").doc(shareId).set(shareData);
 
     // Construct share URL
-    const shareLink = `${process.env.FRONTEND_URL || "https://app.mydynastyapp.com"}/vault/share/${shareId}`;
+    const shareLink = `${process.env.FRONTEND_URL || "https://mydynastyapp.com"}/vault/share/${shareId}`;
 
     // Audit log
     await db.collection("vaultAuditLogs").add({

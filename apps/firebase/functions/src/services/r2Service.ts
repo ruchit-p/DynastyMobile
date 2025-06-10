@@ -239,30 +239,30 @@ export class R2Service {
     try {
       const config = getR2Config();
       const bucket = config.baseBucket;
-      
+
       // Try to list objects with a very small limit to test connectivity
       const command = new ListObjectsV2Command({
         Bucket: bucket,
         MaxKeys: 1,
       });
-      
+
       // Create a promise that rejects after timeout
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error("R2 connectivity check timeout")), timeout);
       });
-      
+
       // Race between the actual request and timeout
       await Promise.race([
         this.s3Client.send(command),
         timeoutPromise,
       ]);
-      
-      logger.info("R2 connectivity check succeeded", { bucket });
+
+      logger.info("R2 connectivity check succeeded", {bucket});
       return true;
     } catch (error) {
-      logger.warn("R2 connectivity check failed", { 
+      logger.warn("R2 connectivity check failed", {
         error: error instanceof Error ? error.message : "Unknown error",
-        timeout 
+        timeout,
       });
       return false;
     }

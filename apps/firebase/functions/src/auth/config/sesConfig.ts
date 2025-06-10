@@ -48,7 +48,7 @@ export function getSESConfig(): SESConfigData {
     const config: SESConfigData = {
       region: process.env.AWS_REGION || process.env.SES_REGION || "us-east-2",
       fromEmail: getFromEmail(),
-      fromName: process.env.SES_FROM_NAME || "Dynasty App",
+      fromName: process.env.SES_FROM_NAME || "My Dynasty App",
     };
 
     // Only add credentials if explicitly provided (for local testing)
@@ -68,7 +68,7 @@ export function getSESConfig(): SESConfigData {
     return {
       region: config.region || "us-east-2",
       fromEmail: config.fromEmail,
-      fromName: config.fromName || "Dynasty App",
+      fromName: config.fromName || "My Dynasty App",
       // Don't include credentials in production - use IAM roles
     };
   } catch (e) {
@@ -77,7 +77,7 @@ export function getSESConfig(): SESConfigData {
     return {
       region: process.env.AWS_REGION || "us-east-2",
       fromEmail: getFromEmail(),
-      fromName: "Dynasty App",
+      fromName: "My Dynasty App",
     };
   }
 }
