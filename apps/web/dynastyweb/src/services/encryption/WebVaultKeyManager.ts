@@ -43,6 +43,7 @@ export interface VaultConfiguration {
   keyRotationEnabled: boolean;
   keyRotationIntervalDays: number;
   autoLockTimeoutMinutes: number;
+  currentKeyId?: string;
 }
 
 export interface BiometricCredential {
@@ -573,6 +574,54 @@ export class WebVaultKeyManager {
       errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
         action: 'retrieve-vault-configuration',
         userId
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Retrieve vault master key by version
+   * Used for key rotation and decrypting old files
+   */
+  async retrieveKeyByVersion(keyId: string, version: number): Promise<Uint8Array | null> {
+    await this.initialize();
+    
+    try {
+      const transaction = this.db!.transaction([VAULT_KEYS_STORE], 'readonly');
+      const store = transaction.objectStore(VAULT_KEYS_STORE);
+      
+      return new Promise<Uint8Array | null>((resolve, reject) => {
+        const request = store.get(keyId);
+        request.onsuccess = async () => {
+          const keyInfo = request.result as VaultKeyInfo;
+          if (!keyInfo || keyInfo.version !== version.toString()) {
+            resolve(null);
+            return;
+          }
+
+          // Try to get key from session storage first
+          const sessionKey = sessionStorage.getItem(`${SESSION_STORAGE_PREFIX}${keyInfo.userId}_${keyId}`);
+          if (sessionKey) {
+            try {
+              const keyData = JSON.parse(sessionKey);
+              resolve(new Uint8Array(keyData));
+              return;
+            } catch {
+              // Continue to decrypt from stored key
+            }
+          }
+
+          // If we have a password in memory, decrypt the stored key
+          // Note: In production, this would require re-authentication
+          resolve(null);
+        };
+        request.onerror = () => reject(request.error);
+      });
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
+        action: 'retrieve-key-by-version',
+        keyId,
+        version
       });
       return null;
     }

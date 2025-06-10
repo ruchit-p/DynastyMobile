@@ -73,7 +73,7 @@ echo ""
 echo "📧 Checking external service configuration..."
 
 # External services (optional but recommended)
-check_config "sendgrid.config" "SendGrid Configuration (JSON)" false
+# Email configuration now uses Firebase Secrets (EMAIL_PROVIDER and SES_CONFIG)
 check_config "fingerprint.api_key" "FingerprintJS API Key" false
 check_config "google.places_api_key" "Google Places API Key" false
 
@@ -104,9 +104,7 @@ if [ $ERRORS -eq 0 ]; then
     echo "   firebase deploy --only functions $STAGING_PROJECT"
     echo ""
     echo "🔧 Optional improvements:"
-    if ! echo "$CONFIG" | jq -e '.sendgrid.config' >/dev/null; then
-        echo "   - Configure SendGrid for email functionality"
-    fi
+    # Email configuration is now managed via Firebase Secrets
     if ! echo "$CONFIG" | jq -e '.fingerprint.api_key' >/dev/null; then
         echo "   - Configure FingerprintJS for device security"
     fi

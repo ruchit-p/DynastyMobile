@@ -181,6 +181,7 @@ export default function FilePreview({ item, isOpen, onClose, onDownload, onShare
                 height={600}
                 className="max-h-96 w-auto object-contain"
                 priority
+                unoptimized={true}
               />
             </div>
           )}

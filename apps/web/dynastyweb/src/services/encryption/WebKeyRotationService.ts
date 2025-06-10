@@ -1,6 +1,7 @@
 // Web Key Rotation Service for Dynasty Web App
 // Provides automatic key rotation, warning system, and lifecycle management
 
+import sodium from 'libsodium-wrappers-sumo';
 import { WebVaultCryptoService } from './VaultCryptoService';
 import { WebVaultKeyManager } from './WebVaultKeyManager';
 import { errorHandler, ErrorSeverity } from '../ErrorHandlingService';
@@ -418,15 +419,79 @@ export class WebKeyRotationService {
 
   /**
    * Try to decrypt with any available key
+   * Used for re-encrypting files during key rotation
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async decryptWithAnyKey(_encryptedData: ArrayBuffer): Promise<ArrayBuffer | null> {
-    // TODO: Implement proper decryption with libsodium
-    // The current implementation incorrectly tries to use Web Crypto API
-    // with raw ArrayBuffer keys instead of CryptoKey objects
+  async decryptWithAnyKey(
+    encryptedData: Uint8Array,
+    header: Uint8Array,
+    fileId: string
+  ): Promise<Uint8Array | null> {
+    const allKeys = await this.getAllVaultKeys();
     
-    console.warn('[WebKeyRotation] decryptWithAnyKey not implemented');
-    return null;
+    for (const keyInfo of allKeys) {
+      try {
+        // Retrieve the master key for this key version
+        const masterKey = await this.keyManager.retrieveKeyByVersion(
+          keyInfo.keyId,
+          keyInfo.version
+        );
+        
+        if (!masterKey) continue;
+        
+        // Derive file key using the master key
+        const fileKey = this.cryptoService.deriveFileKey(masterKey, fileId);
+        
+        // Attempt decryption with libsodium
+        // Note: We need to use libsodium directly since ensureSodiumReady is private
+        await sodium.ready;
+        const state = sodium.crypto_secretstream_xchacha20poly1305_init_pull(
+          header, 
+          fileKey
+        );
+        
+        const result = sodium.crypto_secretstream_xchacha20poly1305_pull(
+          state, 
+          encryptedData
+        );
+        
+        if (result && result.message) {
+          // Successfully decrypted
+          this.cryptoService.memzero(fileKey);
+          return result.message;
+        }
+      } catch (error) {
+        // Decryption failed with this key, try next
+        continue;
+      }
+    }
+    
+    return null; // No key could decrypt
+  }
+  
+  /**
+   * Get all vault keys from key manager
+   */
+  async getAllVaultKeys(): Promise<Array<{keyId: string; version: number}>> {
+    try {
+      const keyIds = JSON.parse(localStorage.getItem(STORAGE_KEYS.KEY_LIST) || '[]');
+      const vaultKeys = [];
+      
+      for (const keyId of keyIds) {
+        const keyData = localStorage.getItem(`dynasty_key_${keyId}`);
+        if (keyData) {
+          const parsed = JSON.parse(keyData);
+          vaultKeys.push({
+            keyId: parsed.id,
+            version: parsed.version
+          });
+        }
+      }
+      
+      return vaultKeys;
+    } catch (error) {
+      console.error('[WebKeyRotation] Failed to get vault keys:', error);
+      return [];
+    }
   }
 
   // MARK: - Storage Management
