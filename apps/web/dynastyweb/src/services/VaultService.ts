@@ -94,6 +94,8 @@ class VaultService {
   private downloadCache = new Map<string, Blob>();
   private maxFileSize = 100 * 1024 * 1024; // 100MB
   private functionsClient: FirebaseFunctionsClient;
+  private encryptionEnabled: boolean | null = null;
+  private userId: string | null = null;
 
   private constructor() {
     // Initialize Firebase Functions client
@@ -111,12 +113,232 @@ class VaultService {
     return VaultService.instance;
   }
 
+  // Set current user ID for encryption operations
+  setUserId(userId: string) {
+    this.userId = userId;
+  }
+
+  // Check if encryption is enabled for the current user
+  async isEncryptionEnabled(): Promise<boolean> {
+    if (this.encryptionEnabled !== null) {
+      return this.encryptionEnabled;
+    }
+
+    try {
+      // Check if user has vault encryption setup
+      const result = await this.functionsClient.callFunction('getVaultEncryptionStatus', {});
+      const data = result.data as { encryptionEnabled: boolean };
+      this.encryptionEnabled = data.encryptionEnabled;
+      return this.encryptionEnabled;
+    } catch (error) {
+      // Default to false if we can't determine status
+      errorHandler.handleError(error, ErrorSeverity.LOW, {
+        action: 'check-encryption-status'
+      });
+      return false;
+    }
+  }
+  
+  // Validate path to prevent directory traversal
+  validatePath(path: string): void {
+    // Normalize path
+    const normalizedPath = path.replace(/\\/g, '/');
+    
+    // Check for directory traversal patterns
+    const traversalPatterns = [
+      '..',
+      '..%2F',
+      '..%2f',
+      '%2e%2e',
+      '.%2e',
+      '%2e.',
+      '..\\',
+      '..%5C',
+      '..%5c',
+      '%2e%2e%2f',
+      '%2e%2e/',
+      '../',
+      '..\\/',
+      '..%00',
+      '%00..'
+    ];
+    
+    const lowerPath = normalizedPath.toLowerCase();
+    for (const pattern of traversalPatterns) {
+      if (lowerPath.includes(pattern.toLowerCase())) {
+        throw new Error('Invalid path: Directory traversal attempt detected');
+      }
+    }
+    
+    // Check for absolute paths
+    if (normalizedPath.startsWith('/') && !normalizedPath.startsWith('/vault/')) {
+      throw new Error('Invalid path: Absolute paths not allowed');
+    }
+    
+    // Check for special characters that might be used in attacks
+    const invalidChars = /[\x00-\x1f\x7f-\x9f]/;
+    if (invalidChars.test(normalizedPath)) {
+      throw new Error('Invalid path: Contains invalid characters');
+    }
+  }
+  
+  // Validate MIME type
+  isValidMimeType(mimeType: string): boolean {
+    // List of dangerous MIME types to block
+    const dangerousMimeTypes = [
+      'application/x-executable',
+      'application/x-msdownload',
+      'application/x-msdos-program',
+      'text/html',
+      'application/javascript',
+      'application/x-javascript',
+      'text/javascript',
+      'application/x-httpd-php',
+      'application/x-sh',
+      'application/x-bat',
+      'application/x-csh',
+      'application/x-shellscript',
+      'application/x-perl',
+      'application/x-python',
+      'application/x-ruby',
+      'application/hta',
+      'application/x-ms-application',
+      'application/x-silverlight',
+      'application/x-shockwave-flash'
+    ];
+    
+    return !dangerousMimeTypes.includes(mimeType.toLowerCase());
+  }
+  
+  // Detect actual MIME type (basic implementation)
+  async detectActualMimeType(file: File): Promise<string> {
+    // Read first few bytes to detect file signature
+    const slice = file.slice(0, 512);
+    const bytes = new Uint8Array(await slice.arrayBuffer());
+    
+    // Check for common file signatures
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) {
+      return 'image/png';
+    }
+    if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) {
+      return 'image/jpeg';
+    }
+    if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
+      return 'image/gif';
+    }
+    if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) {
+      return 'application/pdf';
+    }
+    
+    // Check for HTML content
+    const text = new TextDecoder().decode(bytes).toLowerCase();
+    if (text.includes('<html') || text.includes('<!doctype html') || text.includes('<script')) {
+      return 'text/html';
+    }
+    
+    // Default to declared type
+    return file.type;
+  }
+  
+  // Get audit logs
+  async getAuditLogs(options?: {
+    startDate?: Date;
+    endDate?: Date;
+    action?: string;
+    itemId?: string;
+    limit?: number;
+  }): Promise<Array<{
+    id: string;
+    userId: string;
+    action: string;
+    itemId?: string;
+    timestamp: Date;
+    metadata?: any;
+  }>> {
+    try {
+      const result = await this.functionsClient.callFunction('getVaultAuditLogs', {
+        startDate: options?.startDate?.toISOString(),
+        endDate: options?.endDate?.toISOString(),
+        action: options?.action,
+        itemId: options?.itemId,
+        limit: options?.limit || 100
+      });
+      
+      const data = result.data as { logs: any[] };
+      return data.logs.map(log => ({
+        ...log,
+        timestamp: new Date(log.timestamp)
+      }));
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.LOW, {
+        action: 'vault-get-audit-logs'
+      });
+      throw error;
+    }
+  }
+  
+  // Access share link (for testing)
+  async accessShareLink(shareId: string, password?: string): Promise<any> {
+    try {
+      const result = await this.functionsClient.callFunction('accessVaultShareLink', {
+        shareId,
+        password
+      });
+      return result.data;
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
+        action: 'vault-access-share-link',
+        shareId
+      });
+      throw error;
+    }
+  }
+  
+  // Access share link with data (for testing)
+  async accessShareLinkWithData(data: any): Promise<any> {
+    try {
+      const result = await this.functionsClient.callFunction('accessVaultShareLink', data);
+      return result.data;
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
+        action: 'vault-access-share-link-data'
+      });
+      throw error;
+    }
+  }
+
+  // Get encryption metadata for a file
+  async getEncryptionMetadata(itemId: string): Promise<any> {
+    try {
+      const result = await this.functionsClient.callFunction('getVaultItemEncryptionMetadata', {
+        itemId
+      });
+      return result.data;
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
+        action: 'get-encryption-metadata',
+        itemId
+      });
+      throw error;
+    }
+  }
+
   // File Operations
 
   async uploadFile(
     file: File,
     parentId: string | null = null,
-    onProgress?: (progress: UploadProgress) => void
+    onProgress?: (progress: UploadProgress) => void,
+    encryptionOptions?: {
+      encrypt: (file: File, fileId: string) => Promise<{
+        success: boolean;
+        encryptedFile?: Uint8Array;
+        header?: Uint8Array;
+        metadata?: Record<string, unknown>;
+        error?: string;
+      }>;
+      getCurrentKeyId: () => Promise<string>;
+    }
   ): Promise<VaultItem> {
     // Validate file size
     if (file.size > this.maxFileSize) {
@@ -126,91 +348,167 @@ class VaultService {
     const uploadId = `upload-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     try {
+      // Check if encryption is enabled and handle encryption
+      const encryptionEnabled = await this.isEncryptionEnabled();
+      let uploadData: File | Blob = file;
+      let encryptionMetadata: any = null;
+      let encryptionKeyId: string | null = null;
+
+      // Pre-generate item ID for encryption
+      const preGeneratedItemId = `vault-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      if (encryptionEnabled && encryptionOptions) {
+        // Encrypt the file
+        const encryptionResult = await encryptionOptions.encrypt(file, preGeneratedItemId);
+        
+        if (!encryptionResult.success) {
+          throw new Error(encryptionResult.error || 'Encryption failed');
+        }
+
+        // Convert encrypted data to Blob for upload
+        uploadData = new Blob([encryptionResult.encryptedFile!], { 
+          type: 'application/octet-stream' 
+        });
+        
+        // Get current encryption key ID
+        encryptionKeyId = await encryptionOptions.getCurrentKeyId();
+        
+        // Store encryption metadata
+        encryptionMetadata = {
+          header: Array.from(encryptionResult.header!),
+          metadata: encryptionResult.metadata,
+          encryptionKeyId
+        };
+      }
+
       // Get upload URL from backend
       const { data } = await this.functionsClient.callFunction('getVaultUploadSignedUrl', {
         fileName: file.name,
         mimeType: file.type,
-        fileSize: file.size,
-        parentId
+        fileSize: uploadData.size,
+        parentId,
+        isEncrypted: encryptionEnabled && encryptionOptions !== undefined
       });
 
-      const { storagePath, itemId } = data as { signedUrl: string; storagePath: string; itemId: string };
+      const { 
+        signedUrl, 
+        storagePath, 
+        itemId, 
+        storageProvider,
+        r2Bucket,
+        r2Key 
+      } = data as { 
+        signedUrl: string; 
+        storagePath: string; 
+        itemId: string;
+        storageProvider: 'firebase' | 'r2';
+        r2Bucket?: string;
+        r2Key?: string;
+      };
 
-      // Upload to Firebase Storage
-      const storageRef = ref(storage, storagePath);
-      const uploadTask = uploadBytesResumable(storageRef, file, {
-        contentType: file.type,
-        customMetadata: {
-          originalName: file.name,
-          uploadedBy: 'web'
-        }
-      });
-
-      this.uploadTasks.set(uploadId, uploadTask);
-
-      // Monitor upload progress
-      return new Promise((resolve, reject) => {
-        uploadTask.on(
-          'state_changed',
-          (snapshot) => {
-            const progress: UploadProgress = {
-              bytesTransferred: snapshot.bytesTransferred,
-              totalBytes: snapshot.totalBytes,
-              percentage: (snapshot.bytesTransferred / snapshot.totalBytes) * 100,
-              state: snapshot.state
-            };
-            onProgress?.(progress);
-          },
-          (error) => {
-            this.uploadTasks.delete(uploadId);
-            errorHandler.handleError(error, ErrorSeverity.HIGH, {
-              action: 'vault-upload',
-              fileName: file.name
-            });
-            reject(error);
-          },
-          async () => {
-            try {
-              // Get download URL
-              const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-
-              // Update vault item in backend
-              await this.functionsClient.callFunction('addVaultFile', {
-                itemId,
-                name: file.name,
-                storagePath,
-                fileType: this.getFileType(file.type),
-                size: file.size,
-                mimeType: file.type,
-                parentId
-              });
-
-              const vaultItem: VaultItem = {
-                id: itemId,
-                name: file.name,
-                type: 'file',
-                mimeType: file.type,
-                size: file.size,
-                parentId,
-                path: `/${file.name}`,
-                url: downloadUrl,
-                isEncrypted: false,
-                isShared: false,
-                createdAt: new Date(),
-                updatedAt: new Date()
-              };
-              
-              // Invalidate cache
-              this.invalidateCache();
-              
-              this.uploadTasks.delete(uploadId);
-              resolve(vaultItem);
-            } catch (error) {
-              reject(error);
-            }
-          }
+      // Upload based on storage provider
+      if (storageProvider === 'r2') {
+        // Upload to R2 using signed URL
+        return this.uploadToR2(
+          signedUrl,
+          uploadData,
+          file,
+          itemId,
+          parentId,
+          encryptionEnabled && encryptionOptions !== undefined,
+          encryptionKeyId,
+          encryptionMetadata,
+          onProgress,
+          uploadId
         );
-      });
+      } else {
+        // Fallback to Firebase Storage for local development
+        const storageRef = ref(storage, storagePath);
+        const uploadTask = uploadBytesResumable(storageRef, uploadData, {
+          contentType: encryptionEnabled ? 'application/octet-stream' : file.type,
+          customMetadata: {
+            originalName: file.name,
+            uploadedBy: 'web',
+            isEncrypted: String(encryptionEnabled && encryptionOptions !== undefined)
+          }
+        });
+
+        this.uploadTasks.set(uploadId, uploadTask);
+
+        // Monitor upload progress
+        return new Promise((resolve, reject) => {
+          uploadTask.on(
+            'state_changed',
+            (snapshot) => {
+              const progress: UploadProgress = {
+                bytesTransferred: snapshot.bytesTransferred,
+                totalBytes: snapshot.totalBytes,
+                percentage: (snapshot.bytesTransferred / snapshot.totalBytes) * 100,
+                state: snapshot.state
+              };
+              onProgress?.(progress);
+            },
+            (error) => {
+              this.uploadTasks.delete(uploadId);
+              errorHandler.handleError(error, ErrorSeverity.HIGH, {
+                action: 'vault-upload-firebase',
+                fileName: file.name
+              });
+              reject(error);
+            },
+            async () => {
+              try {
+                // Get download URL
+                const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+
+                // Update vault item in backend
+                await this.functionsClient.callFunction('addVaultFile', {
+                  itemId,
+                  name: file.name,
+                  storagePath,
+                  fileType: this.getFileType(file.type),
+                  size: uploadData.size,
+                  mimeType: file.type,
+                  parentId,
+                  isEncrypted: encryptionEnabled && encryptionOptions !== undefined,
+                  encryptionKeyId
+                });
+
+                // If encrypted, store encryption metadata separately
+                if (encryptionEnabled && encryptionMetadata) {
+                  await this.functionsClient.callFunction('storeVaultItemEncryptionMetadata', {
+                    itemId,
+                    encryptionMetadata
+                  });
+                }
+
+                const vaultItem: VaultItem = {
+                  id: itemId,
+                  name: file.name,
+                  type: 'file',
+                  mimeType: file.type,
+                  size: uploadData.size,
+                  parentId,
+                  path: `/${file.name}`,
+                  url: downloadUrl,
+                  isEncrypted: encryptionEnabled && encryptionOptions !== undefined,
+                  isShared: false,
+                  createdAt: new Date(),
+                  updatedAt: new Date()
+                };
+                
+                // Invalidate cache
+                this.invalidateCache();
+                
+                this.uploadTasks.delete(uploadId);
+                resolve(vaultItem);
+              } catch (error) {
+                reject(error);
+              }
+            }
+          );
+        });
+      }
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.HIGH, {
         action: 'vault-upload-init',
@@ -220,7 +518,142 @@ class VaultService {
     }
   }
 
-  async downloadFile(item: VaultItem): Promise<Blob> {
+  // Upload file to R2 using signed URL
+  private async uploadToR2(
+    signedUrl: string,
+    uploadData: File | Blob,
+    originalFile: File,
+    itemId: string,
+    parentId: string | null,
+    isEncrypted: boolean,
+    encryptionKeyId: string | null,
+    encryptionMetadata: any,
+    onProgress?: (progress: UploadProgress) => void,
+    uploadId?: string
+  ): Promise<VaultItem> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // Create XMLHttpRequest for progress tracking
+        const xhr = new XMLHttpRequest();
+        
+        // Track upload progress
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable && onProgress) {
+            const progress: UploadProgress = {
+              bytesTransferred: event.loaded,
+              totalBytes: event.total,
+              percentage: (event.loaded / event.total) * 100,
+              state: 'running'
+            };
+            onProgress(progress);
+          }
+        });
+
+        // Handle completion
+        xhr.addEventListener('load', async () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              // Update vault item in backend to confirm upload
+              await this.functionsClient.callFunction('addVaultFile', {
+                itemId,
+                name: originalFile.name,
+                storagePath: itemId, // For R2, we use itemId as the key
+                fileType: this.getFileType(originalFile.type),
+                size: uploadData.size,
+                mimeType: originalFile.type,
+                parentId,
+                isEncrypted,
+                encryptionKeyId
+              });
+
+              // If encrypted, store encryption metadata separately
+              if (isEncrypted && encryptionMetadata) {
+                await this.functionsClient.callFunction('storeVaultItemEncryptionMetadata', {
+                  itemId,
+                  encryptionMetadata
+                });
+              }
+
+              // Get the download URL from backend
+              const downloadUrl = await this.getDownloadUrl({ id: itemId } as VaultItem);
+
+              const vaultItem: VaultItem = {
+                id: itemId,
+                name: originalFile.name,
+                type: 'file',
+                mimeType: originalFile.type,
+                size: uploadData.size,
+                parentId,
+                path: `/${originalFile.name}`,
+                url: downloadUrl,
+                isEncrypted,
+                isShared: false,
+                createdAt: new Date(),
+                updatedAt: new Date()
+              };
+              
+              // Invalidate cache
+              this.invalidateCache();
+              
+              if (uploadId) {
+                this.uploadTasks.delete(uploadId);
+              }
+              
+              resolve(vaultItem);
+            } catch (error) {
+              reject(error);
+            }
+          } else {
+            reject(new Error(`Upload failed with status: ${xhr.status}`));
+          }
+        });
+
+        // Handle errors
+        xhr.addEventListener('error', () => {
+          if (uploadId) {
+            this.uploadTasks.delete(uploadId);
+          }
+          errorHandler.handleError(new Error('Network error during upload'), ErrorSeverity.HIGH, {
+            action: 'vault-upload-r2',
+            fileName: originalFile.name
+          });
+          reject(new Error('Network error during upload'));
+        });
+
+        // Set up the request
+        xhr.open('PUT', signedUrl);
+        xhr.setRequestHeader('Content-Type', isEncrypted ? 'application/octet-stream' : originalFile.type);
+        
+        // Send the file
+        xhr.send(uploadData);
+      } catch (error) {
+        if (uploadId) {
+          this.uploadTasks.delete(uploadId);
+        }
+        errorHandler.handleError(error, ErrorSeverity.HIGH, {
+          action: 'vault-upload-r2-init',
+          fileName: originalFile.name
+        });
+        reject(error);
+      }
+    });
+  }
+
+  async downloadFile(
+    item: VaultItem,
+    decryptionOptions?: {
+      decrypt: (
+        encryptedFile: Uint8Array,
+        header: Uint8Array,
+        metadata: Record<string, unknown>,
+        fileId: string
+      ) => Promise<{
+        success: boolean;
+        encryptedFile?: Uint8Array;
+        error?: string;
+      }>;
+    }
+  ): Promise<Blob> {
     // Check cache first
     const cached = this.downloadCache.get(item.id);
     if (cached) {
@@ -239,7 +672,37 @@ class VaultService {
         throw new Error('Failed to download file');
       }
 
-      const blob = await response.blob();
+      let blob = await response.blob();
+      
+      // Decrypt if file is encrypted
+      if (item.isEncrypted && decryptionOptions) {
+        // Retrieve encryption metadata
+        const encryptionData = await this.getEncryptionMetadata(item.id);
+        
+        // Convert blob to Uint8Array
+        const encryptedData = new Uint8Array(await blob.arrayBuffer());
+        
+        // Extract header and metadata
+        const header = new Uint8Array(encryptionData.encryptionMetadata.header);
+        const metadata = encryptionData.encryptionMetadata.metadata;
+        
+        // Decrypt the file
+        const decryptionResult = await decryptionOptions.decrypt(
+          encryptedData,
+          header,
+          metadata,
+          item.id
+        );
+        
+        if (!decryptionResult.success) {
+          throw new Error(decryptionResult.error || 'Failed to decrypt file');
+        }
+        
+        // Convert decrypted data back to blob with original mime type
+        blob = new Blob([decryptionResult.encryptedFile!], { 
+          type: item.mimeType || 'application/octet-stream' 
+        });
+      }
       
       // Cache for 5 minutes
       this.downloadCache.set(item.id, blob);
@@ -249,26 +712,52 @@ class VaultService {
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
         action: 'vault-download',
-        fileId: item.id
+        fileId: item.id,
+        isEncrypted: item.isEncrypted
       });
       throw error;
     }
   }
 
   /**
-   * Validates if a URL is from allowed Firebase Storage domains
+   * Validates if a URL is from allowed storage domains (Firebase Storage or R2)
    */
   private isValidStorageUrl(url: string): boolean {
     try {
       const parsedUrl = new URL(url);
-      const allowedHosts = [
+      
+      // Must be HTTPS
+      if (parsedUrl.protocol !== 'https:') {
+        return false;
+      }
+      
+      const hostname = parsedUrl.hostname.toLowerCase();
+      
+      // Check for known storage domains
+      const allowedPatterns = [
+        // Firebase Storage domains
         'firebasestorage.googleapis.com',
         'storage.googleapis.com',
-        'dynasty-eba63.firebasestorage.app'
+        '.firebasestorage.app',
+        // R2 (Cloudflare) domains - more flexible pattern matching
+        '.r2.cloudflarestorage.com',
+        '.r2.dev',
+        'cloudflare-ipfs.com',
+        // S3-compatible URLs
+        'amazonaws.com',
+        // Allow any subdomain of cloudflarestorage.com
+        'cloudflarestorage.com'
       ];
       
-      return allowedHosts.some(host => parsedUrl.hostname.includes(host)) &&
-             parsedUrl.protocol === 'https:';
+      // Check if hostname matches any allowed pattern
+      return allowedPatterns.some(pattern => {
+        if (pattern.startsWith('.')) {
+          // Match subdomain pattern
+          return hostname.endsWith(pattern.substring(1)) || hostname === pattern.substring(1);
+        }
+        // Exact match or contains
+        return hostname === pattern || hostname.includes(pattern);
+      });
     } catch {
       return false;
     }
@@ -282,13 +771,23 @@ class VaultService {
       
       const data = result.data as { downloadUrl: string };
       
-      if (!data.downloadUrl) {
-        throw new Error('No download URL returned');
+      if (!data.downloadUrl || data.downloadUrl === '') {
+        throw new Error('No download URL returned from server');
       }
       
       // Validate the URL before using it
       if (!this.isValidStorageUrl(data.downloadUrl)) {
-        throw new Error('Invalid download URL received');
+        console.warn('Received URL from unexpected domain:', data.downloadUrl);
+        // For R2 URLs, we may need to be more permissive
+        // Only throw if it's not a valid HTTPS URL
+        try {
+          const url = new URL(data.downloadUrl);
+          if (url.protocol !== 'https:') {
+            throw new Error('Download URL must use HTTPS');
+          }
+        } catch {
+          throw new Error('Invalid download URL format');
+        }
       }
       
       // Update the item's URL for future use
@@ -440,8 +939,8 @@ class VaultService {
         { ttl: 5 * 60 * 1000, persist: true }
       );
 
-      // Pre-fetch URLs for image files (but don't wait for them)
-      this.prefetchImageUrls(result.items);
+      // Pre-fetch URLs for image files and wait for them
+      await this.prefetchImageUrls(result.items);
       
       return result;
     } catch (error) {
@@ -456,21 +955,32 @@ class VaultService {
   // Pre-fetch URLs for image files to improve performance
   private async prefetchImageUrls(items: VaultItem[]): Promise<void> {
     const imageItems = items.filter(item => 
-      item.mimeType?.startsWith('image/') && !item.url
+      item.mimeType?.startsWith('image/') && !item.url && !item.thumbnailUrl
     );
 
-    // Fetch URLs in parallel but don't wait
-    Promise.all(
-      imageItems.map(async item => {
-        try {
-          await this.getDownloadUrl(item);
-        } catch {
-          console.warn('Failed to prefetch URL for item:', item.id);
-        }
-      })
-    ).catch(() => {
-      // Ignore errors - this is just optimization
+    // Fetch URLs in parallel and wait for completion
+    const urlPromises = imageItems.map(async item => {
+      try {
+        const url = await this.getDownloadUrl(item);
+        // Also set thumbnailUrl for consistency
+        item.thumbnailUrl = url;
+        return { itemId: item.id, url, success: true };
+      } catch (error) {
+        console.warn('Failed to prefetch URL for item:', item.id, error);
+        return { itemId: item.id, url: null, success: false };
+      }
     });
+
+    // Wait for all URLs to be fetched
+    const results = await Promise.allSettled(urlPromises);
+    
+    // Log summary for debugging
+    const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+    const failed = results.length - successful;
+    
+    if (failed > 0) {
+      console.log(`Prefetched ${successful} URLs, ${failed} failed`);
+    }
   }
 
   async searchItems(query: string, filters?: {
@@ -544,13 +1054,33 @@ class VaultService {
     password?: string;
   }): Promise<{ shareLink: string; shareId: string }> {
     try {
-      const result = await this.functionsClient.callFunction('shareVaultItem', {
+      // If sharing with specific users, use the existing shareVaultItem function
+      if (options.userIds && options.userIds.length > 0) {
+        const result = await this.functionsClient.callFunction('shareVaultItem', {
+          itemId,
+          userIds: options.userIds
+        });
+        
+        // Note: shareVaultItem doesn't return a link, so we'll return a placeholder
+        return {
+          shareLink: `shared-with-users`,
+          shareId: itemId
+        };
+      }
+      
+      // Otherwise, create a share link
+      const result = await this.functionsClient.callFunction('createVaultShareLink', {
         itemId,
-        ...options,
-        expiresAt: options.expiresAt?.toISOString()
+        expiresAt: options.expiresAt?.toISOString(),
+        allowDownload: options.allowDownload,
+        password: options.password
       });
       
       const data = result.data as { shareLink: string; shareId: string };
+      
+      // Invalidate cache since sharing status changed
+      this.invalidateCache();
+      
       return data;
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
@@ -582,6 +1112,244 @@ class VaultService {
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.LOW, {
         action: 'vault-storage-info'
+      });
+      throw error;
+    }
+  }
+
+  // R2 Migration Operations
+
+  async startMigration(options?: {
+    batchSize?: number;
+    maxRetries?: number;
+    dryRun?: boolean;
+    filter?: {
+      minSize?: number;
+      maxSize?: number;
+      fileTypes?: string[];
+      createdBefore?: Date;
+      createdAfter?: Date;
+    };
+  }): Promise<{ batchId: string; status: string }> {
+    try {
+      const result = await this.functionsClient.callFunction('startVaultMigration', {
+        userId: this.userId,
+        batchSize: options?.batchSize,
+        maxRetries: options?.maxRetries,
+        dryRun: options?.dryRun,
+        filter: options?.filter ? {
+          minSize: options.filter.minSize,
+          maxSize: options.filter.maxSize,
+          fileTypes: options.filter.fileTypes,
+          createdBefore: options.filter.createdBefore?.toISOString(),
+          createdAfter: options.filter.createdAfter?.toISOString()
+        } : undefined
+      });
+      
+      return result.data as { batchId: string; status: string };
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
+        action: 'vault-start-migration'
+      });
+      throw error;
+    }
+  }
+
+  async getMigrationStatus(batchId: string): Promise<any> {
+    try {
+      const result = await this.functionsClient.callFunction('getVaultMigrationStatus', { batchId });
+      return result.data;
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.LOW, {
+        action: 'vault-migration-status',
+        batchId
+      });
+      throw error;
+    }
+  }
+
+  async cancelMigration(batchId: string): Promise<void> {
+    try {
+      await this.functionsClient.callFunction('cancelVaultMigration', { batchId });
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
+        action: 'vault-cancel-migration',
+        batchId
+      });
+      throw error;
+    }
+  }
+
+  async verifyMigration(itemId: string): Promise<{
+    valid: boolean;
+    sourceExists: boolean;
+    destExists: boolean;
+    error?: string;
+  }> {
+    try {
+      const result = await this.functionsClient.callFunction('verifyVaultMigration', { itemId });
+      return result.data as {
+        valid: boolean;
+        sourceExists: boolean;
+        destExists: boolean;
+        error?: string;
+      };
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.LOW, {
+        action: 'vault-verify-migration',
+        itemId
+      });
+      throw error;
+    }
+  }
+
+  async rollbackMigration(itemId: string): Promise<void> {
+    try {
+      await this.functionsClient.callFunction('rollbackVaultMigration', { itemId });
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
+        action: 'vault-rollback-migration',
+        itemId
+      });
+      throw error;
+    }
+  }
+
+  // Monitoring & Analytics Operations
+
+  async getEncryptionStats(): Promise<{
+    encryption: {
+      totalItems: number;
+      encryptedItems: number;
+      encryptionPercentage: string;
+      totalSize: number;
+      encryptedSize: number;
+      encryptedSizePercentage: string;
+      keyUsage: Array<{ keyId: string; itemCount: number }>;
+    };
+    keyRotation: {
+      lastRotation: Date | null;
+      rotationCount: number;
+      history: any[];
+    };
+    shareLinks: {
+      active: number;
+      expired: number;
+      totalAccessCount: number;
+    };
+  }> {
+    try {
+      const result = await this.functionsClient.callFunction('getVaultEncryptionStats', {});
+      return result.data as any;
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.LOW, {
+        action: 'vault-encryption-stats'
+      });
+      throw error;
+    }
+  }
+
+  async getKeyRotationStatus(): Promise<{
+    hasVaultKey: boolean;
+    currentKeyId?: string;
+    requiresRotation: boolean;
+    lastRotation: number | null;
+    nextRotationDue: string | null;
+    hasItemsWithOldKeys?: boolean;
+    recommendations?: Array<{
+      priority: 'high' | 'medium' | 'low';
+      message: string;
+      action: string;
+    }>;
+  }> {
+    try {
+      const result = await this.functionsClient.callFunction('getKeyRotationStatus', {});
+      return result.data as any;
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.LOW, {
+        action: 'vault-key-rotation-status'
+      });
+      throw error;
+    }
+  }
+
+  async getShareLinkAnalytics(startDate?: Date, endDate?: Date): Promise<{
+    summary: {
+      totalShareLinks: number;
+      totalAccesses: number;
+      activeLinks: number;
+      passwordProtectedLinks: number;
+    };
+    dailyAnalytics: Array<{
+      date: string;
+      created: number;
+      accessed: number;
+      uniqueAccessors: number;
+    }>;
+    topAccessedItems: Array<{
+      itemId: string;
+      accessCount: number;
+    }>;
+    recentShares: any[];
+  }> {
+    try {
+      const result = await this.functionsClient.callFunction('getShareLinkAnalytics', {
+        startDate: startDate?.toISOString(),
+        endDate: endDate?.toISOString()
+      });
+      return result.data as any;
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.LOW, {
+        action: 'vault-share-analytics'
+      });
+      throw error;
+    }
+  }
+
+  async getSystemVaultStats(): Promise<{
+    stats: {
+      users: {
+        total: number;
+        withVaultEncryption: number;
+        withActiveKeys: number;
+      };
+      items: {
+        total: number;
+        encrypted: number;
+        unencrypted: number;
+        totalSize: number;
+        encryptedSize: number;
+      };
+      keys: {
+        total: number;
+        rotatedLastMonth: number;
+        overdue: number;
+      };
+      shareLinks: {
+        total: number;
+        active: number;
+        expired: number;
+        passwordProtected: number;
+      };
+      storage: {
+        firebase: { count: number; size: number };
+        r2: { count: number; size: number };
+      };
+    };
+    summary: {
+      encryptionAdoption: string;
+      itemEncryptionRate: string;
+      sizeEncryptionRate: string;
+      keyRotationCompliance: string;
+      r2MigrationProgress: string;
+    };
+  }> {
+    try {
+      const result = await this.functionsClient.callFunction('getSystemVaultStats', {});
+      return result.data as any;
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
+        action: 'vault-system-stats'
       });
       throw error;
     }
