@@ -9,7 +9,6 @@ const nextConfig = {
     // Ignore ESLint errors during build (for deployment)
     ignoreDuringBuilds: true,
   },
-  output: 'export',
   transpilePackages: ['ui', 'utils'],
   
   // Environment variables

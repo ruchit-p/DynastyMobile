@@ -22,6 +22,7 @@ export const handleSignIn = onCall(
   {
     memory: "512MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+    cors: true, // Enable CORS for all origins in development
   },
   withAuth(
     async (request) => {
@@ -139,6 +140,7 @@ export const handleSignUp = onCall({
   memory: "512MiB",
   timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   secrets: [FRONTEND_URL],
+  cors: true, // Enable CORS for all origins in development
 }, withAuth(
   async (request) => {
     // Note: IP rate limiting is now handled in withAuth
@@ -357,6 +359,7 @@ export const handleSignUp = onCall({
 export const completeOnboarding = onCall({
   memory: "512MiB",
   timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
+  cors: true, // Enable CORS for all origins in development
 }, async (request) => {
   const userId = request.data.userId;
 
@@ -779,6 +782,7 @@ export const handlePhoneSignIn = onCall(
   {
     memory: "512MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+    cors: true, // Enable CORS for all origins in development
   },
   async (request) => {
     // Validate and sanitize input using centralized validator
@@ -919,6 +923,7 @@ export const handleGoogleSignIn = onCall(
   {
     memory: "512MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+    cors: true, // Enable CORS for all origins in development
   },
   withAuth(
     async (request) => {
@@ -1068,6 +1073,7 @@ export const handleAppleSignIn = onCall(
   {
     memory: "512MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+    cors: true, // Enable CORS for all origins in development
   },
   withAuth(
     async (request) => {
