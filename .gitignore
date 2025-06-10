@@ -115,3 +115,6 @@ firebase-export-*/
 apps/web/dynastyweb/.env.prod
 apps/web/dynastyweb/.env.prod
 apps/web/dynastyweb/.env.example
+apps/web/dynastyweb/.env.prod
+apps/web/dynastyweb/.env.prod
+apps/web/dynastyweb/.env.prod
