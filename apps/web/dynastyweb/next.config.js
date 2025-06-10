@@ -214,6 +214,9 @@ const finalConfig = shouldUseSentry ? withSentryConfig(
     // Only print logs for uploading source maps in CI
     silent: !process.env.CI,
 
+    // Disable Sentry's internal telemetry
+    telemetry: false,
+
     // For all available options, see:
     // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
 
