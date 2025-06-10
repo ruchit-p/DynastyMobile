@@ -257,7 +257,7 @@ describe('Vault Encryption Integration', () => {
     // Mock share link creation
     (vaultService.shareItem as jest.Mock) = jest.fn().mockResolvedValue({
       shareId: 'share-123',
-      shareLink: 'https://app.mydynastyapp.com/vault/share/share-123'
+      shareLink: 'https://mydynastyapp.com/vault/share/share-123'
     });
 
     const shareResult = await vaultService.shareItem('file-123', {
