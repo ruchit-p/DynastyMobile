@@ -360,6 +360,7 @@ export default function VaultPage() {
 
   // Function to load thumbnail URL if not available
   const loadThumbnailUrl = async (item: VaultItem) => {
+    // Skip if URL already exists or is being loaded
     if (item.url || item.thumbnailUrl || loadingThumbnails.has(item.id)) {
       return;
     }
@@ -367,9 +368,11 @@ export default function VaultPage() {
     setLoadingThumbnails(prev => new Set(prev).add(item.id));
     
     try {
-      await vaultService.getDownloadUrl(item);
-      // Force re-render by updating items
-      setItems(prev => [...prev]);
+      const url = await vaultService.getDownloadUrl(item);
+      // Update the item with the new URL
+      setItems(prev => prev.map(i => 
+        i.id === item.id ? { ...i, url, thumbnailUrl: url } : i
+      ));
     } catch (error) {
       console.error('Failed to load thumbnail URL:', error);
     } finally {
@@ -550,6 +553,7 @@ export default function VaultPage() {
                               fill
                               className="object-contain rounded"
                               sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
+                              unoptimized={true}
                               onError={() => {
                                 // Fall back to icon if image fails to load
                                 const imgElement = event?.target as HTMLImageElement;
@@ -633,6 +637,7 @@ export default function VaultPage() {
                               fill
                               className="object-cover rounded"
                               sizes="48px"
+                              unoptimized={true}
                               onError={() => {
                                 // Fall back to icon if image fails to load
                                 const imgElement = event?.target as HTMLImageElement;
