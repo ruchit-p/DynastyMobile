@@ -6,7 +6,7 @@ import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "../../common";
 import {createError, ErrorCode} from "../../utils/errors";
 import {withAuth, RateLimitType} from "../../middleware";
 import {UserDocument} from "../types/user";
-import {sendEmail} from "../utils/sendgridHelper";
+import {sendEmailUniversal} from "../config/emailConfig";
 import {FRONTEND_URL} from "../config/secrets";
 import {ERROR_MESSAGES, TOKEN_EXPIRY} from "../config/constants";
 import {generateSecureToken, hashToken} from "../utils/tokens";
@@ -73,7 +73,7 @@ export const sendVerificationEmail = onCall(
 
       try {
         // Use the updated sendEmail helper function
-        await sendEmail({
+        await sendEmailUniversal({
           to: email,
           templateType: "verification",
           dynamicTemplateData: {
@@ -98,7 +98,7 @@ export const sendVerificationEmail = onCall(
     {
       authLevel: "auth",
       rateLimitConfig: {
-        type: RateLimitType.AUTH,
+        type: RateLimitType.EMAIL_VERIFICATION_SEND,
         maxRequests: 3, // 3 verification emails per hour
         windowSeconds: 3600, // 1 hour window
       },
@@ -170,7 +170,7 @@ export const verifyEmail = onCall(
   }, "verifyEmail", {
     authLevel: "none", // Email verification doesn't require auth
     rateLimitConfig: {
-      type: RateLimitType.AUTH,
+      type: RateLimitType.EMAIL_VERIFICATION_VERIFY,
       maxRequests: 10, // Allow more attempts for email verification
       windowSeconds: 3600, // 1 hour window
     },

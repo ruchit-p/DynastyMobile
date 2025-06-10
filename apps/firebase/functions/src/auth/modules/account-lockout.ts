@@ -1,11 +1,9 @@
 import {onCall} from "firebase-functions/v2/https";
 import {getFirestore, Timestamp} from "firebase-admin/firestore";
-// import {getAuth} from "firebase-admin/auth";
 import {logger} from "firebase-functions/v2";
 import {createError, ErrorCode, withErrorHandling} from "../../utils/errors";
 import {createLogContext} from "../../utils/sanitization";
 import {validateRequest} from "../../utils/request-validator";
-// import {VALIDATION_SCHEMAS} from "../../config/validation-schemas";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "../../common";
 import {beforeUserSignedIn} from "firebase-functions/v2/identity";
 

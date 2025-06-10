@@ -85,7 +85,7 @@ export const submitSupportMessage = onCall({
   {
     authLevel: "auth", // Requires authenticated user
     rateLimitConfig: {
-      type: RateLimitType.API, // Using API type as base
+      type: RateLimitType.SUPPORT,
       maxRequests: 3,
       windowSeconds: 21600, // 6 hours
     },
@@ -168,7 +168,7 @@ export const submitContactMessage = onCall({
   {
     authLevel: "none", // Public endpoint - no auth required
     rateLimitConfig: {
-      type: RateLimitType.API, // Using API type as base
+      type: RateLimitType.SUPPORT,
       maxRequests: 3,
       windowSeconds: 21600, // 6 hours
     },
@@ -190,7 +190,7 @@ export const getSupportStats = onCall({
     const db = getFirestore();
     const userDoc = await db.collection("users").doc(request.auth!.uid).get();
     const userData = userDoc.data();
-    
+
     if (!userData?.isAdmin) {
       throw createError(
         ErrorCode.PERMISSION_DENIED,

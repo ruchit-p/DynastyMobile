@@ -139,7 +139,7 @@ export const handleSignIn = onCall(
 export const handleSignUp = onCall({
   memory: "512MiB",
   timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
-  secrets: [SENDGRID_CONFIG, FRONTEND_URL],
+  secrets: [FRONTEND_URL],
 }, withAuth(
   async (request) => {
     // Note: IP rate limiting is now handled in withAuth
@@ -299,8 +299,8 @@ export const handleSignUp = onCall({
 
       // Send verification email using helper
       const verificationLink = `${FRONTEND_URL.value()}/verify-email/confirm?uid=${userId}&token=${verificationToken}`;
-      const {sendEmail} = await import("../utils/sendgridHelper");
-      await sendEmail({
+      const {sendEmailUniversal} = await import("../config/emailConfig");
+      await sendEmailUniversal({
         to: signupData.email,
         templateType: "verification",
         dynamicTemplateData: {
