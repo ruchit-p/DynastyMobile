@@ -459,7 +459,7 @@ export class WebKeyRotationService {
           this.cryptoService.memzero(fileKey);
           return result.message;
         }
-      } catch (error) {
+      } catch {
         // Decryption failed with this key, try next
         continue;
       }
