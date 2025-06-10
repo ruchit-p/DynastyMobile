@@ -62,9 +62,9 @@ if [ ! -z "$EMAIL_PROVIDER" ]; then
     # Create SES config JSON
     SES_CONFIG_JSON=$(cat <<EOF
 {
-  "region": "${SES_REGION:-us-east-1}",
+  "region": "${SES_REGION:-us-east-2}",
   "fromEmail": "${SES_FROM_EMAIL:-noreply@dynastytest.com}",
-  "fromName": "${SES_FROM_NAME:-Dynasty App}"
+  "fromName": "${SES_FROM_NAME:-My Dynasty App}"
 }
 EOF
 )

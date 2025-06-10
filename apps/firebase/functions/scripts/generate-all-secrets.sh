@@ -88,9 +88,9 @@ FINGERPRINT_PUBLIC_API_KEY=<your-fingerprint-public-api-key>
 
 # AWS SES Configuration (uses IAM roles in production)
 EMAIL_PROVIDER=ses
-SES_REGION=us-east-1
+SES_REGION=us-east-2
 SES_FROM_EMAIL=noreply@mydynastyapp.com
-SES_FROM_NAME=Dynasty App
+SES_FROM_NAME=My Dynasty App
 
 # Cloudflare R2 Configuration
 R2_ACCOUNT_ID=<your-r2-account-id>
