@@ -153,7 +153,7 @@ export function VaultUnlock({ userId, onUnlock, onSetup }: VaultUnlockProps) {
             onClick={handleCheckVault}
             className="text-sm text-dynastyGreen hover:underline"
           >
-            Don't have a vault? Set one up
+            Don&apos;t have a vault? Set one up
           </button>
         </div>
       </CardContent>
