@@ -1,10 +1,6 @@
 import {defineSecret} from "firebase-functions/params";
 
-// Bundled SendGrid configuration
-// Format: JSON object with apiKey, fromEmail, and templates
-export const SENDGRID_CONFIG = defineSecret("SENDGRID_CONFIG");
-
-// Email provider selection (ses or sendgrid)
+// Email provider selection (currently only supports ses)
 export const EMAIL_PROVIDER = defineSecret("EMAIL_PROVIDER");
 
 // AWS SES configuration

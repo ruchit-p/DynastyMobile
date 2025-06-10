@@ -6,7 +6,6 @@ export * from "./types/auth";
 // Configuration
 export * from "./config/constants";
 export * from "./config/secrets";
-export * from "./config/sendgrid";
 
 // Utilities
 export * from "./utils/tokens";
