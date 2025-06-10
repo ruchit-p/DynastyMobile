@@ -4,6 +4,73 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Recent Updates (January 2025)
 
+### Email Provider Migration to AWS SES (January 2025)
+The Dynasty codebase has been fully migrated from SendGrid to AWS SES for all email functionality.
+
+**Key changes:**
+- All email sending now uses the universal `sendEmailUniversal` function that routes to AWS SES
+- SendGrid package dependency (`@sendgrid/mail`) has been removed from package.json
+- SendGrid configuration files have been deprecated and renamed with `.deprecated.ts` extension
+- Email configuration defaults to AWS SES instead of SendGrid
+- All modules (authentication, email verification, family invitations, vault, family tree) now use the universal email function
+- Attempting to use SendGrid now throws an error directing users to use AWS SES
+
+**Domain configuration:**
+- **Production**: `mydynastyapp.com` 
+- **Staging**: `dynastytest.com` (added to CORS configurations)
+- **Development**: `localhost` with configurable port via `FRONTEND_PORT` environment variable
+- Removed unused `staging.mydynastyapp.com` domain
+
+**CORS updates:**
+- R2 staging CORS now includes `dynastytest.com` and `www.dynastytest.com`
+- Firebase functions CORS properly handles staging domains with default fallbacks
+- Production CORS remains configured for `mydynastyapp.com` domains only
+
+**Migration notes:**
+- The `EMAIL_PROVIDER` environment variable/secret now defaults to "ses"
+- To use SendGrid (not recommended), you would need to restore the deprecated files
+- All email templates are automatically mapped from SendGrid format to SES format
+- **Production Ready**: Comprehensive error handling, rate limiting, and security measures
+
+**Implementation details:**
+- Universal email function (`sendEmailUniversal`) routes to appropriate provider
+- SES templates created: `verify-email`, `password-reset`, `invite`, `mfa`
+- IAM role support for production (no hardcoded credentials)
+- Environment-specific URL handling for all email links
+- MFA email support (new functionality not available in SendGrid)
+
+**Configuration:**
+- Set `EMAIL_PROVIDER=ses` to switch to AWS SES
+- Configure `SES_CONFIG` with region, fromEmail, and fromName
+- All email functions automatically use the configured provider
+- Instant rollback capability by switching provider
+
+### Vault Encryption Implementation
+The Dynasty Vault has been fully implemented with zero-knowledge encryption architecture using XChaCha20-Poly1305, ensuring complete privacy and security for user files.
+
+**Key features:**
+- **Zero-Knowledge Architecture**: Server never has access to unencrypted content or encryption keys
+- **Client-Side Encryption**: All files encrypted on-device before upload using libsodium
+- **Cloudflare R2 Storage**: Migrated from Firebase Storage for better performance and cost
+- **Comprehensive Security**: Input sanitization, path traversal protection, and MIME type validation
+- **Adaptive Rate Limiting**: Intelligent rate limits based on user trust scores
+- **Audit Logging**: Complete activity tracking for SOC 2 compliance
+- **Security Monitoring**: Real-time incident detection and admin notifications
+
+**Implementation details:**
+- All vault functions use `withAuth` middleware with appropriate authentication levels
+- Comprehensive input validation using `vault-sanitization` utilities
+- Rate limiting configured for different operations (uploads: 10/hour, downloads: 100/hour)
+- Security incidents trigger immediate email alerts to administrators
+- Soft delete with 30-day retention for accidental deletion recovery
+
+**Security measures:**
+- PBKDF2 key derivation with 100,000 iterations
+- XChaCha20-Poly1305 authenticated encryption
+- Dangerous file extensions automatically appended with .txt
+- Path normalization prevents directory traversal attacks
+- Admin-only access to security monitoring functions
+
 ### Signal Protocol Security Implementation
 The Signal Protocol functions have been updated to use standardized authentication middleware, input validation, and rate limiting for production-ready security.
 
@@ -34,6 +101,32 @@ The codebase has been updated to remove CSRF protection from Firebase callable f
 - Bearer token authentication (not cookie-based)
 - Automatic token validation
 - Built-in CORS protection
+
+### R2 Storage Configuration (January 2025)
+The Dynasty codebase now uses environment-specific R2 buckets with automatic fallback for local development.
+
+**Bucket configuration:**
+- **Production**: `dynastyprod`
+- **Staging**: `dynastytest`
+- **Local/Emulator**: `dynastylocal`
+
+**Local development features:**
+- Automatic R2 connectivity check on first storage operation
+- Falls back to Firebase Storage emulator if R2 is unavailable (offline mode)
+- No CORS configuration required - uses signed URLs for all operations
+- 3-second timeout for connectivity checks to avoid blocking
+
+**Implementation details:**
+- StorageAdapter checks connectivity lazily (not on initialization)
+- R2 bucket names are auto-selected based on environment (NODE_ENV)
+- Signed URLs bypass CORS restrictions for uploads/downloads
+- Frontend validates R2 URLs and handles them properly with Next.js Image component
+
+**Key files updated:**
+- `config/r2Secrets.ts` - Added `getEnvironmentBucketName()` function
+- `services/storageAdapter.ts` - Added connectivity check and fallback logic
+- `services/r2Service.ts` - Added `checkConnectivity()` method
+- `services/VaultService.ts` - Fixed URL validation and prefetching for R2
 
 ## Automated Feature Development Workflow
 

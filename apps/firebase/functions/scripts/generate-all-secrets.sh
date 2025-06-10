@@ -81,11 +81,16 @@ FIREBASE_MESSAGING_SENDER_ID=<your-messaging-sender-id>
 FIREBASE_APP_ID=<your-firebase-app-id>
 
 # External Service API Keys (replace with actual values)
-SENDGRID_API_KEY=<your-sendgrid-api-key>
 TWILIO_ACCOUNT_SID=<your-twilio-account-sid>
 TWILIO_AUTH_TOKEN=<your-twilio-auth-token>
 FINGERPRINT_SERVER_API_KEY=<your-fingerprint-server-api-key>
 FINGERPRINT_PUBLIC_API_KEY=<your-fingerprint-public-api-key>
+
+# AWS SES Configuration (uses IAM roles in production)
+EMAIL_PROVIDER=ses
+SES_REGION=us-east-1
+SES_FROM_EMAIL=noreply@mydynastyapp.com
+SES_FROM_NAME=Dynasty App
 
 # Cloudflare R2 Configuration
 R2_ACCOUNT_ID=<your-r2-account-id>

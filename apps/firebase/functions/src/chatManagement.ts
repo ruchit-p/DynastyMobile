@@ -511,7 +511,7 @@ export const updateChatNotifications = onCall(withAuth(async (request) => {
   authLevel: "onboarded",
   rateLimitConfig: {
     type: RateLimitType.WRITE,
-    maxRequests: 20,
+    maxRequests: 10,
     windowSeconds: 60,
   },
 }));

@@ -16,9 +16,13 @@ if (process.env.FUNCTIONS_EMULATOR === "true") {
 import {initializeApp} from "firebase-admin/app";
 import {setGlobalOptions} from "firebase-functions/v2";
 import {DEFAULT_REGION} from "./common";
+import {UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN} from "./services/rateLimitService";
 
 // Set global options for ALL Firebase Functions
-setGlobalOptions({region: DEFAULT_REGION});
+setGlobalOptions({
+  region: DEFAULT_REGION,
+  secrets: [UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN],
+});
 
 // Initialize Firebase Admin
 if (process.env.FUNCTIONS_EMULATOR === "true") {
@@ -56,7 +60,6 @@ export * from "./migrations/userDocumentConsistency"; // User document consisten
 export * from "./deviceFingerprint"; // Device fingerprinting and trust management
 export * from "./signal"; // Signal Protocol key management and verification
 export * from "./sms"; // Twilio SMS functions for invitations and notifications
-export * from "./support"; // Support ticket management with Notion integration
 
 // R2 Migration functions (only when enabled)
 if (process.env.ENABLE_R2_MIGRATION === "true") {

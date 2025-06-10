@@ -80,12 +80,17 @@ export enum RateLimitType {
   API = "api", // Default general rate limiting (mapped to API)
   AUTH = "auth", // Authentication operations (login, signup, etc.)
   MEDIA = "media", // Media uploads
+  UPLOAD = "upload", // Alias for media (backward compatibility)
   WRITE = "write", // Write operations (create/update)
   SENSITIVE = "sensitive", // Sensitive operations
+  SMS = "sms", // SMS operations
+  SUPPORT = "support", // Support messages
   SIGNAL_KEY_PUBLISH = "signal_key_publish", // Signal Protocol key publishing operations
   SIGNAL_KEY_RETRIEVE = "signal_key_retrieve", // Signal Protocol key retrieval operations
   SIGNAL_VERIFICATION = "signal_verification", // Signal Protocol verification operations
   SIGNAL_MAINTENANCE = "signal_maintenance", // Signal Protocol maintenance operations
+  EMAIL_VERIFICATION_SEND = "email_verification_send", // Email verification send operations
+  EMAIL_VERIFICATION_VERIFY = "email_verification_verify", // Email verification verify operations
 }
 
 /**
@@ -338,7 +343,24 @@ export async function checkRateLimit(
   } = config;
 
   // Map our RateLimitType to Redis RateLimitType
-  const redisType = type.toLowerCase() as RedisRateLimitType;
+  const rateLimitTypeMap: Record<RateLimitType, RedisRateLimitType> = {
+    [RateLimitType.API]: "api",
+    [RateLimitType.AUTH]: "auth",
+    [RateLimitType.MEDIA]: "media",
+    [RateLimitType.UPLOAD]: "upload",
+    [RateLimitType.WRITE]: "write",
+    [RateLimitType.SENSITIVE]: "sensitive",
+    [RateLimitType.SMS]: "sms",
+    [RateLimitType.SUPPORT]: "support",
+    [RateLimitType.SIGNAL_KEY_PUBLISH]: "signalKeyPublish",
+    [RateLimitType.SIGNAL_KEY_RETRIEVE]: "signalKeyRetrieve",
+    [RateLimitType.SIGNAL_VERIFICATION]: "signalVerification",
+    [RateLimitType.SIGNAL_MAINTENANCE]: "signalMaintenance",
+    [RateLimitType.EMAIL_VERIFICATION_SEND]: "emailVerificationSend",
+    [RateLimitType.EMAIL_VERIFICATION_VERIFY]: "emailVerificationVerify",
+  };
+  
+  const redisType = rateLimitTypeMap[type];
 
   // Check if user is admin and admin bypass is enabled
   let skipForAdmin = false;
@@ -406,7 +428,24 @@ export async function checkRateLimitByIP(
   }
 
   // Map our RateLimitType to Redis RateLimitType
-  const redisType = type.toLowerCase() as RedisRateLimitType;
+  const rateLimitTypeMap: Record<RateLimitType, RedisRateLimitType> = {
+    [RateLimitType.API]: "api",
+    [RateLimitType.AUTH]: "auth",
+    [RateLimitType.MEDIA]: "media",
+    [RateLimitType.UPLOAD]: "upload",
+    [RateLimitType.WRITE]: "write",
+    [RateLimitType.SENSITIVE]: "sensitive",
+    [RateLimitType.SMS]: "sms",
+    [RateLimitType.SUPPORT]: "support",
+    [RateLimitType.SIGNAL_KEY_PUBLISH]: "signalKeyPublish",
+    [RateLimitType.SIGNAL_KEY_RETRIEVE]: "signalKeyRetrieve",
+    [RateLimitType.SIGNAL_VERIFICATION]: "signalVerification",
+    [RateLimitType.SIGNAL_MAINTENANCE]: "signalMaintenance",
+    [RateLimitType.EMAIL_VERIFICATION_SEND]: "emailVerificationSend",
+    [RateLimitType.EMAIL_VERIFICATION_VERIFY]: "emailVerificationVerify",
+  };
+  
+  const redisType = rateLimitTypeMap[type];
 
   try {
     // Use Redis rate limiting with IP identifier

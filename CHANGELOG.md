@@ -1,5 +1,181 @@
 # Dynasty Changelog
 
+## Version 2.14.0 - January 2025
+
+### 🏗️ R2 Storage Configuration & Vault Improvements
+
+**R2 Storage Environment Configuration**
+- ✅ **Environment-Specific Buckets**:
+  - Production: `dynastyprod`
+  - Staging: `dynastytest`
+  - Local Development: `dynastylocal`
+  - Automatic bucket selection based on environment
+  - Removed hardcoded bucket names from configuration files
+
+- ✅ **Local Development Fallback**:
+  - Automatic R2 connectivity check (3-second timeout) in emulator mode
+  - Falls back to Firebase Storage emulator when R2 unavailable
+  - Enables offline development without internet connection
+  - Lazy connectivity checking to avoid blocking initialization
+
+- ✅ **Vault Image Loading Fixes**:
+  - Fixed thumbnail loading after page refresh
+  - Updated URL validation to support R2 domains (`*.r2.cloudflarestorage.com`)
+  - Fixed `prefetchImageUrls` to wait for completion instead of fire-and-forget
+  - Added R2 domains to Next.js image configuration
+  - Updated CSP headers to allow R2 image sources
+  - Added `unoptimized={true}` to vault images to bypass Next.js optimization
+
+- ✅ **CORS Configuration Cleanup**:
+  - Determined CORS is not required for signed URLs
+  - Updated setup scripts to indicate CORS not needed
+  - Removed unnecessary CORS configuration files
+  - Cleaned up CORS-related documentation
+
+**Key Files Updated**
+- `r2Secrets.ts`: Added `getEnvironmentBucketName()` function
+- `storageAdapter.ts`: Implemented R2 connectivity check and fallback
+- `r2Service.ts`: Added `checkConnectivity()` method
+- `VaultService.ts`: Fixed URL validation and prefetch mechanism
+- `next.config.js`: Added R2 domains to images and CSP configuration
+
+## Version 2.13.0 - January 2025
+
+### 🚀 Complete Migration from SendGrid to AWS SES
+
+**Breaking Changes**
+- ❌ **SendGrid Support Removed**:
+  - Removed `@sendgrid/mail` package dependency
+  - Deprecated all SendGrid configuration files (renamed with `.deprecated.ts` extension)
+  - Email provider now defaults to AWS SES instead of SendGrid
+  - Attempting to use SendGrid throws an error with migration instructions
+
+**Email System Updates**
+- ✅ **Universal Email Function Adoption**:
+  - All modules now use `sendEmailUniversal` instead of direct provider imports
+  - Updated modules: authentication, email verification, family invitations, vault, family tree
+  - Removed all `SENDGRID_CONFIG` secret references from Firebase functions
+  - Consistent email handling across the entire codebase
+
+**Domain & CORS Configuration**
+- ✅ **Staging Domain Fixed**:
+  - Added `dynastytest.com` and `www.dynastytest.com` to R2 staging CORS
+  - Removed unused `staging.mydynastyapp.com` domain
+  - Firebase functions CORS now properly handles staging domains
+  
+- ✅ **Environment-Specific Domains**:
+  - Production: `mydynastyapp.com`
+  - Staging: `dynastytest.com`
+  - Development: `localhost` (with configurable port via `FRONTEND_PORT`)
+
+**Migration Guide**
+- Set `EMAIL_PROVIDER=ses` in environment variables/secrets (now default)
+- Ensure AWS SES is configured with proper IAM permissions
+- All existing email templates work without modification
+- To restore SendGrid support, recover deprecated files and set `EMAIL_PROVIDER=sendgrid`
+
+## Version 2.12.0 - January 2025
+
+### 📧 AWS SES Email Integration
+
+**Dual Email Provider Support**
+- ✅ **AWS SES Service Implementation**:
+  - Created `sesService.ts` using AWS SDK v3 for modern, efficient email delivery
+  - Full compatibility with existing SendGrid template structure
+  - Support for templated emails with automatic variable mapping
+  - Comprehensive error handling for SES-specific errors
+  - Email verification status checking capability
+
+- ✅ **Universal Email Configuration**:
+  - Implemented `sendEmailUniversal` function for provider-agnostic email sending
+  - Automatic routing between SendGrid and SES based on configuration
+  - Zero code changes required in existing email functions
+  - Backward compatible - SendGrid remains the default provider
+
+- ✅ **Template Variable Mapping**:
+  - Automatic conversion between SendGrid and SES variable formats
+  - Email verification: `userName` → `username`, `verificationUrl` → `verificationLink`
+  - Password reset: Variables match perfectly between providers
+  - Invite emails: `acceptLink` → `signUpLink`
+  - MFA support: New functionality added (not available in SendGrid)
+
+- ✅ **Security & Production Features**:
+  - IAM role support for production (no hardcoded credentials)
+  - Environment-specific URL handling for all email links
+  - Secrets managed through Firebase Secret Manager
+  - Comprehensive logging and monitoring capabilities
+  - Instant rollback capability by changing single configuration
+
+- ✅ **Cost Optimization**:
+  - SendGrid: ~$20/month for 40k emails
+  - AWS SES: ~$1/month for 10k emails
+  - Estimated savings: 95% reduction in email costs
+
+- ✅ **Documentation & Tools**:
+  - Created migration guide: `/docs/SENDGRID_TO_SES_MIGRATION.md`
+  - Production checklist: `/docs/SES_PRODUCTION_CHECKLIST.md`
+  - Setup script: `/scripts/setup-ses-secrets.sh`
+  - Test utility: `/src/test/testSESIntegration.ts`
+
+## Version 2.11.0 - January 2025
+
+### 🔐 Vault Encryption Implementation
+
+**Zero-Knowledge Vault Encryption**
+- ✅ **Core Encryption Infrastructure**: 
+  - Implemented XChaCha20-Poly1305 authenticated encryption using libsodium
+  - PBKDF2 key derivation with 100,000 iterations and 32-byte salts
+  - Client-side encryption ensures server never sees unencrypted data
+  - Zero-knowledge architecture for complete privacy
+
+- ✅ **Vault API Functions**: All functions implemented with security best practices
+  - `getVaultItems` - List user's encrypted vault items
+  - `addVaultFile` - Upload files with client-side encryption
+  - `createVaultFolder` - Organize files in folder structure
+  - `renameVaultItem` - Rename files and folders
+  - `deleteVaultItem` - Soft delete with 30-day retention
+  - `moveVaultItem` - Move items between folders
+  - `shareVaultItem` - Secure sharing with family members
+  - `getVaultDownloadUrl` - Generate time-limited download URLs
+  - `createVaultShareLink` - Create expiring share links
+  - `accessVaultShareLink` - Access shared items securely
+
+- ✅ **Cloudflare R2 Integration**:
+  - Migrated from Firebase Storage to Cloudflare R2
+  - Pre-signed URLs for direct client uploads
+  - Separate CORS configurations for staging/production
+  - Lifecycle rules for automatic cleanup of deleted items
+
+- ✅ **Security Hardening**:
+  - **Input Sanitization**: Comprehensive validation for all user inputs
+    - Path traversal protection with normalized paths
+    - Dangerous file extensions automatically appended with .txt
+    - MIME type validation blocking executable content
+    - File size limits (100MB per file)
+  - **Adaptive Rate Limiting**: Based on user trust scores
+    - Upload operations: 10 per hour
+    - Download operations: 100 per hour  
+    - Admin operations: 30 per 5 minutes
+  - **Security Monitoring**:
+    - Real-time incident detection and reporting
+    - Email alerts to administrators for critical incidents
+    - Complete audit logging for SOC 2 compliance
+    - Admin-only access to security functions
+
+- ✅ **Production Deployment Assets**:
+  - Automated deployment scripts with verification
+  - Interactive secrets configuration setup
+  - Firestore security rules for vault collections
+  - Optimized database indexes for vault queries
+  - Comprehensive deployment checklist
+
+- ✅ **Code Quality**:
+  - All functions use `withAuth` middleware
+  - Removed all TODO comments and placeholders
+  - Fixed admin role checking implementation
+  - Added permission verification for migrations
+  - Implemented email notifications for security incidents
+
 ## Version 2.10.0 - January 2025
 
 ### 🔒 Security Updates

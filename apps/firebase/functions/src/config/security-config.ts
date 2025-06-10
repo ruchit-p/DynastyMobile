@@ -57,13 +57,6 @@ export const SECURITY_CONFIG = {
       windowSeconds: 60, // 10 deletes per minute
     },
 
-    // Upload operations
-    upload: {
-      type: RateLimitType.MEDIA,
-      maxRequests: 10,
-      windowSeconds: 300, // 10 uploads per 5 minutes
-    },
-
     // Read operations
     read: {
       type: RateLimitType.API,
@@ -97,6 +90,31 @@ export const SECURITY_CONFIG = {
       type: RateLimitType.SIGNAL_MAINTENANCE,
       maxRequests: 10,
       windowSeconds: 60, // 10 per minute
+    },
+
+    // Vault security monitoring operations
+    vault_audit_logs: {
+      type: RateLimitType.API,
+      maxRequests: 30,
+      windowSeconds: 300, // 30 per 5 minutes
+    },
+
+    security_incident_report: {
+      type: RateLimitType.WRITE,
+      maxRequests: 10,
+      windowSeconds: 3600, // 10 per hour to prevent abuse
+    },
+
+    security_monitoring_data: {
+      type: RateLimitType.API,
+      maxRequests: 10,
+      windowSeconds: 300, // 10 per 5 minutes (admin only)
+    },
+
+    security_alert_config: {
+      type: RateLimitType.WRITE,
+      maxRequests: 5,
+      windowSeconds: 300, // 5 per 5 minutes (admin only)
     },
   },
 
