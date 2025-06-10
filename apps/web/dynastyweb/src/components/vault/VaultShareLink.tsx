@@ -34,7 +34,7 @@ export function VaultShareLink({ item, onClose }: VaultShareLinkProps) {
   const [expiresAt, setExpiresAt] = useState<Date | undefined>();
   const [allowDownload, setAllowDownload] = useState(true);
   const [password, setPassword] = useState('');
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [selectedUsers] = useState<string[]>([]);
   const [shareMode, setShareMode] = useState<'link' | 'users'>('link');
   
   const handleCreateShareLink = async () => {
@@ -55,10 +55,10 @@ export function VaultShareLink({ item, onClose }: VaultShareLinkProps) {
         title: "Share link created",
         description: "Your secure share link has been generated"
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: "Failed to create share link",
-        description: error.message,
+        description: error instanceof Error ? error.message : 'An error occurred',
         variant: "destructive"
       });
     } finally {
@@ -76,7 +76,7 @@ export function VaultShareLink({ item, onClose }: VaultShareLinkProps) {
         title: "Link copied",
         description: "Share link copied to clipboard"
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "Failed to copy",
         description: "Please copy the link manually",
@@ -97,10 +97,10 @@ export function VaultShareLink({ item, onClose }: VaultShareLinkProps) {
       });
       
       onClose();
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: "Failed to revoke",
-        description: error.message,
+        description: error instanceof Error ? error.message : 'An error occurred',
         variant: "destructive"
       });
     }
@@ -112,7 +112,7 @@ export function VaultShareLink({ item, onClose }: VaultShareLinkProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="h-5 w-5" />
-            Share "{item.name}"
+            Share &quot;{item.name}&quot;
           </DialogTitle>
           <DialogDescription>
             Create a secure link to share this {item.isEncrypted ? 'encrypted' : ''} file
@@ -197,7 +197,7 @@ export function VaultShareLink({ item, onClose }: VaultShareLinkProps) {
               <Alert>
                 <Users className="h-4 w-4" />
                 <AlertDescription>
-                  Share directly with Dynasty family members. They'll receive a notification.
+                  Share directly with Dynasty family members. They&apos;ll receive a notification.
                 </AlertDescription>
               </Alert>
               

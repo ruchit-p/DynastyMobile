@@ -1,7 +1,7 @@
 // Example component demonstrating vault encryption usage
 // Shows how to integrate VaultService with encryption hooks
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useWebVaultEncryption } from '@/hooks/useWebVaultEncryption';
 import { vaultService, VaultItem } from '@/services/VaultService';
@@ -90,10 +90,10 @@ export function VaultUploadExample() {
       // Refresh vault items
       await loadVaultItems();
       setFiles([]);
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: "Upload failed",
-        description: error.message,
+        description: error instanceof Error ? error.message : 'An error occurred',
         variant: "destructive"
       });
     } finally {
@@ -138,10 +138,10 @@ export function VaultUploadExample() {
         title: "Download complete",
         description: `${item.name} decrypted and downloaded`
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: "Download failed",
-        description: error.message,
+        description: error instanceof Error ? error.message : 'An error occurred',
         variant: "destructive"
       });
     }

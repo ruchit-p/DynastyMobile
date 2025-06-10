@@ -7,9 +7,8 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Shield, Key, Share2, AlertTriangle, CheckCircle2, Clock, HardDrive, Database } from 'lucide-react';
+import { Shield, Share2, AlertTriangle, HardDrive } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface EncryptionStats {
@@ -25,7 +24,7 @@ interface EncryptionStats {
   keyRotation: {
     lastRotation: Date | null;
     rotationCount: number;
-    history: any[];
+    history: Array<{ timestamp: Date; keyId: string; }>;
   };
   shareLinks: {
     active: number;
@@ -65,7 +64,7 @@ interface ShareLinkAnalytics {
     itemId: string;
     accessCount: number;
   }>;
-  recentShares: any[];
+  recentShares: Array<{ itemId: string; createdAt: Date; accessCount: number; }>;
 }
 
 interface SystemStats {
@@ -117,41 +116,42 @@ export default function VaultMonitoringDashboard({ isAdmin = false }: { isAdmin?
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Load user-specific stats
+        const [encStats, keyStatus, shareAnalytics] = await Promise.all([
+          vaultService.getEncryptionStats(),
+          vaultService.getKeyRotationStatus(),
+          vaultService.getShareLinkAnalytics()
+        ]);
+
+        setEncryptionStats(encStats);
+        setKeyRotationStatus(keyStatus);
+        setShareLinkAnalytics(shareAnalytics);
+
+        // Load admin stats if user is admin
+        if (isAdmin) {
+          try {
+            const sysStats = await vaultService.getSystemVaultStats();
+            setSystemStats(sysStats);
+          } catch (err) {
+            console.error('Failed to load system stats:', err);
+          }
+        }
+      } catch (err) {
+        setError('Failed to load monitoring data');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
     loadDashboardData();
   }, [isAdmin]);
 
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Load user-specific stats
-      const [encStats, keyStatus, shareAnalytics] = await Promise.all([
-        vaultService.getEncryptionStats(),
-        vaultService.getKeyRotationStatus(),
-        vaultService.getShareLinkAnalytics()
-      ]);
-
-      setEncryptionStats(encStats);
-      setKeyRotationStatus(keyStatus);
-      setShareLinkAnalytics(shareAnalytics);
-
-      // Load admin stats if user is admin
-      if (isAdmin) {
-        try {
-          const sysStats = await vaultService.getSystemVaultStats();
-          setSystemStats(sysStats);
-        } catch (err) {
-          console.error('Failed to load system stats:', err);
-        }
-      }
-    } catch (err) {
-      setError('Failed to load monitoring data');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -539,7 +539,7 @@ export default function VaultMonitoringDashboard({ isAdmin = false }: { isAdmin?
                     <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
                     <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
                     <Tooltip 
-                      formatter={(value: any, name: string) => {
+                      formatter={(value: number | string, name: string) => {
                         if (name === 'Size') {
                           return formatBytes(value);
                         }
