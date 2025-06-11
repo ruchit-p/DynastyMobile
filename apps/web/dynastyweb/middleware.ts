@@ -28,18 +28,20 @@ export async function middleware(request: NextRequest) {
   }
   
   const response = NextResponse.next();
-  // In middleware, we check the host to determine if it's development
-  const isDevelopment = request.headers.get('host')?.includes('localhost') || 
-                       request.headers.get('host')?.includes('127.0.0.1');
+  // Environment detection based on hostname
+  const hostname = request.headers.get('host') || '';
+  const isDevelopment = hostname.includes('localhost') || hostname.includes('127.0.0.1');
+  const isStaging = hostname.includes('dynastytest.com');
+  const isProduction = hostname.includes('mydynastyapp.com');
   
   // Generate nonce for CSP
   const nonce = Buffer.from(globalThis.crypto.randomUUID()).toString('base64');
   
-  // CSP configuration with Firebase emulator support
-  const cspDirectives = isDevelopment ? [
+  // CSP configuration based on environment
+  const cspDirectives = (isDevelopment || isStaging) ? [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' 'unsafe-inline' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://js.stripe.com https://*.sentry.io https://www.googletagmanager.com https://fpnpmcdn.net https://va.vercel-scripts.com`,
-    "connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://dynasty-eba63-us-central1.cloudfunctions.net https://dynasty-dev-1b042-us-central1.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://nominatim.openstreetmap.org https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://*.googletagmanager.com https://react-circle-flags.pages.dev https://fpnpmcdn.net http://127.0.0.1:* http://localhost:*",
+    "connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://dynasty-dev-1b042-us-central1.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://nominatim.openstreetmap.org https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://*.googletagmanager.com https://react-circle-flags.pages.dev https://fpnpmcdn.net http://127.0.0.1:* http://localhost:*",
     "img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.firebaseapp.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://hatscripts.github.io https://react-circle-flags.pages.dev",
     `style-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://fonts.googleapis.com`,
     "font-src 'self' https://fonts.gstatic.com",
@@ -49,7 +51,7 @@ export async function middleware(request: NextRequest) {
   ] : [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://js.stripe.com https://*.sentry.io https://www.googletagmanager.com https://va.vercel-scripts.com`,
-    "connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://dynasty-prod-us-central1.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://nominatim.openstreetmap.org https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://*.googletagmanager.com",
+    "connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://dynasty-eba63-us-central1.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://nominatim.openstreetmap.org https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://*.googletagmanager.com",
     "img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.firebaseapp.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://hatscripts.github.io https://react-circle-flags.pages.dev",
     `style-src 'self' 'nonce-${nonce}' https://fonts.googleapis.com`,
     "font-src 'self' https://fonts.gstatic.com",
@@ -73,7 +75,7 @@ export async function middleware(request: NextRequest) {
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), interest-cohort=()');
   
   // HSTS (only in production)
-  if (!isDevelopment) {
+  if (isProduction) {
     response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   }
   
