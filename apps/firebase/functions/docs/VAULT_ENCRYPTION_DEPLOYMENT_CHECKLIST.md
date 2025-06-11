@@ -204,7 +204,6 @@ npm run test:load -- --users 100 --duration 300
 - [ ] Test for common vulnerabilities:
   - SQL/NoSQL injection
   - XSS attacks
-  - CSRF attempts
   - Path traversal
   - Privilege escalation
   - Rate limit bypass

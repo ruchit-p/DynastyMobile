@@ -21,12 +21,6 @@ Comprehensive security audit findings and remediation status.
 - Remaining recommendations
 - Implementation roadmap
 
-### [CSRF Protection](./csrf-protection.md)
-Cross-Site Request Forgery prevention implementation.
-- Double-submit cookie pattern
-- Token generation and validation
-- Integration with Firebase Functions
-- Testing procedures
 
 ### [Encryption Methods](./encryption.md)
 End-to-end encryption implementation details.
