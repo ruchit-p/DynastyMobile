@@ -228,8 +228,8 @@ export class StorageUtils {
       let bucket: string | undefined;
       let key: string | undefined;
       let region: string | undefined;
-      let isPublic = true; // Default assumption
-      let isSigned = parsedUrl.searchParams.has('X-Amz-Signature') || 
+      const isPublic = true; // Default assumption
+      const isSigned = parsedUrl.searchParams.has('X-Amz-Signature') || 
                      parsedUrl.searchParams.has('Signature') ||
                      parsedUrl.searchParams.has('token');
       

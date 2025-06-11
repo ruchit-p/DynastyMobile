@@ -1,0 +1,24 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🔍 Running pre-push checks (Web + Firebase only)..."
+
+# Run linting first (faster feedback)
+echo "📝 Checking linting..."
+npm run lint:all
+if [ $? -ne 0 ]; then
+  echo "❌ Linting failed. Push aborted."
+  echo "💡 Run 'npm run lint:fix' to auto-fix issues"
+  exit 1
+fi
+
+# Run tests
+echo "🧪 Running tests..."
+npm run test:all
+if [ $? -ne 0 ]; then
+  echo "❌ Tests failed. Push aborted."
+  echo "💡 Run 'npm run test:web' or 'npm run test:firebase' to debug"
+  exit 1
+fi
+
+echo "✅ All checks passed. Proceeding with push..."
