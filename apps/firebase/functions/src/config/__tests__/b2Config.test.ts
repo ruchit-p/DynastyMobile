@@ -22,7 +22,7 @@ describe("B2 Configuration", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env = { ...originalEnv };
+    process.env = {...originalEnv};
   });
 
   afterEach(() => {

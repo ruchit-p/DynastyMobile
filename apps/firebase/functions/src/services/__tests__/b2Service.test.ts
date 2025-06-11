@@ -55,7 +55,7 @@ describe("B2Service", () => {
     });
 
     mockGetB2Config.mockReturnValue(mockB2Config);
-    
+
     // Mock S3 config
     mockGetB2S3Config.mockReturnValue({
       endpoint: mockB2Config.endpoint,
@@ -120,7 +120,7 @@ describe("B2Service", () => {
       expect(mockGetSignedUrlFunc).toHaveBeenCalledWith(
         expect.anything(),
         expect.anything(),
-        { expiresIn: 3600 }
+        {expiresIn: 3600}
       );
     });
 
@@ -134,7 +134,7 @@ describe("B2Service", () => {
       await b2Service.generateUploadUrl(options);
 
       // Verify PutObjectCommand was called with checksum
-      const {PutObjectCommand} = require("@aws-sdk/client-s3");
+      const {PutObjectCommand} = await import("@aws-sdk/client-s3");
       expect(PutObjectCommand).toHaveBeenCalledWith(
         expect.objectContaining({
           ChecksumSHA1: "da39a3ee5e6b4b0d3255bfef95601890afd80709",
@@ -155,7 +155,7 @@ describe("B2Service", () => {
       expect(mockGetSignedUrlFunc).toHaveBeenCalledWith(
         expect.anything(),
         expect.anything(),
-        { expiresIn: 7 * 24 * 60 * 60 }
+        {expiresIn: 7 * 24 * 60 * 60}
       );
     });
   });
@@ -181,7 +181,7 @@ describe("B2Service", () => {
       expect(mockGetSignedUrlFunc).toHaveBeenCalledWith(
         expect.anything(),
         expect.anything(),
-        { expiresIn: 1800 }
+        {expiresIn: 1800}
       );
     });
   });
@@ -213,7 +213,7 @@ describe("B2Service", () => {
     it("should return false for non-existent objects", async () => {
       mockS3Send.mockRejectedValue({
         name: "NotFound",
-        $metadata: { httpStatusCode: 404 },
+        $metadata: {httpStatusCode: 404},
       });
 
       const exists = await b2Service.objectExists("test-bucket", "test/file.txt");
@@ -276,8 +276,8 @@ describe("B2Service", () => {
 
     it("should handle timeout", async () => {
       // Mock a delayed response
-      mockS3Send.mockImplementation(() => 
-        new Promise(resolve => setTimeout(() => resolve({}), 2000))
+      mockS3Send.mockImplementation(() =>
+        new Promise((resolve) => setTimeout(() => resolve({}), 2000))
       );
 
       const isConnected = await b2Service.checkConnectivity(500);
@@ -297,7 +297,7 @@ describe("B2Service", () => {
       // First call fails, second succeeds
       mockGetSignedUrlFunc
         .mockRejectedValueOnce({
-          $metadata: { httpStatusCode: 500 },
+          $metadata: {httpStatusCode: 500},
           message: "Internal Server Error",
         })
         .mockResolvedValueOnce("https://success-url.com");
@@ -313,7 +313,7 @@ describe("B2Service", () => {
 
     it("should not retry on client errors", async () => {
       mockGetSignedUrlFunc.mockRejectedValue({
-        $metadata: { httpStatusCode: 400 },
+        $metadata: {httpStatusCode: 400},
         message: "Bad Request",
       });
 
@@ -331,7 +331,7 @@ describe("B2Service", () => {
       // Test 429 (rate limit)
       mockGetSignedUrlFunc
         .mockRejectedValueOnce({
-          $metadata: { httpStatusCode: 429 },
+          $metadata: {httpStatusCode: 429},
           message: "Too Many Requests",
         })
         .mockResolvedValueOnce("https://success-url.com");
@@ -349,25 +349,25 @@ describe("B2Service", () => {
   describe("Static Methods", () => {
     it("should generate proper storage keys", () => {
       const key = B2Service.generateStorageKey("vault", "user123", "document.pdf", "folder1");
-      
+
       expect(key).toMatch(/^vault\/user123\/folder1\/\d+_document\.pdf$/);
     });
 
     it("should generate storage keys without parent", () => {
       const key = B2Service.generateStorageKey("profiles", "user123", "avatar.jpg");
-      
+
       expect(key).toMatch(/^profiles\/user123\/\d+_avatar\.jpg$/);
     });
 
     it("should sanitize file names", () => {
       const key = B2Service.generateStorageKey("vault", "user123", "my file (1).pdf");
-      
+
       expect(key).toMatch(/^vault\/user123\/root\/\d+_my_file__1_\.pdf$/);
     });
 
     it("should get bucket name from config", () => {
       const bucketName = B2Service.getBucketName();
-      
+
       expect(bucketName).toBe("test-bucket");
     });
   });
@@ -385,7 +385,7 @@ describe("B2Service", () => {
         LastModified: new Date(),
         ContentType: "application/pdf",
         ETag: "etag123",
-        Metadata: { userCustom: "value" },
+        Metadata: {userCustom: "value"},
         ChecksumSHA1: "sha1hash",
       };
 
@@ -406,7 +406,7 @@ describe("B2Service", () => {
         "source/file.txt",
         "dest-bucket",
         "dest/file.txt",
-        { newMeta: "value" }
+        {newMeta: "value"}
       );
 
       expect(mockS3Send).toHaveBeenCalledWith(expect.anything());
@@ -419,11 +419,11 @@ describe("B2Service", () => {
       };
 
       mockGetB2Config.mockReturnValue(configWithDownloadUrl);
-      
+
       const b2ServiceWithCdn = new B2Service();
-      
+
       const url = await b2ServiceWithCdn.getDirectDownloadUrl("test-bucket", "file.txt");
-      
+
       expect(url).toBe("https://cdn.example.com/test-bucket/file.txt");
     });
   });
@@ -432,7 +432,7 @@ describe("B2Service", () => {
     it("should return same instance", () => {
       const instance1 = getB2Service();
       const instance2 = getB2Service();
-      
+
       expect(instance1).toBe(instance2);
     });
 
@@ -440,7 +440,7 @@ describe("B2Service", () => {
       const instance1 = getB2Service();
       resetB2ServiceInstance();
       const instance2 = getB2Service();
-      
+
       expect(instance1).not.toBe(instance2);
     });
   });

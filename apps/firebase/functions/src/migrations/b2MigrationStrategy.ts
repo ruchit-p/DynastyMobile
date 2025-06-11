@@ -104,21 +104,21 @@ export class B2MigrationStrategy {
       // Get user data
       const userDoc = await this.db.collection("users").doc(userId).get();
       if (!userDoc.exists) {
-        return { eligible: false, reason: "User not found" };
+        return {eligible: false, reason: "User not found"};
       }
 
       const userData = userDoc.data();
       if (!userData) {
-        return { eligible: false, reason: "User data is null" };
+        return {eligible: false, reason: "User data is null"};
       }
 
       // Check if user is already migrated or in progress
       const migrationStatus = await this.getUserMigrationStatus(userId);
       if (migrationStatus.migrationStatus === "completed") {
-        return { eligible: false, reason: "Already migrated to B2" };
+        return {eligible: false, reason: "Already migrated to B2"};
       }
       if (migrationStatus.migrationStatus === "in_progress") {
-        return { eligible: false, reason: "Migration already in progress" };
+        return {eligible: false, reason: "Migration already in progress"};
       }
 
       // Get active cohorts
@@ -149,11 +149,11 @@ export class B2MigrationStrategy {
         }
       }
 
-      return { eligible: false, reason: "User does not match any active cohort" };
+      return {eligible: false, reason: "User does not match any active cohort"};
     } catch (error) {
       const {message} = formatErrorForLogging(error, {userId});
       logger.error("Error checking user eligibility", {userId, error: message});
-      return { eligible: false, reason: `Error checking eligibility: ${message}` };
+      return {eligible: false, reason: `Error checking eligibility: ${message}`};
     }
   }
 
@@ -305,7 +305,7 @@ export class B2MigrationStrategy {
       totalSize += size;
 
       if (!filesByProvider[provider]) {
-        filesByProvider[provider] = { count: 0, size: 0 };
+        filesByProvider[provider] = {count: 0, size: 0};
       }
       filesByProvider[provider].count++;
       filesByProvider[provider].size += size;
@@ -391,7 +391,7 @@ export class B2MigrationStrategy {
 
     for (const doc of cohortsSnapshot.docs) {
       const cohort = doc.data() as MigrationCohort;
-      
+
       // Count eligible users for this cohort (approximate)
       const eligibleCount = await this.db.collection("userMigrationStatus")
         .where("cohortId", "==", cohort.id)

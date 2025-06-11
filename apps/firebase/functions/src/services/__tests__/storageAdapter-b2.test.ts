@@ -131,7 +131,7 @@ describe("StorageAdapter - B2 Integration", () => {
     });
 
     it("should handle metadata properly", async () => {
-      const metadata = { userId: "123", type: "document" };
+      const metadata = {userId: "123", type: "document"};
 
       await adapter.generateUploadUrl({
         path: "test/file.txt",
@@ -506,7 +506,7 @@ describe("StorageAdapter - B2 Integration", () => {
         "test/file.txt",
         "text/plain",
         3600,
-        { userId: "123" }
+        {userId: "123"}
       );
 
       expect(result.signedUrl).toBe("https://b2-upload-url.com");
@@ -514,7 +514,7 @@ describe("StorageAdapter - B2 Integration", () => {
         bucket: "test-b2-bucket",
         key: "test/file.txt",
         contentType: "text/plain",
-        metadata: { userId: "123" },
+        metadata: {userId: "123"},
         expiresIn: 3600,
       });
     });

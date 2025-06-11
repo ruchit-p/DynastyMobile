@@ -60,7 +60,7 @@ const mockB2Service = {
 };
 
 (getB2Service as jest.Mock).mockReturnValue(mockB2Service);
-(validateB2Config as jest.Mock).mockReturnValue({ valid: true, errors: [] });
+(validateB2Config as jest.Mock).mockReturnValue({valid: true, errors: []});
 
 describe("B2 Integration Tests", () => {
   beforeEach(() => {
@@ -90,7 +90,7 @@ describe("B2 Integration Tests", () => {
 
     beforeEach(() => {
       migration = getB2VaultMigration();
-      
+
       // Mock Firestore responses
       mockDoc.set.mockResolvedValue(undefined);
       mockDoc.update.mockResolvedValue(undefined);
@@ -171,7 +171,7 @@ describe("B2 Integration Tests", () => {
       const mockStorageAdapter = {
         copyBetweenProviders: jest.fn().mockResolvedValue(undefined),
       };
-      
+
       (migration as any).storageAdapter = mockStorageAdapter;
 
       await migration.startB2Migration(batchId);
@@ -254,18 +254,18 @@ describe("B2 Integration Tests", () => {
     it("should get storage migration statistics", async () => {
       mockQuery.get.mockResolvedValue({
         forEach: (callback: any) => {
-          callback({ data: () => ({ storageProvider: "firebase", size: 1024 }) });
-          callback({ data: () => ({ storageProvider: "r2", size: 2048 }) });
-          callback({ data: () => ({ storageProvider: "b2", size: 512 }) });
+          callback({data: () => ({storageProvider: "firebase", size: 1024})});
+          callback({data: () => ({storageProvider: "r2", size: 2048})});
+          callback({data: () => ({storageProvider: "b2", size: 512})});
         },
       });
 
       const stats = await migration.getStorageMigrationStats();
 
       expect(stats).toEqual({
-        firebase: { count: 1, totalSize: 1024 },
-        r2: { count: 1, totalSize: 2048 },
-        b2: { count: 1, totalSize: 512 },
+        firebase: {count: 1, totalSize: 1024},
+        r2: {count: 1, totalSize: 2048},
+        b2: {count: 1, totalSize: 512},
       });
     });
   });
@@ -307,7 +307,7 @@ describe("B2 Integration Tests", () => {
         exists: true,
         data: () => ({
           subscriptionStatus: "active",
-          createdAt: { toMillis: () => Date.now() - 86400000 }, // 1 day ago
+          createdAt: {toMillis: () => Date.now() - 86400000}, // 1 day ago
           storageUsed: 5000,
         }),
       });
@@ -330,7 +330,7 @@ describe("B2 Integration Tests", () => {
               rolloutPercentage: 50,
               criteria: {
                 userType: "premium",
-                storageUsage: { min: 1000, max: 10000 },
+                storageUsage: {min: 1000, max: 10000},
               },
             }),
           },
@@ -371,9 +371,9 @@ describe("B2 Integration Tests", () => {
 
       expect(metrics.totalFiles).toBe(3);
       expect(metrics.totalSize).toBe(3584);
-      expect(metrics.filesByProvider.firebase).toEqual({ count: 1, size: 1024 });
-      expect(metrics.filesByProvider.r2).toEqual({ count: 1, size: 2048 });
-      expect(metrics.filesByProvider.b2).toEqual({ count: 1, size: 512 });
+      expect(metrics.filesByProvider.firebase).toEqual({count: 1, size: 1024});
+      expect(metrics.filesByProvider.r2).toEqual({count: 1, size: 2048});
+      expect(metrics.filesByProvider.b2).toEqual({count: 1, size: 512});
       expect(metrics.estimatedMigrationTime).toBeGreaterThan(0);
     });
 
@@ -440,7 +440,7 @@ describe("B2 Integration Tests", () => {
             }),
           });
         }
-        return Promise.resolve({ exists: false });
+        return Promise.resolve({exists: false});
       });
 
       mockQuery.get.mockResolvedValue({
@@ -450,7 +450,7 @@ describe("B2 Integration Tests", () => {
               id: cohortId,
               enabled: true,
               rolloutPercentage: 100,
-              criteria: { testGroup: true },
+              criteria: {testGroup: true},
             }),
           },
         ],
@@ -504,7 +504,7 @@ describe("B2 Integration Tests", () => {
       const migration = getB2VaultMigration();
 
       // Mock large dataset
-      const largeDataset = Array.from({ length: 1000 }, (_, i) => ({
+      const largeDataset = Array.from({length: 1000}, (_, i) => ({
         id: `item${i}`,
         data: () => ({
           id: `item${i}`,
@@ -547,7 +547,7 @@ describe("B2 Integration Tests", () => {
         maxRetries: 5, // More retries
       };
 
-      const batchId = await migration.createB2MigrationBatch(batchConfig);
+      await migration.createB2MigrationBatch(batchConfig);
 
       expect(mockDoc.set).toHaveBeenCalledWith(
         expect.objectContaining({

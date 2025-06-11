@@ -86,10 +86,30 @@ if [ ! -z "$R2_CONFIG" ]; then
         r2.config="$R2_CONFIG" \
         r2.base_bucket="$R2_BASE_BUCKET" \
         r2.enable_tests="$ENABLE_R2_TESTS" \
-        r2.enable_migration="$ENABLE_R2_MIGRATION" \
+        r2.enable_migration="$ENABLE_R2_MIGRATION"
+else
+    echo "⚠️  Cloudflare R2 config not provided"
+fi
+
+# Backblaze B2 configuration (using Firebase Secrets for security)
+if [ ! -z "$B2_CONFIG" ]; then
+    echo "Setting Backblaze B2 configuration..."
+    echo "$B2_CONFIG" | firebase functions:secrets:set B2_CONFIG
+    
+    if [ ! -z "$B2_BASE_BUCKET" ]; then
+        echo "$B2_BASE_BUCKET" | firebase functions:secrets:set B2_BASE_BUCKET
+    fi
+    
+    # Set B2 environment configuration
+    firebase functions:config:set \
+        b2.enable_tests="$ENABLE_B2_TESTS" \
+        b2.enable_migration="$ENABLE_B2_MIGRATION" \
+        b2.migration_percentage="$B2_MIGRATION_PERCENTAGE" \
+        b2.endpoint="$B2_ENDPOINT" \
+        b2.region="$B2_REGION" \
         storage.provider="$STORAGE_PROVIDER"
 else
-    echo "⚠️  Cloudflare R2 config not provided - file storage will use Firebase Storage"
+    echo "⚠️  Backblaze B2 config not provided - will fallback to other storage providers"
 fi
 
 # Stripe configuration
