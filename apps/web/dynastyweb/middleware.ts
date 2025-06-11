@@ -45,7 +45,7 @@ export async function middleware(request: NextRequest) {
     "img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.firebaseapp.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://hatscripts.github.io https://react-circle-flags.pages.dev",
     `style-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://fonts.googleapis.com`,
     "font-src 'self' https://fonts.gstatic.com",
-    "frame-src 'self' https://*.firebaseapp.com https://*.google.com http://127.0.0.1:* http://localhost:*",
+    "frame-src 'self' https://*.firebaseapp.com https://*.google.com https://vercel.live http://127.0.0.1:* http://localhost:*",
     "worker-src 'self' blob:",
     `script-src-elem 'self' 'nonce-${nonce}' 'unsafe-inline' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://js.stripe.com https://*.sentry.io https://www.googletagmanager.com https://fpnpmcdn.net https://va.vercel-scripts.com https://vercel.live`,
   ] : [
@@ -55,7 +55,7 @@ export async function middleware(request: NextRequest) {
     "img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.firebaseapp.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://hatscripts.github.io https://react-circle-flags.pages.dev",
     `style-src 'self' 'nonce-${nonce}' https://fonts.googleapis.com`,
     "font-src 'self' https://fonts.gstatic.com",
-    "frame-src 'self' https://*.firebaseapp.com https://*.google.com",
+    "frame-src 'self' https://*.firebaseapp.com https://*.google.com https://vercel.live",
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",

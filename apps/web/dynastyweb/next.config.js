@@ -76,7 +76,7 @@ const nextConfig = {
           "img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.firebaseapp.com https://*.cloudflarestorage.com https://*.r2.cloudflarestorage.com https://*.r2.dev",
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
           "font-src 'self' https://fonts.gstatic.com data:",
-          "frame-src 'none'",
+          "frame-src 'self' https://vercel.live",
           "object-src 'none'",
           "base-uri 'self'",
           "form-action 'self'",
@@ -102,7 +102,7 @@ const nextConfig = {
               "img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.firebaseapp.com https://*.cloudflarestorage.com https://*.r2.cloudflarestorage.com https://*.r2.dev",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com data:",
-              "frame-src 'none'",
+              "frame-src 'self' https://vercel.live",
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",
@@ -137,7 +137,7 @@ const nextConfig = {
                 "img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.firebaseapp.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://hatscripts.github.io https://react-circle-flags.pages.dev https://*.r2.cloudflarestorage.com https://*.r2.dev",
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
                 "font-src 'self' https://fonts.gstatic.com",
-                "frame-src 'self' https://*.firebaseapp.com https://*.google.com http://127.0.0.1:* http://localhost:*",
+                "frame-src 'self' https://*.firebaseapp.com https://*.google.com https://vercel.live http://127.0.0.1:* http://localhost:*",
                 "worker-src 'self' blob: https://*.gstatic.com",
                 "script-src-elem 'self' 'unsafe-inline' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://js.stripe.com https://*.sentry.io https://www.googletagmanager.com https://fpnpmcdn.net https://va.vercel-scripts.com https://vercel.live",
               ].join('; '),
@@ -172,6 +172,15 @@ const nextConfig = {
       {
         source: '/va/:path*',
         destination: 'https://va.vercel-scripts.com/:path*',
+      },
+      // Handle Vercel's internal analytics paths
+      {
+        source: '/_vercel/insights/:path*',
+        destination: 'https://vitals.vercel-insights.com/:path*',
+      },
+      {
+        source: '/_vercel/speed-insights/:path*',
+        destination: 'https://vitals.vercel-insights.com/:path*',
       },
     ];
   },
