@@ -15,6 +15,7 @@ import {getStorageAdapter} from "./services/storageAdapter";
 import {validateUploadRequest, checkUserStorageCapacity} from "./config/r2Security";
 import {R2_CONFIG} from "./config/r2Secrets";
 import {R2Service} from "./services/r2Service";
+import {SubscriptionValidationService} from "./services/subscriptionValidationService";
 import {createLogContext, formatErrorForLogging} from "./utils/sanitization";
 import {validateRequest} from "./utils/request-validator";
 import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
@@ -383,10 +384,29 @@ export const getVaultUploadSignedUrl = onCall(
     const sanitizedFileName = sanitizeFileName(fileName);
     const sanitizedMimeType = sanitizeMimeType(mimeType);
 
-    // Check user's storage capacity
-    const storageCheck = await checkUserStorageCapacity(uid, fileSize);
-    if (!storageCheck.allowed) {
-      throw createError(ErrorCode.RESOURCE_EXHAUSTED, storageCheck.reason || "Insufficient storage capacity");
+    // Use the new SubscriptionValidationService for comprehensive storage validation
+    const validationService = new SubscriptionValidationService();
+    const storageValidation = await validationService.validateStorageAllocation(
+      uid,
+      fileSize,
+      sanitizedMimeType
+    );
+
+    if (!storageValidation.isValid) {
+      throw createError(
+        ErrorCode.RESOURCE_EXHAUSTED,
+        storageValidation.errors.join("; ")
+      );
+    }
+
+    // Log warnings if any (e.g., usage > 80%)
+    if (storageValidation.warnings && storageValidation.warnings.length > 0) {
+      logger.warn("Storage allocation warnings", {
+        userId: uid,
+        warnings: storageValidation.warnings,
+        fileSize,
+        fileName: sanitizedFileName,
+      });
     }
 
     // Validate file for security (MIME type, extensions)
