@@ -94,11 +94,12 @@ firebase functions:secrets:list
 ## Notes
 
 1. **EMAIL_PROVIDER** must be set to "ses" - SendGrid is no longer supported
-2. **SES_CONFIG** contains AWS SES configuration (IAM role used in production)
+2. **SES_CONFIG** contains AWS SES configuration with IAM role ARN (no AWS credentials in production)
 3. **B2_CONFIG** bundles all Backblaze B2 credentials for security
 4. Environment variables in .env files are for non-sensitive configuration
 5. Secrets in Firebase Secret Manager are for sensitive data like API keys
-6. FingerprintJS has been completely removed - no API key needed
+6. **Production SES Authentication**: Uses IAM role assumption - no AWS credentials stored
+7. FingerprintJS has been completely removed - no API key needed
 
 ## Deprecated Services
 

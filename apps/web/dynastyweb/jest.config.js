@@ -8,7 +8,6 @@ const createJestConfig = nextJest({
 // Add any custom config to be passed to Jest
 const customJestConfig = {
   // Add more setup options before each test is run
-  setupFiles: ['<rootDir>/jest.setup.mocks.js'],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.enhanced.js'],
   testEnvironment: 'jest-environment-jsdom',
   moduleDirectories: ['node_modules', 'src'],
@@ -30,18 +29,25 @@ const customJestConfig = {
     '**/__tests__/**/*.test.[jt]s?(x)',
     '**/?(*.)+(spec|test).[jt]s?(x)',
   ],
+  // Separate integration tests
+  testPathIgnorePatterns: (() => {
+    const patterns = [
+      '<rootDir>/node_modules/',
+      '<rootDir>/.next/',
+    ];
+    if (process.env.TEST_TYPE === 'unit') {
+      patterns.push('<rootDir>/src/__tests__/integration/');
+    }
+    return patterns;
+  })(),
   collectCoverageFrom: [
     'src/**/*.{js,jsx,ts,tsx}',
     '!src/**/*.d.ts',
     '!src/**/*.stories.{js,jsx,ts,tsx}',
     '!src/**/__tests__/**',
   ],
-  testPathIgnorePatterns: [
-    '/node_modules/',
-    '/.next/',
-  ],
   transformIgnorePatterns: [
-    'node_modules/(?!(lucide-react|nanoid|ics|uuid|firebase)/)',
+    'node_modules/(?!(lucide-react|nanoid|ics|uuid|firebase|fake-indexeddb)/)',
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
 }

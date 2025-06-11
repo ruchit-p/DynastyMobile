@@ -1,9 +1,11 @@
 import {getStorage} from "firebase-admin/storage";
 import {logger} from "firebase-functions/v2";
 import {getR2Service, R2Service} from "./r2Service";
+import {getB2Service, B2Service} from "./b2Service";
 import {getEnvironmentBucketName} from "../config/r2Secrets";
+import {getEnvironmentBucketName as getB2EnvironmentBucketName} from "../config/b2Secrets";
 
-export type StorageProvider = "firebase" | "r2";
+export type StorageProvider = "firebase" | "r2" | "b2";
 
 export interface StorageAdapterConfig {
   provider: StorageProvider;
@@ -11,18 +13,23 @@ export interface StorageAdapterConfig {
   r2Config?: {
     defaultBucket: string;
   };
+  b2Config?: {
+    defaultBucket: string;
+  };
 }
 
 /**
- * Unified storage adapter that can work with both Firebase Storage and Cloudflare R2
- * This allows for gradual migration and A/B testing
+ * Unified storage adapter that can work with Firebase Storage, Cloudflare R2, and Backblaze B2
+ * This allows for gradual migration and A/B testing between providers
  */
 export class StorageAdapter {
   private provider: StorageProvider;
   private r2Service: R2Service | null = null;
+  private b2Service: B2Service | null = null;
   private firebaseStorage = getStorage();
   private config: StorageAdapterConfig;
   private r2Available: boolean = false;
+  private b2Available: boolean = false;
   private connectivityChecked: boolean = false;
 
   constructor(config?: StorageAdapterConfig) {
@@ -31,6 +38,9 @@ export class StorageAdapter {
       enableMigration: process.env.ENABLE_STORAGE_MIGRATION === "true",
       r2Config: {
         defaultBucket: getEnvironmentBucketName(),
+      },
+      b2Config: {
+        defaultBucket: getB2EnvironmentBucketName(),
       },
     };
 
@@ -42,8 +52,13 @@ export class StorageAdapter {
       logger.info("Emulator mode detected, defaulting to R2 storage with Firebase fallback");
     }
 
+    // Initialize services based on provider and migration settings
     if (this.provider === "r2" || this.config.enableMigration) {
       this.r2Service = getR2Service();
+    }
+
+    if (this.provider === "b2" || this.config.enableMigration) {
+      this.b2Service = getB2Service();
     }
 
     logger.info("StorageAdapter initialized", {
@@ -54,7 +69,7 @@ export class StorageAdapter {
   }
 
   /**
-   * Check R2 connectivity and update provider if needed
+   * Check cloud storage connectivity and update provider if needed
    * This is called lazily on first operation to avoid blocking initialization
    */
   private async ensureProviderAvailability(): Promise<void> {
@@ -65,28 +80,43 @@ export class StorageAdapter {
 
     this.connectivityChecked = true;
 
-    // Only check connectivity for R2 in emulator mode
-    if (this.provider === "r2" && process.env.FUNCTIONS_EMULATOR === "true" && this.r2Service) {
-      logger.info("Checking R2 connectivity for emulator mode...");
-
-      try {
-        this.r2Available = await this.r2Service.checkConnectivity(3000); // 3 second timeout
-
-        if (!this.r2Available) {
-          logger.warn("R2 not available in emulator mode, falling back to Firebase Storage emulator");
+    // Check connectivity for cloud providers in emulator mode
+    if (process.env.FUNCTIONS_EMULATOR === "true") {
+      if (this.provider === "r2" && this.r2Service) {
+        logger.info("Checking R2 connectivity for emulator mode...");
+        try {
+          this.r2Available = await this.r2Service.checkConnectivity(3000);
+          if (!this.r2Available) {
+            logger.warn("R2 not available in emulator mode, falling back to Firebase Storage emulator");
+            this.provider = "firebase";
+          } else {
+            logger.info("R2 connectivity confirmed in emulator mode");
+          }
+        } catch (error) {
+          logger.error("Error checking R2 connectivity", {error});
+          this.r2Available = false;
           this.provider = "firebase";
-          // Keep r2Service instance for potential migration operations
-        } else {
-          logger.info("R2 connectivity confirmed in emulator mode");
         }
-      } catch (error) {
-        logger.error("Error checking R2 connectivity", {error});
-        this.r2Available = false;
-        this.provider = "firebase";
+      } else if (this.provider === "b2" && this.b2Service) {
+        logger.info("Checking B2 connectivity for emulator mode...");
+        try {
+          this.b2Available = await this.b2Service.checkConnectivity(3000);
+          if (!this.b2Available) {
+            logger.warn("B2 not available in emulator mode, falling back to Firebase Storage emulator");
+            this.provider = "firebase";
+          } else {
+            logger.info("B2 connectivity confirmed in emulator mode");
+          }
+        } catch (error) {
+          logger.error("Error checking B2 connectivity", {error});
+          this.b2Available = false;
+          this.provider = "firebase";
+        }
       }
     } else {
       // For non-emulator environments, assume the configured provider is available
       this.r2Available = this.provider === "r2";
+      this.b2Available = this.provider === "b2";
     }
   }
 
@@ -143,7 +173,7 @@ export class StorageAdapter {
     await this.ensureProviderAvailability();
 
     // Use the actual provider after connectivity check
-    const actualProvider = provider === "r2" ? this.provider : provider;
+    const actualProvider = (provider === "r2" || provider === "b2") ? this.provider : provider;
 
     if (actualProvider === "r2" && this.r2Service) {
       const r2Bucket = bucket || this.config.r2Config?.defaultBucket;
@@ -162,6 +192,25 @@ export class StorageAdapter {
         signedUrl,
         provider: actualProvider as StorageProvider,
         bucket: r2Bucket,
+        key: path,
+      };
+    } else if (actualProvider === "b2" && this.b2Service) {
+      const b2Bucket = bucket || this.config.b2Config?.defaultBucket;
+      if (!b2Bucket) {
+        throw new Error("B2 bucket not configured");
+      }
+      const signedUrl = await this.b2Service.generateUploadUrl({
+        bucket: b2Bucket,
+        key: path,
+        contentType: cType,
+        metadata: meta,
+        expiresIn: expires,
+      });
+
+      return {
+        signedUrl,
+        provider: actualProvider as StorageProvider,
+        bucket: b2Bucket,
         key: path,
       };
     } else {
@@ -225,7 +274,7 @@ export class StorageAdapter {
     await this.ensureProviderAvailability();
 
     // Use the actual provider after connectivity check
-    const actualProvider = provider === "r2" ? this.provider : provider;
+    const actualProvider = (provider === "r2" || provider === "b2") ? this.provider : provider;
 
     if (actualProvider === "r2" && this.r2Service) {
       const r2Bucket = bucket || this.config.r2Config?.defaultBucket;
@@ -234,6 +283,17 @@ export class StorageAdapter {
       }
       const signedUrl = await this.r2Service.generateDownloadUrl({
         bucket: r2Bucket,
+        key: path,
+        expiresIn: expires,
+      });
+      return {signedUrl, provider: actualProvider as StorageProvider};
+    } else if (actualProvider === "b2" && this.b2Service) {
+      const b2Bucket = bucket || this.config.b2Config?.defaultBucket;
+      if (!b2Bucket) {
+        throw new Error("B2 bucket not configured");
+      }
+      const signedUrl = await this.b2Service.generateDownloadUrl({
+        bucket: b2Bucket,
         key: path,
         expiresIn: expires,
       });
@@ -279,7 +339,7 @@ export class StorageAdapter {
     await this.ensureProviderAvailability();
 
     // Use the actual provider after connectivity check
-    const actualProvider = provider === "r2" ? this.provider : provider;
+    const actualProvider = (provider === "r2" || provider === "b2") ? this.provider : provider;
 
     if (actualProvider === "r2" && this.r2Service) {
       const r2Bucket = bucket || this.config.r2Config?.defaultBucket;
@@ -287,6 +347,12 @@ export class StorageAdapter {
         throw new Error("R2 bucket not configured");
       }
       await this.r2Service.deleteObject(r2Bucket, path);
+    } else if (actualProvider === "b2" && this.b2Service) {
+      const b2Bucket = bucket || this.config.b2Config?.defaultBucket;
+      if (!b2Bucket) {
+        throw new Error("B2 bucket not configured");
+      }
+      await this.b2Service.deleteObject(b2Bucket, path);
     } else {
       // Firebase Storage
       await this.firebaseStorage.bucket().file(path).delete();
@@ -307,7 +373,7 @@ export class StorageAdapter {
     await this.ensureProviderAvailability();
 
     // Use the actual provider after connectivity check
-    const actualProvider = provider === "r2" ? this.provider : provider;
+    const actualProvider = (provider === "r2" || provider === "b2") ? this.provider : provider;
 
     if (actualProvider === "r2" && this.r2Service) {
       const r2Bucket = bucket || this.config.r2Config?.defaultBucket;
@@ -315,6 +381,12 @@ export class StorageAdapter {
         throw new Error("R2 bucket not configured");
       }
       return await this.r2Service.objectExists(r2Bucket, path);
+    } else if (actualProvider === "b2" && this.b2Service) {
+      const b2Bucket = bucket || this.config.b2Config?.defaultBucket;
+      if (!b2Bucket) {
+        throw new Error("B2 bucket not configured");
+      }
+      return await this.b2Service.objectExists(b2Bucket, path);
     } else {
       // Firebase Storage
       const [exists] = await this.firebaseStorage.bucket().file(path).exists();
@@ -404,18 +476,28 @@ export class StorageAdapter {
     configuredProvider: StorageProvider;
     actualProvider: StorageProvider;
     r2Available: boolean;
+    b2Available: boolean;
     connectivityChecked: boolean;
     bucket: string;
     isEmulator: boolean;
   }> {
     await this.ensureProviderAvailability();
 
+    // Determine the appropriate bucket based on the actual provider
+    let bucket = "default";
+    if (this.provider === "r2") {
+      bucket = this.config.r2Config?.defaultBucket || "default";
+    } else if (this.provider === "b2") {
+      bucket = this.config.b2Config?.defaultBucket || "default";
+    }
+
     return {
       configuredProvider: this.config.provider,
       actualProvider: this.provider,
       r2Available: this.r2Available,
+      b2Available: this.b2Available,
       connectivityChecked: this.connectivityChecked,
-      bucket: this.config.r2Config?.defaultBucket || "default",
+      bucket,
       isEmulator: process.env.FUNCTIONS_EMULATOR === "true",
     };
   }
@@ -427,6 +509,9 @@ export class StorageAdapter {
     this.provider = provider;
     if (provider === "r2" && !this.r2Service) {
       this.r2Service = getR2Service();
+    }
+    if (provider === "b2" && !this.b2Service) {
+      this.b2Service = getB2Service();
     }
     logger.info("Storage provider switched", {provider});
   }

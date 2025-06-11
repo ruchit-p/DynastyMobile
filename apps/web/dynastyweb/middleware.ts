@@ -1,7 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from './src/lib/rate-limit';
+import { subscriptionRateLimit } from './src/middleware/subscription-rate-limit';
 
 export async function middleware(request: NextRequest) {
+  // Rate limiting for subscription-related routes
+  if (request.nextUrl.pathname.startsWith('/checkout') || 
+      request.nextUrl.pathname.includes('/api/subscription')) {
+    const { success, response } = await subscriptionRateLimit(request, 'checkout');
+    if (!success && response) {
+      return response;
+    }
+  }
+  
+  if (request.nextUrl.pathname.includes('/account-settings/subscription') ||
+      request.nextUrl.pathname.includes('/api/billing')) {
+    const { success, response } = await subscriptionRateLimit(request, 'management');
+    if (!success && response) {
+      return response;
+    }
+  }
+
   // Rate limiting for API routes
   if (request.nextUrl.pathname.startsWith('/api/')) {
     // Determine rate limit type based on the API endpoint
@@ -42,7 +60,7 @@ export async function middleware(request: NextRequest) {
   const cspDirectives = (isDevelopment || isStaging) ? [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' 'unsafe-inline' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://js.stripe.com https://*.sentry.io https://www.googletagmanager.com https://fpnpmcdn.net https://va.vercel-scripts.com https://vercel.live`,
-    "connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://us-central1-dynasty-dev-1b042.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://nominatim.openstreetmap.org https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://*.googletagmanager.com https://react-circle-flags.pages.dev https://fpnpmcdn.net https://vitals.vercel-insights.com https://va.vercel-scripts.com https://vercel.live http://127.0.0.1:* http://localhost:*",
+    "connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://us-central1-dynasty-dev-1b042.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://nominatim.openstreetmap.org https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://*.googletagmanager.com https://react-circle-flags.pages.dev https://fpnpmcdn.net https://vitals.vercel-insights.com https://va.vercel-scripts.com https://vercel.live https://api.stripe.com https://checkout.stripe.com http://127.0.0.1:* http://localhost:*",
     "img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.firebaseapp.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://hatscripts.github.io https://react-circle-flags.pages.dev",
     `style-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://fonts.googleapis.com`,
     "font-src 'self' https://fonts.gstatic.com",
@@ -52,7 +70,7 @@ export async function middleware(request: NextRequest) {
   ] : [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://js.stripe.com https://*.sentry.io https://www.googletagmanager.com https://va.vercel-scripts.com https://vercel.live`,
-    "connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://us-central1-dynasty-eba63.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://nominatim.openstreetmap.org https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://*.googletagmanager.com https://vitals.vercel-insights.com https://va.vercel-scripts.com https://vercel.live",
+    "connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://us-central1-dynasty-eba63.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://nominatim.openstreetmap.org https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://*.googletagmanager.com https://vitals.vercel-insights.com https://va.vercel-scripts.com https://vercel.live https://api.stripe.com https://checkout.stripe.com",
     "img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.firebaseapp.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://hatscripts.github.io https://react-circle-flags.pages.dev",
     `style-src 'self' 'nonce-${nonce}' https://fonts.googleapis.com`,
     "font-src 'self' https://fonts.gstatic.com",
@@ -73,7 +91,7 @@ export async function middleware(request: NextRequest) {
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('X-XSS-Protection', '1; mode=block');
-  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), interest-cohort=()');
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   
   // HSTS (only in production)
   if (isProduction) {

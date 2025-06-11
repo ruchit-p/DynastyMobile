@@ -16,10 +16,12 @@ All templates created in SES with correct names:
 - [ ] `invite` - Family invitation template
 - [ ] `mfa` - Multi-factor authentication template
 
-### ✅ IAM Configuration
-- [ ] IAM role created with SES permissions
-- [ ] Role attached to Firebase Functions service account
+### ✅ IAM Configuration (Production Authentication)
+- [ ] IAM role created with SES permissions (e.g., `AmazonConnectEmailSESAccessRole`)
+- [ ] Trust policy configured to allow Firebase service account assumption
+- [ ] Role ARN added to Firebase `SES_CONFIG` secret
 - [ ] Minimal permissions granted (principle of least privilege)
+- [ ] NO AWS credentials stored in Firebase secrets (IAM role only)
 
 Required IAM Policy:
 ```json

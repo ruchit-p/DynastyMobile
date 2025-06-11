@@ -328,10 +328,26 @@ export const inviteUserToFamily = onCall(
 
     await invitationRef.set(newInvitation);
 
-    const frontendUrlValue = FRONTEND_URL.value();
+    // Handle missing FRONTEND_URL secret in development
+    let frontendUrlValue: string;
+    try {
+      frontendUrlValue = FRONTEND_URL.value();
+    } catch (error) {
+      // Fallback for local development when secret is not set
+      if (process.env.FUNCTIONS_EMULATOR === "true") {
+        frontendUrlValue = process.env.FRONTEND_URL || "http://localhost:3000";
+        logger.warn("FRONTEND_URL secret not set, using environment variable or default for family invitation", {
+          fallbackUrl: frontendUrlValue,
+        });
+      } else {
+        logger.error("FRONTEND_URL configuration secret is missing for family invitation.");
+        await invitationRef.update({status: "failed_config_error"}); // Mark invite as failed
+        throw createError(ErrorCode.INTERNAL, "Email service configuration error prevents sending invitation.");
+      }
+    }
 
     if (!frontendUrlValue) {
-      logger.error("FRONTEND_URL configuration secret is missing for family invitation.");
+      logger.error("FRONTEND_URL configuration is missing for family invitation.");
       await invitationRef.update({status: "failed_config_error"}); // Mark invite as failed
       throw createError(ErrorCode.INTERNAL, "Email service configuration error prevents sending invitation.");
     }

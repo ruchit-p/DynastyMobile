@@ -1,6 +1,29 @@
 import {ValidationSchema} from "../utils/request-validator";
 
 export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
+  // Migration schemas
+  migrateUserSubscriptionFields: {
+    rules: [
+      {field: "dryRun", type: "boolean"},
+      {field: "batchSize", type: "number"},
+    ],
+    xssCheck: false,
+  },
+
+  checkUserSubscriptionFields: {
+    rules: [
+      {field: "userId", type: "id", required: true},
+    ],
+    xssCheck: false,
+  },
+
+  generateMissingReferralCodes: {
+    rules: [
+      {field: "dryRun", type: "boolean"},
+    ],
+    xssCheck: false,
+  },
+
   createEvent: {
     rules: [
       {field: "title", type: "string", required: true, maxLength: 200},

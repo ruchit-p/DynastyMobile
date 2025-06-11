@@ -52,9 +52,7 @@ SES_REGION=us-east-1
 SES_FROM_EMAIL=noreply@mydynastyapp.com
 SES_FROM_NAME=Dynasty App
 
-# Optional: For local testing only
-AWS_ACCESS_KEY_ID=your-access-key
-AWS_SECRET_ACCESS_KEY=your-secret-key
+# Note: Production uses IAM roles - no AWS credentials needed
 ```
 
 #### Production/Staging
@@ -64,9 +62,9 @@ Create Firebase secrets:
 firebase functions:secrets:set EMAIL_PROVIDER
 # Enter: ses
 
-# Set SES configuration
+# Set SES configuration (Production with IAM role)
 firebase functions:secrets:set SES_CONFIG
-# Enter JSON: {"region":"us-east-1","fromEmail":"noreply@mydynastyapp.com","fromName":"Dynasty App"}
+# Enter JSON: {"region":"us-east-1","fromEmail":"noreply@mydynastyapp.com","fromName":"Dynasty App","roleArn":"arn:aws:iam::ACCOUNT:role/ROLE_NAME"}
 ```
 
 ### 3. Template Variable Mapping

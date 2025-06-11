@@ -54,10 +54,10 @@ interface MigrationBatch {
 }
 
 export class R2VaultMigration {
-  private db = getFirestore();
-  private storageAdapter: StorageAdapter;
-  private batchSize = 100;
-  private maxRetries = 3;
+  protected db = getFirestore();
+  protected storageAdapter: StorageAdapter;
+  protected batchSize = 100;
+  protected maxRetries = 3;
 
   constructor() {
     this.storageAdapter = new StorageAdapter({

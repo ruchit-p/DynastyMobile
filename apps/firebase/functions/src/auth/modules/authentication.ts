@@ -296,7 +296,27 @@ export const handleSignUp = onCall({
       });
 
       // Send verification email using helper
-      const verificationLink = `${FRONTEND_URL.value()}/verify-email/confirm?uid=${userId}&token=${verificationToken}`;
+      // Handle missing FRONTEND_URL secret in development
+      let frontendUrl: string;
+      try {
+        frontendUrl = FRONTEND_URL.value();
+      } catch (error) {
+        // Fallback for local development when secret is not set
+        if (process.env.FUNCTIONS_EMULATOR === "true") {
+          frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+          logger.warn("FRONTEND_URL secret not set, using environment variable or default", createLogContext({
+            fallbackUrl: frontendUrl,
+          }));
+        } else {
+          throw createError(ErrorCode.INTERNAL, "Email service configuration error prevents sending verification email.");
+        }
+      }
+
+      if (!frontendUrl) {
+        throw createError(ErrorCode.INTERNAL, "Email service configuration error prevents sending verification email.");
+      }
+
+      const verificationLink = `${frontendUrl}/verify-email/confirm?uid=${userId}&token=${verificationToken}`;
       const {sendEmailUniversal} = await import("../config/emailConfig");
       await sendEmailUniversal({
         to: signupData.email,

@@ -1,12 +1,12 @@
 # Production Secrets Setup Guide
 
-This guide walks through setting up all production secrets for Dynasty's Firebase Functions with CSRF protection enabled.
+This guide walks through setting up all production secrets for Dynasty's Firebase Functions.
 
 ## Overview
 
 Dynasty requires several types of secrets for secure production operation:
-- **Core Security**: CSRF protection, JWT tokens, encryption keys
-- **External Services**: SendGrid, Twilio, FingerprintJS, Cloudflare R2
+- **Core Security**: JWT tokens, encryption keys
+- **External Services**: AWS SES, Twilio, Backblaze B2
 - **Environment Config**: URLs, API endpoints, feature flags
 
 ## Quick Start
@@ -45,7 +45,6 @@ Dynasty requires several types of secrets for secure production operation:
 
 | Secret | Purpose | Size | Auto-Generated |
 |--------|---------|------|----------------|
-| `CSRF_SECRET_KEY` | CSRF token validation | 256-bit | ✅ |
 | `JWT_SECRET_KEY` | JWT token signing | 256-bit | ✅ |
 | `ENCRYPTION_KEY` | Data encryption | 256-bit | ✅ |
 | `SESSION_SECRET_KEY` | Session management | 256-bit | ✅ |
@@ -57,32 +56,25 @@ Dynasty requires several types of secrets for secure production operation:
 
 | Service | Keys Required | Purpose |
 |---------|---------------|---------|
-| **SendGrid** | `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL` | Email delivery |
+| **AWS SES** | `SES_CONFIG` (with IAM role ARN) | Email delivery |
 | **Twilio** | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` | SMS delivery |
-| **FingerprintJS** | `FINGERPRINTJS_SECRET_KEY`, `FINGERPRINTJS_PUBLIC_KEY` | Device fingerprinting |
-| **Cloudflare R2** | `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY` | File storage |
+| **Backblaze B2** | `B2_CONFIG` | File storage |
 
 ## External Service Setup
 
-### SendGrid Configuration
+### AWS SES Configuration
 
-1. **Create SendGrid Account**: https://sendgrid.com/
-2. **Generate API Key**:
-   - Go to Settings → API Keys
-   - Create API key with "Full Access" or "Mail Send" permissions
-   - Copy the API key
+1. **Set up IAM Role** with SES permissions (see CLAUDE.md for details)
+2. **Configure Domain Authentication**:
+   - Verify your domain in AWS SES
+   - Set up SPF, DKIM, and DMARC records
+   - Move out of sandbox mode for production
 
-3. **Configure Sender Identity**:
-   - Go to Settings → Sender Authentication
-   - Verify a single sender email or domain
-   - Use verified email as `SENDGRID_FROM_EMAIL`
-
-4. **Update Configuration**:
+3. **Update Configuration**:
    ```bash
-   # In .env.production
-   SENDGRID_API_KEY=SG.your-api-key-here
-   SENDGRID_FROM_EMAIL=noreply@yourdomain.com
-   SENDGRID_FROM_NAME="Dynasty App"
+   # Set Firebase secret
+   firebase functions:secrets:set SES_CONFIG
+   # Enter JSON: {"region":"us-east-2","fromEmail":"noreply@mydynastyapp.com","fromName":"Dynasty App","roleArn":"arn:aws:iam::ACCOUNT:role/ROLE_NAME"}
    ```
 
 ### Twilio Configuration
@@ -106,42 +98,24 @@ Dynasty requires several types of secrets for secure production operation:
    TWILIO_PHONE_NUMBER=+1234567890
    ```
 
-### FingerprintJS Pro Configuration
+### Backblaze B2 Configuration
 
-1. **Create FingerprintJS Account**: https://fingerprint.com/
-2. **Get API Keys**:
-   - Go to API Keys section
-   - Copy Public Key (for client-side)
-   - Copy Secret Key (for server-side)
-
-3. **Update Configuration**:
-   ```bash
-   # In .env.production
-   FINGERPRINTJS_PUBLIC_KEY=your-public-key-here
-   FINGERPRINTJS_SECRET_KEY=your-secret-key-here
-   ```
-
-### Cloudflare R2 Configuration
-
-1. **Create Cloudflare Account**: https://cloudflare.com/
-2. **Enable R2 Storage**:
-   - Go to R2 Object Storage
+1. **Create Backblaze Account**: https://www.backblaze.com/b2/
+2. **Create B2 Bucket**:
+   - Go to B2 Cloud Storage
    - Create a new bucket
-   - Note bucket name and account ID
+   - Note bucket name and bucket ID
 
-3. **Generate API Token**:
-   - Go to My Profile → API Tokens
-   - Create Custom Token with R2 permissions
-   - Note Access Key ID and Secret Access Key
+3. **Generate Application Key**:
+   - Go to App Keys
+   - Create Application Key with read/write permissions
+   - Note Application Key ID and Application Key
 
 4. **Update Configuration**:
    ```bash
-   # In .env.production
-   CLOUDFLARE_R2_ACCESS_KEY_ID=your-access-key-id
-   CLOUDFLARE_R2_SECRET_ACCESS_KEY=your-secret-access-key
-   CLOUDFLARE_R2_ENDPOINT=https://your-account-id.r2.cloudflarestorage.com
-   CLOUDFLARE_R2_BUCKET_NAME=dynasty-production
-   CLOUDFLARE_R2_ACCOUNT_ID=your-account-id
+   # Set Firebase secret
+   firebase functions:secrets:set B2_CONFIG
+   # Enter JSON: {"applicationKeyId":"your-key-id","applicationKey":"your-key","bucketId":"your-bucket-id","bucketName":"dynastyprod"}
    ```
 
 ## Security Best Practices

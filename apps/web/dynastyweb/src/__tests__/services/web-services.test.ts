@@ -2,13 +2,13 @@ import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals
 
 // Import services to test
 import { vaultService } from '../../services/VaultService';
-import notificationService from '../../services/NotificationService';
-import networkMonitor from '../../services/NetworkMonitor';
-import offlineService from '../../services/OfflineService';
-import syncQueueService from '../../services/SyncQueueService';
-import cacheService from '../../services/CacheService';
-import auditLogService from '../../services/AuditLogService';
-import errorHandlingService from '../../services/ErrorHandlingService';
+import { notificationService } from '../../services/NotificationService';
+import { networkMonitor } from '../../services/NetworkMonitor';
+import { offlineService } from '../../services/OfflineService';
+import { syncQueueService } from '../../services/SyncQueueService';
+import { cacheService } from '../../services/CacheService';
+import { auditLogService } from '../../services/AuditLogService';
+import { errorHandler as ErrorHandlingService, ErrorSeverity } from '../../services/ErrorHandlingService';
 
 // Mock Firebase
 jest.mock('firebase/auth');
@@ -459,7 +459,7 @@ describe('Web Services Tests', () => {
     let errorService: ErrorHandlingService;
 
     beforeEach(() => {
-      errorService = new ErrorHandlingService();
+      errorService = ErrorHandlingService;
       // Mock console methods
       jest.spyOn(console, 'error').mockImplementation();
       jest.spyOn(console, 'warn').mockImplementation();
@@ -539,9 +539,8 @@ describe('Web Services Tests', () => {
 
 describe('Web Services Integration Tests', () => {
   it('should handle complete offline-to-online sync flow', async () => {
-    const offlineService = new OfflineService();
-    const syncQueue = new SyncQueueService();
-    const notificationService = new NotificationService();
+    // Use existing service instances
+    const syncQueue = syncQueueService;
     
     // Start offline
     jest.spyOn(offlineService, 'isOnline').mockReturnValue(false);
@@ -585,8 +584,8 @@ describe('Web Services Integration Tests', () => {
   });
   
   it('should coordinate vault encryption with audit logging', async () => {
-    const vaultService = new VaultService();
-    const auditService = new AuditLogService();
+    // Use existing service instances  
+    const auditService = auditLogService;
     
     // Enable audit hooks
     vaultService.enableAuditLogging(auditService);

@@ -65,14 +65,18 @@ The Dynasty codebase has been fully migrated from SendGrid to AWS SES for all em
 **Implementation details:**
 - Universal email function (`sendEmailUniversal`) routes to appropriate provider
 - SES templates created: `verify-email`, `password-reset`, `invite`, `mfa`
-- IAM role support for production (no hardcoded credentials)
+- **IAM role authentication** for production (no hardcoded credentials stored)
 - Environment-specific URL handling for all email links
 - MFA email support (new functionality not available in SendGrid)
+- Trust policy configured for Firebase service account assumption
+- Production uses role ARN in SES_CONFIG secret
 
 **Configuration:**
 - Set `EMAIL_PROVIDER=ses` to switch to AWS SES
-- Configure `SES_CONFIG` with region, fromEmail, and fromName
+- Configure `SES_CONFIG` with region, fromEmail, fromName, and roleArn (production)
 - All email functions automatically use the configured provider
+- **Production**: Uses IAM role ARN for authentication (no AWS credentials)
+- **Development**: Can use AWS credentials or service account for local testing
 - Instant rollback capability by switching provider
 
 ### Vault Encryption Implementation

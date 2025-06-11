@@ -13,6 +13,9 @@
 import '@testing-library/jest-dom'
 import React from 'react'
 
+// Setup fake IndexedDB for testing
+import 'fake-indexeddb/auto'
+
 // =============================================================================
 // ENVIRONMENT SETUP
 // =============================================================================
@@ -631,4 +634,20 @@ global.testUtils = {
   flushPromises: () => new Promise(resolve => setTimeout(resolve, 0)),
 };
 
-console.log('🧪 Enhanced Jest setup complete - all mocks and utilities loaded!');
+// =============================================================================
+// INTEGRATION TEST ENVIRONMENT SETUP
+// =============================================================================
+
+// Check if we're running integration tests
+const isIntegrationTest = process.env.TEST_TYPE === 'integration' || 
+                         process.argv.some(arg => arg.includes('integration'));
+
+if (isIntegrationTest) {
+  // Setup integration test environment
+  const { setupTestFile } = require('./src/__tests__/integration/setup');
+  setupTestFile();
+  
+  console.log('🔧 Integration test environment configured');
+} else {
+  console.log('🧪 Enhanced Jest setup complete - all mocks and utilities loaded!');
+}
