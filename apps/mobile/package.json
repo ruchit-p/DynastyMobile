@@ -22,7 +22,6 @@
   "dependencies": {
     "@craftzdog/react-native-buffer": "^6.0.5",
     "@expo/vector-icons": "^14.1.0",
-    "@fingerprintjs/fingerprintjs-pro-react-native": "^3.4.0",
     "@gorhom/bottom-sheet": "^5.1.4",
     "@notifee/react-native": "^9.1.8",
     "@react-native-async-storage/async-storage": "^2.1.2",

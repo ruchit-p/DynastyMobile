@@ -20,8 +20,6 @@
     "emulator:start": "cd ../../firebase && firebase emulators:start --import=./emulator-data --export-on-exit"
   },
   "dependencies": {
-    "@fingerprintjs/fingerprintjs": "^4.6.1",
-    "@fingerprintjs/fingerprintjs-pro-react": "^2.6.3",
     "@radix-ui/react-accordion": "^1.2.3",
     "@radix-ui/react-alert-dialog": "^1.1.6",
     "@radix-ui/react-avatar": "^1.1.3",
