@@ -57,6 +57,14 @@ const nextConfig = {
       }
     ];
 
+    // Determine environment based on NEXT_PUBLIC_ENVIRONMENT
+    const environment = process.env.NEXT_PUBLIC_ENVIRONMENT || 'development';
+    const firebaseFunctionsUrl = {
+      'staging': 'https://dynasty-dev-1b042-us-central1.cloudfunctions.net',
+      'production': 'https://dynasty-eba63-us-central1.cloudfunctions.net',
+      'development': 'https://dynasty-dev-1b042-us-central1.cloudfunctions.net'
+    }[environment] || 'https://dynasty-dev-1b042-us-central1.cloudfunctions.net';
+
     const productionHeaders = [
       ...commonHeaders,
       {
@@ -72,7 +80,7 @@ const nextConfig = {
         value: [
           "default-src 'self'",
           "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://*.sentry.io https://www.googletagmanager.com https://va.vercel-scripts.com https://vitals.vercel-insights.com https://vercel.live",
-          "connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://dynasty-eba63-us-central1.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.cloudflarestorage.com https://*.r2.cloudflarestorage.com https://vitals.vercel-insights.com https://va.vercel-scripts.com",
+          `connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com ${firebaseFunctionsUrl} https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.cloudflarestorage.com https://*.r2.cloudflarestorage.com https://vitals.vercel-insights.com https://va.vercel-scripts.com https://www.google-analytics.com https://*.google-analytics.com https://*.googletagmanager.com https://vercel.live`,
           "img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.firebaseapp.com https://*.cloudflarestorage.com https://*.r2.cloudflarestorage.com https://*.r2.dev",
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
           "font-src 'self' https://fonts.gstatic.com data:",
@@ -98,7 +106,7 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://*.sentry.io https://www.googletagmanager.com https://vercel.live",
-              "connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://dynasty-eba63-us-central1.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.cloudflarestorage.com https://*.r2.cloudflarestorage.com",
+              `connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com ${firebaseFunctionsUrl} https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.cloudflarestorage.com https://*.r2.cloudflarestorage.com https://www.google-analytics.com https://*.google-analytics.com https://*.googletagmanager.com`,
               "img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.firebaseapp.com https://*.cloudflarestorage.com https://*.r2.cloudflarestorage.com https://*.r2.dev",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com data:",
