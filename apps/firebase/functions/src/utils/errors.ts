@@ -47,6 +47,7 @@ export enum ErrorCode {
   INTERNAL = "internal",
   UNKNOWN = "unknown",
   UNIMPLEMENTED = "unimplemented",
+  INVALID_STATE = "invalid-state",
 
   // Subscription/Payment errors
   SUBSCRIPTION_NOT_FOUND = "subscription-not-found",
@@ -127,6 +128,7 @@ export const ErrorMessages = {
   [ErrorCode.ABORTED]: "The operation was aborted.",
   [ErrorCode.INTERNAL]: "An internal error occurred. Please try again later.",
   [ErrorCode.UNKNOWN]: "An unknown error occurred. Please try again.",
+  [ErrorCode.INVALID_STATE]: "The operation cannot be performed in the current state.",
 
   // Subscription/Payment errors
   [ErrorCode.SUBSCRIPTION_NOT_FOUND]: "Subscription not found. Please check your account status.",
@@ -311,6 +313,9 @@ function mapToHttpsErrorCode(code: ErrorCode): "ok" | "cancelled" | "unknown" | 
     return "already-exists";
   case ErrorCode.ADDON_NOT_FOUND:
     return "not-found";
+  
+  case ErrorCode.INVALID_STATE:
+    return "failed-precondition";
 
   default: {
     // This exhaustive check helps ensure all enum members are considered.
