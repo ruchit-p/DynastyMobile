@@ -11,7 +11,9 @@ After conducting a thorough analysis of the Dynasty web application (`apps/web/d
 - **Architecture**: React Native with Expo Router
 - **Target**: iOS/Android native applications
 - **Core Focus**: Enterprise-grade security, offline-first design, comprehensive encryption
-- **Dependencies**: 80+ specialized packages including LibSignal, FingerprintJS, extensive Firebase services
+- **Dependencies**: 80+ specialized packages including LibSignal, native device identification, extensive Firebase services
+- **Email Provider**: AWS SES
+- **Storage Provider**: Backblaze B2
 
 ### Web Application (Next.js)
 
@@ -19,6 +21,24 @@ After conducting a thorough analysis of the Dynasty web application (`apps/web/d
 - **Target**: Web browsers (responsive design)
 - **Core Focus**: Basic family management features with web-optimized UX
 - **Dependencies**: 40+ packages focused on web UI and basic functionality
+- **Email Provider**: AWS SES
+- **Storage Provider**: Backblaze B2
+
+## Infrastructure Overview
+
+### Backend Services
+- **Database**: Firebase Firestore
+- **Authentication**: Firebase Auth
+- **Functions**: Firebase Cloud Functions
+- **Email Provider**: AWS SES (migrated from SendGrid)
+- **File Storage**: Backblaze B2 (S3-compatible API)
+- **CDN**: Cloudflare (for web assets)
+
+### Security Infrastructure
+- **Encryption**: LibSignal Protocol (E2EE)
+- **Device ID**: Native platform identification (removed FingerprintJS)
+- **Secrets Management**: Firebase Secret Manager
+- **Rate Limiting**: Redis-based (production)
 
 ## Detailed Feature Comparison
 
@@ -31,8 +51,8 @@ After conducting a thorough analysis of the Dynasty web application (`apps/web/d
 
 #### 2. Vault/File Storage
 
-- **Mobile**: 43KB advanced implementation with encryption, search, streaming, biometric access
-- **Web**: 13KB basic implementation with standard file operations
+- **Mobile**: 43KB advanced implementation with encryption, search, streaming, biometric access (Backblaze B2)
+- **Web**: 13KB basic implementation with standard file operations (Backblaze B2)
 
 #### 3. Chat/Messaging
 
@@ -51,8 +71,8 @@ After conducting a thorough analysis of the Dynasty web application (`apps/web/d
 
 #### 6. User Authentication
 
-- **Mobile**: Multi-factor authentication, biometric login, advanced security flows
-- **Web**: Standard email/password and Google OAuth
+- **Mobile**: Multi-factor authentication, biometric login, advanced security flows (AWS SES)
+- **Web**: Standard email/password and Google OAuth (AWS SES)
 
 #### 7. Notifications
 
@@ -92,7 +112,7 @@ After conducting a thorough analysis of the Dynasty web application (`apps/web/d
 
 **Device Management**
 
-- FingerprintJS integration for device identification
+- Native device identification using platform-specific properties
 - Trusted device management with scoring
 - Remote device revocation
 - Device location tracking
@@ -236,7 +256,7 @@ After conducting a thorough analysis of the Dynasty web application (`apps/web/d
 ├─────────────────────────────────────┤
 │ Biometric Authentication Layer      │
 ├─────────────────────────────────────┤
-│ Device Fingerprinting (FingerprintJS)│
+│ Native Device Identification        │
 ├─────────────────────────────────────┤
 │ Multi-Device Key Management        │
 ├─────────────────────────────────────┤
@@ -288,7 +308,7 @@ After conducting a thorough analysis of the Dynasty web application (`apps/web/d
 ```json
 {
   "@signalapp/libsignal-client": "^0.73.1",
-  "@fingerprintjs/fingerprintjs-pro-react-native": "^3.4.0",
+  "expo-device": "~7.0.1",
   "@notifee/react-native": "^9.1.8",
   "react-native-keychain": "^10.0.0",
   "react-native-sqlite-storage": "^6.0.1",
@@ -335,7 +355,7 @@ After conducting a thorough analysis of the Dynasty web application (`apps/web/d
 
 2. **Device Management**
 
-   - Integrate FingerprintJS for web
+   - Implement native browser device identification
    - Add trusted device management
    - Implement device-based authentication
 

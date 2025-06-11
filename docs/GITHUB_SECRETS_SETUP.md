@@ -2,6 +2,17 @@
 
 This document lists all the GitHub secrets that need to be configured for the Dynasty Mobile project's CI/CD pipelines.
 
+## Recent Migration Updates
+
+**Important**: This guide reflects recent service migrations:
+
+- **Email Service**: Migrated from SendGrid to AWS SES (January 2025)
+- **Storage Service**: Migrated from Cloudflare R2 to Backblaze B2 (January 2025)  
+- **Device Fingerprinting**: Removed FingerprintJS dependency - now uses native device properties (January 2025)
+- **CSRF Protection**: Removed from Firebase functions - using Firebase's built-in authentication (January 2025)
+
+If you have existing secrets from previous services, they can be removed from your GitHub repository settings.
+
 ## Repository Secrets Required
 
 ### 1. Firebase Configuration
@@ -27,7 +38,6 @@ This document lists all the GitHub secrets that need to be configured for the Dy
 ### 2. Firebase Functions Secrets
 
 #### Core Security Keys (Production)
-- `PROD_CSRF_SECRET_KEY` - CSRF protection secret (256-bit)
 - `PROD_JWT_SECRET_KEY` - JWT signing key (256-bit)
 - `PROD_ENCRYPTION_MASTER_KEY` - Master encryption key (256-bit)
 - `PROD_SESSION_SECRET` - Session management secret (256-bit)
@@ -36,7 +46,6 @@ This document lists all the GitHub secrets that need to be configured for the Dy
 - `PROD_DB_ENCRYPTION_KEY` - Database encryption key (256-bit)
 
 #### Core Security Keys (Staging)
-- `STAGING_CSRF_SECRET_KEY` - CSRF protection secret for staging
 - `STAGING_JWT_SECRET_KEY` - JWT signing key for staging
 - `STAGING_ENCRYPTION_MASTER_KEY` - Master encryption key for staging
 - `STAGING_SESSION_SECRET` - Session management secret for staging
@@ -46,26 +55,36 @@ This document lists all the GitHub secrets that need to be configured for the Dy
 
 ### 3. External Service APIs
 
-#### SendGrid (Email Service)
-- `PROD_SENDGRID_API_KEY` - SendGrid API key for production
-- `STAGING_SENDGRID_API_KEY` - SendGrid API key for staging
-- `SENDGRID_FROM_EMAIL` - Verified sender email (e.g., noreply@mydynastyapp.com)
-- `SENDGRID_TEMPLATE_VERIFICATION` - Email verification template ID
-- `SENDGRID_TEMPLATE_PASSWORD_RESET` - Password reset template ID
-- `SENDGRID_TEMPLATE_INVITE` - Invitation template ID
+#### AWS SES (Email Service)
+- `PROD_SES_CONFIG` - AWS SES configuration JSON for production
+- `STAGING_SES_CONFIG` - AWS SES configuration JSON for staging
+- `SES_REGION` - AWS region for SES (e.g., us-east-1)
+- `SES_FROM_EMAIL` - Verified sender email (e.g., noreply@mydynastyapp.com)
+- `SES_FROM_NAME` - Email sender display name (e.g., Dynasty)
 
-#### Cloudflare R2 (Storage)
-- `PROD_R2_ACCOUNT_ID` - Cloudflare account ID for production
-- `PROD_R2_ACCESS_KEY_ID` - R2 access key ID for production
-- `PROD_R2_SECRET_ACCESS_KEY` - R2 secret access key for production
-- `STAGING_R2_ACCOUNT_ID` - Cloudflare account ID for staging
-- `STAGING_R2_ACCESS_KEY_ID` - R2 access key ID for staging
-- `STAGING_R2_SECRET_ACCESS_KEY` - R2 secret access key for staging
+#### Backblaze B2 (Storage)
+- `PROD_B2_APPLICATION_KEY_ID` - B2 application key ID for production
+- `PROD_B2_APPLICATION_KEY` - B2 application key for production
+- `PROD_B2_BUCKET_ID` - B2 bucket ID for production
+- `STAGING_B2_APPLICATION_KEY_ID` - B2 application key ID for staging
+- `STAGING_B2_APPLICATION_KEY` - B2 application key for staging
+- `STAGING_B2_BUCKET_ID` - B2 bucket ID for staging
 
-#### FingerprintJS Pro
-- `PROD_FINGERPRINT_API_KEY` - FingerprintJS public API key for production
-- `PROD_FINGERPRINT_SECRET_KEY` - FingerprintJS server secret key for production
-- `STAGING_FINGERPRINT_API_KEY` - FingerprintJS public API key for staging
+#### Twilio (SMS Service)
+- `PROD_TWILIO_ACCOUNT_SID` - Twilio account SID for production
+- `PROD_TWILIO_AUTH_TOKEN` - Twilio auth token for production
+- `PROD_TWILIO_PHONE_NUMBER` - Twilio phone number for production
+- `STAGING_TWILIO_ACCOUNT_SID` - Twilio account SID for staging
+- `STAGING_TWILIO_AUTH_TOKEN` - Twilio auth token for staging
+- `STAGING_TWILIO_PHONE_NUMBER` - Twilio phone number for staging
+
+#### Stripe (Payment Processing)
+- `PROD_STRIPE_PUBLISHABLE_KEY` - Stripe publishable key for production
+- `PROD_STRIPE_SECRET_KEY` - Stripe secret key for production
+- `PROD_STRIPE_WEBHOOK_SECRET` - Stripe webhook secret for production
+- `STAGING_STRIPE_PUBLISHABLE_KEY` - Stripe publishable key for staging
+- `STAGING_STRIPE_SECRET_KEY` - Stripe secret key for staging
+- `STAGING_STRIPE_WEBHOOK_SECRET` - Stripe webhook secret for staging
 
 #### Google Services
 - `PROD_GOOGLE_PLACES_API_KEY` - Google Places API key for production
@@ -172,9 +191,11 @@ cp .env.production.template .env.production
 
 - [ ] All Firebase configuration secrets added
 - [ ] Security keys generated and added
-- [ ] SendGrid API configured with templates
-- [ ] Cloudflare R2 credentials configured
-- [ ] FingerprintJS keys added
+- [ ] AWS SES configured with templates
+- [ ] Backblaze B2 credentials configured
+- [ ] Twilio SMS service configured
+- [ ] Stripe payment processing configured
+- [ ] Google Places API configured
 - [ ] Vercel deployment token configured
 - [ ] Sentry integration configured
 - [ ] Mobile app signing credentials added
@@ -195,7 +216,7 @@ cp .env.production.template .env.production
 - Automatic deployment on push to `staging` branch
 - Runs integration tests
 - Uses separate Firebase project
-- Separate R2 bucket for isolation
+- Separate B2 bucket for isolation
 
 ## Secret Security Guidelines
 

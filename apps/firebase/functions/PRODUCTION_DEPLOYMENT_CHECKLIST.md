@@ -37,13 +37,15 @@
 
 # This sets all required configuration:
 # - Core security keys (CSRF, JWT, encryption, etc.)
-# - External service keys (SendGrid, Twilio, FingerprintJS, R2)
+# - External service keys (AWS SES, Twilio, R2)
 # - Environment configuration (URLs, feature flags)
 
 # Manual configuration (for reference):
 # firebase functions:config:set \
 #   security.csrf_secret="GENERATED_KEY" \
 #   security.jwt_secret="GENERATED_KEY" \
+#   ses.region="us-east-1" \
+#   ses.from_email="noreply@mydynastyapp.com" \
 #   ... (see .env.production.template for full list)
 ```
 
