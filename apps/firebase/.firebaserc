@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "dynasty-eba63"
+    "default": "dynasty-eba63",
+    "development": "dynasty-eba63",
+    "staging": "dynasty-dev-1b042",
+    "production": "dynasty-prod"
   }
 }
