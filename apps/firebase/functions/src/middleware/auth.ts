@@ -91,6 +91,20 @@ export enum RateLimitType {
   SIGNAL_MAINTENANCE = "signal_maintenance", // Signal Protocol maintenance operations
   EMAIL_VERIFICATION_SEND = "email_verification_send", // Email verification send operations
   EMAIL_VERIFICATION_VERIFY = "email_verification_verify", // Email verification verify operations
+
+  // Subscription operations
+  CHECKOUT = "checkout", // Stripe checkout session creation
+  SUBSCRIPTION_MODIFY = "subscription_modify", // Plan changes, addon management
+  REFERRAL = "referral", // Referral code operations
+  WEBHOOK = "webhook", // Stripe webhook endpoints
+
+  // Phase 2: Enhanced Stripe operations
+  STRIPE_CHECKOUT = "stripe_checkout", // Enhanced checkout operations
+  STRIPE_SUBSCRIPTION_READ = "stripe_subscription_read", // Subscription status/history
+  STRIPE_SUBSCRIPTION_UPDATE = "stripe_subscription_update", // Plan changes, updates
+  STRIPE_FAMILY_UPDATE = "stripe_family_update", // Family member management
+  STRIPE_PORTAL = "stripe_portal", // Customer portal access
+  STRIPE_ADDON_MANAGE = "stripe_addon_manage", // Addon purchase/removal
 }
 
 /**
@@ -358,6 +372,16 @@ export async function checkRateLimit(
     [RateLimitType.SIGNAL_MAINTENANCE]: "signalMaintenance",
     [RateLimitType.EMAIL_VERIFICATION_SEND]: "emailVerificationSend",
     [RateLimitType.EMAIL_VERIFICATION_VERIFY]: "emailVerificationVerify",
+    [RateLimitType.CHECKOUT]: "checkout",
+    [RateLimitType.SUBSCRIPTION_MODIFY]: "subscriptionModify",
+    [RateLimitType.REFERRAL]: "referral",
+    [RateLimitType.WEBHOOK]: "webhook",
+    [RateLimitType.STRIPE_CHECKOUT]: "stripeCheckout",
+    [RateLimitType.STRIPE_SUBSCRIPTION_READ]: "stripeSubscriptionRead",
+    [RateLimitType.STRIPE_SUBSCRIPTION_UPDATE]: "stripeSubscriptionUpdate",
+    [RateLimitType.STRIPE_FAMILY_UPDATE]: "stripeFamilyUpdate",
+    [RateLimitType.STRIPE_PORTAL]: "stripePortal",
+    [RateLimitType.STRIPE_ADDON_MANAGE]: "stripeAddonManage",
   };
 
   const redisType = rateLimitTypeMap[type];
@@ -443,6 +467,16 @@ export async function checkRateLimitByIP(
     [RateLimitType.SIGNAL_MAINTENANCE]: "signalMaintenance",
     [RateLimitType.EMAIL_VERIFICATION_SEND]: "emailVerificationSend",
     [RateLimitType.EMAIL_VERIFICATION_VERIFY]: "emailVerificationVerify",
+    [RateLimitType.CHECKOUT]: "checkout",
+    [RateLimitType.SUBSCRIPTION_MODIFY]: "subscriptionModify",
+    [RateLimitType.REFERRAL]: "referral",
+    [RateLimitType.WEBHOOK]: "webhook",
+    [RateLimitType.STRIPE_CHECKOUT]: "stripeCheckout",
+    [RateLimitType.STRIPE_SUBSCRIPTION_READ]: "stripeSubscriptionRead",
+    [RateLimitType.STRIPE_SUBSCRIPTION_UPDATE]: "stripeSubscriptionUpdate",
+    [RateLimitType.STRIPE_FAMILY_UPDATE]: "stripeFamilyUpdate",
+    [RateLimitType.STRIPE_PORTAL]: "stripePortal",
+    [RateLimitType.STRIPE_ADDON_MANAGE]: "stripeAddonManage",
   };
 
   const redisType = rateLimitTypeMap[type];

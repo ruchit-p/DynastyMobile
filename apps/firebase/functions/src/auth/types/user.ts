@@ -35,6 +35,17 @@ export interface UserDocument {
   };
   notificationSettings?: any;
   privacySettings?: any;
+
+  // Subscription related fields
+  subscriptionId?: string; // Reference to subscription document
+  stripeCustomerId?: string; // Stripe customer ID for easy lookup
+  subscriptionPlan?: "free" | "individual" | "family"; // Quick reference
+  subscriptionStatus?: "active" | "past_due" | "canceled" | "incomplete"; // Quick reference
+  storageUsedBytes?: number; // Current storage usage
+  storageQuotaBytes?: number; // Total storage quota
+  referralCode?: string; // User's unique referral code
+  referredBy?: string; // Who referred this user
+  familyPlanOwnerId?: string; // If member of family plan, the owner's ID
 }
 
 export interface UserProfileUpdate {
