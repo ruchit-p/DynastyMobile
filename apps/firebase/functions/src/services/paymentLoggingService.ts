@@ -117,6 +117,12 @@ export class PaymentLoggingService {
   private readonly METRICS_COLLECTION = "paymentMetrics";
   private readonly ERROR_PATTERNS_COLLECTION = "paymentErrorPatterns";
 
+  // Batch logging configuration
+  private logBatch: any[] = [];
+  private batchSize = 100;
+  private batchFlushInterval = 5000; // 5 seconds
+  private batchTimer: NodeJS.Timeout | null = null;
+
   /**
    * Log a payment event
    */
@@ -155,8 +161,8 @@ export class PaymentLoggingService {
         };
       }
 
-      // Store in Firestore
-      const docRef = await this.db.collection(this.LOGS_COLLECTION).add(logEntry);
+      // Add to batch instead of immediate write
+      await this.addToBatch(logEntry);
 
       // Also log to Cloud Logging for real-time monitoring
       logger.log({
@@ -169,7 +175,6 @@ export class PaymentLoggingService {
           userId: context.userId,
         },
         data: {
-          logId: docRef.id,
           ...logEntry,
         },
       });
@@ -552,6 +557,94 @@ export class PaymentLoggingService {
     } catch (error) {
       logger.error("Failed to cleanup old logs", {error});
       throw error;
+    }
+  }
+
+  /**
+   * Add log entry to batch
+   */
+  private async addToBatch(logEntry: any): Promise<void> {
+    this.logBatch.push(logEntry);
+
+    // Flush if batch size reached
+    if (this.logBatch.length >= this.batchSize) {
+      await this.flushBatch();
+    } else {
+      // Set timer for auto-flush if not already set
+      if (!this.batchTimer) {
+        this.batchTimer = setTimeout(() => {
+          this.flushBatch().catch((error) => {
+            logger.error("Failed to auto-flush batch", {error});
+          });
+        }, this.batchFlushInterval);
+      }
+    }
+  }
+
+  /**
+   * Flush log batch to Firestore
+   */
+  async flushBatch(): Promise<void> {
+    // Clear timer
+    if (this.batchTimer) {
+      clearTimeout(this.batchTimer);
+      this.batchTimer = null;
+    }
+
+    // Nothing to flush
+    if (this.logBatch.length === 0) {
+      return;
+    }
+
+    // Copy and clear batch
+    const logsToWrite = [...this.logBatch];
+    this.logBatch = [];
+
+    try {
+      // Use Firestore batch write (max 500 operations)
+      const chunks = this.chunkArray(logsToWrite, 500);
+
+      for (const chunk of chunks) {
+        const batch = this.db.batch();
+
+        chunk.forEach((logEntry) => {
+          const docRef = this.db.collection(this.LOGS_COLLECTION).doc();
+          batch.set(docRef, logEntry);
+        });
+
+        await batch.commit();
+      }
+
+      logger.info(`Flushed ${logsToWrite.length} payment logs to Firestore`);
+    } catch (error) {
+      logger.error("Failed to flush log batch", {
+        error,
+        batchSize: logsToWrite.length,
+      });
+
+      // Re-add failed logs to batch for retry
+      this.logBatch = [...logsToWrite, ...this.logBatch];
+      throw error;
+    }
+  }
+
+  /**
+   * Helper to chunk array for batch operations
+   */
+  private chunkArray<T>(array: T[], size: number): T[][] {
+    const chunks: T[][] = [];
+    for (let i = 0; i < array.length; i += size) {
+      chunks.push(array.slice(i, i + size));
+    }
+    return chunks;
+  }
+
+  /**
+   * Ensure batch is flushed before function terminates
+   */
+  async ensureBatchFlushed(): Promise<void> {
+    if (this.logBatch.length > 0) {
+      await this.flushBatch();
     }
   }
 }

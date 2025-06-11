@@ -554,15 +554,18 @@ export class PaymentRecoveryService {
         urgency = "reminder";
       }
 
-      // Use mfa template type as a workaround for payment emails
+      // Send appropriate payment email based on interval
+      const templateType = intervalDay >= config.durationDays - 1 ? "paymentRetry" : "paymentFailed";
+
       await sendEmailUniversal({
         to: userData.email,
-        templateType: "mfa",
+        templateType,
         dynamicTemplateData: {
           ...emailData,
+          retryDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString(),
+          attemptNumber: intervalDay + 1,
           subject,
           urgency,
-          emailType: "payment_failed",
         },
       });
 
@@ -589,6 +592,8 @@ export class PaymentRecoveryService {
       const userData = user.data();
       if (!userData) return;
 
+      // Payment success still uses standard notification since it's not a failure scenario
+      // Using 'mfa' template as a fallback for now
       await sendEmailUniversal({
         to: userData.email,
         templateType: "mfa",
@@ -618,13 +623,14 @@ export class PaymentRecoveryService {
 
       await sendEmailUniversal({
         to: userData.email,
-        templateType: "mfa",
+        templateType: "subscriptionSuspended",
         dynamicTemplateData: {
           userName: userData.displayName || userData.email,
-          planName: subscription.planDisplayName,
-          reactivateUrl: `${process.env.FRONTEND_URL}/account/billing/reactivate`,
+          plan: subscription.planDisplayName,
+          suspensionDate: new Date().toLocaleDateString(),
+          gracePeriodEnds: "N/A",
+          reactivateUrl: `${process.env.FRONTEND_URL || "https://mydynastyapp.com"}/account/billing/reactivate`,
           subject: "Subscription Suspended - Payment Required",
-          emailType: "subscription_suspended",
         },
       });
     } catch (error) {
@@ -644,6 +650,8 @@ export class PaymentRecoveryService {
       const userData = user.data();
       if (!userData) return;
 
+      // Reactivation success still uses standard notification
+      // Using 'mfa' template as a fallback for now
       await sendEmailUniversal({
         to: userData.email,
         templateType: "mfa",

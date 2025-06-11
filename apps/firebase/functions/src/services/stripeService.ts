@@ -21,7 +21,7 @@ import {
   SubscriptionStatus,
 } from "../types/subscription";
 import {createError, ErrorCode} from "../utils/errors";
-import {PaymentErrorHandler, PaymentErrorContext, withPaymentRetry} from "../utils/paymentErrors";
+import {PaymentErrorHandler, PaymentErrorContext, withPaymentRetry, DEFAULT_PAYMENT_RETRY_CONFIG} from "../utils/paymentErrors";
 
 export interface CreateCheckoutSessionParams {
   userId: string;
@@ -79,7 +79,7 @@ export class StripeService {
         try {
           const customer = await withPaymentRetry(
             () => this.stripe!.customers.retrieve(userData.stripeCustomerId),
-            { userId, stripeCustomerId: userData.stripeCustomerId },
+            {userId, stripeCustomerId: userData.stripeCustomerId},
             "StripeService.createOrGetCustomer"
           );
           if (!customer.deleted) {
@@ -103,7 +103,7 @@ export class StripeService {
             firebaseUid: userId,
           },
         }),
-        { userId },
+        {userId},
         "StripeService.createOrGetCustomer"
       );
 
@@ -213,13 +213,18 @@ export class StripeService {
       });
 
       const session = await withPaymentRetry(
-        () => this.stripe!.checkout.sessions.create(sessionConfig),
-        { 
-          userId: params.userId, 
+        (idempotencyKey) => this.stripe!.checkout.sessions.create(
+          sessionConfig,
+          {idempotencyKey}
+        ),
+        {
+          userId: params.userId,
           stripeCustomerId: customer.id,
-          planType: params.plan
+          planType: params.plan,
         },
-        "StripeService.createCheckoutSession"
+        "StripeService.createCheckoutSession",
+        DEFAULT_PAYMENT_RETRY_CONFIG,
+        `checkout-${params.userId}-${params.plan}-${Date.now()}`
       );
 
       logger.info("Created checkout session", {
@@ -247,9 +252,9 @@ export class StripeService {
         () => this.stripe!.subscriptions.retrieve(params.subscriptionId, {
           expand: ["items"],
         }),
-        { 
+        {
           userId: "unknown",
-          subscriptionId: params.subscriptionId 
+          subscriptionId: params.subscriptionId,
         },
         "StripeService.updateSubscription"
       );
@@ -328,17 +333,20 @@ export class StripeService {
 
       // Update subscription
       const updatedSubscription = await withPaymentRetry(
-        () => this.stripe!.subscriptions.update(
+        (idempotencyKey) => this.stripe!.subscriptions.update(
           params.subscriptionId,
-          updateParams
+          updateParams,
+          {idempotencyKey}
         ),
-        { 
+        {
           userId: subscription.metadata.userId || "unknown",
           subscriptionId: params.subscriptionId,
           stripeCustomerId: subscription.customer as string,
-          planType: params.plan || subscription.metadata.plan
+          planType: params.plan || subscription.metadata.plan,
         },
-        "StripeService.updateSubscription"
+        "StripeService.updateSubscription",
+        DEFAULT_PAYMENT_RETRY_CONFIG,
+        `sub-update-${params.subscriptionId}-${Date.now()}`
       );
 
       logger.info("Updated subscription", {
@@ -376,9 +384,9 @@ export class StripeService {
               cancellation_details: cancelParams.cancellation_details,
             }
           ),
-          { 
+          {
             userId: "unknown",
-            subscriptionId: params.subscriptionId 
+            subscriptionId: params.subscriptionId,
           },
           "StripeService.cancelSubscription"
         );
@@ -395,9 +403,9 @@ export class StripeService {
             params.subscriptionId,
             cancelParams
           ),
-          { 
+          {
             userId: "unknown",
-            subscriptionId: params.subscriptionId 
+            subscriptionId: params.subscriptionId,
           },
           "StripeService.cancelSubscription"
         );
@@ -428,9 +436,9 @@ export class StripeService {
             cancel_at_period_end: false,
           }
         ),
-        { 
+        {
           userId: "unknown",
-          subscriptionId 
+          subscriptionId,
         },
         "StripeService.reactivateSubscription"
       );
@@ -456,9 +464,9 @@ export class StripeService {
         () => this.stripe!.subscriptions.retrieve(subscriptionId, {
           expand: ["items", "customer", "latest_invoice"],
         }),
-        { 
+        {
           userId: "unknown",
-          subscriptionId 
+          subscriptionId,
         },
         "StripeService.getSubscription"
       );
@@ -480,9 +488,9 @@ export class StripeService {
           expand: ["data.items"],
           limit: 100,
         }),
-        { 
+        {
           userId: "unknown",
-          stripeCustomerId: customerId 
+          stripeCustomerId: customerId,
         },
         "StripeService.getCustomerSubscriptions"
       );
@@ -505,9 +513,9 @@ export class StripeService {
           customer: customerId,
           return_url: returnUrl,
         }),
-        { 
+        {
           userId: "unknown",
-          stripeCustomerId: customerId 
+          stripeCustomerId: customerId,
         },
         "StripeService.createCustomerPortalSession"
       );
@@ -590,9 +598,9 @@ export class StripeService {
         () => this.stripe!.subscriptions.retrieve(subscriptionId, {
           expand: ["latest_invoice"],
         }),
-        { 
+        {
           userId: "unknown",
-          subscriptionId 
+          subscriptionId,
         },
         "StripeService.retrySubscriptionPayment"
       );
@@ -610,10 +618,10 @@ export class StripeService {
       }
       const paymentIntent = await withPaymentRetry(
         () => this.stripe!.paymentIntents.retrieve(paymentIntentId),
-        { 
+        {
           userId: "unknown",
           subscriptionId,
-          paymentMethodId: paymentIntentId 
+          paymentMethodId: paymentIntentId,
         },
         "StripeService.retrySubscriptionPayment"
       );
@@ -622,10 +630,10 @@ export class StripeService {
         // Retry with the default payment method
         await withPaymentRetry(
           () => this.stripe!.paymentIntents.confirm(paymentIntent.id),
-          { 
+          {
             userId: "unknown",
             subscriptionId,
-            paymentMethodId: paymentIntent.id 
+            paymentMethodId: paymentIntent.id,
           },
           "StripeService.retrySubscriptionPayment"
         );
@@ -656,10 +664,10 @@ export class StripeService {
         () => this.stripe!.paymentMethods.attach(paymentMethodId, {
           customer: customerId,
         }),
-        { 
+        {
           userId: "unknown",
           stripeCustomerId: customerId,
-          paymentMethodId 
+          paymentMethodId,
         },
         "StripeService.updateCustomerPaymentMethod"
       );
@@ -671,10 +679,10 @@ export class StripeService {
             default_payment_method: paymentMethodId,
           },
         }),
-        { 
+        {
           userId: "unknown",
           stripeCustomerId: customerId,
-          paymentMethodId 
+          paymentMethodId,
         },
         "StripeService.updateCustomerPaymentMethod"
       );
@@ -718,10 +726,10 @@ export class StripeService {
 
       return await withPaymentRetry(
         () => this.stripe!.subscriptions.create(subscriptionParams),
-        { 
+        {
           userId: params.metadata?.userId || "unknown",
           stripeCustomerId: params.customerId,
-          paymentMethodId: params.paymentMethodId
+          paymentMethodId: params.paymentMethodId,
         },
         "StripeService.createSubscription"
       );

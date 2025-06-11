@@ -22,6 +22,7 @@ interface MessageData {
   metadata?: any;
 }
 
+
 /**
  * Send a message to a chat
  * Supports both encrypted and non-encrypted messages
