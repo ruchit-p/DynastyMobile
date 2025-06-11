@@ -18,8 +18,8 @@ export enum SubscriptionTier {
   FAMILY_12TB = "family_12tb",
 
   // Legacy tier names for backward compatibility
-  LITE = "family_2_5tb",
-  PRO = "family_12tb",
+  LITE = "lite",
+  PRO = "pro",
 }
 
 // Subscription Status
@@ -32,6 +32,45 @@ export enum SubscriptionStatus {
   TRIALING = "trialing",
   PAUSED = "paused",
   UNPAID = "unpaid",
+  SUSPENDED = "suspended", // Added for payment failure recovery
+}
+
+// Grace Period Status
+export enum GracePeriodStatus {
+  ACTIVE = "active",
+  EXPIRED = "expired",
+  CLEARED = "cleared",
+}
+
+// Grace Period Information
+export interface GracePeriod {
+  status: GracePeriodStatus;
+  type: "paymentFailed" | "subscriptionExpired" | "paymentMethodExpired";
+  startedAt: Timestamp;
+  endsAt: Timestamp;
+  reason: string;
+  paymentFailureId?: string;
+}
+
+// Payment Failure Record
+export interface PaymentFailureRecord {
+  id: string;
+  subscriptionId: string;
+  userId: string;
+  stripeCustomerId: string;
+  paymentIntentId?: string;
+  errorCode: string;
+  errorMessage: string;
+  errorType?: string;
+  declineCode?: string;
+  amount: number;
+  currency: string;
+  attemptCount: number;
+  resolved: boolean;
+  createdAt: Timestamp;
+  lastAttemptAt: Timestamp;
+  resolvedAt?: Timestamp;
+  lastFourDigits?: string;
 }
 
 // Storage Addon Types - updated for pricing matrix
@@ -140,12 +179,29 @@ export interface Subscription {
 
   // Billing
   priceMonthly: number;
+  amount: number; // Added for payment recovery
   currency: string;
   lastPaymentStatus: "succeeded" | "failed" | "pending";
   lastPaymentAt?: Timestamp;
   nextPaymentAt?: Timestamp;
   paymentMethodLast4?: string;
   paymentMethodType?: string;
+  lastPaymentError?: {
+    code: string;
+    message: string;
+    occurredAt: Timestamp;
+  };
+
+  // Grace Period
+  gracePeriod?: GracePeriod;
+
+  // Suspension details
+  suspendedAt?: Timestamp;
+  suspensionReason?: string;
+  reactivatedAt?: Timestamp;
+
+  // Display name for plan
+  planDisplayName: string;
 
   // Storage
   storageAllocation: StorageAllocation;
