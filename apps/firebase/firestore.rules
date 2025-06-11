@@ -319,5 +319,61 @@ service cloud.firestore {
          request.auth.uid in resource.data.sharedWith);
       allow write: if false; // Only through functions
     }
+    
+    // Subscription Documents
+    match /subscriptions/{subscriptionId} {
+      // Users can only read their own subscription
+      // Family plan members can read the family owner's subscription
+      allow read: if isSignedIn() && (
+        subscriptionId == request.auth.uid ||
+        (resource.data.plan == 'family' && 
+         resource.data.familyMembers != null &&
+         request.auth.uid in resource.data.familyMembers.map(m => m.userId))
+      );
+      // All writes must go through Cloud Functions for security
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // Subscription History (audit trail)
+    match /subscriptionHistory/{historyId} {
+      // Users can read their own subscription history
+      allow read: if isSignedIn() && 
+        resource.data.userId == request.auth.uid;
+      // Only Cloud Functions can write history
+      allow write: if false;
+    }
+    
+    // Referral Documents
+    match /referrals/{referralId} {
+      // Users can read referrals they created or were referred by
+      allow read: if isSignedIn() && (
+        resource.data.referrerUserId == request.auth.uid ||
+        resource.data.referredUserId == request.auth.uid
+      );
+      // Only Cloud Functions can create/update referrals
+      allow write: if false;
+    }
+    
+    // Stripe Webhook Events (for debugging/audit)
+    match /stripeWebhookEvents/{eventId} {
+      // Only admins can read webhook events
+      allow read: if isSignedIn() && 
+        getUserData() != null && 
+        getUserData().isAdmin == true;
+      // Only Cloud Functions can write webhook events
+      allow write: if false;
+    }
+    
+    // Subscription Analytics (aggregated data)
+    match /subscriptionAnalytics/{analyticsId} {
+      // Only admins can read analytics
+      allow read: if isSignedIn() && 
+        getUserData() != null && 
+        getUserData().isAdmin == true;
+      // Only Cloud Functions can write analytics
+      allow write: if false;
+    }
   }
 }

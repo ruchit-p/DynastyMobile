@@ -103,9 +103,23 @@ export const initializeMessaging = async () => {
         return existingToken;
       }
       
-      // Register service worker explicitly
-      const serviceWorkerRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-      console.log('Service Worker registered successfully', serviceWorkerRegistration);
+      // Register service worker explicitly with error handling
+      let serviceWorkerRegistration;
+      try {
+        serviceWorkerRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+          scope: '/',
+          updateViaCache: 'none'
+        });
+        console.log('Service Worker registered successfully', serviceWorkerRegistration);
+        
+        // Wait for service worker to be ready
+        await navigator.serviceWorker.ready;
+        console.log('Service Worker is ready');
+      } catch (swError) {
+        console.error('Service Worker registration failed:', swError);
+        isTokenRegistrationInProgress = false;
+        return null;
+      }
       
       // Get token
       const token = await getToken(messaging, {

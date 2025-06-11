@@ -271,14 +271,29 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
   deleteFamilyMember: {
     rules: [
       {field: "memberId", type: "id", required: true},
-      {field: "removeRelationships", type: "boolean"},
+      {field: "familyTreeId", type: "id", required: true},
+      {field: "currentUserId", type: "id"},
+    ],
+    xssCheck: false,
+  },
+
+  getFamilyTreeMembers: {
+    rules: [
+      {field: "familyTreeId", type: "id", required: true},
+    ],
+    xssCheck: false,
+  },
+
+  getPendingInvitations: {
+    rules: [
+      {field: "familyTreeId", type: "id", required: true},
     ],
     xssCheck: false,
   },
 
   promoteToAdmin: {
     rules: [
-      {field: "userId", type: "id", required: true},
+      {field: "memberId", type: "id", required: true},
       {field: "familyTreeId", type: "id", required: true},
     ],
     xssCheck: false,
@@ -286,7 +301,7 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
 
   demoteToMember: {
     rules: [
-      {field: "userId", type: "id", required: true},
+      {field: "memberId", type: "id", required: true},
       {field: "familyTreeId", type: "id", required: true},
     ],
     xssCheck: false,
@@ -733,38 +748,6 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
     xssCheck: false, // No user content
   },
 
-  // Device fingerprint schemas
-  verifyDeviceFingerprint: {
-    rules: [
-      {field: "requestId", type: "string", required: true, maxLength: 200},
-      {field: "visitorId", type: "string", required: true, maxLength: 200},
-      {field: "deviceInfo", type: "object"},
-    ],
-    xssCheck: false, // System-generated IDs
-  },
-
-  getTrustedDevices: {
-    rules: [
-      {field: "currentVisitorId", type: "string", maxLength: 200},
-    ],
-    xssCheck: false, // System-generated ID
-  },
-
-  removeTrustedDevice: {
-    rules: [
-      {field: "visitorId", type: "string", required: true, maxLength: 200},
-      {field: "currentVisitorId", type: "string", maxLength: 200},
-    ],
-    xssCheck: false, // System-generated IDs
-  },
-
-  checkDeviceTrust: {
-    rules: [
-      {field: "visitorId", type: "string", required: true, maxLength: 200},
-      {field: "userId", type: "id"},
-    ],
-    xssCheck: false, // System-generated IDs
-  },
 
   // Encryption schemas
   generateUserKeys: {
@@ -1432,5 +1415,54 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
       {field: "channels", type: "array", required: true, maxSize: 10},
     ],
     xssCheck: false,
+  },
+
+  // Stripe subscription validation schemas
+  createCheckoutSession: {
+    rules: [
+      {field: "plan", type: "enum", required: true, enumValues: ["free", "individual", "family"]},
+      {field: "tier", type: "enum", enumValues: ["lite", "plus", "pro"]},
+      {field: "interval", type: "enum", enumValues: ["month", "year"]},
+      {field: "addons", type: "array", maxSize: 5},
+      {field: "referralCode", type: "string", maxLength: 50},
+      {field: "familyMemberIds", type: "array", maxSize: 5},
+      {field: "allowPromotionCodes", type: "boolean"},
+    ],
+    xssCheck: true,
+  },
+
+  updateSubscription: {
+    rules: [
+      {field: "plan", type: "enum", enumValues: ["free", "individual", "family"]},
+      {field: "tier", type: "enum", enumValues: ["lite", "plus", "pro"]},
+      {field: "addons", type: "array", maxSize: 5},
+      {field: "cancelAtPeriodEnd", type: "boolean"},
+      {field: "prorationBehavior", type: "enum", enumValues: ["create_prorations", "none", "always_invoice"]},
+    ],
+    xssCheck: false,
+  },
+
+  addFamilyMember: {
+    rules: [
+      {field: "memberId", type: "id", required: true},
+      {field: "memberEmail", type: "email", required: true},
+      {field: "memberName", type: "string", required: true, maxLength: 100},
+    ],
+    xssCheck: true,
+  },
+
+  removeFamilyMember: {
+    rules: [
+      {field: "memberId", type: "id", required: true},
+      {field: "reason", type: "string", maxLength: 500},
+    ],
+    xssCheck: true,
+  },
+
+  createCustomerPortalSession: {
+    rules: [
+      {field: "returnUrl", type: "string", required: true, maxLength: 500},
+    ],
+    xssCheck: true,
   },
 };

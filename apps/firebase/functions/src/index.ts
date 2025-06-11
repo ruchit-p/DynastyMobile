@@ -17,11 +17,20 @@ import {initializeApp} from "firebase-admin/app";
 import {setGlobalOptions} from "firebase-functions/v2";
 import {DEFAULT_REGION} from "./common";
 import {UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN} from "./services/rateLimitService";
+import {STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PUBLISHABLE_KEY, STRIPE_API_VERSION} from "./config/stripeSecrets";
 
 // Set global options for ALL Firebase Functions
 setGlobalOptions({
   region: DEFAULT_REGION,
-  secrets: [UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN],
+  secrets: [
+    UPSTASH_REDIS_REST_URL,
+    UPSTASH_REDIS_REST_TOKEN,
+    // Stripe secrets
+    STRIPE_SECRET_KEY,
+    STRIPE_WEBHOOK_SECRET,
+    STRIPE_PUBLISHABLE_KEY,
+    STRIPE_API_VERSION,
+  ],
 });
 
 // Initialize Firebase Admin
@@ -57,9 +66,9 @@ export * from "./sync"; // Offline sync functions
 export * from "./messaging"; // Chat messaging and notifications
 export * from "./chatManagement"; // Chat management APIs
 export * from "./migrations/userDocumentConsistency"; // User document consistency migration
-export * from "./deviceFingerprint"; // Device fingerprinting and trust management
 export * from "./signal"; // Signal Protocol key management and verification
 export * from "./sms"; // Twilio SMS functions for invitations and notifications
+export * from "./subscriptions"; // Stripe subscription management and webhooks
 
 // R2 Migration functions (only when enabled)
 if (process.env.ENABLE_R2_MIGRATION === "true") {

@@ -324,13 +324,6 @@ export const FEATURE_FLAGS = {
     description: 'Session timeout duration in minutes',
   },
   
-  ENABLE_DEVICE_VERIFICATION: {
-    key: 'enable_device_verification',
-    category: FeatureFlagCategory.SECURITY,
-    type: FeatureFlagType.BOOLEAN,
-    defaultValue: true,
-    description: 'Enable device fingerprinting and verification',
-  },
 
   // MARK: Experimental Features
   ENABLE_AI_FEATURES: {

@@ -19,7 +19,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { syncService } from '../lib/syncService';
 import { networkService } from '../services/NetworkService';
 import { getNotificationService } from '../services/NotificationService';
-import { fingerprintService } from '../services/FingerprintService';
 import * as Device from 'expo-device';
 import { logger } from '../services/LoggingService';
 import { GOOGLE_OAUTH_WEB_CLIENT_ID } from '../config/environment';
@@ -397,26 +396,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             await notificationService.initialize(freshUser.uid);
             logger.debug('AuthContext: Notification service initialized for user:', sanitizeUserId(freshUser.uid));
             
-            // Initialize fingerprint service and verify device
-            await fingerprintService.initialize();
-            const deviceInfo = {
-              deviceName: Device.deviceName || `${Device.brand} ${Device.modelName}`,
-              deviceType: Device.deviceType === Device.DeviceType.PHONE ? 'Phone' : 'Tablet',
-              platform: Device.osName || 'Unknown'
-            };
-            
-            const trustResult = await fingerprintService.verifyDevice(freshUser.uid, deviceInfo);
-            logger.debug('AuthContext: Device verification completed:', {
-              trustScore: trustResult.device?.trustScore,
-              isNewDevice: trustResult.device?.isNewDevice,
-              requiresAdditionalAuth: trustResult.requiresAdditionalAuth
-            });
-            
-            // Store device trust status for use in navigation
-            if (trustResult.requiresAdditionalAuth) {
-              // You can store this in state or handle additional auth here
-              logger.debug('AuthContext: Device requires additional authentication');
-            }
           } catch (error: any) {
             logger.error('AuthContext: Failed to initialize services: ' + (error instanceof Error ? error.message : String(error)));
           }
@@ -437,9 +416,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           notificationService.cleanup();
           logger.debug('AuthContext: Notification service cleaned up');
           
-          // Cleanup fingerprint service
-          await fingerprintService.clearAllData();
-          logger.debug('AuthContext: Fingerprint service cleaned up');
         } catch (error: any) {
           logger.error('AuthContext: Failed to cleanup services: ' + (error instanceof Error ? error.message : String(error)));
         }
@@ -1084,8 +1060,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         displayName: userCredential.user.displayName || 'Not provided'
       });
       
-      // Fingerprint tracking for Apple sign-in
-      await fingerprintService.trackLogin(userCredential.user.uid, 'apple');
       
       // Check onboarding status
       const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));

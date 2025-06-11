@@ -49,6 +49,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { EditMemberDialog } from '@/components/EditMemberDialog';
+import { Pencil } from 'lucide-react';
 
 interface FamilyMember {
   id: string;
@@ -61,6 +63,12 @@ interface FamilyMember {
   canAddMembers?: boolean;
   canEdit?: boolean;
   relationship?: string;
+  isPendingSignUp?: boolean;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  dateOfBirth?: string | Date;
+  gender?: string;
 }
 
 interface PendingInvitation {
@@ -91,6 +99,8 @@ export default function FamilyManagementPage() {
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [selectedMember, setSelectedMember] = useState<FamilyMember | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingMember, setEditingMember] = useState<FamilyMember | null>(null);
 
   const [inviteForm, setInviteForm] = useState({
     email: '',
@@ -334,7 +344,15 @@ export default function FamilyManagementPage() {
                         size="md"
                       />
                       <div>
-                        <h3 className="font-semibold">{member.displayName}</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold">{member.displayName}</h3>
+                          {member.isPendingSignUp && (
+                            <Badge variant="outline" className="text-xs">
+                              <Clock className="mr-1 h-3 w-3" />
+                              Pending
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-sm text-gray-600">{member.email}</p>
                         {member.relationship && (
                           <p className="text-sm text-gray-500">
@@ -370,6 +388,20 @@ export default function FamilyManagementPage() {
                           >
                             View Profile
                           </DropdownMenuItem>
+                          {firestoreUser?.isAdmin && member.isPendingSignUp && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setEditingMember(member);
+                                  setShowEditDialog(true);
+                                }}
+                              >
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Edit Member
+                              </DropdownMenuItem>
+                            </>
+                          )}
                           {firestoreUser?.isAdmin && (
                             <>
                               <DropdownMenuSeparator />
@@ -596,6 +628,15 @@ export default function FamilyManagementPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Edit Member Dialog */}
+      <EditMemberDialog
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        member={editingMember}
+        familyTreeId={firestoreUser?.familyTreeId || ''}
+        onSuccess={loadFamilyData}
+      />
     </div>
   );
 }

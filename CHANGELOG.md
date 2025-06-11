@@ -1,5 +1,48 @@
 # Dynasty Changelog
 
+## Version 2.15.0 - January 2025
+
+### 🧹 FingerprintJS Library Removal & Security Cleanup
+
+**Breaking Changes**
+- ❌ **FingerprintJS Removed**:
+  - Removed all FingerprintJS dependencies (`@fingerprintjs/fingerprintjs`, `@fingerprintjs/fingerprintjs-pro-react`, `@fingerprintjs/fingerprintjs-pro-react-native`, `@fingerprintjs/fingerprintjs-pro-server-api`)
+  - Deleted service files: `FingerprintService.ts`, `EnhancedFingerprintService.ts`, `FingerprintProvider.tsx`
+  - Cleaned up all compiled JavaScript files from Firebase functions lib directory
+  - Rebuilt package-lock.json files across all apps without FingerprintJS packages
+
+**Security & Device Management**
+- ✅ **Preserved Encryption Security**:
+  - All cryptographic key fingerprints remain functional (Signal Protocol, E2EE)
+  - Biometric authentication (Touch ID/Face ID) unchanged
+  - Key verification and safety number generation preserved
+  - E2EE key fingerprint generation (`e2eeService.generateFingerprint`) intact
+
+- ✅ **Device Identification Migration**:
+  - Updated trusted device management to use native device properties
+  - Replaced FingerprintJS device IDs with platform-native identification
+  - Device ID generation now uses `Device.brand`, `Device.modelName`, `Device.deviceYearClass`, `Platform.OS`
+  - Maintained trusted device functionality without external fingerprinting
+
+**Code Cleanup**
+- ✅ **Updated Components**:
+  - `EnhancedAuthContext.tsx`: Added removal comments, cleaned up fingerprint service calls
+  - `trustedDevices.tsx`: Migrated to native device property-based identification
+  - Test files: Updated with service removal comments
+  - No broken imports or references remain
+
+**Key Files Modified**
+- `package.json` (web, mobile, Firebase functions): Removed FingerprintJS dependencies
+- `apps/mobile/app/(screens)/trustedDevices.tsx`: Updated device ID generation
+- `apps/web/dynastyweb/src/context/EnhancedAuthContext.tsx`: Removed fingerprinting service integration
+- `apps/web/dynastyweb/src/__tests__/services/web-services.test.ts`: Updated test documentation
+
+**Migration Notes**
+- Device fingerprinting functionality completely removed
+- Cryptographic fingerprints and security features preserved
+- No impact on end-to-end encryption or authentication
+- Trusted devices continue to work with native device identification
+
 ## Version 2.14.0 - January 2025
 
 ### 🏗️ R2 Storage Configuration & Vault Improvements
