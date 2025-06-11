@@ -145,7 +145,7 @@ export function EditMemberDialog({
             Update information for {member.displayName}
             {member.isPendingSignUp && (
               <span className="block mt-2 text-sm text-amber-600">
-                This member hasn't joined Dynasty yet. You can update their information.
+                This member hasn&rsquo;t joined Dynasty yet. You can update their information.
               </span>
             )}
           </DialogDescription>
