@@ -1,16 +1,21 @@
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js');
 
-// Initialize the Firebase app in the service worker
-firebase.initializeApp({
+// Get Firebase configuration from environment
+// Note: Service worker can't access process.env directly, 
+// so config must be passed via query params or postMessage
+let firebaseConfig = {
   apiKey: "AIzaSyA_uNpQElWXQXcIPDuVgzAgiGNqgT-31W4",
-  authDomain: "dynasty-eba63.firebaseapp.com",
+  authDomain: "dynasty-eba63.firebaseapp.com", 
   projectId: "dynasty-eba63",
   storageBucket: "dynasty-eba63.firebasestorage.app",
   messagingSenderId: "613996380558",
   appId: "1:613996380558:web:e92ddd147ebc530768e4df",
   measurementId: "G-KDHWY1R09Z",
-});
+};
+
+// Initialize the Firebase app in the service worker
+firebase.initializeApp(firebaseConfig);
 
 // Retrieve firebase messaging
 const messaging = firebase.messaging();

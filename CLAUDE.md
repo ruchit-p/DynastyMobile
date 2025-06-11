@@ -4,6 +4,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Recent Updates (January 2025)
 
+### FingerprintJS Library Removal (January 2025)
+The Dynasty codebase has been fully cleaned of FingerprintJS device fingerprinting library while preserving all encryption and security-related fingerprint functionality.
+
+**Key changes:**
+- Removed all FingerprintJS dependencies from package.json files across all apps
+- Deleted FingerprintJS service files: `FingerprintService.ts`, `EnhancedFingerprintService.ts`, `FingerprintProvider.tsx`
+- Updated trusted device management to use native device properties instead of FingerprintJS
+- Cleaned up all FingerprintJS imports and references from codebase
+- Rebuilt package-lock.json files without FingerprintJS packages
+
+**What was removed:**
+- `@fingerprintjs/fingerprintjs` (web app)
+- `@fingerprintjs/fingerprintjs-pro-react` (web app)  
+- `@fingerprintjs/fingerprintjs-pro-react-native` (mobile app)
+- `@fingerprintjs/fingerprintjs-pro-server-api` (Firebase functions)
+- All related service implementations and provider components
+
+**What was preserved:**
+- Cryptographic key fingerprints for Signal Protocol verification
+- E2EE key fingerprint generation (`e2eeService.generateFingerprint`)
+- Biometric authentication (Touch ID/Face ID) functionality
+- All security-related fingerprint verification for encryption keys
+- Device identification now uses native device properties (`Device.brand`, `Device.modelName`, etc.)
+
+**Migration notes:**
+- Trusted device functionality continues to work using device-based IDs
+- No impact on end-to-end encryption or security features
+- All cryptographic fingerprints remain functional for key verification
+- Device registration uses platform-native identification methods
+
 ### Email Provider Migration to AWS SES (January 2025)
 The Dynasty codebase has been fully migrated from SendGrid to AWS SES for all email functionality.
 

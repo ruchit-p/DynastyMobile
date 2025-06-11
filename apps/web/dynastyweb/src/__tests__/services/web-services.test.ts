@@ -9,7 +9,6 @@ import syncQueueService from '../../services/SyncQueueService';
 import cacheService from '../../services/CacheService';
 import auditLogService from '../../services/AuditLogService';
 import errorHandlingService from '../../services/ErrorHandlingService';
-import enhancedFingerprintService from '../../services/EnhancedFingerprintService';
 
 // Mock Firebase
 jest.mock('firebase/auth');
@@ -534,84 +533,7 @@ describe('Web Services Tests', () => {
     });
   });
 
-  describe('EnhancedFingerprintService', () => {
-    let fingerprintService: EnhancedFingerprintService;
-
-    beforeEach(() => {
-      fingerprintService = new EnhancedFingerprintService();
-    });
-
-    it('should generate consistent device fingerprints', async () => {
-      const fingerprint1 = await fingerprintService.getFingerprint();
-      const fingerprint2 = await fingerprintService.getFingerprint();
-
-      expect(fingerprint1.visitorId).toBe(fingerprint2.visitorId);
-      expect(fingerprint1.components).toBeDefined();
-      expect(fingerprint1.confidence).toBeGreaterThan(0);
-    });
-
-    it('should calculate trust scores for devices', async () => {
-      const knownDevice = {
-        visitorId: 'known-device-123',
-        lastSeen: Date.now() - 86400000, // 1 day ago
-        loginCount: 50,
-        suspiciousActivity: 0,
-      };
-
-      const unknownDevice = {
-        visitorId: 'unknown-device-456',
-        lastSeen: null,
-        loginCount: 0,
-        suspiciousActivity: 0,
-      };
-
-      const knownScore = await fingerprintService.calculateTrustScore(knownDevice);
-      const unknownScore = await fingerprintService.calculateTrustScore(unknownDevice);
-
-      expect(knownScore).toBeGreaterThan(0.8);
-      expect(unknownScore).toBeLessThan(0.3);
-    });
-
-    it('should detect device anomalies', async () => {
-      const normalDevice = {
-        visitorId: 'device-123',
-        components: {
-          userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-          language: 'en-US',
-          timezone: 'America/New_York',
-          screenResolution: '1920x1080',
-        },
-      };
-
-      const anomalousDevice = {
-        visitorId: 'device-123', // Same ID but different characteristics
-        components: {
-          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64)',
-          language: 'ru-RU',
-          timezone: 'Europe/Moscow',
-          screenResolution: '1366x768',
-        },
-      };
-
-      const anomalies = await fingerprintService.detectAnomalies(
-        normalDevice,
-        anomalousDevice
-      );
-
-      expect(anomalies).toContainEqual(
-        expect.objectContaining({
-          type: 'os-change',
-          severity: 'high',
-        })
-      );
-      expect(anomalies).toContainEqual(
-        expect.objectContaining({
-          type: 'location-change',
-          severity: 'medium',
-        })
-      );
-    });
-  });
+  // EnhancedFingerprintService tests removed - service no longer in use
 
 });
 

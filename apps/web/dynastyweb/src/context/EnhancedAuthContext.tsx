@@ -37,7 +37,6 @@ import { cacheService, cacheKeys } from '@/services/CacheService';
 import { syncQueue } from '@/services/SyncQueueService';
 import { networkMonitor } from '@/services/NetworkMonitor';
 import { createFirebaseClient } from '@/lib/functions-client';
-import { fingerprintService } from '@/services/FingerprintService';
 
 // Initialize Firebase Functions client at module level
 const functionsClient = createFirebaseClient(functions);
@@ -317,21 +316,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Start network monitoring
       networkMonitor.start();
       
-      // Initialize fingerprint service and verify device
-      await fingerprintService.initialize();
-      const trustResult = await fingerprintService.verifyDevice(userId);
-      
-      console.log('[Auth] Device verification completed:', {
-        trustScore: trustResult.device?.trustScore,
-        isNewDevice: trustResult.device?.isNewDevice,
-        requiresAdditionalAuth: trustResult.requiresAdditionalAuth
-      });
-      
-      // Handle additional auth requirements if needed
-      if (trustResult.requiresAdditionalAuth) {
-        console.log('[Auth] Device requires additional authentication');
-        // You can store this in state or handle additional auth here
-      }
+      // Device verification removed - no longer using fingerprinting service
       
       console.log('[Auth] User services initialized');
     } catch (error) {
@@ -357,8 +342,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Clear sync queue for user
       await syncQueue.clearQueue();
       
-      // Clear fingerprint data
-      fingerprintService.clearAllData();
+      // Fingerprint service cleanup removed - no longer using fingerprinting service
       
       console.log('[Auth] User services cleaned up');
     } catch (error) {

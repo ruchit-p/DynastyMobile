@@ -1136,6 +1136,116 @@ export const demoteToMember = onCall(
 );
 
 /**
+ * Get family tree members with their status information
+ */
+export const getFamilyTreeMembers = onCall(
+  {
+    region: DEFAULT_REGION,
+    memory: DEFAULT_MEMORY.SHORT,
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getFamilyTreeMembers,
+      request.auth!.uid
+    );
+
+    const {familyTreeId} = validatedData;
+    const db = getFirestore();
+
+    // Get the family tree document
+    const treeDoc = await db.collection("familyTrees").doc(familyTreeId).get();
+    if (!treeDoc.exists) {
+      throw createError(ErrorCode.NOT_FOUND, "Family tree not found");
+    }
+    const treeData = treeDoc.data() as FamilyTreeDocument;
+
+    // Get all members in the family tree
+    const membersSnapshot = await db.collection("users")
+      .where("familyTreeId", "==", familyTreeId)
+      .get();
+
+    const members = membersSnapshot.docs.map((doc) => {
+      const data = doc.data();
+      const isOwner = doc.id === treeData.ownerUserId;
+      const isAdmin = treeData.adminUserIds?.includes(doc.id) || false;
+
+      return {
+        id: doc.id,
+        displayName: data.displayName || `${data.firstName} ${data.lastName}`.trim(),
+        email: data.email || "",
+        profilePicture: data.profilePicture,
+        role: isOwner ? "owner" : isAdmin ? "admin" : "member",
+        joinedAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+        status: data.isPendingSignUp ? "invited" : "active",
+        canAddMembers: isOwner || isAdmin,
+        canEdit: data.isPendingSignUp || false,
+        relationship: data.relationship,
+        isPendingSignUp: data.isPendingSignUp || false,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        phone: data.phone,
+        dateOfBirth: data.dateOfBirth,
+        gender: data.gender,
+      };
+    });
+
+    return {members};
+  }, "getFamilyTreeMembers", "verified", {type: RateLimitType.API})
+);
+
+/**
+ * Get pending invitations for a family tree
+ */
+export const getPendingInvitations = onCall(
+  {
+    region: DEFAULT_REGION,
+    memory: DEFAULT_MEMORY.SHORT,
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    // Validate and sanitize input using centralized validator
+    const validatedData = validateRequest(
+      request.data,
+      VALIDATION_SCHEMAS.getPendingInvitations,
+      request.auth!.uid
+    );
+
+    const {familyTreeId} = validatedData;
+    const db = getFirestore();
+
+    // Get pending invitations for this family tree
+    const invitationsSnapshot = await db.collection("invitations")
+      .where("familyTreeId", "==", familyTreeId)
+      .where("status", "==", "pending")
+      .orderBy("createdAt", "desc")
+      .get();
+
+    const invitations = invitationsSnapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        email: data.inviteeEmail || "",
+        firstName: data.prefillData?.firstName || "",
+        lastName: data.prefillData?.lastName || "",
+        invitedBy: data.inviterId || "",
+        invitedAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+        status: data.status || "pending",
+        inviteeEmail: data.inviteeEmail,
+        inviteeName: data.inviteeName,
+        invitedByName: data.inviterName,
+        createdAt: data.createdAt?.toDate?.(),
+        expiresAt: data.expires?.toDate?.(),
+      };
+    });
+
+    return {invitations};
+  }, "getPendingInvitations", "verified", {type: RateLimitType.API})
+);
+
+/**
  * Fetches family tree management data including the tree information and all members
  * with their admin status.
  *

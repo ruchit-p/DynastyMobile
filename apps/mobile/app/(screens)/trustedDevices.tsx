@@ -9,7 +9,6 @@ import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
 import * as Device from 'expo-device';
 import { FlashList } from '../../components/ui/FlashList';
-import { fingerprintService } from '../../src/services/FingerprintService';
 import { callFirebaseFunction } from '../../src/lib/errorUtils';
 
 interface TrustedDevice {
@@ -60,11 +59,11 @@ const TrustedDevicesScreen = () => {
           return;
         }
 
-        // Get current device fingerprint
-        const currentFingerprint = await fingerprintService.getFingerprint();
-        const currentVisitorId = currentFingerprint?.visitorId;
+        // Get current device ID
+        const currentDeviceId = generateDeviceId();
+        setCurrentDeviceId(currentDeviceId);
         
-        // Get trusted devices from Firebase using FingerprintJS
+        // Get trusted devices from Firebase using device ID
         const result = await callFirebaseFunction<{
           success: boolean;
           devices: {
@@ -83,7 +82,7 @@ const TrustedDevicesScreen = () => {
             };
           }[];
         }>('getTrustedDevices', {
-          currentVisitorId
+          currentDeviceId
         });
 
         if (result.success && result.devices) {
@@ -91,7 +90,7 @@ const TrustedDevicesScreen = () => {
             ...device,
             lastUsed: new Date(device.lastUsed),
             addedAt: new Date(device.addedAt),
-            isCurrentDevice: device.visitorId === currentVisitorId
+            isCurrentDevice: device.visitorId === currentDeviceId
           }));
           
           // Sort devices: current device first, then by last used
@@ -112,13 +111,18 @@ const TrustedDevicesScreen = () => {
     [handleError, reset, withErrorHandling]
   );
 
+  // Generate a device ID based on available device properties
+  const generateDeviceId = useCallback(() => {
+    return `${Device.brand || 'Unknown'}-${Device.modelName || 'Unknown'}-${Device.deviceYearClass || Date.now()}-${Platform.OS}`;
+  }, []);
+
   useEffect(() => {
     loadTrustedDevices();
   }, [loadTrustedDevices]);
 
   const getCurrentDeviceInfo = async () => {
     // Create a unique device ID based on available device properties
-    const deviceId = `${Device.brand || 'Unknown'}-${Device.modelName || 'Unknown'}-${Device.deviceYearClass || Date.now()}`;
+    const deviceId = generateDeviceId();
     setCurrentDeviceId(deviceId);
     return {
       id: deviceId,
@@ -144,10 +148,11 @@ const TrustedDevicesScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              const success = await fingerprintService.removeTrustedDevice(
-                visitorId,
+              const result = await callFirebaseFunction<{ success: boolean }>('removeTrustedDevice', {
+                deviceIdToRemove: visitorId,
                 currentDeviceId
-              );
+              });
+              const success = result.success;
               
               if (success) {
                 const updatedDevices = devices.filter(d => d.visitorId !== visitorId);

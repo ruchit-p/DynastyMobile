@@ -182,6 +182,7 @@ export const updateFamilyMember = async (
     gender: string;
     phone?: string;
     email?: string;
+    dateOfBirth?: Date;
   },
   familyTreeId: string
 ) => {
