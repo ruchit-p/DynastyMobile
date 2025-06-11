@@ -92,6 +92,21 @@ else
     echo "⚠️  Cloudflare R2 config not provided - file storage will use Firebase Storage"
 fi
 
+# Stripe configuration
+if [ ! -z "$STRIPE_SECRET_KEY" ]; then
+    echo "Setting Stripe configuration..."
+    echo "$STRIPE_SECRET_KEY" | firebase functions:secrets:set STRIPE_SECRET_KEY
+    echo "$STRIPE_WEBHOOK_SECRET" | firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
+    echo "$STRIPE_PUBLISHABLE_KEY" | firebase functions:secrets:set STRIPE_PUBLISHABLE_KEY
+    
+    # Optional API version
+    if [ ! -z "$STRIPE_API_VERSION" ]; then
+        echo "$STRIPE_API_VERSION" | firebase functions:secrets:set STRIPE_API_VERSION
+    fi
+else
+    echo "⚠️  Stripe configuration not provided - subscription features will be disabled"
+fi
+
 # Environment configuration
 echo "Setting environment configuration..."
 firebase functions:config:set \
