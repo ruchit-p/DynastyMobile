@@ -120,6 +120,8 @@ export class SubscriptionService {
         cancelAtPeriodEnd: false,
         cancelReason: undefined,
         priceMonthly: this.getMonthlyPrice(params.plan, params.tier, params.interval),
+        amount: this.getMonthlyPrice(params.plan, params.tier, params.interval) * 100, // Convert to cents
+        planDisplayName: this.getPlanDisplayName(params.plan, params.tier),
         currency: "usd",
         lastPaymentStatus: "succeeded",
         lastPaymentAt: Timestamp.now(),
@@ -792,6 +794,34 @@ export class SubscriptionService {
     }
 
     return monthlyPrice;
+  }
+
+  /**
+   * Get display name for a plan
+   */
+  private getPlanDisplayName(plan: SubscriptionPlan, tier?: SubscriptionTier): string {
+    if (plan === SubscriptionPlan.FREE) {
+      return "Dynasty Free";
+    }
+    
+    if (plan === SubscriptionPlan.INDIVIDUAL) {
+      return "Dynasty Individual Plus";
+    }
+    
+    if (plan === SubscriptionPlan.FAMILY) {
+      switch (tier) {
+        case SubscriptionTier.FAMILY_2_5TB:
+          return "Dynasty Family 2.5TB";
+        case SubscriptionTier.FAMILY_7_5TB:
+          return "Dynasty Family 7.5TB";
+        case SubscriptionTier.FAMILY_12TB:
+          return "Dynasty Family 12TB";
+        default:
+          return "Dynasty Family";
+      }
+    }
+    
+    return "Dynasty Plan";
   }
 
   /**
