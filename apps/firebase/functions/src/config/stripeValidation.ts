@@ -111,3 +111,22 @@ export const GenerateStorageReportSchema = z.object({
   includeProjections: z.boolean().optional(),
   includeMemberBreakdown: z.boolean().optional(),
 });
+
+// Referral System Schemas
+export const GenerateReferralCodeSchema = z.object({});
+
+export const ValidateReferralCodeSchema = z.object({
+  referralCode: z.string().min(1, "Referral code is required"),
+});
+
+export const CreateReferralSchema = z.object({
+  referralCode: z.string().min(1, "Referral code is required"),
+  metadata: z.object({
+    campaign: z.string().optional(),
+    source: z.string().optional(),
+  }).optional(),
+});
+
+export const GetReferralStatsSchema = z.object({});
+
+export const GetReferralInfoSchema = z.object({});
