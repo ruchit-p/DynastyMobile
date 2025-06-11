@@ -64,7 +64,7 @@ export class CheckoutService {
       const metadata = await this.buildMetadata(params);
 
       // Create checkout session
-      const session = await this.stripeService.stripe.checkout.sessions.create({
+      const session = await this.stripeService.stripe!.checkout.sessions.create({
         customer: customerResult.customerId,
         payment_method_types: ["card"],
         line_items: lineItems,
@@ -130,13 +130,13 @@ export class CheckoutService {
 
       if (userData?.stripeCustomerId) {
         try {
-          const customer = await this.stripeService.stripe.customers.retrieve(
+          const customer = await this.stripeService.stripe!.customers.retrieve(
             userData.stripeCustomerId
           ) as Stripe.Customer;
 
           // Verify email matches and update if necessary
           if (customer.email !== userEmail) {
-            await this.stripeService.stripe.customers.update(userData.stripeCustomerId, {
+            await this.stripeService.stripe!.customers.update(userData.stripeCustomerId, {
               email: userEmail,
             });
             logger.info("Updated customer email in Stripe", {
@@ -163,7 +163,7 @@ export class CheckoutService {
       }
 
       // Create new customer
-      const customer = await this.stripeService.stripe.customers.create({
+      const customer = await this.stripeService.stripe!.customers.create({
         email: userEmail,
         metadata: {
           userId,
@@ -450,7 +450,7 @@ export class CheckoutService {
    */
   async handleCheckoutCompleted(sessionId: string): Promise<void> {
     try {
-      const session = await this.stripeService.stripe.checkout.sessions.retrieve(sessionId, {
+      const session = await this.stripeService.stripe!.checkout.sessions.retrieve(sessionId, {
         expand: ["subscription", "customer"],
       });
 
@@ -499,7 +499,7 @@ export class CheckoutService {
    */
   async handleCheckoutExpired(sessionId: string): Promise<void> {
     try {
-      const session = await this.stripeService.stripe.checkout.sessions.retrieve(sessionId);
+      const session = await this.stripeService.stripe!.checkout.sessions.retrieve(sessionId);
       const metadata = session.metadata || {};
 
       if (metadata.userId) {

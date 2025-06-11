@@ -11,6 +11,8 @@ import {StorageCalculationService} from "./services/storageCalculationService";
 import {CheckoutService} from "./subscriptions/checkout";
 import {FamilyPlanService} from "./subscriptions/familyPlan";
 import {AddonService} from "./subscriptions/addons";
+// Phase 3 services
+import {ReferralService} from "./services/referralService";
 import {createError, ErrorCode} from "./utils/errors";
 import {
   CreateCheckoutSessionSchema,
@@ -26,6 +28,12 @@ import {
   RemoveAddonSchema,
   CheckAddonEligibilitySchema,
   GenerateStorageReportSchema,
+  // Phase 3 schemas
+  GenerateReferralCodeSchema,
+  ValidateReferralCodeSchema,
+  CreateReferralSchema,
+  GetReferralStatsSchema,
+  GetReferralInfoSchema,
 } from "./config/stripeValidation";
 
 // Re-export secrets for global options
@@ -45,6 +53,8 @@ const storageService = new StorageCalculationService();
 const checkoutService = new CheckoutService();
 const familyPlanService = new FamilyPlanService();
 const addonService = new AddonService();
+// Phase 3 services
+const referralService = new ReferralService();
 
 /**
  * Stripe webhook handler
@@ -1041,4 +1051,263 @@ export const getFamilyStorageReport = onCall(
       type: RateLimitType.STRIPE_SUBSCRIPTION_READ,
     },
   })
+);
+
+// ============================================================================
+// PHASE 3: Referral System Implementation
+// ============================================================================
+
+/**
+ * Generate referral code for user (Phase 3.1)
+ */
+export const generateReferralCode = onCall(
+  {
+    region: "us-central1",
+    maxInstances: 10,
+  },
+  withAuth(async (request) => {
+    const uid = request.auth!.uid;
+    GenerateReferralCodeSchema.parse(request.data);
+
+    try {
+      const referralCode = await referralService.generateReferralCode(uid);
+
+      logger.info("Referral code generated", {
+        userId: uid,
+        referralCode,
+      });
+
+      return {
+        referralCode,
+      };
+    } catch (error) {
+      logger.error("Failed to generate referral code", {error, uid});
+      throw error;
+    }
+  }, "generateReferralCode", {
+    authLevel: "auth",
+    rateLimitConfig: {
+      type: RateLimitType.STRIPE_SUBSCRIPTION_READ,
+    },
+  })
+);
+
+/**
+ * Validate referral code (Phase 3.1)
+ */
+export const validateReferralCode = onCall(
+  {
+    region: "us-central1",
+    maxInstances: 10,
+  },
+  withAuth(async (request) => {
+    const uid = request.auth!.uid;
+    const data = ValidateReferralCodeSchema.parse(request.data);
+
+    try {
+      const validation = await referralService.validateReferralCode(
+        data.referralCode,
+        uid
+      );
+
+      logger.info("Referral code validated", {
+        userId: uid,
+        referralCode: data.referralCode,
+        isValid: validation.isValid,
+      });
+
+      return validation;
+    } catch (error) {
+      logger.error("Failed to validate referral code", {error, uid});
+      throw error;
+    }
+  }, "validateReferralCode", {
+    authLevel: "auth",
+    rateLimitConfig: {
+      type: RateLimitType.STRIPE_SUBSCRIPTION_READ,
+    },
+  })
+);
+
+/**
+ * Create referral when user signs up with referral code (Phase 3.1)
+ */
+export const createReferral = onCall(
+  {
+    region: "us-central1",
+    maxInstances: 10,
+  },
+  withAuth(async (request) => {
+    const uid = request.auth!.uid;
+    const data = CreateReferralSchema.parse(request.data);
+
+    try {
+      // Find referrer user ID from referral code
+      const db = getFirestore();
+      const referrerQuery = await db.collection("users")
+        .where("referralCode", "==", data.referralCode)
+        .limit(1)
+        .get();
+
+      if (referrerQuery.empty) {
+        throw createError(ErrorCode.REFERRAL_INVALID, "Invalid referral code");
+      }
+
+      const referrerUserId = referrerQuery.docs[0].id;
+
+      const referral = await referralService.createReferral({
+        referrerUserId,
+        referredUserId: uid,
+        referralCode: data.referralCode,
+        metadata: data.metadata,
+      });
+
+      logger.info("Referral created", {
+        referralId: referral.id,
+        referrerUserId,
+        referredUserId: uid,
+      });
+
+      return {
+        success: true,
+        referral,
+      };
+    } catch (error) {
+      logger.error("Failed to create referral", {error, uid});
+      throw error;
+    }
+  }, "createReferral", {
+    authLevel: "auth",
+    rateLimitConfig: {
+      type: RateLimitType.STRIPE_SUBSCRIPTION_READ,
+    },
+  })
+);
+
+/**
+ * Complete referral when user becomes paying customer (Phase 3.2)
+ */
+export const completeReferral = onCall(
+  {
+    region: "us-central1",
+    maxInstances: 10,
+  },
+  withAuth(async (request) => {
+    const uid = request.auth!.uid;
+
+    try {
+      await referralService.completeReferral(uid);
+
+      logger.info("Referral completed", {
+        referredUserId: uid,
+      });
+
+      return {
+        success: true,
+        message: "Referral completed successfully",
+      };
+    } catch (error) {
+      logger.error("Failed to complete referral", {error, uid});
+      throw error;
+    }
+  }, "completeReferral", {
+    authLevel: "verified",
+    rateLimitConfig: {
+      type: RateLimitType.STRIPE_SUBSCRIPTION_UPDATE,
+    },
+  })
+);
+
+/**
+ * Get referral statistics for user (Phase 3.1)
+ */
+export const getReferralStats = onCall(
+  {
+    region: "us-central1",
+    maxInstances: 10,
+  },
+  withAuth(async (request) => {
+    const uid = request.auth!.uid;
+    GetReferralStatsSchema.parse(request.data);
+
+    try {
+      const stats = await referralService.getReferralStats(uid);
+
+      logger.info("Referral stats retrieved", {
+        userId: uid,
+        totalReferrals: stats.totalReferrals,
+        completedReferrals: stats.completedReferrals,
+      });
+
+      return stats;
+    } catch (error) {
+      logger.error("Failed to get referral stats", {error, uid});
+      throw error;
+    }
+  }, "getReferralStats", {
+    authLevel: "auth",
+    rateLimitConfig: {
+      type: RateLimitType.STRIPE_SUBSCRIPTION_READ,
+    },
+  })
+);
+
+/**
+ * Get referral information for user (Phase 3.1)
+ */
+export const getReferralInfo = onCall(
+  {
+    region: "us-central1",
+    maxInstances: 10,
+  },
+  withAuth(async (request) => {
+    const uid = request.auth!.uid;
+    GetReferralInfoSchema.parse(request.data);
+
+    try {
+      const referralInfo = await referralService.getReferralInfo(uid);
+
+      logger.info("Referral info retrieved", {
+        userId: uid,
+        hasReferralCode: !!referralInfo?.referralCode,
+        totalReferrals: referralInfo?.totalReferrals || 0,
+      });
+
+      return {
+        referralInfo,
+      };
+    } catch (error) {
+      logger.error("Failed to get referral info", {error, uid});
+      throw error;
+    }
+  }, "getReferralInfo", {
+    authLevel: "auth",
+    rateLimitConfig: {
+      type: RateLimitType.STRIPE_SUBSCRIPTION_READ,
+    },
+  })
+);
+
+/**
+ * Scheduled function to cleanup expired referrals
+ */
+export const cleanupExpiredReferrals = onSchedule(
+  {
+    schedule: "every day 03:00",
+    timeZone: "America/Los_Angeles",
+    region: "us-central1",
+  },
+  async () => {
+    try {
+      logger.info("Starting cleanup of expired referrals");
+
+      const cleanedCount = await referralService.cleanupExpiredReferrals();
+
+      logger.info("Expired referrals cleanup completed", {
+        cleanedCount,
+      });
+    } catch (error) {
+      logger.error("Failed to cleanup expired referrals", {error});
+    }
+  }
 );

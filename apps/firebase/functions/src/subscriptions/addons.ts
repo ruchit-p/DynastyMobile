@@ -249,11 +249,11 @@ export class AddonService {
       }
 
       // Add addon to Stripe subscription
-      const stripeSubscription = await this.stripeService.stripe.subscriptions.retrieve(
+      const stripeSubscription = await this.stripeService.stripe!.subscriptions.retrieve(
         subscription.stripeSubscriptionId!
       );
 
-      const subscriptionItem = await this.stripeService.stripe.subscriptionItems.create({
+      const subscriptionItem = await this.stripeService.stripe!.subscriptionItems.create({
         subscription: stripeSubscription.id,
         price: addonPriceId,
         quantity: 1,
@@ -345,12 +345,12 @@ export class AddonService {
 
       // Remove from Stripe subscription
       if (params.effectiveDate === "immediate") {
-        await this.stripeService.stripe.subscriptionItems.del(addon.id!, {
+        await this.stripeService.stripe!.subscriptionItems.del(addon.id!, {
           proration_behavior: params.prorationBehavior || "create_prorations",
         });
       } else {
         // Schedule cancellation at end of billing period
-        await this.stripeService.stripe.subscriptionItems.update(addon.id!, {
+        await this.stripeService.stripe!.subscriptionItems.update(addon.id!, {
           quantity: 0,
           proration_behavior: params.prorationBehavior || "create_prorations",
         });
