@@ -181,7 +181,9 @@ export const getFamilyTreeData = onCall(
         "lastName",
         "profilePicture",
         "gender",
-        "familyTreeId"
+        "familyTreeId",
+        "email",
+        "phoneNumber"
       )
       .get();
 
