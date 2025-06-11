@@ -28,11 +28,12 @@ export async function middleware(request: NextRequest) {
   }
   
   const response = NextResponse.next();
-  // Environment detection based on hostname
+  // Environment detection based on hostname and environment variable
   const hostname = request.headers.get('host') || '';
   const isDevelopment = hostname.includes('localhost') || hostname.includes('127.0.0.1');
-  const isStaging = hostname.includes('dynastytest.com');
-  const isProduction = hostname.includes('mydynastyapp.com');
+  // Check both hostname and environment variable for staging detection
+  const isStaging = hostname.includes('dynastytest.com') || process.env.NEXT_PUBLIC_ENVIRONMENT === 'staging';
+  const isProduction = hostname.includes('mydynastyapp.com') && process.env.NEXT_PUBLIC_ENVIRONMENT !== 'staging';
   
   // Generate nonce for CSP
   const nonce = Buffer.from(globalThis.crypto.randomUUID()).toString('base64');
