@@ -92,7 +92,7 @@ export const reactivateSubscription = onCall(
   }, "reactivateSubscription", "verified", {
     type: RateLimitType.SUBSCRIPTION_MODIFY,
     maxRequests: 5,
-    windowSeconds: 3600
+    windowSeconds: 3600,
   })
 );
 
@@ -161,7 +161,7 @@ export const getPaymentFailureDetails = onCall(
   }, "getPaymentFailureDetails", "verified", {
     type: RateLimitType.API,
     maxRequests: 20,
-    windowSeconds: 60
+    windowSeconds: 60,
   })
 );
 
@@ -193,7 +193,7 @@ export const getPaymentMetrics = onCall(
   }, "getPaymentMetrics", "onboarded", {
     type: RateLimitType.API,
     maxRequests: 10,
-    windowSeconds: 60
+    windowSeconds: 60,
   })
 );
 
@@ -205,7 +205,7 @@ export const getPaymentMonitoringDashboard = onCall(
     region: "us-central1",
     memory: "512MiB",
   },
-  withAuth(async (_request) => {
+  withAuth(async () => {
     try {
       const dashboard = await paymentLoggingService.getMonitoringDashboard();
 
@@ -220,7 +220,7 @@ export const getPaymentMonitoringDashboard = onCall(
   }, "getPaymentMonitoringDashboard", "onboarded", {
     type: RateLimitType.API,
     maxRequests: 10,
-    windowSeconds: 60
+    windowSeconds: 60,
   })
 );
 
@@ -257,7 +257,7 @@ export const debugPaymentIssues = onCall(
   }, "debugPaymentIssues", "onboarded", {
     type: RateLimitType.API,
     maxRequests: 5,
-    windowSeconds: 300
+    windowSeconds: 300,
   })
 );
 

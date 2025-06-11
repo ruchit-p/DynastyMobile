@@ -313,7 +313,7 @@ function mapToHttpsErrorCode(code: ErrorCode): "ok" | "cancelled" | "unknown" | 
     return "already-exists";
   case ErrorCode.ADDON_NOT_FOUND:
     return "not-found";
-  
+
   case ErrorCode.INVALID_STATE:
     return "failed-precondition";
 

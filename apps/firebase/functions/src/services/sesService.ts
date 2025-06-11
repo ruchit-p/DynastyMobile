@@ -180,6 +180,9 @@ export const SES_TEMPLATE_NAMES = {
   passwordReset: "password-reset",
   invite: "invite",
   mfa: "mfa",
+  paymentFailed: "payment-failed",
+  paymentRetry: "payment-retry",
+  subscriptionSuspended: "subscription-suspended",
 } as const;
 
 /**
@@ -192,6 +195,7 @@ export function mapTemplateVariables(
   const baseVariables = {
     ...sendGridVariables,
     year: new Date().getFullYear().toString(),
+    baseUrl: sendGridVariables.baseUrl || process.env.FRONTEND_URL || "https://mydynastyapp.com",
   };
 
   switch (templateType) {
@@ -219,6 +223,42 @@ export function mapTemplateVariables(
       username: sendGridVariables.username,
       code: sendGridVariables.code,
       expiryMinutes: sendGridVariables.expiryMinutes || "10",
+    };
+
+  case "paymentFailed":
+    return {
+      ...baseVariables,
+      username: sendGridVariables.userName || sendGridVariables.username,
+      plan: sendGridVariables.plan,
+      amount: sendGridVariables.amount,
+      currency: sendGridVariables.currency || "USD",
+      failureReason: sendGridVariables.failureReason,
+      updatePaymentUrl: sendGridVariables.updatePaymentUrl,
+      supportUrl: sendGridVariables.supportUrl || `${baseVariables.baseUrl}/support`,
+    };
+
+  case "paymentRetry":
+    return {
+      ...baseVariables,
+      username: sendGridVariables.userName || sendGridVariables.username,
+      plan: sendGridVariables.plan,
+      amount: sendGridVariables.amount,
+      currency: sendGridVariables.currency || "USD",
+      retryDate: sendGridVariables.retryDate,
+      attemptNumber: sendGridVariables.attemptNumber,
+      updatePaymentUrl: sendGridVariables.updatePaymentUrl,
+      supportUrl: sendGridVariables.supportUrl || `${baseVariables.baseUrl}/support`,
+    };
+
+  case "subscriptionSuspended":
+    return {
+      ...baseVariables,
+      username: sendGridVariables.userName || sendGridVariables.username,
+      plan: sendGridVariables.plan,
+      suspensionDate: sendGridVariables.suspensionDate,
+      gracePeriodEnds: sendGridVariables.gracePeriodEnds,
+      reactivateUrl: sendGridVariables.reactivateUrl,
+      supportUrl: sendGridVariables.supportUrl || `${baseVariables.baseUrl}/support`,
     };
 
   default:

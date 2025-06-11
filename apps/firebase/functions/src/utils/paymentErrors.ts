@@ -326,10 +326,11 @@ export class PaymentErrorHandler {
  * Retry wrapper for payment operations
  */
 export async function withPaymentRetry<T>(
-  operation: () => Promise<T>,
+  operation: (idempotencyKey?: string) => Promise<T>,
   context: PaymentErrorContext,
   functionName: string,
-  config: PaymentRetryConfig = DEFAULT_PAYMENT_RETRY_CONFIG
+  config: PaymentRetryConfig = DEFAULT_PAYMENT_RETRY_CONFIG,
+  idempotencyKeyBase?: string
 ): Promise<T> {
   let lastError: any;
 
@@ -337,11 +338,16 @@ export async function withPaymentRetry<T>(
     try {
       context.attemptNumber = attempt;
 
+      // Generate idempotency key for this attempt
+      const idempotencyKey = idempotencyKeyBase ?
+        `${idempotencyKeyBase}-attempt-${attempt}-${Date.now()}` :
+        undefined;
+
       // Log attempt
       await PaymentErrorHandler.logPaymentAttempt(context, "retry");
 
-      // Execute operation
-      const result = await operation();
+      // Execute operation with idempotency key
+      const result = await operation(idempotencyKey);
 
       // Log success
       await PaymentErrorHandler.logPaymentAttempt(context, "success");

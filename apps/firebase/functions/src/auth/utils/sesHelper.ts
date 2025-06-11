@@ -6,7 +6,7 @@ import {createLogContext} from "../../utils/sanitization";
 
 interface SendEmailOptions {
   to: string;
-  templateType: "verification" | "passwordReset" | "invite" | "mfa";
+  templateType: "verification" | "passwordReset" | "invite" | "mfa" | "paymentFailed" | "paymentRetry" | "subscriptionSuspended";
   dynamicTemplateData: Record<string, any>;
   fromName?: string;
 }

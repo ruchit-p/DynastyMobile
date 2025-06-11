@@ -803,24 +803,24 @@ export class SubscriptionService {
     if (plan === SubscriptionPlan.FREE) {
       return "Dynasty Free";
     }
-    
+
     if (plan === SubscriptionPlan.INDIVIDUAL) {
       return "Dynasty Individual Plus";
     }
-    
+
     if (plan === SubscriptionPlan.FAMILY) {
       switch (tier) {
-        case SubscriptionTier.FAMILY_2_5TB:
-          return "Dynasty Family 2.5TB";
-        case SubscriptionTier.FAMILY_7_5TB:
-          return "Dynasty Family 7.5TB";
-        case SubscriptionTier.FAMILY_12TB:
-          return "Dynasty Family 12TB";
-        default:
-          return "Dynasty Family";
+      case SubscriptionTier.FAMILY_2_5TB:
+        return "Dynasty Family 2.5TB";
+      case SubscriptionTier.FAMILY_7_5TB:
+        return "Dynasty Family 7.5TB";
+      case SubscriptionTier.FAMILY_12TB:
+        return "Dynasty Family 12TB";
+      default:
+        return "Dynasty Family";
       }
     }
-    
+
     return "Dynasty Plan";
   }
 

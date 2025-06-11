@@ -41,7 +41,7 @@ export function getEmailProvider(): EmailProvider {
  */
 export async function sendEmailUniversal(options: {
   to: string;
-  templateType: "verification" | "passwordReset" | "invite" | "mfa";
+  templateType: "verification" | "passwordReset" | "invite" | "mfa" | "paymentFailed" | "paymentRetry" | "subscriptionSuspended";
   dynamicTemplateData: Record<string, any>;
   fromName?: string;
 }): Promise<void> {
