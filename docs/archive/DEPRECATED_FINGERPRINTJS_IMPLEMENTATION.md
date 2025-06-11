@@ -1,3 +1,27 @@
+# ⚠️ DEPRECATED - FingerprintJS Pro Implementation Guide
+
+> **DEPRECATED as of January 2025**: This documentation is obsolete. The Dynasty codebase has been fully cleaned of FingerprintJS device fingerprinting library while preserving all encryption and security-related fingerprint functionality.
+>
+> **What was removed:**
+> - All FingerprintJS dependencies (`@fingerprintjs/fingerprintjs*` packages)
+> - FingerprintJS service files: `FingerprintService.ts`, `EnhancedFingerprintService.ts`, `FingerprintProvider.tsx`
+> - Device fingerprinting using FingerprintJS API
+>
+> **What was preserved:**
+> - Cryptographic key fingerprints for Signal Protocol verification
+> - E2EE key fingerprint generation (`e2eeService.generateFingerprint`)
+> - Biometric authentication (Touch ID/Face ID) functionality
+> - Device identification now uses native device properties (`Device.brand`, `Device.modelName`, etc.)
+>
+> **Migration notes:**
+> - Trusted device functionality continues to work using device-based IDs
+> - No impact on end-to-end encryption or security features
+> - All cryptographic fingerprints remain functional for key verification
+>
+> For current device identification implementation, see the updated authentication modules in `/apps/firebase/functions/src/auth/`.
+
+---
+
 # FingerprintJS Pro Implementation Guide
 
 This document outlines the implementation of FingerprintJS Pro for device fingerprinting and trust management in the Dynasty app.

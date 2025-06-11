@@ -81,7 +81,7 @@ The Dynasty Vault has been fully implemented with zero-knowledge encryption arch
 **Key features:**
 - **Zero-Knowledge Architecture**: Server never has access to unencrypted content or encryption keys
 - **Client-Side Encryption**: All files encrypted on-device before upload using libsodium
-- **Cloudflare R2 Storage**: Migrated from Firebase Storage for better performance and cost
+- **Backblaze B2 Storage**: Migrated from Firebase Storage for better performance and cost
 - **Comprehensive Security**: Input sanitization, path traversal protection, and MIME type validation
 - **Adaptive Rate Limiting**: Intelligent rate limits based on user trust scores
 - **Audit Logging**: Complete activity tracking for SOC 2 compliance
@@ -132,31 +132,38 @@ The codebase has been updated to remove CSRF protection from Firebase callable f
 - Automatic token validation
 - Built-in CORS protection
 
-### R2 Storage Configuration (January 2025)
-The Dynasty codebase now uses environment-specific R2 buckets with automatic fallback for local development.
+### Backblaze B2 Storage Configuration (January 2025)
+The Dynasty codebase is transitioning to Backblaze B2 for object storage, providing cost-effective and reliable cloud storage with S3-compatible APIs.
 
 **Bucket configuration:**
 - **Production**: `dynastyprod`
 - **Staging**: `dynastytest`
 - **Local/Emulator**: `dynastylocal`
 
-**Local development features:**
-- Automatic R2 connectivity check on first storage operation
-- Falls back to Firebase Storage emulator if R2 is unavailable (offline mode)
+**Key features:**
+- S3-compatible API for easy migration
+- Automatic fallback to Firebase Storage emulator for local development
 - No CORS configuration required - uses signed URLs for all operations
 - 3-second timeout for connectivity checks to avoid blocking
+- Egress-free bandwidth within Cloudflare network
 
 **Implementation details:**
-- StorageAdapter checks connectivity lazily (not on initialization)
-- R2 bucket names are auto-selected based on environment (NODE_ENV)
+- StorageAdapter provides unified interface for storage operations
+- Bucket names are auto-selected based on environment (NODE_ENV)
 - Signed URLs bypass CORS restrictions for uploads/downloads
-- Frontend validates R2 URLs and handles them properly with Next.js Image component
+- Frontend validates B2 URLs and handles them properly with Next.js Image component
+- Uses AWS SDK S3 client for compatibility
 
-**Key files updated:**
-- `config/r2Secrets.ts` - Added `getEnvironmentBucketName()` function
-- `services/storageAdapter.ts` - Added connectivity check and fallback logic
-- `services/r2Service.ts` - Added `checkConnectivity()` method
-- `services/VaultService.ts` - Fixed URL validation and prefetching for R2
+**Configuration:**
+- B2 credentials stored in Firebase secrets (`B2_CONFIG`)
+- Application key ID and application key required
+- S3-compatible endpoint: `https://s3.us-west-004.backblazeb2.com`
+- Bucket region: `us-west-004`
+
+**Migration from R2:**
+- Same bucket naming convention maintained
+- No changes required to application code
+- Only configuration update needed in secrets
 
 ## Automated Feature Development Workflow
 
@@ -377,6 +384,20 @@ npm run serve    # Run emulators
 npm run deploy   # Deploy to Firebase
 npm run lint     # Run ESLint
 npm test         # Run Jest tests
+
+# Firebase Secrets Management
+firebase functions:secrets:get SECRET_NAME  # Check if a secret is set
+firebase functions:secrets:set SECRET_NAME  # Set a new secret
+firebase functions:secrets:access SECRET_NAME  # View secret value
+firebase functions:secrets:destroy SECRET_NAME  # Delete a secret
+firebase functions:secrets:prune  # Clean up unused secrets
+
+# Check required secrets status
+firebase functions:secrets:get EMAIL_PROVIDER
+firebase functions:secrets:get SES_CONFIG
+firebase functions:secrets:get FRONTEND_URL
+firebase functions:secrets:get R2_CONFIG
+firebase functions:secrets:get STRIPE_SECRET_KEY
 ```
 
 ## Critical Guidelines

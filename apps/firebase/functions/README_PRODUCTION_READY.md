@@ -28,7 +28,7 @@ All critical security implementations have been completed and tested:
 
 ### Prerequisites
 1. **Firebase CLI installed and authenticated**
-2. **External service API keys obtained** (SendGrid, Twilio, etc.)
+2. **External service API keys obtained** (AWS SES, Twilio, etc.)
 3. **Production domain configured**
 
 ### 30-Second Deployment
@@ -165,15 +165,14 @@ cp .env.production.template .env.production
 - [x] **Monitoring & Alerts**: Security event tracking
 
 ### External Services Ready 🔧
-- [ ] **SendGrid API Key**: Email delivery service
+- [ ] **AWS SES Configuration**: Email delivery service
 - [ ] **Twilio Credentials**: SMS authentication 
-- [ ] **FingerprintJS Keys**: Device security
 - [ ] **Cloudflare R2**: File storage service
 
 ## 📞 Next Steps for Production
 
 ### Immediate (Today)
-1. **Obtain External API Keys** (SendGrid, Twilio, FingerprintJS, R2)
+1. **Obtain External API Keys** (AWS SES, Twilio, R2)
 2. **Update .env.production** with your service credentials
 3. **Run Deployment Pipeline**: `./scripts/deploy-production-secrets.sh`
 4. **Deploy Functions**: `./scripts/gradual-rollout-deploy.sh`

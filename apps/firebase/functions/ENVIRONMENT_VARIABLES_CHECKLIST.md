@@ -4,33 +4,31 @@
 
 These must be set using Firebase CLI or Console:
 
-### 1. **SENDGRID_CONFIG** (Required)
+### 1. **EMAIL_PROVIDER** (Required)
+- Set to: `ses` (AWS SES is the only supported provider)
+
+### 2. **SES_CONFIG** (Required)
 ```json
 {
-  "apiKey": "SG.xxxxxxxxxxxx",
+  "region": "us-east-1",
   "fromEmail": "noreply@mydynastyapp.com",
   "fromName": "Dynasty App",
-  "templates": {
-    "verification": "d-xxxxxx",
-    "passwordReset": "d-xxxxxx",
-    "invite": "d-xxxxxx"
-  }
+  "replyToEmail": "support@mydynastyapp.com"
 }
 ```
 
-### 2. **FRONTEND_URL** (Required)
+### 3. **FRONTEND_URL** (Required)
 - Production: `https://mydynastyapp.com`
+- Staging: `https://dynastytest.com`
 - Development: `http://localhost:3000`
 
-### 3. **FINGERPRINT_SERVER_API_KEY** (Required)
-- Your FingerprintJS Pro Server API key
-
-### 4. **R2_CONFIG** (Required for R2 Storage)
+### 4. **B2_CONFIG** (Required for Backblaze B2 Storage)
 ```json
 {
-  "accountId": "your_cloudflare_account_id",
-  "accessKeyId": "your_r2_access_key",
-  "secretAccessKey": "your_r2_secret_key"
+  "applicationKeyId": "your_b2_application_key_id",
+  "applicationKey": "your_b2_application_key",
+  "bucketId": "your_default_bucket_id",
+  "bucketName": "dynastyprod"
 }
 ```
 
@@ -45,22 +43,22 @@ These must be set using Firebase CLI or Console:
 # Node Environment
 NODE_ENV=production
 
-# R2 Storage Configuration
-R2_BASE_BUCKET=dynasty
-R2_ENDPOINT=https://your_account_id.r2.cloudflarestorage.com
-STORAGE_PROVIDER=r2  # or 'firebase' for Firebase Storage
-ENABLE_R2_MIGRATION=true
-R2_MIGRATION_PERCENTAGE=100  # 0-100
+# B2 Storage Configuration
+B2_BASE_BUCKET=dynasty
+B2_ENDPOINT=https://s3.us-west-004.backblazeb2.com
+STORAGE_PROVIDER=b2  # or 'firebase' for Firebase Storage
+ENABLE_B2_MIGRATION=true
+B2_MIGRATION_PERCENTAGE=100  # 0-100
 
 # CDN Configuration
 CDN_BASE_URL=https://cdn.mydynastyapp.com
 ENABLE_CDN=true
 
 # CORS Configuration
-ALLOWED_ORIGINS=https://mydynastyapp.com,https://www.mydynastyapp.com,https://app.mydynastyapp.com
+ALLOWED_ORIGINS=https://mydynastyapp.com,https://www.mydynastyapp.com,https://app.mydynastyapp.com,https://dynastytest.com,https://www.dynastytest.com
 
 # Feature Flags
-ENABLE_R2_TESTS=false
+ENABLE_B2_TESTS=false
 ```
 
 ## How to Set Secrets
@@ -68,10 +66,10 @@ ENABLE_R2_TESTS=false
 ### Using Firebase CLI:
 ```bash
 # Set individual secrets
-firebase functions:secrets:set SENDGRID_CONFIG
+firebase functions:secrets:set EMAIL_PROVIDER
+firebase functions:secrets:set SES_CONFIG
 firebase functions:secrets:set FRONTEND_URL
-firebase functions:secrets:set FINGERPRINT_SERVER_API_KEY
-firebase functions:secrets:set R2_CONFIG
+firebase functions:secrets:set B2_CONFIG
 firebase functions:secrets:set GOOGLE_PLACES_API_KEY
 
 # View all secrets
@@ -95,12 +93,15 @@ firebase functions:secrets:list
 
 ## Notes
 
-1. **SENDGRID_CONFIG** replaces the old individual SendGrid secrets (SENDGRID_APIKEY, SENDGRID_FROMEMAIL, etc.)
-2. **R2_CONFIG** bundles all R2 credentials for security
-3. Environment variables in .env files are for non-sensitive configuration
-4. Secrets in Firebase Secret Manager are for sensitive data like API keys
-5. The `CSRF_SECRET_KEY` mentioned in the example is not currently used in the code
+1. **EMAIL_PROVIDER** must be set to "ses" - SendGrid is no longer supported
+2. **SES_CONFIG** contains AWS SES configuration (IAM role used in production)
+3. **B2_CONFIG** bundles all Backblaze B2 credentials for security
+4. Environment variables in .env files are for non-sensitive configuration
+5. Secrets in Firebase Secret Manager are for sensitive data like API keys
+6. FingerprintJS has been completely removed - no API key needed
 
-## Migration Notes
+## Deprecated Services
 
-The code in `familyTree.ts` still uses old individual SendGrid secrets. This should be updated to use the bundled `SENDGRID_CONFIG`.
+- **SendGrid**: Migrated to AWS SES (January 2025)
+- **FingerprintJS**: Removed completely (January 2025)
+- **Cloudflare R2**: Transitioning to Backblaze B2 (January 2025)
