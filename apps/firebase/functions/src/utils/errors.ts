@@ -46,7 +46,40 @@ export enum ErrorCode {
   ABORTED = "aborted",
   INTERNAL = "internal",
   UNKNOWN = "unknown",
-  UNIMPLEMENTED = "unimplemented"
+  UNIMPLEMENTED = "unimplemented",
+
+  // Subscription/Payment errors
+  SUBSCRIPTION_NOT_FOUND = "subscription-not-found",
+  PAYMENT_FAILED = "payment-failed",
+  PAYMENT_METHOD_REQUIRED = "payment-method-required",
+  PLAN_CHANGE_INVALID = "plan-change-invalid",
+  FAMILY_MEMBER_LIMIT = "family-member-limit",
+  FAMILY_MEMBER_LIMIT_EXCEEDED = "family-member-limit-exceeded",
+  ADDON_INVALID = "addon-invalid",
+  REFERRAL_INVALID = "referral-invalid",
+  REFERRAL_EXPIRED = "referral-expired",
+  STRIPE_ERROR = "stripe-error",
+  WEBHOOK_SIGNATURE_INVALID = "webhook-signature-invalid",
+  WEBHOOK_SIGNATURE_MISSING = "webhook-signature-missing",
+  SUBSCRIPTION_EXPIRED = "subscription-expired",
+  STORAGE_LIMIT_EXCEEDED = "storage-limit-exceeded",
+
+  // Phase 2: Enhanced subscription and family plan errors
+  SUBSCRIPTION_ALREADY_EXISTS = "subscription-already-exists",
+  CUSTOMER_CREATION_FAILED = "customer-creation-failed",
+  FAMILY_RELATIONSHIP_NOT_VERIFIED = "family-relationship-not-verified",
+  FAMILY_MEMBER_ALREADY_IN_PLAN = "family-member-already-in-plan",
+  INVITATION_EXPIRED = "invitation-expired",
+  INVITATION_ALREADY_ACCEPTED = "invitation-already-accepted",
+  INVITATION_ALREADY_DECLINED = "invitation-already-declined",
+
+  // Phase 2: Addon-specific errors
+  ADDON_NOT_ELIGIBLE = "addon-not-eligible",
+  ADDON_LIMIT_EXCEEDED = "addon-limit-exceeded",
+  ADDON_CONFLICT = "addon-conflict",
+  ADDON_ALREADY_EXISTS = "addon-already-exists",
+  ADDON_NOT_FOUND = "addon-not-found",
+  ADDON_TIER_REQUIREMENT_NOT_MET = "addon-tier-requirement-not-met",
 }
 
 /**
@@ -94,6 +127,39 @@ export const ErrorMessages = {
   [ErrorCode.ABORTED]: "The operation was aborted.",
   [ErrorCode.INTERNAL]: "An internal error occurred. Please try again later.",
   [ErrorCode.UNKNOWN]: "An unknown error occurred. Please try again.",
+
+  // Subscription/Payment errors
+  [ErrorCode.SUBSCRIPTION_NOT_FOUND]: "Subscription not found. Please check your account status.",
+  [ErrorCode.PAYMENT_FAILED]: "Payment failed. Please check your payment method and try again.",
+  [ErrorCode.PAYMENT_METHOD_REQUIRED]: "Payment method required. Please add a valid payment method.",
+  [ErrorCode.PLAN_CHANGE_INVALID]: "Invalid plan change. Please check plan requirements and try again.",
+  [ErrorCode.FAMILY_MEMBER_LIMIT]: "Family member limit reached. Please upgrade your plan to add more members.",
+  [ErrorCode.FAMILY_MEMBER_LIMIT_EXCEEDED]: "Family member limit exceeded. Maximum members allowed for this plan.",
+  [ErrorCode.ADDON_INVALID]: "Invalid addon selection. This addon is not available for your plan.",
+  [ErrorCode.REFERRAL_INVALID]: "Invalid referral code. Please check and try again.",
+  [ErrorCode.REFERRAL_EXPIRED]: "Referral code has expired. Please request a new one.",
+  [ErrorCode.STRIPE_ERROR]: "Payment processing error. Please try again or contact support.",
+  [ErrorCode.WEBHOOK_SIGNATURE_INVALID]: "Invalid webhook signature. Request not authenticated.",
+  [ErrorCode.WEBHOOK_SIGNATURE_MISSING]: "Missing webhook signature. Request not authenticated.",
+  [ErrorCode.SUBSCRIPTION_EXPIRED]: "Your subscription has expired. Please renew to continue.",
+  [ErrorCode.STORAGE_LIMIT_EXCEEDED]: "Storage limit exceeded. Please upgrade your plan or remove some files.",
+
+  // Phase 2: Enhanced subscription and family plan error messages
+  [ErrorCode.SUBSCRIPTION_ALREADY_EXISTS]: "You already have an active subscription. Use upgrade/downgrade to change your plan.",
+  [ErrorCode.CUSTOMER_CREATION_FAILED]: "Failed to setup billing account. Please try again or contact support.",
+  [ErrorCode.FAMILY_RELATIONSHIP_NOT_VERIFIED]: "Family relationship could not be verified. Please ensure this person is in your family tree.",
+  [ErrorCode.FAMILY_MEMBER_ALREADY_IN_PLAN]: "This person is already a member of a family plan.",
+  [ErrorCode.INVITATION_EXPIRED]: "This invitation has expired. Please request a new invitation.",
+  [ErrorCode.INVITATION_ALREADY_ACCEPTED]: "This invitation has already been accepted.",
+  [ErrorCode.INVITATION_ALREADY_DECLINED]: "This invitation has already been declined.",
+
+  // Phase 2: Addon-specific error messages
+  [ErrorCode.ADDON_NOT_ELIGIBLE]: "This addon is not available for your current plan. Addons are only available for Individual plans.",
+  [ErrorCode.ADDON_LIMIT_EXCEEDED]: "Addon limit exceeded. You have reached the maximum number of addons for your plan.",
+  [ErrorCode.ADDON_CONFLICT]: "This addon conflicts with your existing addons. Please remove conflicting addons first.",
+  [ErrorCode.ADDON_ALREADY_EXISTS]: "You already have this addon active on your subscription.",
+  [ErrorCode.ADDON_NOT_FOUND]: "Addon not found. It may have already been removed.",
+  [ErrorCode.ADDON_TIER_REQUIREMENT_NOT_MET]: "This addon requires a higher tier plan. Please upgrade your tier first.",
 };
 
 /**
@@ -197,6 +263,54 @@ function mapToHttpsErrorCode(code: ErrorCode): "ok" | "cancelled" | "unknown" | 
     return "unknown";
   case ErrorCode.UNIMPLEMENTED:
     return "unavailable"; // Mapped to unavailable as per previous attempt
+
+    // Subscription/Payment errors
+  case ErrorCode.SUBSCRIPTION_NOT_FOUND:
+    return "not-found";
+  case ErrorCode.PAYMENT_FAILED:
+  case ErrorCode.PAYMENT_METHOD_REQUIRED:
+  case ErrorCode.STRIPE_ERROR:
+    return "failed-precondition";
+  case ErrorCode.PLAN_CHANGE_INVALID:
+  case ErrorCode.ADDON_INVALID:
+  case ErrorCode.REFERRAL_INVALID:
+  case ErrorCode.REFERRAL_EXPIRED:
+    return "invalid-argument";
+  case ErrorCode.FAMILY_MEMBER_LIMIT:
+  case ErrorCode.FAMILY_MEMBER_LIMIT_EXCEEDED:
+  case ErrorCode.STORAGE_LIMIT_EXCEEDED:
+    return "resource-exhausted";
+  case ErrorCode.WEBHOOK_SIGNATURE_INVALID:
+  case ErrorCode.WEBHOOK_SIGNATURE_MISSING:
+    return "unauthenticated";
+  case ErrorCode.SUBSCRIPTION_EXPIRED:
+    return "failed-precondition";
+
+  // Phase 2: Enhanced subscription and family plan error mappings
+  case ErrorCode.SUBSCRIPTION_ALREADY_EXISTS:
+    return "already-exists";
+  case ErrorCode.CUSTOMER_CREATION_FAILED:
+    return "failed-precondition";
+  case ErrorCode.FAMILY_RELATIONSHIP_NOT_VERIFIED:
+  case ErrorCode.FAMILY_MEMBER_ALREADY_IN_PLAN:
+    return "failed-precondition";
+  case ErrorCode.INVITATION_EXPIRED:
+  case ErrorCode.INVITATION_ALREADY_ACCEPTED:
+  case ErrorCode.INVITATION_ALREADY_DECLINED:
+    return "failed-precondition";
+
+  // Phase 2: Addon-specific error mappings
+  case ErrorCode.ADDON_NOT_ELIGIBLE:
+  case ErrorCode.ADDON_TIER_REQUIREMENT_NOT_MET:
+    return "failed-precondition";
+  case ErrorCode.ADDON_LIMIT_EXCEEDED:
+    return "resource-exhausted";
+  case ErrorCode.ADDON_CONFLICT:
+    return "failed-precondition";
+  case ErrorCode.ADDON_ALREADY_EXISTS:
+    return "already-exists";
+  case ErrorCode.ADDON_NOT_FOUND:
+    return "not-found";
 
   default: {
     // This exhaustive check helps ensure all enum members are considered.

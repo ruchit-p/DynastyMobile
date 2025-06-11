@@ -140,6 +140,68 @@ function getRateLimiters() {
         limiter: Ratelimit.fixedWindow(10, "1 h"),
         prefix: "@dynasty/email/verify",
       }),
+
+      // Subscription rate limits
+      checkout: new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(5, "1 h"), // 5 checkout attempts per hour
+        prefix: "@dynasty/subscription/checkout",
+      }),
+
+      subscriptionModify: new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(10, "24 h"), // 10 modifications per day
+        prefix: "@dynasty/subscription/modify",
+      }),
+
+      referral: new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(20, "24 h"), // 20 referral operations per day
+        prefix: "@dynasty/subscription/referral",
+      }),
+
+      webhook: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(100, "1 m"), // 100 webhook events per minute
+        prefix: "@dynasty/stripe/webhook",
+      }),
+
+      // Phase 2: Enhanced Stripe operations
+      stripeCheckout: new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(10, "1 h"), // 10 enhanced checkout sessions per hour
+        prefix: "@dynasty/stripe/enhanced-checkout",
+      }),
+
+      stripeSubscriptionRead: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(100, "1 h"), // 100 subscription reads per hour
+        prefix: "@dynasty/stripe/subscription-read",
+      }),
+
+      stripeSubscriptionUpdate: new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(10, "24 h"), // 10 subscription updates per day
+        prefix: "@dynasty/stripe/subscription-update",
+      }),
+
+      stripeFamilyUpdate: new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(20, "24 h"), // 20 family member operations per day
+        prefix: "@dynasty/stripe/family-update",
+      }),
+
+      stripePortal: new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(10, "1 h"), // 10 portal sessions per hour
+        prefix: "@dynasty/stripe/portal",
+      }),
+
+      stripeAddonManage: new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(20, "24 h"), // 20 addon operations per day
+        prefix: "@dynasty/stripe/addon-manage",
+      }),
     };
   }
 
@@ -161,6 +223,16 @@ export type RateLimitType =
   | "signalMaintenance"
   | "emailVerificationSend"
   | "emailVerificationVerify"
+  | "checkout"
+  | "subscriptionModify"
+  | "referral"
+  | "webhook"
+  | "stripeCheckout"
+  | "stripeSubscriptionRead"
+  | "stripeSubscriptionUpdate"
+  | "stripeFamilyUpdate"
+  | "stripePortal"
+  | "stripeAddonManage"
 
 interface RateLimitOptions {
   type: RateLimitType
@@ -292,6 +364,16 @@ export async function resetRateLimit(type: RateLimitType, identifier: string): P
     signalMaintenance: "@dynasty/signal/maintenance",
     emailVerificationSend: "@dynasty/email/send",
     emailVerificationVerify: "@dynasty/email/verify",
+    checkout: "@dynasty/subscription/checkout",
+    subscriptionModify: "@dynasty/subscription/modify",
+    referral: "@dynasty/subscription/referral",
+    webhook: "@dynasty/stripe/webhook",
+    stripeCheckout: "@dynasty/stripe/enhanced-checkout",
+    stripeSubscriptionRead: "@dynasty/stripe/subscription-read",
+    stripeSubscriptionUpdate: "@dynasty/stripe/subscription-update",
+    stripeFamilyUpdate: "@dynasty/stripe/family-update",
+    stripePortal: "@dynasty/stripe/portal",
+    stripeAddonManage: "@dynasty/stripe/addon-manage",
   };
 
   const prefix = prefixMap[type];
