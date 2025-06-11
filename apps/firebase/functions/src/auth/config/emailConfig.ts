@@ -28,7 +28,7 @@ export function getEmailProvider(): EmailProvider {
       return provider;
     }
   } catch (e) {
-    logger.warn("EMAIL_PROVIDER secret not found or invalid");
+    logger.warn("EMAIL_PROVIDER secret not found or invalid, defaulting to SES");
   }
 
   // Default to SES

@@ -539,8 +539,27 @@ export const createFamilyMember = onCall(
           },
         });
 
-        // Create invitation link
-        const invitationLink = `${FRONTEND_URL.value()}/signup/invited?token=${invitationToken}&id=${invitationRef.id}`;
+        // Create invitation link - handle missing FRONTEND_URL secret in development
+        let frontendUrl: string;
+        try {
+          frontendUrl = FRONTEND_URL.value();
+        } catch (error) {
+          // Fallback for local development when secret is not set
+          if (process.env.FUNCTIONS_EMULATOR === "true") {
+            frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+            logger.warn("FRONTEND_URL secret not set, using environment variable or default for family tree invitation", {
+              fallbackUrl: frontendUrl,
+            });
+          } else {
+            throw createError(ErrorCode.INTERNAL, "Email service configuration error prevents sending invitation.");
+          }
+        }
+
+        if (!frontendUrl) {
+          throw createError(ErrorCode.INTERNAL, "Email service configuration error prevents sending invitation.");
+        }
+
+        const invitationLink = `${frontendUrl}/signup/invited?token=${invitationToken}&id=${invitationRef.id}`;
 
         // Initialize SendGrid before sending email
         // Send invitation email
@@ -965,8 +984,27 @@ export const updateFamilyMember = onCall(
           },
         });
 
-        // Create invitation link
-        const invitationLink = `${FRONTEND_URL.value()}/signup/invited?token=${invitationToken}&id=${invitationRef.id}`;
+        // Create invitation link - handle missing FRONTEND_URL secret in development
+        let frontendUrl: string;
+        try {
+          frontendUrl = FRONTEND_URL.value();
+        } catch (error) {
+          // Fallback for local development when secret is not set
+          if (process.env.FUNCTIONS_EMULATOR === "true") {
+            frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+            logger.warn("FRONTEND_URL secret not set, using environment variable or default for family tree invitation", {
+              fallbackUrl: frontendUrl,
+            });
+          } else {
+            throw createError(ErrorCode.INTERNAL, "Email service configuration error prevents sending invitation.");
+          }
+        }
+
+        if (!frontendUrl) {
+          throw createError(ErrorCode.INTERNAL, "Email service configuration error prevents sending invitation.");
+        }
+
+        const invitationLink = `${frontendUrl}/signup/invited?token=${invitationToken}&id=${invitationRef.id}`;
 
         // Send invitation email
         await sendEmailUniversal({

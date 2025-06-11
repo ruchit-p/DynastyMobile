@@ -14,7 +14,11 @@
     "prod": "cross-env NODE_ENV=production npm run serve",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "migrate:subscription-fields:test": "npx ts-node src/test/testSubscriptionFieldsMigration.ts",
+    "migrate:subscription-fields:dry": "./scripts/run-subscription-fields-migration.sh dry-run",
+    "migrate:subscription-fields:execute": "./scripts/run-subscription-fields-migration.sh execute",
+    "migrate:subscription-fields:check": "./scripts/run-subscription-fields-migration.sh check"
   },
   "engines": {
     "node": "20"

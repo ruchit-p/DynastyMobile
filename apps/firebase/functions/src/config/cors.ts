@@ -62,7 +62,6 @@ export function getCorsConfig() {
     const defaultOrigins = [
       "https://dynastytest.com",
       "https://www.dynastytest.com",
-      "https://dynasty-staging.vercel.app",
     ];
 
     // Combine and deduplicate origins

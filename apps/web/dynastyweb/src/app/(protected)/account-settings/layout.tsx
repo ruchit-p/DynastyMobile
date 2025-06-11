@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
-import { User, Bell, Lock, HelpCircle, LogOut, Menu, X } from "lucide-react"
+import { User, Bell, Lock, HelpCircle, LogOut, Menu, X, CreditCard } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 import { useToast } from "@/components/ui/use-toast"
 import ProtectedRoute from "@/components/ProtectedRoute"
@@ -25,6 +25,13 @@ const sidebarNavItems: SidebarNavItem[] = [
     title: "Personal Information",
     icon: <User className="h-5 w-5" />,
     description: "Manage your profile details",
+    badge: ""
+  },
+  {
+    href: "/account-settings/subscription",
+    title: "Subscription & Billing",
+    icon: <CreditCard className="h-5 w-5" />,
+    description: "Manage your plan and billing",
     badge: ""
   },
   {

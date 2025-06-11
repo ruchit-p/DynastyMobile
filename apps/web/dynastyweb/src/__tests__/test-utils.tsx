@@ -1,5 +1,6 @@
 import React from 'react';
 import { render as rtlRender, waitFor, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { User } from 'firebase/auth';
 
 // Mock Firebase User
@@ -254,4 +255,87 @@ export const setupFirebaseMocks = () => {
     storage: mockStorage,
     functions: mockFunctions,
   };
+};
+
+// Additional render utilities
+export const renderWithAuthenticatedUser = (
+  ui: React.ReactElement,
+  user = createMockFirebaseUser(),
+  options?: any
+) => {
+  // Mock context provider that includes authenticated user
+  return rtlRender(ui, options);
+};
+
+export const renderWithUnauthenticatedUser = (
+  ui: React.ReactElement,
+  options?: any
+) => {
+  // Mock context provider with no authenticated user
+  return rtlRender(ui, options);
+};
+
+export const renderWithOfflineMode = (
+  ui: React.ReactElement,
+  options?: any
+) => {
+  // Mock context provider with offline mode
+  return rtlRender(ui, options);
+};
+
+export const renderWithProviders = (
+  ui: React.ReactElement,
+  providers = {},
+  options?: any
+) => {
+  // Mock context provider with custom providers
+  return rtlRender(ui, options);
+};
+
+// User event utilities
+export const userEventSetup = () => userEvent.setup();
+
+// Form utilities
+export const fillAndSubmitForm = async (
+  formData: Record<string, string>,
+  user = userEvent.setup()
+) => {
+  for (const [field, value] of Object.entries(formData)) {
+    const input = screen.getByLabelText(new RegExp(field, 'i')) || 
+                  screen.getByPlaceholderText(new RegExp(field, 'i')) ||
+                  screen.getByRole('textbox', { name: new RegExp(field, 'i') });
+    await user.clear(input);
+    await user.type(input, value);
+  }
+  
+  const submitButton = screen.getByRole('button', { name: /submit|sign in|sign up|save/i });
+  await user.click(submitButton);
+};
+
+export const simulateFileUpload = async (
+  inputElement: HTMLElement,
+  file: File,
+  user = userEvent.setup()
+) => {
+  await user.upload(inputElement, file);
+};
+
+// Assertion utilities
+export const expectFormValidationError = (errorMessage: string) => {
+  expect(screen.getByText(errorMessage)).toBeInTheDocument();
+};
+
+export const expectToastMessage = (message: string) => {
+  expect(screen.getByText(message)).toBeInTheDocument();
+};
+
+// File utilities
+export const createMockFile = (
+  name = 'test.jpg',
+  size = 1024,
+  type = 'image/jpeg'
+) => {
+  const file = new File([''], name, { type });
+  Object.defineProperty(file, 'size', { value: size });
+  return file;
 };
