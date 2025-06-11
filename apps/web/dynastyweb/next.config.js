@@ -60,10 +60,10 @@ const nextConfig = {
     // Determine environment based on NEXT_PUBLIC_ENVIRONMENT
     const environment = process.env.NEXT_PUBLIC_ENVIRONMENT || 'development';
     const firebaseFunctionsUrl = {
-      'staging': 'https://dynasty-dev-1b042-us-central1.cloudfunctions.net',
-      'production': 'https://dynasty-eba63-us-central1.cloudfunctions.net',
-      'development': 'https://dynasty-dev-1b042-us-central1.cloudfunctions.net'
-    }[environment] || 'https://dynasty-dev-1b042-us-central1.cloudfunctions.net';
+      'staging': 'https://us-central1-dynasty-dev-1b042.cloudfunctions.net',
+      'production': 'https://us-central1-dynasty-eba63.cloudfunctions.net',
+      'development': 'https://us-central1-dynasty-dev-1b042.cloudfunctions.net'
+    }[environment] || 'https://us-central1-dynasty-dev-1b042.cloudfunctions.net';
 
     const productionHeaders = [
       ...commonHeaders,
