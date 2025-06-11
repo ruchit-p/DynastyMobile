@@ -2,6 +2,7 @@ import {logger} from "firebase-functions/v2";
 import Stripe from "stripe";
 import {SubscriptionService} from "../../services/subscriptionService";
 import {StripeService} from "../../services/stripeService";
+import {ReferralService} from "../../services/referralService";
 import {WebhookProcessorResult} from "../stripeWebhookHandler";
 import {SubscriptionStatus, SubscriptionPlan, SubscriptionTier} from "../../types/subscription";
 import {createError, ErrorCode} from "../../utils/errors";
@@ -10,11 +11,13 @@ import {getFirestore, Timestamp} from "firebase-admin/firestore";
 export class SubscriptionWebhookProcessor {
   private subscriptionService: SubscriptionService;
   private stripeService: StripeService;
+  private referralService: ReferralService;
   private db = getFirestore();
 
   constructor() {
     this.subscriptionService = new SubscriptionService();
     this.stripeService = new StripeService();
+    this.referralService = new ReferralService();
   }
 
   /**
@@ -125,7 +128,7 @@ export class SubscriptionWebhookProcessor {
       }
 
       // Get customer details
-      const customer = await this.stripeService.stripe.customers.retrieve(
+      const customer = await this.stripeService.stripe!.customers.retrieve(
         stripeSubscription.customer as string
       ) as Stripe.Customer;
 
@@ -157,6 +160,22 @@ export class SubscriptionWebhookProcessor {
         plan,
         tier,
       });
+
+      // Complete referral if user was referred by someone
+      try {
+        await this.referralService.completeReferral(userId);
+        logger.info("Referral completed for new subscription", {
+          userId,
+          subscriptionId: stripeSubscription.id,
+        });
+      } catch (referralError) {
+        // Log error but don't fail the subscription creation
+        logger.warn("Failed to complete referral for new subscription", {
+          userId,
+          subscriptionId: stripeSubscription.id,
+          error: referralError,
+        });
+      }
 
       return {
         success: true,

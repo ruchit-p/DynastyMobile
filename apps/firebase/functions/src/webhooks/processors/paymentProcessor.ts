@@ -3,14 +3,21 @@ import Stripe from "stripe";
 import {getFirestore, Timestamp} from "firebase-admin/firestore";
 import {WebhookProcessorResult} from "../stripeWebhookHandler";
 import {SubscriptionService} from "../../services/subscriptionService";
+import {PaymentRecoveryService} from "../../services/paymentRecoveryService";
+import {PaymentLoggingService, PaymentEventType, PaymentStatus} from "../../services/paymentLoggingService";
 import {SubscriptionStatus} from "../../types/subscription";
+import {PaymentErrorContext} from "../../utils/paymentErrors";
 
 export class PaymentWebhookProcessor {
   private db = getFirestore();
   private subscriptionService: SubscriptionService;
+  private paymentRecoveryService: PaymentRecoveryService;
+  private paymentLoggingService: PaymentLoggingService;
 
   constructor() {
     this.subscriptionService = new SubscriptionService();
+    this.paymentRecoveryService = new PaymentRecoveryService();
+    this.paymentLoggingService = new PaymentLoggingService();
   }
 
   /**
@@ -64,19 +71,52 @@ export class PaymentWebhookProcessor {
         (invoice as any).subscription :
         (invoice as any).subscription?.id;
 
+      const customerId = typeof invoice.customer === "string" ?
+        invoice.customer :
+        (invoice.customer?.id || "");
+
+      // Log payment event
+      const paymentContext: PaymentErrorContext = {
+        userId: "unknown", // Will be updated when we get subscription
+        subscriptionId,
+        stripeCustomerId: customerId,
+        amount: invoice.amount_paid,
+        currency: invoice.currency,
+        errorCode: "payment_succeeded",
+      };
+
       if (!subscriptionId) {
         // One-time payment, not a subscription
+        await this.paymentLoggingService.logPaymentEvent(
+          PaymentEventType.ONE_TIME_PAYMENT_SUCCEEDED,
+          paymentContext,
+          PaymentStatus.SUCCESS
+        );
         return {
           success: true,
           message: "One-time payment processed",
         };
       }
 
+      // Get subscription details
+      const subscription = await this.subscriptionService.getSubscription(subscriptionId);
+      if (subscription) {
+        paymentContext.userId = subscription.userId;
+        paymentContext.planType = subscription.plan;
+      }
+
+      // Log payment success
+      await this.paymentLoggingService.logPaymentEvent(
+        PaymentEventType.PAYMENT_SUCCEEDED,
+        paymentContext,
+        PaymentStatus.SUCCESS
+      );
+
       // Create payment record
       await this.createPaymentRecord({
         invoiceId: invoice.id!,
         subscriptionId: subscriptionId!,
-        customerId: typeof invoice.customer === "string" ? invoice.customer : (invoice.customer?.id || ""),
+        customerId: customerId,
         amount: invoice.amount_paid,
         currency: invoice.currency,
         status: "succeeded",
@@ -86,12 +126,24 @@ export class PaymentWebhookProcessor {
       });
 
       // Update subscription if it was past due
-      const subscription = await this.subscriptionService.getSubscription(subscriptionId);
       if (subscription && subscription.status === SubscriptionStatus.PAST_DUE) {
         await this.subscriptionService.updateSubscription({
           subscriptionId: subscriptionId!,
           status: SubscriptionStatus.ACTIVE,
         });
+
+        // Clear any grace periods
+        await this.db.collection("subscriptions").doc(subscriptionId).update({
+          gracePeriod: null,
+          updatedAt: Timestamp.now(),
+        });
+
+        // Log reactivation
+        await this.paymentLoggingService.logPaymentEvent(
+          PaymentEventType.SUBSCRIPTION_REACTIVATED,
+          paymentContext,
+          PaymentStatus.SUCCESS
+        );
       }
 
       // Send payment confirmation notification
@@ -126,6 +178,17 @@ export class PaymentWebhookProcessor {
         invoiceId: invoice.id!,
         error,
       });
+
+      // Log the error
+      await this.paymentLoggingService.logPaymentEvent(
+        PaymentEventType.WEBHOOK_ERROR,
+        {
+          errorMessage: error instanceof Error ? error.message : String(error),
+          invoiceId: invoice.id,
+        } as any,
+        PaymentStatus.FAILED
+      );
+
       return {
         success: false,
         error: error as Error,
@@ -142,20 +205,65 @@ export class PaymentWebhookProcessor {
         (invoice as any).subscription :
         (invoice as any).subscription?.id;
 
+      const customerId = typeof invoice.customer === "string" ?
+        invoice.customer :
+        (invoice.customer?.id || "");
+
+      const paymentContext: PaymentErrorContext = {
+        userId: "unknown",
+        subscriptionId,
+        stripeCustomerId: customerId,
+        amount: invoice.amount_due,
+        currency: invoice.currency,
+        errorCode: invoice.last_finalization_error?.code,
+        errorMessage: invoice.last_finalization_error?.message,
+        stripeErrorType: invoice.last_finalization_error?.type,
+      };
+
       if (!subscriptionId) {
+        await this.paymentLoggingService.logPaymentEvent(
+          PaymentEventType.ONE_TIME_PAYMENT_FAILED,
+          paymentContext,
+          PaymentStatus.FAILED
+        );
         return {
           success: true,
           message: "One-time payment failure handled",
         };
       }
 
-      const attemptCount = invoice.attempt_count;
+      // Get subscription for user context
+      const subscription = await this.subscriptionService.getSubscription(subscriptionId);
+      if (!subscription) {
+        logger.error("Subscription not found for failed payment", {subscriptionId});
+        await this.paymentLoggingService.logPaymentEvent(
+          PaymentEventType.WEBHOOK_ERROR,
+          paymentContext,
+          PaymentStatus.FAILED
+        );
+        return {
+          success: false,
+          error: new Error("Subscription not found"),
+        };
+      }
+
+      // Update context with user info
+      paymentContext.userId = subscription.userId;
+      paymentContext.planType = subscription.plan;
+
+      // Log payment failure
+      await this.paymentLoggingService.logPaymentEvent(
+        PaymentEventType.PAYMENT_FAILED,
+        paymentContext,
+        PaymentStatus.FAILED
+      );
 
       // Create payment record
+      const attemptCount = invoice.attempt_count;
       await this.createPaymentRecord({
         invoiceId: invoice.id!,
         subscriptionId: subscriptionId!,
-        customerId: typeof invoice.customer === "string" ? invoice.customer : (invoice.customer?.id || ""),
+        customerId: customerId,
         amount: invoice.amount_due,
         currency: invoice.currency,
         status: "failed",
@@ -163,32 +271,25 @@ export class PaymentWebhookProcessor {
         attemptCount,
       });
 
-      // Get subscription
-      const subscription = await this.subscriptionService.getSubscription(subscriptionId);
-      if (!subscription) {
-        logger.error("Subscription not found for failed payment", {subscriptionId});
-        return {
-          success: false,
-          error: new Error("Subscription not found"),
-        };
-      }
+      // Use payment recovery service to handle the failure
+      await this.paymentRecoveryService.handlePaymentFailure(
+        subscriptionId,
+        invoice.last_finalization_error || {
+          type: "card_error",
+          code: "payment_failed",
+          message: "Payment failed",
+        },
+        (invoice as any).payment_intent as string
+      );
 
-      // Update subscription status based on retry attempts
-      if (attemptCount >= 3) {
-        // After 3 attempts, mark as unpaid
-        await this.subscriptionService.updateSubscription({
-          subscriptionId: subscriptionId!,
-          status: SubscriptionStatus.UNPAID,
-        });
-      } else {
-        // Mark as past due for first few attempts
-        await this.subscriptionService.updateSubscription({
-          subscriptionId: subscriptionId!,
-          status: SubscriptionStatus.PAST_DUE,
-        });
-      }
+      // The payment recovery service handles:
+      // - Creating payment failure record
+      // - Scheduling retries
+      // - Creating/updating grace periods
+      // - Sending dunning emails
+      // - Updating subscription status
 
-      // Send payment failure notification
+      // Send immediate payment failure notification
       await this.db.collection("notifications").add({
         userId: subscription.userId,
         type: "payment_failed",
@@ -225,6 +326,17 @@ export class PaymentWebhookProcessor {
         invoiceId: invoice.id!,
         error,
       });
+
+      // Log webhook error
+      await this.paymentLoggingService.logPaymentEvent(
+        PaymentEventType.WEBHOOK_ERROR,
+        {
+          errorMessage: error instanceof Error ? error.message : String(error),
+          invoiceId: invoice.id,
+        } as any,
+        PaymentStatus.FAILED
+      );
+
       return {
         success: false,
         error: error as Error,
@@ -241,7 +353,25 @@ export class PaymentWebhookProcessor {
         (invoice as any).subscription :
         (invoice as any).subscription?.id;
 
+      const customerId = typeof invoice.customer === "string" ?
+        invoice.customer :
+        (invoice.customer?.id || "");
+
+      const paymentContext: PaymentErrorContext = {
+        userId: "unknown",
+        subscriptionId,
+        stripeCustomerId: customerId,
+        amount: invoice.amount_due,
+        currency: invoice.currency,
+        errorCode: "action_required",
+      };
+
       if (!subscriptionId) {
+        await this.paymentLoggingService.logPaymentEvent(
+          PaymentEventType.PAYMENT_ACTION_REQUIRED,
+          paymentContext,
+          PaymentStatus.PENDING
+        );
         return {
           success: true,
           message: "Payment action required handled",
@@ -251,11 +381,27 @@ export class PaymentWebhookProcessor {
       const subscription = await this.subscriptionService.getSubscription(subscriptionId);
 
       if (!subscription) {
+        await this.paymentLoggingService.logPaymentEvent(
+          PaymentEventType.WEBHOOK_ERROR,
+          paymentContext,
+          PaymentStatus.FAILED
+        );
         return {
           success: false,
           error: new Error("Subscription not found"),
         };
       }
+
+      // Update context with user info
+      paymentContext.userId = subscription.userId;
+      paymentContext.planType = subscription.plan;
+
+      // Log action required event
+      await this.paymentLoggingService.logPaymentEvent(
+        PaymentEventType.PAYMENT_ACTION_REQUIRED,
+        paymentContext,
+        PaymentStatus.PENDING
+      );
 
       // Send notification to complete payment
       await this.db.collection("notifications").add({
@@ -286,6 +432,17 @@ export class PaymentWebhookProcessor {
         invoiceId: invoice.id!,
         error,
       });
+
+      // Log webhook error
+      await this.paymentLoggingService.logPaymentEvent(
+        PaymentEventType.WEBHOOK_ERROR,
+        {
+          errorMessage: error instanceof Error ? error.message : String(error),
+          invoiceId: invoice.id,
+        } as any,
+        PaymentStatus.FAILED
+      );
+
       return {
         success: false,
         error: error as Error,
@@ -302,7 +459,24 @@ export class PaymentWebhookProcessor {
         (invoice as any).subscription :
         (invoice as any).subscription?.id;
 
+      const customerId = typeof invoice.customer === "string" ?
+        invoice.customer :
+        (invoice.customer?.id || "");
+
+      const paymentContext: PaymentErrorContext = {
+        userId: "unknown",
+        subscriptionId,
+        stripeCustomerId: customerId,
+        amount: invoice.amount_due,
+        currency: invoice.currency,
+      };
+
       if (!subscriptionId) {
+        await this.paymentLoggingService.logPaymentEvent(
+          PaymentEventType.INVOICE_UPCOMING,
+          paymentContext,
+          PaymentStatus.PENDING
+        );
         return {
           success: true,
           message: "Upcoming invoice handled",
@@ -312,11 +486,27 @@ export class PaymentWebhookProcessor {
       const subscription = await this.subscriptionService.getSubscription(subscriptionId);
 
       if (!subscription) {
+        await this.paymentLoggingService.logPaymentEvent(
+          PaymentEventType.WEBHOOK_ERROR,
+          paymentContext,
+          PaymentStatus.FAILED
+        );
         return {
           success: false,
           error: new Error("Subscription not found"),
         };
       }
+
+      // Update context with user info
+      paymentContext.userId = subscription.userId;
+      paymentContext.planType = subscription.plan;
+
+      // Log upcoming invoice event
+      await this.paymentLoggingService.logPaymentEvent(
+        PaymentEventType.INVOICE_UPCOMING,
+        paymentContext,
+        PaymentStatus.PENDING
+      );
 
       // Calculate days until payment
       const daysUntilPayment = Math.ceil(
@@ -356,6 +546,17 @@ export class PaymentWebhookProcessor {
         invoiceId: invoice.id!,
         error,
       });
+
+      // Log webhook error
+      await this.paymentLoggingService.logPaymentEvent(
+        PaymentEventType.WEBHOOK_ERROR,
+        {
+          errorMessage: error instanceof Error ? error.message : String(error),
+          invoiceId: invoice.id,
+        } as any,
+        PaymentStatus.FAILED
+      );
+
       return {
         success: false,
         error: error as Error,
@@ -368,20 +569,49 @@ export class PaymentWebhookProcessor {
    */
   private async handleInvoiceFinalized(invoice: Stripe.Invoice): Promise<WebhookProcessorResult> {
     try {
-      logger.info("Invoice finalized", {
-        invoiceId: invoice.id!,
-        subscriptionId: (invoice as any).subscription,
-      });
-
-      // Store invoice details for record keeping
       const finalSubscriptionId = typeof (invoice as any).subscription === "string" ?
         (invoice as any).subscription :
         (invoice as any).subscription?.id;
+
+      const customerId = typeof invoice.customer === "string" ?
+        invoice.customer :
+        (invoice.customer?.id || "");
+
+      const paymentContext: PaymentErrorContext = {
+        userId: "unknown",
+        subscriptionId: finalSubscriptionId,
+        stripeCustomerId: customerId,
+        amount: invoice.amount_due,
+        currency: invoice.currency,
+      };
+
+      // Try to get user context if we have a subscription
+      if (finalSubscriptionId) {
+        const subscription = await this.subscriptionService.getSubscription(finalSubscriptionId);
+        if (subscription) {
+          paymentContext.userId = subscription.userId;
+          paymentContext.planType = subscription.plan;
+        }
+      }
+
+      // Log invoice finalized event
+      await this.paymentLoggingService.logPaymentEvent(
+        PaymentEventType.INVOICE_FINALIZED,
+        paymentContext,
+        PaymentStatus.PENDING
+      );
+
+      logger.info("Invoice finalized", {
+        invoiceId: invoice.id!,
+        subscriptionId: finalSubscriptionId,
+      });
+
+      // Store invoice details for record keeping
       if (finalSubscriptionId) {
         await this.db.collection("invoices").doc(invoice.id!).set({
           invoiceId: invoice.id!,
           subscriptionId: finalSubscriptionId!,
-          customerId: invoice.customer,
+          customerId: customerId,
           amount: invoice.amount_due,
           currency: invoice.currency,
           status: invoice.status,
@@ -406,6 +636,17 @@ export class PaymentWebhookProcessor {
         invoiceId: invoice.id!,
         error,
       });
+
+      // Log webhook error
+      await this.paymentLoggingService.logPaymentEvent(
+        PaymentEventType.WEBHOOK_ERROR,
+        {
+          errorMessage: error instanceof Error ? error.message : String(error),
+          invoiceId: invoice.id,
+        } as any,
+        PaymentStatus.FAILED
+      );
+
       return {
         success: false,
         error: error as Error,

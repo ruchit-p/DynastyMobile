@@ -23,27 +23,33 @@ export interface WebhookProcessorResult {
 }
 
 export class StripeWebhookHandler {
-  private stripe: Stripe;
-  private webhookSecret: string;
-  private subscriptionProcessor: SubscriptionWebhookProcessor;
-  private paymentProcessor: PaymentWebhookProcessor;
-  private customerProcessor: CustomerWebhookProcessor;
+  private stripe?: Stripe;
+  private webhookSecret?: string;
+  private subscriptionProcessor?: SubscriptionWebhookProcessor;
+  private paymentProcessor?: PaymentWebhookProcessor;
+  private customerProcessor?: CustomerWebhookProcessor;
 
   constructor() {
-    this.stripe = getStripeClient();
-    const config = getStripeConfig();
-    this.webhookSecret = config.webhookSecret;
-
-    // Initialize processors
-    this.subscriptionProcessor = new SubscriptionWebhookProcessor();
-    this.paymentProcessor = new PaymentWebhookProcessor();
-    this.customerProcessor = new CustomerWebhookProcessor();
+    // Lazy initialization - don't access secrets during construction
   }
 
+  private initializeIfNeeded() {
+    if (!this.stripe) {
+      this.stripe = getStripeClient();
+      const config = getStripeConfig();
+      this.webhookSecret = config.webhookSecret;
+
+      // Initialize processors
+      this.subscriptionProcessor = new SubscriptionWebhookProcessor();
+      this.paymentProcessor = new PaymentWebhookProcessor();
+      this.customerProcessor = new CustomerWebhookProcessor();
+    }
+  }
   /**
    * Handle incoming webhook request
    */
   async handleWebhook(req: Request): Promise<WebhookProcessorResult> {
+    this.initializeIfNeeded();
     try {
       // Validate webhook signature
       const event = this.constructEvent(req);
@@ -87,6 +93,7 @@ export class StripeWebhookHandler {
    * Construct and validate webhook event
    */
   private constructEvent(req: Request): Stripe.Event {
+    this.initializeIfNeeded();
     const signature = req.headers["stripe-signature"];
 
     if (!signature || typeof signature !== "string") {
@@ -101,10 +108,10 @@ export class StripeWebhookHandler {
 
     try {
       // Construct event with signature verification
-      return this.stripe.webhooks.constructEvent(
+      return this.stripe!.webhooks.constructEvent(
         rawBody,
         signature,
-        this.webhookSecret
+        this.webhookSecret!
       );
     } catch (err) {
       if (err instanceof Stripe.errors.StripeSignatureVerificationError) {
@@ -131,7 +138,7 @@ export class StripeWebhookHandler {
       case "customer.subscription.trial_will_end":
       case "customer.subscription.paused":
       case "customer.subscription.resumed":
-        return await this.subscriptionProcessor.processEvent(event);
+        return await this.subscriptionProcessor!.processEvent(event);
 
         // Payment events
       case "invoice.payment_succeeded":
@@ -139,24 +146,24 @@ export class StripeWebhookHandler {
       case "invoice.payment_action_required":
       case "invoice.upcoming":
       case "invoice.finalized":
-        return await this.paymentProcessor.processEvent(event);
+        return await this.paymentProcessor!.processEvent(event);
 
         // Customer events
       case "customer.created":
       case "customer.updated":
       case "customer.deleted":
-        return await this.customerProcessor.processEvent(event);
+        return await this.customerProcessor!.processEvent(event);
 
         // Checkout events
       case "checkout.session.completed":
       case "checkout.session.expired":
-        return await this.subscriptionProcessor.processCheckoutEvent(event);
+        return await this.subscriptionProcessor!.processCheckoutEvent(event);
 
         // Payment method events
       case "payment_method.attached":
       case "payment_method.detached":
       case "payment_method.updated":
-        return await this.customerProcessor.processPaymentMethodEvent(event);
+        return await this.customerProcessor!.processPaymentMethodEvent(event);
 
         // Product/Price events (for syncing)
       case "product.created":
@@ -213,10 +220,11 @@ export class StripeWebhookHandler {
    * Get webhook event from database (for replay/debugging)
    */
   async getWebhookEvent(eventId: string): Promise<Stripe.Event | null> {
+    this.initializeIfNeeded();
     try {
       // In production, you might want to store webhook events in Firestore
       // for debugging and replay capabilities
-      const event = await this.stripe.events.retrieve(eventId);
+      const event = await this.stripe!.events.retrieve(eventId);
       return event;
     } catch (error) {
       logger.error("Failed to retrieve webhook event", {eventId, error});
