@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Gradual Rollout Deployment Script
-# This script deploys functions with CSRF protection using a gradual rollout strategy
+# Deploys authentication functions using a gradual rollout strategy
 
 set -e
 
@@ -13,7 +13,7 @@ FUNCTIONS_TO_DEPLOY=(
     "auth-updateUserProfile"
 )
 
-echo "🚀 Starting gradual rollout deployment for CSRF-protected functions..."
+echo "🚀 Starting gradual rollout deployment..."
 echo "📋 Functions to deploy: ${#FUNCTIONS_TO_DEPLOY[@]}"
 
 # Check if Firebase CLI is installed
@@ -197,19 +197,17 @@ if [ ${#FAILED_DEPLOYMENTS[@]} -eq 0 ]; then
     echo ""
     echo "🎉 ALL FUNCTIONS DEPLOYED SUCCESSFULLY!"
     echo ""
-    echo "✅ CSRF protection is now active on all authentication functions"
     echo "🔒 Rate limiting is enforced"
     echo "🛡️  Security configuration is complete"
     echo ""
     echo "📋 Next steps:"
-    echo "   1. Test authentication flows with CSRF protection"
+    echo "   1. Test authentication flows"
     echo "   2. Monitor function logs for any issues"
-    echo "   3. Update frontend to include CSRF tokens"
-    echo "   4. Run end-to-end tests"
+    echo "   3. Run end-to-end tests"
     
     # Mark todo as completed
     echo ""
-    echo "✅ Production deployment with CSRF protection completed successfully!"
+    echo "✅ Production deployment completed successfully!"
     
 else
     echo ""

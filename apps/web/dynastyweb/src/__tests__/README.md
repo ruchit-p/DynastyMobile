@@ -126,7 +126,6 @@ describe('VaultUpload', () => {
 | `createMockAuthContext()` | Auth context value | Authentication state |
 | `createMockNotificationContext()` | Notification context | Notifications & badges |
 | `createMockOfflineContext()` | Offline context | Network state & sync |
-| `createMockCSRFContext()` | CSRF context | Security tokens |
 
 ### Service Mocks
 

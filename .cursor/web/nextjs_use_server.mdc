@@ -107,7 +107,6 @@ export async function getData() { return 'data'; }
 ## Security Considerations
 
 1. Validate all input data
-2. Use CSRF protection (built into Next.js)
 3. Don't expose sensitive information
 4. Apply proper authentication and authorization checks
 

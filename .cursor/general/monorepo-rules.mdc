@@ -53,7 +53,7 @@ These rules apply to all interactions within the Dynasty Monorepo.
 ## Security
 - **Secure Code Practices**:
     - Avoid exposing sensitive information in code (e.g., API keys, tokens). Use environment variables.
-    - Highlight and mitigate potential security risks (e.g., XSS, CSRF, data exposure).
+    - Highlight and mitigate potential security risks (e.g., XSS, data exposure).
 - **Data Privacy**:
     - Adhere to user data protection standards. Avoid storing or processing sensitive user data unnecessarily.
 

@@ -100,12 +100,9 @@ Users can be created with `emailVerified: false` in Firestore but `true` in Fire
 
 **Recommendation:** Always sync email verification status between Firebase Auth and Firestore.
 
-### 2. **Missing CSRF Protection**
 **Location:** Web application
 
-No CSRF tokens implemented for state-changing operations.
 
-**Recommendation:** Implement CSRF protection for web app, especially for sensitive operations.
 
 ### 3. **Session Management**
 **Location:** Mobile and web apps
@@ -145,7 +142,6 @@ Standard security headers (CSP, X-Frame-Options, etc.) not configured.
 - [ ] Remove duplicate sign-up functions
 - [ ] Implement rate limiting on all auth endpoints
 - [ ] Fix or remove phone authentication
-- [ ] Add CSRF protection to web app
 - [ ] Implement session management
 - [ ] Add security headers to web app
 - [ ] Complete security testing
@@ -173,7 +169,6 @@ Standard security headers (CSP, X-Frame-Options, etc.) not configured.
 
 ### Short Term (1-2 weeks)
 1. Implement proper phone authentication or remove from UI
-2. Add CSRF protection to web application
 3. Implement session timeout and management
 
 ### Long Term (1-3 months)
@@ -187,7 +182,6 @@ Standard security headers (CSP, X-Frame-Options, etc.) not configured.
    - Penetration testing of auth endpoints
    - Rate limit testing
    - Session hijacking attempts
-   - CSRF attack simulations
 
 2. **Functional Testing**
    - Complete user journey testing

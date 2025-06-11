@@ -6,29 +6,17 @@ This document summarizes the comprehensive security improvements implemented in 
 
 ## Implemented Security Enhancements
 
-### 1. ✅ CSRF Protection (Critical)
 
 **Implementation Details:**
-- Created `csrfService.ts` with AES-256-GCM encryption for token security
-- Added CSRF validation middleware for Firebase Functions
 - Implemented double-submit cookie pattern with encrypted tokens
 - 4-hour token expiry with automatic refresh
-- Added `useCSRF` hook for Next.js frontend
-- Created `CSRFProtectedClient` for secure API calls
-- Updated `EnhancedAuthContext` to integrate CSRF protection
 
 **Files Modified:**
-- `/apps/firebase/functions/src/services/csrfService.ts` (new)
-- `/apps/firebase/functions/src/middleware/csrf.ts` (new)
 - `/apps/firebase/functions/src/middleware/auth.ts` (updated)
 - `/apps/firebase/functions/src/stories.ts` (updated)
-- `/apps/web/dynastyweb/src/hooks/useCSRF.ts` (new)
-- `/apps/web/dynastyweb/src/lib/csrf-client.ts` (new)
 - `/apps/web/dynastyweb/src/context/EnhancedAuthContext.tsx` (updated)
 
 **Impact:**
-- All state-changing operations now protected against CSRF attacks
-- Backward compatible with mobile apps (CSRF skipped for mobile)
 - No breaking changes for existing functionality
 
 ### 2. ✅ Security Headers (Critical)
@@ -113,7 +101,6 @@ This document summarizes the comprehensive security improvements implemented in 
 **After:** ~65/100
 
 ### Breakdown:
-- Authentication: 70/100 → 80/100 (CSRF protection added)
 - Data Protection: 40/100 → 65/100 (Encryption upgraded, file scanning)
 - Network Security: 25/100 → 50/100 (Security headers)
 - Application Security: 35/100 → 60/100 (Multiple improvements)
@@ -137,15 +124,11 @@ This document summarizes the comprehensive security improvements implemented in 
 
 ## Testing Recommendations
 
-### 1. CSRF Protection Testing
 ```bash
-# Test without CSRF token
 curl -X POST https://api.example.com/createStory \
   -H "Authorization: Bearer <token>" \
   -d '{"title": "Test"}'
-# Should fail with "CSRF token missing"
 
-# Test with valid CSRF token
 # Should succeed
 ```
 
@@ -166,11 +149,9 @@ curl -X POST https://api.example.com/createStory \
 
 ## Deployment Checklist
 
-- [ ] Set CSRF_SECRET_KEY environment variable in Firebase Functions
 - [ ] Deploy Firebase Functions with new middleware
 - [ ] Deploy Next.js with security headers
 - [ ] Clear browser cache for CSP to take effect
-- [ ] Monitor error logs for CSRF failures
 - [ ] Test file uploads with various file types
 - [ ] Verify mobile app compatibility
 
@@ -184,7 +165,6 @@ curl -X POST https://api.example.com/createStory \
    - Impact: 100-500ms per file depending on size
    - Mitigation: Async processing, caching of results
 
-3. **CSRF Token Management**: Minimal impact
    - Impact: One additional API call on session start
    - Mitigation: 4-hour token lifetime reduces calls
 
