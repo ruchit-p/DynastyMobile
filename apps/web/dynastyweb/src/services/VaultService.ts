@@ -418,7 +418,7 @@ class VaultService {
         // Store encryption metadata
         encryptionMetadata = {
           header: Array.from(encryptionResult.header!),
-          metadata: encryptionResult.metadata,
+          metadata: encryptionResult.metadata || {},
           encryptionKeyId
         };
       }
@@ -441,13 +441,29 @@ class VaultService {
         signedUrl: string; 
         storagePath: string; 
         itemId: string;
-        storageProvider: 'firebase' | 'r2';
+        storageProvider: 'firebase' | 'r2' | 'b2';
         r2Bucket?: string;
         r2Key?: string;
+        b2Bucket?: string;
+        b2Key?: string;
       };
 
       // Upload based on storage provider
-      if (storageProvider === 'r2') {
+      if (storageProvider === 'b2') {
+        // Upload to B2 using signed URL
+        return this.uploadToB2(
+          signedUrl,
+          uploadData,
+          file,
+          itemId,
+          parentId,
+          encryptionEnabled && encryptionOptions !== undefined,
+          encryptionKeyId,
+          encryptionMetadata,
+          onProgress,
+          uploadId
+        );
+      } else if (storageProvider === 'r2') {
         // Upload to R2 using signed URL
         return this.uploadToR2(
           signedUrl,
@@ -556,6 +572,144 @@ class VaultService {
       });
       throw error;
     }
+  }
+
+  // Upload file to B2 using signed URL
+  private async uploadToB2(
+    signedUrl: string,
+    uploadData: File | Blob,
+    originalFile: File,
+    itemId: string,
+    parentId: string | null,
+    isEncrypted: boolean,
+    encryptionKeyId: string | null,
+    encryptionMetadata: {
+      header: number[];
+      metadata: Record<string, unknown>;
+      encryptionKeyId: string;
+    } | null,
+    onProgress?: (progress: UploadProgress) => void,
+    uploadId?: string
+  ): Promise<VaultItem> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // Create XMLHttpRequest for progress tracking
+        const xhr = new XMLHttpRequest();
+        
+        // Track upload progress
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable && onProgress) {
+            const progress: UploadProgress = {
+              bytesTransferred: event.loaded,
+              totalBytes: event.total,
+              percentage: (event.loaded / event.total) * 100,
+              state: 'running'
+            };
+            onProgress(progress);
+          }
+        });
+
+        // Handle completion
+        xhr.addEventListener('load', async () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              // Update vault item in backend to confirm upload
+              await this.functionsClient.callFunction('addVaultFile', {
+                itemId,
+                name: originalFile.name,
+                storagePath: itemId, // For B2, we use itemId as the key
+                fileType: this.getFileType(originalFile.type),
+                size: uploadData.size,
+                mimeType: originalFile.type,
+                parentId,
+                isEncrypted,
+                encryptionKeyId
+              });
+
+              // If encrypted, store encryption metadata separately
+              if (isEncrypted && encryptionMetadata) {
+                await this.functionsClient.callFunction('storeVaultItemEncryptionMetadata', {
+                  itemId,
+                  encryptionMetadata
+                });
+              }
+
+              // Get the download URL from backend
+              const downloadUrl = await this.getDownloadUrl({ id: itemId } as VaultItem);
+
+              const vaultItem: VaultItem = {
+                id: itemId,
+                name: originalFile.name,
+                type: 'file',
+                mimeType: originalFile.type,
+                size: uploadData.size,
+                parentId,
+                path: `/${originalFile.name}`,
+                url: downloadUrl,
+                isEncrypted,
+                isShared: false,
+                createdAt: new Date(),
+                updatedAt: new Date()
+              };
+              
+              // Invalidate cache
+              this.invalidateCache();
+              
+              if (uploadId) {
+                this.uploadTasks.delete(uploadId);
+              }
+              
+              resolve(vaultItem);
+            } catch (innerError) {
+              reject(innerError);
+            }
+          } else {
+            reject(new Error(`B2 upload failed with status: ${xhr.status}`));
+          }
+        });
+
+        // Handle errors
+        xhr.addEventListener('error', () => {
+          if (uploadId) {
+            this.uploadTasks.delete(uploadId);
+          }
+          errorHandler.handleError(new Error('Network error during B2 upload'), ErrorSeverity.HIGH, {
+            action: 'vault-upload-b2',
+            fileName: originalFile.name
+          });
+          reject(new Error('Network error during B2 upload'));
+        });
+
+        // Handle abort
+        xhr.addEventListener('abort', () => {
+          if (uploadId) {
+            this.uploadTasks.delete(uploadId);
+          }
+          reject(new Error('B2 upload was cancelled'));
+        });
+
+        // Set up the request
+        xhr.open('PUT', signedUrl);
+        xhr.setRequestHeader('Content-Type', isEncrypted ? 'application/octet-stream' : originalFile.type);
+        
+        // B2-specific headers
+        if (uploadData.size > 0) {
+          xhr.setRequestHeader('Content-Length', uploadData.size.toString());
+        }
+        
+        // Send the file
+        xhr.send(uploadData);
+      } catch (error) {
+        if (uploadId) {
+          this.uploadTasks.delete(uploadId);
+        }
+        errorHandler.handleError(error, ErrorSeverity.HIGH, {
+          action: 'vault-upload-b2-init',
+          fileName: originalFile.name
+        });
+        reject(error);
+      }
+    });
   }
 
   // Upload file to R2 using signed URL
@@ -764,7 +918,7 @@ class VaultService {
   }
 
   /**
-   * Validates if a URL is from allowed storage domains (Firebase Storage or R2)
+   * Validates if a URL is from allowed storage domains (Firebase Storage, R2, or B2)
    */
   private isValidStorageUrl(url: string): boolean {
     try {
@@ -783,14 +937,24 @@ class VaultService {
         'firebasestorage.googleapis.com',
         'storage.googleapis.com',
         '.firebasestorage.app',
-        // R2 (Cloudflare) domains - more flexible pattern matching
+        
+        // R2 (Cloudflare) domains
         '.r2.cloudflarestorage.com',
         '.r2.dev',
         'cloudflare-ipfs.com',
-        // S3-compatible URLs
-        'amazonaws.com',
-        // Allow any subdomain of cloudflarestorage.com
-        'cloudflarestorage.com'
+        'cloudflarestorage.com',
+        
+        // B2 (Backblaze) domains
+        's3.us-west-004.backblazeb2.com',
+        's3.us-west-002.backblazeb2.com',
+        's3.us-east-005.backblazeb2.com',
+        's3.eu-central-003.backblazeb2.com',
+        'backblazeb2.com',
+        '.b2-api.com',
+        '.b2.com',
+        
+        // S3-compatible URLs (for B2 and other providers)
+        'amazonaws.com'
       ];
       
       // Check if hostname matches any allowed pattern

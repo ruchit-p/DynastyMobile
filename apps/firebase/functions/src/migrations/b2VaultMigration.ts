@@ -66,7 +66,7 @@ export class B2VaultMigration extends R2VaultMigration {
     // Override defaults for B2 to avoid rate limits
     this.batchSize = 50; // Smaller batches for B2 to avoid rate limits
     this.maxRetries = 5; // More retries for B2 due to potential rate limiting
-    
+
     this.storageAdapter = new StorageAdapter({
       provider: "firebase", // Start with Firebase as default
       enableMigration: true,

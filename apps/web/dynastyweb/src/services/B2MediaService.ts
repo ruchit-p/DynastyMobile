@@ -1,10 +1,10 @@
-// R2 Media Service for Dynasty Web App
-// Handles all media uploads to Cloudflare R2 with Firebase Storage fallback
+// B2 Media Service for Dynasty Web App
+// Handles all media uploads to Backblaze B2 with R2 and Firebase Storage fallback
 
 import { FirebaseFunctionsClient, createFirebaseClient } from '@/lib/functions-client';
 import { errorHandler, ErrorSeverity } from './ErrorHandlingService';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { storage } from '@/lib/firebase';
+import { storage, functions } from '@/lib/firebase';
 
 export interface UploadProgressCallback {
   onProgress?: (progress: number) => void;
@@ -18,20 +18,20 @@ export interface MediaUploadOptions {
   quality?: number;
 }
 
-class R2MediaService {
-  private static instance: R2MediaService;
+class B2MediaService {
+  private static instance: B2MediaService;
   private functionsClient: FirebaseFunctionsClient;
   private uploadTasks = new Map<string, XMLHttpRequest | ReturnType<typeof uploadBytesResumable>>();
 
   private constructor() {
-    this.functionsClient = createFirebaseClient();
+    this.functionsClient = createFirebaseClient(functions);
   }
 
-  static getInstance(): R2MediaService {
-    if (!R2MediaService.instance) {
-      R2MediaService.instance = new R2MediaService();
+  static getInstance(): B2MediaService {
+    if (!B2MediaService.instance) {
+      B2MediaService.instance = new B2MediaService();
     }
-    return R2MediaService.instance;
+    return B2MediaService.instance;
   }
 
   /**
@@ -95,7 +95,7 @@ class R2MediaService {
   }
 
   /**
-   * Upload media to R2 or Firebase Storage based on backend configuration
+   * Upload media to B2, R2, or Firebase Storage based on backend configuration
    */
   private async uploadToStorage(
     data: Blob | File,
@@ -107,7 +107,7 @@ class R2MediaService {
     const uploadId = `upload-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     try {
-      // Get signed upload URL from backend
+      // Get signed upload URL from backend (supports B2, R2, Firebase)
       const { data: uploadData } = await this.functionsClient.callFunction('getMediaUploadUrl', {
         path,
         contentType,
@@ -157,7 +157,8 @@ class R2MediaService {
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.HIGH, {
         action: 'media-upload-init',
-        path
+        path,
+        storageProvider: 'b2'
       });
       throw error;
     }
@@ -222,7 +223,7 @@ class R2MediaService {
       const fileType = data instanceof File ? data.type : 'application/octet-stream';
       xhr.setRequestHeader('Content-Type', fileType);
       
-      // B2-specific headers
+      // B2-specific headers (if needed)
       if (data.size > 0) {
         xhr.setRequestHeader('Content-Length', data.size.toString());
       }
@@ -233,7 +234,7 @@ class R2MediaService {
   }
 
   /**
-   * Upload to R2 using signed URL
+   * Upload to R2 using signed URL (legacy support)
    */
   private async uploadToR2(
     signedUrl: string,
@@ -258,24 +259,21 @@ class R2MediaService {
         if (xhr.status >= 200 && xhr.status < 300) {
           this.uploadTasks.delete(uploadId);
           
-          // Extract the key from the signed URL
-          // R2 signed URLs contain the full path in the URL
-          // const url = new URL(signedUrl);
-          // const pathParts = url.pathname.split('/');
-          // const key = pathParts.slice(2).join('/'); // Remove bucket name
-          
-          // Generate public URL (assuming public bucket or signed URL will be generated on access)
-          const publicUrl = signedUrl.split('?')[0]; // Remove query params
+          // Generate public URL for R2
+          const publicUrl = signedUrl.split('?')[0];
           resolve(publicUrl);
         } else {
-          reject(new Error(`Upload failed with status: ${xhr.status}`));
+          this.uploadTasks.delete(uploadId);
+          const error = new Error(`R2 upload failed with status: ${xhr.status}`);
+          callbacks?.onError?.(error);
+          reject(error);
         }
       });
 
       // Handle errors
       xhr.addEventListener('error', () => {
         this.uploadTasks.delete(uploadId);
-        const error = new Error('Network error during upload');
+        const error = new Error('Network error during R2 upload');
         callbacks?.onError?.(error);
         reject(error);
       });
@@ -327,6 +325,7 @@ class R2MediaService {
             this.uploadTasks.delete(uploadId);
             resolve(downloadUrl);
           } catch (error) {
+            this.uploadTasks.delete(uploadId);
             reject(error);
           }
         }
@@ -335,7 +334,7 @@ class R2MediaService {
   }
 
   /**
-   * Upload profile picture
+   * Upload profile picture with B2 support
    */
   async uploadProfilePicture(
     imageBlob: Blob,
@@ -374,7 +373,7 @@ class R2MediaService {
   }
 
   /**
-   * Upload story media
+   * Upload story media with B2 support
    */
   async uploadStoryMedia(
     file: File,
@@ -396,10 +395,10 @@ class R2MediaService {
         contentType = 'image/jpeg';
       }
 
-      // Check file size limits
+      // Check file size limits (B2 has generous limits but we'll use reasonable ones)
       const maxSizes = {
         image: 10 * 1024 * 1024, // 10MB
-        video: 500 * 1024 * 1024, // 500MB
+        video: 1 * 1024 * 1024 * 1024, // 1GB (B2 can handle much larger)
         audio: 100 * 1024 * 1024 // 100MB
       };
 
@@ -429,7 +428,7 @@ class R2MediaService {
   }
 
   /**
-   * Upload event cover photo
+   * Upload event cover photo with B2 support
    */
   async uploadEventCoverPhoto(
     file: File,
@@ -466,6 +465,78 @@ class R2MediaService {
   }
 
   /**
+   * Upload vault files with B2 support (delegates to VaultService)
+   */
+  async uploadVaultFile(
+    file: File,
+    parentId: string | null = null,
+    callbacks?: UploadProgressCallback
+  ): Promise<string> {
+    try {
+      // For vault files, we delegate to the VaultService which handles encryption
+      // and B2 upload. This method is here for consistency but should use VaultService
+      throw new Error('Use VaultService.uploadFile() for vault uploads with encryption support');
+    } catch (error) {
+      const finalError = error as Error;
+      callbacks?.onError?.(finalError);
+      throw finalError;
+    }
+  }
+
+  /**
+   * Generic file upload with B2 support
+   */
+  async uploadGenericFile(
+    file: File,
+    path: string,
+    options?: {
+      compress?: boolean;
+      metadata?: Record<string, string>;
+    },
+    callbacks?: UploadProgressCallback
+  ): Promise<string> {
+    try {
+      let processedBlob: Blob = file;
+      let contentType = file.type;
+      
+      // Compress images if requested
+      if (options?.compress && file.type.startsWith('image/')) {
+        processedBlob = await this.compressImage(file, {
+          maxWidth: 1200,
+          maxHeight: 1200,
+          quality: 0.85
+        }).catch(() => file);
+        contentType = 'image/jpeg';
+      }
+
+      // B2 can handle very large files (up to 10TB), but we'll set reasonable limits
+      const maxFileSize = 5 * 1024 * 1024 * 1024; // 5GB
+      if (processedBlob.size > maxFileSize) {
+        throw new Error(`File size must be less than ${maxFileSize / (1024 * 1024 * 1024)}GB`);
+      }
+
+      const metadata = {
+        uploadedAt: new Date().toISOString(),
+        originalName: file.name,
+        originalSize: file.size.toString(),
+        ...options?.metadata
+      };
+
+      return await this.uploadToStorage(
+        processedBlob,
+        path,
+        contentType,
+        metadata,
+        callbacks
+      );
+    } catch (error) {
+      const finalError = error as Error;
+      callbacks?.onError?.(finalError);
+      throw finalError;
+    }
+  }
+
+  /**
    * Cancel an upload
    */
   cancelUpload(uploadId: string) {
@@ -479,7 +550,48 @@ class R2MediaService {
       this.uploadTasks.delete(uploadId);
     }
   }
+
+  /**
+   * Get upload progress for a specific upload
+   */
+  getUploadProgress(uploadId: string): number | null {
+    const task = this.uploadTasks.get(uploadId);
+    if (!task) return null;
+
+    if (task instanceof XMLHttpRequest) {
+      // For XHR uploads, we can't easily get progress here
+      // Progress is handled via event listeners
+      return null;
+    } else {
+      // For Firebase uploads
+      const snapshot = task.snapshot;
+      if (snapshot) {
+        return (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Get active upload count
+   */
+  getActiveUploadCount(): number {
+    return this.uploadTasks.size;
+  }
+
+  /**
+   * Cancel all active uploads
+   */
+  cancelAllUploads() {
+    for (const [uploadId] of this.uploadTasks) {
+      this.cancelUpload(uploadId);
+    }
+  }
 }
 
 // Export singleton instance
-export const r2MediaService = R2MediaService.getInstance();
+export const b2MediaService = B2MediaService.getInstance();
+
+// Also export the class for testing
+export default B2MediaService;

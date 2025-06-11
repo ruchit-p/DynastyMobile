@@ -3,6 +3,7 @@ import {getSignedUrl} from "@aws-sdk/s3-request-presigner";
 import {logger} from "firebase-functions/v2";
 import {getB2Config, getB2S3Config, validateB2Config} from "../config/b2Config";
 import {B2_DEFAULTS} from "../config/b2Secrets";
+import {B2Monitoring} from "../monitoring/b2Monitoring";
 
 export interface B2Config {
   keyId: string;
@@ -169,11 +170,28 @@ export class B2Service {
       const command = new PutObjectCommand(commandOptions);
 
       try {
+        const startTime = Date.now();
         const signedUrl = await getSignedUrl(this.s3Client, command, {expiresIn: actualExpiresIn});
+        const latency = Date.now() - startTime;
+
         logger.info("Generated B2 upload URL", {bucket, key, expiresIn: actualExpiresIn});
+
+        // Track successful operation
+        await B2Monitoring.trackOperation("upload", true, {
+          latency,
+          bucket,
+        });
+
         return signedUrl;
       } catch (error) {
         logger.error("Failed to generate B2 upload URL", {bucket, key, error});
+
+        // Track failed operation
+        await B2Monitoring.trackOperation("upload", false, {
+          bucket,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+
         throw error;
       }
     }, "generateUploadUrl");
@@ -196,11 +214,28 @@ export class B2Service {
       });
 
       try {
+        const startTime = Date.now();
         const signedUrl = await getSignedUrl(this.s3Client, command, {expiresIn: actualExpiresIn});
+        const latency = Date.now() - startTime;
+
         logger.info("Generated B2 download URL", {bucket, key, expiresIn: actualExpiresIn});
+
+        // Track successful operation
+        await B2Monitoring.trackOperation("download", true, {
+          latency,
+          bucket,
+        });
+
         return signedUrl;
       } catch (error) {
         logger.error("Failed to generate B2 download URL", {bucket, key, error});
+
+        // Track failed operation
+        await B2Monitoring.trackOperation("download", false, {
+          bucket,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+
         throw error;
       }
     }, "generateDownloadUrl");
@@ -217,10 +252,26 @@ export class B2Service {
       });
 
       try {
+        const startTime = Date.now();
         await this.s3Client.send(command);
+        const latency = Date.now() - startTime;
+
         logger.info("Deleted object from B2", {bucket, key});
+
+        // Track successful operation
+        await B2Monitoring.trackOperation("delete", true, {
+          latency,
+          bucket,
+        });
       } catch (error) {
         logger.error("Failed to delete B2 object", {bucket, key, error});
+
+        // Track failed operation
+        await B2Monitoring.trackOperation("delete", false, {
+          bucket,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+
         throw error;
       }
     }, "deleteObject");
@@ -423,10 +474,26 @@ export class B2Service {
     });
 
     try {
+      const startTime = Date.now();
       await this.s3Client.send(command);
+      const latency = Date.now() - startTime;
+
       logger.info("Copied object in B2", {sourceBucket, sourceKey, destBucket, destKey});
+
+      // Track successful operation
+      await B2Monitoring.trackOperation("copy", true, {
+        latency,
+        bucket: destBucket,
+      });
     } catch (error) {
       logger.error("Failed to copy B2 object", {sourceBucket, sourceKey, destBucket, destKey, error});
+
+      // Track failed operation
+      await B2Monitoring.trackOperation("copy", false, {
+        bucket: destBucket,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+
       throw error;
     }
   }
