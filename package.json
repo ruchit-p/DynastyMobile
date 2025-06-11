@@ -21,14 +21,36 @@
     "fix:ci": "./scripts/claude-fix-ci-errors.sh",
     "fix:ci:ts": "ts-node scripts/claude-ci-fixer.ts",
     "fix:pr": "./scripts/claude-fix-ci-errors.sh --pr",
-    "test:all": "cd apps/web/dynastyweb && yarn test && cd ../../.. && cd apps/mobile && yarn test && cd ../.. && cd apps/firebase/functions && npm test && cd ../../..",
-    "lint:all": "cd apps/web/dynastyweb && yarn lint && cd ../../.. && cd apps/mobile && yarn lint && cd ../.. && cd apps/firebase/functions && npm run lint && cd ../../..",
-    "lint:fix": "cd apps/web/dynastyweb && yarn lint --fix && cd ../../.. && cd apps/mobile && yarn lint --fix && cd ../.. && cd apps/firebase/functions && npm run lint -- --fix && cd ../../.."
+    "commit:quick": "./scripts/quick-commit.sh",
+    "test:all": "cd apps/web/dynastyweb && yarn test && cd ../../.. && cd apps/firebase/functions && npm test && cd ../../..",
+    "test:web": "cd apps/web/dynastyweb && yarn test",
+    "test:firebase": "cd apps/firebase/functions && npm test",
+    "test:integration": "cd apps/web/dynastyweb && yarn test:integration",
+    "lint:all": "cd apps/web/dynastyweb && yarn lint && cd ../../.. && cd apps/firebase/functions && npm run lint && cd ../../..",
+    "lint:fix": "cd apps/web/dynastyweb && yarn lint --fix && cd ../../.. && cd apps/firebase/functions && npm run lint -- --fix && cd ../../..",
+    "prepare": "husky",
+    "pre-commit": "lint-staged",
+    "pre-push": "npm run test:all"
+  },
+  "lint-staged": {
+    "apps/web/dynastyweb/**/*.{js,jsx,ts,tsx}": [
+      "cd apps/web/dynastyweb && yarn lint --fix --",
+      "prettier --write"
+    ],
+    "apps/firebase/functions/**/*.{js,ts}": [
+      "cd apps/firebase/functions && npm run lint -- --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
   },
   "devDependencies": {
     "babel-plugin-module-resolver": "^5.0.2",
     "babel-preset-expo": "^13.1.11",
     "eslint": "^9.25.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.0",
     "prettier": "^2.0.0"
   },
   "resolutions": {
