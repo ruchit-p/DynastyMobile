@@ -71,7 +71,7 @@ const nextConfig = {
         key: 'Content-Security-Policy',
         value: [
           "default-src 'self'",
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://*.sentry.io https://va.vercel-scripts.com https://vitals.vercel-insights.com",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://*.sentry.io https://www.googletagmanager.com https://va.vercel-scripts.com https://vitals.vercel-insights.com https://vercel.live",
           "connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://dynasty-eba63-us-central1.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.cloudflarestorage.com https://*.r2.cloudflarestorage.com https://vitals.vercel-insights.com https://va.vercel-scripts.com",
           "img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.firebaseapp.com https://*.cloudflarestorage.com https://*.r2.cloudflarestorage.com https://*.r2.dev",
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
@@ -97,7 +97,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://*.sentry.io",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://*.sentry.io https://www.googletagmanager.com https://vercel.live",
               "connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://dynasty-eba63-us-central1.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.cloudflarestorage.com https://*.r2.cloudflarestorage.com",
               "img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.firebaseapp.com https://*.cloudflarestorage.com https://*.r2.cloudflarestorage.com https://*.r2.dev",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
@@ -132,14 +132,14 @@ const nextConfig = {
               key: 'Content-Security-Policy',
               value: [
                 "default-src 'self'",
-                "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://js.stripe.com https://*.sentry.io https://www.googletagmanager.com https://fpnpmcdn.net https://va.vercel-scripts.com",
+                "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://js.stripe.com https://*.sentry.io https://www.googletagmanager.com https://fpnpmcdn.net https://va.vercel-scripts.com https://vercel.live",
                 "connect-src 'self' https://*.googleapis.com https://*.google.com https://firebasestorage.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://dynasty-dev-1b042-us-central1.cloudfunctions.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://nominatim.openstreetmap.org https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://*.googletagmanager.com https://react-circle-flags.pages.dev https://fpnpmcdn.net https://api.fpjs.io https://*.fpjs.io http://127.0.0.1:* http://localhost:*",
                 "img-src 'self' data: blob: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.firebaseapp.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://hatscripts.github.io https://react-circle-flags.pages.dev https://*.r2.cloudflarestorage.com https://*.r2.dev",
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
                 "font-src 'self' https://fonts.gstatic.com",
                 "frame-src 'self' https://*.firebaseapp.com https://*.google.com http://127.0.0.1:* http://localhost:*",
                 "worker-src 'self' blob: https://*.gstatic.com",
-                "script-src-elem 'self' 'unsafe-inline' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://js.stripe.com https://*.sentry.io https://www.googletagmanager.com https://fpnpmcdn.net https://va.vercel-scripts.com",
+                "script-src-elem 'self' 'unsafe-inline' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.firebaseapp.com https://*.firebaseio.com https://js.stripe.com https://*.sentry.io https://www.googletagmanager.com https://fpnpmcdn.net https://va.vercel-scripts.com https://vercel.live",
               ].join('; '),
             },
             ...commonHeaders
