@@ -19,6 +19,7 @@ import {
   isAddonEligible,
   PLAN_LIMITS,
   ADDON_STORAGE,
+  getMonthlyPrice,
 } from "../config/stripeProducts";
 
 export interface ValidationResult {
@@ -540,20 +541,59 @@ export class SubscriptionValidationService {
    * Helper: Calculate plan change cost
    */
   private async calculatePlanChangeCost(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _subscription: Subscription,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _newPlan: SubscriptionPlan,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _newTier?: SubscriptionTier
+    subscription: Subscription,
+    newPlan: SubscriptionPlan,
+    newTier?: SubscriptionTier
   ): Promise<PlanChangeValidation["estimatedCost"]> {
-    // TODO: Implement cost calculation logic
-    // This would integrate with Stripe to calculate prorations
-    return {
-      immediateCharge: 0,
-      nextBillingAmount: 0,
-      credit: 0,
-    };
+    try {
+      // Get current and new pricing
+      const currentMonthlyPrice = subscription.priceMonthly;
+      const newMonthlyPrice = getMonthlyPrice(newPlan, newTier);
+      
+      // Calculate remaining time in current period
+      const now = Date.now();
+      const periodEnd = subscription.currentPeriodEnd.toDate().getTime();
+      const remainingDays = Math.max(0, Math.ceil((periodEnd - now) / (1000 * 60 * 60 * 24)));
+      
+      // Calculate prorated amounts
+      const currentPlanDailyRate = currentMonthlyPrice / 30;
+      const newPlanDailyRate = newMonthlyPrice / 30;
+      
+      // Credit for unused portion of current plan
+      const unusedCredit = currentPlanDailyRate * remainingDays;
+      
+      // Charge for remaining period on new plan
+      const newPlanCharge = newPlanDailyRate * remainingDays;
+      
+      // Calculate immediate charge or credit
+      const immediateCharge = Math.max(0, newPlanCharge - unusedCredit);
+      const credit = Math.max(0, unusedCredit - newPlanCharge);
+      
+      // Calculate next billing amount
+      const nextBillingAmount = subscription.interval === "year" ? 
+        newMonthlyPrice * 12 * 0.9 : // 10% yearly discount
+        newMonthlyPrice;
+      
+      return {
+        immediateCharge: Math.round(immediateCharge * 100) / 100, // Round to cents
+        nextBillingAmount: Math.round(nextBillingAmount * 100) / 100,
+        credit: Math.round(credit * 100) / 100,
+      };
+    } catch (error) {
+      logger.error("Failed to calculate plan change cost", {
+        subscriptionId: subscription.id,
+        newPlan,
+        newTier,
+        error,
+      });
+      
+      // Return conservative estimate on error
+      return {
+        immediateCharge: 0,
+        nextBillingAmount: getMonthlyPrice(newPlan, newTier),
+        credit: 0,
+      };
+    }
   }
 
   /**

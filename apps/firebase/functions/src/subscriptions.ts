@@ -13,6 +13,8 @@ import {FamilyPlanService} from "./subscriptions/familyPlan";
 import {AddonService} from "./subscriptions/addons";
 // Phase 3 services
 import {ReferralService} from "./services/referralService";
+// Phase 4 services
+import {SubscriptionValidationService} from "./services/subscriptionValidationService";
 import {createError, ErrorCode} from "./utils/errors";
 import {
   CreateCheckoutSessionSchema,
@@ -55,6 +57,8 @@ const familyPlanService = new FamilyPlanService();
 const addonService = new AddonService();
 // Phase 3 services
 const referralService = new ReferralService();
+// Phase 4 services
+const validationService = new SubscriptionValidationService();
 
 /**
  * Stripe webhook handler
@@ -118,6 +122,28 @@ export const createCheckoutSession = onCall(
     const data = CreateCheckoutSessionSchema.parse(request.data);
 
     try {
+      // Validate plan eligibility
+      const eligibilityResult = await validationService.validatePlanEligibility(
+        uid,
+        data.plan as any,
+        data.tier as any
+      );
+
+      if (!eligibilityResult.isValid) {
+        throw createError(
+          ErrorCode.FAILED_PRECONDITION,
+          eligibilityResult.errors.join(", ")
+        );
+      }
+
+      // Log warnings if any
+      if (eligibilityResult.warnings && eligibilityResult.warnings.length > 0) {
+        logger.warn("Plan eligibility warnings", {
+          userId: uid,
+          warnings: eligibilityResult.warnings,
+        });
+      }
+
       const session = await stripeService.createCheckoutSession({
         userId: uid,
         userEmail: userEmail || "",
@@ -259,6 +285,38 @@ export const updateSubscription = onCall(
       // Verify ownership
       if (subscription.userId !== uid) {
         throw createError(ErrorCode.PERMISSION_DENIED, "Not authorized to update this subscription");
+      }
+
+      // Validate plan change if changing plan/tier
+      if (data.plan && (data.plan !== subscription.plan || data.tier !== subscription.tier)) {
+        const planChangeValidation = await validationService.validatePlanChange(
+          subscription.id,
+          data.plan as any,
+          data.tier as any
+        );
+
+        if (!planChangeValidation.allowed) {
+          throw createError(
+            ErrorCode.PLAN_CHANGE_INVALID,
+            planChangeValidation.reason || "Plan change not allowed"
+          );
+        }
+
+        // Log any required actions
+        if (planChangeValidation.requiresAction && planChangeValidation.requiresAction.length > 0) {
+          logger.info("Plan change requires actions", {
+            subscriptionId: subscription.id,
+            actions: planChangeValidation.requiresAction,
+          });
+        }
+
+        // Include cost estimate in response
+        if (planChangeValidation.estimatedCost) {
+          logger.info("Plan change cost estimate", {
+            subscriptionId: subscription.id,
+            cost: planChangeValidation.estimatedCost,
+          });
+        }
       }
 
       // Update in Stripe
@@ -441,6 +499,28 @@ export const addFamilyMember = onCall(
 
       if (subscription.plan !== "family") {
         throw createError(ErrorCode.INVALID_ARGUMENT, "Not a family plan subscription");
+      }
+
+      // Validate family member addition
+      const memberValidation = await validationService.validateFamilyMemberAddition(
+        subscription.id,
+        data.memberId,
+        false // Default to false since AddFamilyMemberSchema doesn't include relationshipVerified
+      );
+
+      if (!memberValidation.isValid) {
+        throw createError(
+          ErrorCode.FAILED_PRECONDITION,
+          memberValidation.errors.join(", ")
+        );
+      }
+
+      // Log warnings if any
+      if (memberValidation.warnings && memberValidation.warnings.length > 0) {
+        logger.warn("Family member addition warnings", {
+          subscriptionId: subscription.id,
+          warnings: memberValidation.warnings,
+        });
       }
 
       await subscriptionService.addFamilyMember({
@@ -675,6 +755,48 @@ export const createEnhancedCheckoutSession = onCall(
     const data = EnhancedCreateCheckoutSessionSchema.parse(request.data);
 
     try {
+      // Validate plan eligibility
+      const eligibilityResult = await validationService.validatePlanEligibility(
+        uid,
+        data.plan as any,
+        data.tier as any
+      );
+
+      if (!eligibilityResult.isValid) {
+        throw createError(
+          ErrorCode.FAILED_PRECONDITION,
+          eligibilityResult.errors.join(", ")
+        );
+      }
+
+      // Validate family members if provided
+      if (data.familyMemberIds && data.familyMemberIds.length > 0) {
+        if (data.plan !== "family") {
+          throw createError(
+            ErrorCode.INVALID_ARGUMENT,
+            "Family members can only be added to family plans"
+          );
+        }
+      }
+
+      // Validate addons if provided
+      if (data.addons && data.addons.length > 0) {
+        if (data.plan !== "individual" || data.tier !== "plus") {
+          throw createError(
+            ErrorCode.ADDON_INVALID,
+            "Addons are only available for Individual Plus plans"
+          );
+        }
+      }
+
+      // Log warnings if any
+      if (eligibilityResult.warnings && eligibilityResult.warnings.length > 0) {
+        logger.warn("Enhanced checkout warnings", {
+          userId: uid,
+          warnings: eligibilityResult.warnings,
+        });
+      }
+
       const session = await checkoutService.createCheckoutSession({
         userId: uid,
         userEmail: userEmail || "",
@@ -816,6 +938,27 @@ export const purchaseAddon = onCall(
     const data = PurchaseAddonSchema.parse(request.data);
 
     try {
+      // Validate addon purchase
+      const addonValidation = await validationService.validateAddonPurchase(
+        data.subscriptionId,
+        data.addonType as any
+      );
+
+      if (!addonValidation.isValid) {
+        throw createError(
+          ErrorCode.ADDON_INVALID,
+          addonValidation.errors.join(", ")
+        );
+      }
+
+      // Log warnings if any
+      if (addonValidation.warnings && addonValidation.warnings.length > 0) {
+        logger.warn("Addon purchase warnings", {
+          subscriptionId: data.subscriptionId,
+          warnings: addonValidation.warnings,
+        });
+      }
+
       const addon = await addonService.purchaseAddon({
         subscriptionId: data.subscriptionId,
         userId: uid,
