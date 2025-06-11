@@ -19,6 +19,7 @@ export interface ValidationSchema {
   rules: ValidationRule[];
   allowExtraFields?: boolean;
   xssCheck?: boolean;
+  customValidation?: (data: any, context?: any) => { isValid: boolean; error?: string } | Promise<{ isValid: boolean; error?: string }>;
 }
 
 export function validateRequest(
