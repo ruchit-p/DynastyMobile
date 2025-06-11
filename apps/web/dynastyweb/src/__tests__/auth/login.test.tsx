@@ -1,5 +1,7 @@
 // Mock dependencies BEFORE imports
-jest.mock('next/navigation');
+jest.mock('next/navigation', () => ({
+  useRouter: jest.fn(),
+}));
 jest.mock('@/lib/firebase', () => ({
   auth: {},
   db: {},
