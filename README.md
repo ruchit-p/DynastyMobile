@@ -36,6 +36,7 @@ DynastyMobile/
 ### Technology Stack
 
 #### Mobile App
+
 - **Framework**: React Native with Expo
 - **Navigation**: Expo Router (file-based routing)
 - **State Management**: React Context API
@@ -43,12 +44,14 @@ DynastyMobile/
 - **UI Components**: Custom design system with accessibility support
 
 #### Web App
+
 - **Framework**: Next.js 14 with App Router
 - **Styling**: Tailwind CSS + shadcn/ui
 - **Authentication**: Firebase Auth with MFA support
 - **Real-time**: Firebase Firestore subscriptions
 
 #### Backend
+
 - **Functions**: Firebase Functions (TypeScript)
 - **Database**: Firebase Firestore
 - **Storage**: Backblaze B2 (S3-compatible)
@@ -68,12 +71,14 @@ DynastyMobile/
 ### Installation
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/yourusername/DynastyMobile.git
    cd DynastyMobile
    ```
 
 2. **Install dependencies**
+
    ```bash
    # Install root dependencies
    yarn install
@@ -85,15 +90,16 @@ DynastyMobile/
    ```
 
 3. **Environment Setup**
-   
+
    Create environment files based on the examples:
+
    ```bash
    # Mobile app
    cp apps/mobile/.env.example apps/mobile/.env
-   
+
    # Web app
    cp apps/web/dynastyweb/.env.example apps/web/dynastyweb/.env.local
-   
+
    # Firebase functions
    cp apps/firebase/functions/.env.example apps/firebase/functions/.env
    ```
@@ -107,6 +113,7 @@ DynastyMobile/
 ### Development
 
 #### Mobile App
+
 ```bash
 cd apps/mobile
 yarn start                # Start Expo development server
@@ -116,6 +123,7 @@ yarn test                 # Run tests
 ```
 
 #### Web App
+
 ```bash
 cd apps/web/dynastyweb
 yarn dev                  # Start Next.js development server
@@ -124,6 +132,7 @@ yarn test                 # Run tests
 ```
 
 #### Firebase Functions
+
 ```bash
 cd apps/firebase/functions
 npm run serve             # Start Firebase emulators
@@ -173,6 +182,7 @@ cd apps/firebase/functions && npm test
 ## 🚢 Deployment
 
 ### Mobile Apps
+
 Dynasty uses Expo Application Services (EAS) for building and deploying:
 
 ```bash
@@ -183,6 +193,7 @@ eas submit                     # Submit to app stores
 ```
 
 ### Web App
+
 The web app is deployed to Vercel:
 
 ```bash
@@ -191,6 +202,7 @@ vercel --prod                  # Deploy to production
 ```
 
 ### Firebase Functions
+
 ```bash
 cd apps/firebase/functions
 npm run deploy                 # Deploy all functions
@@ -209,6 +221,7 @@ We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md)
 4. Submit a pull request to `dev`
 
 Use our automated workflow:
+
 ```bash
 yarn feature "feature-name" "feat: your commit message"
 ```
@@ -226,4 +239,4 @@ Dynasty is proprietary software. All rights reserved.
 
 ---
 
-For more information, visit [mydynastyapp.com](https://mydynastyapp.com)
+For more information, visit [mydynastyapp.com](https://mydynastyapp.com)# Test change
