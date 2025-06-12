@@ -22,6 +22,7 @@ class CacheService {
   private db?: IDBDatabase;
   private defaultTTL = 30 * 60 * 1000; // 30 minutes
   private cleanupInterval?: NodeJS.Timeout;
+  private maxSize = 100; // Default max cache size
 
   private constructor() {
     this.initializeDatabase();
@@ -42,10 +43,7 @@ class CacheService {
       const request = indexedDB.open('DynastyCache', 1);
 
       request.onerror = () => {
-        errorHandler.handleError(
-          new Error('Failed to open cache database'),
-          ErrorSeverity.MEDIUM
-        );
+        errorHandler.handleError(new Error('Failed to open cache database'), ErrorSeverity.MEDIUM);
       };
 
       request.onsuccess = () => {
@@ -53,9 +51,9 @@ class CacheService {
         this.loadPersistedCache();
       };
 
-      request.onupgradeneeded = (event) => {
+      request.onupgradeneeded = event => {
         const db = (event.target as IDBOpenDBRequest).result;
-        
+
         if (!db.objectStoreNames.contains('cache')) {
           const store = db.createObjectStore('cache', { keyPath: 'key' });
           store.createIndex('timestamp', 'timestamp', { unique: false });
@@ -63,7 +61,7 @@ class CacheService {
       };
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
-        action: 'cache-init'
+        action: 'cache-init',
       });
     }
   }
@@ -88,7 +86,7 @@ class CacheService {
       };
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.LOW, {
-        action: 'load-persisted-cache'
+        action: 'load-persisted-cache',
       });
     }
   }
@@ -118,7 +116,7 @@ class CacheService {
       try {
         const transaction = this.db.transaction(['cache'], 'readwrite');
         const store = transaction.objectStore('cache');
-        
+
         expiredKeys.forEach(key => store.delete(key));
       } catch (error) {
         console.error('Failed to cleanup persisted cache:', error);
@@ -130,20 +128,19 @@ class CacheService {
     return now - entry.timestamp < entry.ttl;
   }
 
-  async set<T>(
-    key: string,
-    data: T,
-    options: CacheOptions = {}
-  ): Promise<void> {
+  async set<T>(key: string, data: T, options: CacheOptions = {}): Promise<void> {
     const entry: CacheEntry<T> = {
       key,
       data,
       timestamp: Date.now(),
-      ttl: options.ttl || this.defaultTTL
+      ttl: options.ttl || this.defaultTTL,
     };
 
     // Always set in memory cache
     this.memoryCache.set(key, entry);
+
+    // Enforce max size (LRU eviction)
+    this.enforceMaxSize();
 
     // Persist to IndexedDB if requested
     if (options.persist && this.db) {
@@ -154,7 +151,7 @@ class CacheService {
       } catch (error) {
         errorHandler.handleError(error, ErrorSeverity.LOW, {
           action: 'cache-persist',
-          context: { key }
+          context: { key },
         });
       }
     }
@@ -162,9 +159,9 @@ class CacheService {
 
   get<T>(key: string): T | null {
     const entry = this.memoryCache.get(key);
-    
+
     if (!entry) return null;
-    
+
     if (this.isValidEntry(entry, Date.now())) {
       return entry.data as T;
     }
@@ -193,7 +190,7 @@ class CacheService {
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
         action: 'cache-fetch',
-        context: { key }
+        context: { key },
       });
       throw error;
     }
@@ -201,7 +198,7 @@ class CacheService {
 
   invalidate(key: string): void {
     this.memoryCache.delete(key);
-    
+
     if (this.db) {
       try {
         const transaction = this.db.transaction(['cache'], 'readwrite');
@@ -228,7 +225,7 @@ class CacheService {
 
   clear(): void {
     this.memoryCache.clear();
-    
+
     if (this.db) {
       try {
         const transaction = this.db.transaction(['cache'], 'readwrite');
@@ -249,15 +246,15 @@ class CacheService {
   static keys = {
     user: (userId: string) => CacheService.generateKey('user', userId),
     familyTree: (familyTreeId: string) => CacheService.generateKey('familyTree', familyTreeId),
-    stories: (familyTreeId: string, page?: number) => 
+    stories: (familyTreeId: string, page?: number) =>
       CacheService.generateKey('stories', familyTreeId, page),
     story: (storyId: string) => CacheService.generateKey('story', storyId),
-    events: (familyTreeId: string, page?: number) => 
+    events: (familyTreeId: string, page?: number) =>
       CacheService.generateKey('events', familyTreeId, page),
     event: (eventId: string) => CacheService.generateKey('event', eventId),
-    notifications: (userId: string, page?: number) => 
+    notifications: (userId: string, page?: number) =>
       CacheService.generateKey('notifications', userId, page),
-    vaultItems: (userId: string, folderId?: string) => 
+    vaultItems: (userId: string, folderId?: string) =>
       CacheService.generateKey('vault', userId, folderId),
   };
 
@@ -269,6 +266,26 @@ class CacheService {
       this.db.close();
     }
     this.memoryCache.clear();
+  }
+
+  // Test-specific methods for compatibility
+  setMaxSize(maxSize: number): void {
+    this.maxSize = maxSize;
+    this.enforceMaxSize();
+  }
+
+  private enforceMaxSize(): void {
+    if (this.memoryCache.size <= this.maxSize) {
+      return;
+    }
+
+    // Convert to array and sort by timestamp (LRU)
+    const entries = Array.from(this.memoryCache.entries());
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+
+    // Remove oldest entries
+    const toRemove = entries.slice(0, this.memoryCache.size - this.maxSize);
+    toRemove.forEach(([key]) => this.memoryCache.delete(key));
   }
 }
 
@@ -288,25 +305,28 @@ export function useCachedData<T>(
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<Error | null>(null);
 
-  const refresh = React.useCallback(async (force = false) => {
-    const cache = CacheService.getInstance();
-    
-    if (force) {
-      cache.invalidate(key);
-    }
+  const refresh = React.useCallback(
+    async (force = false) => {
+      const cache = CacheService.getInstance();
 
-    setLoading(true);
-    setError(null);
+      if (force) {
+        cache.invalidate(key);
+      }
 
-    try {
-      const result = await cache.getOrSet(key, fetcher, options);
-      setData(result);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to fetch data'));
-    } finally {
-      setLoading(false);
-    }
-  }, [key, fetcher, options]);
+      setLoading(true);
+      setError(null);
+
+      try {
+        const result = await cache.getOrSet(key, fetcher, options);
+        setData(result);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to fetch data'));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [key, fetcher, options]
+  );
 
   React.useEffect(() => {
     refresh();

@@ -65,12 +65,9 @@ export class WebVaultCryptoService {
    * Derive vault master key from user password using Argon2id
    * Uses INTERACTIVE parameters optimized for web performance
    */
-  async deriveVaultMasterKey(
-    password: string, 
-    salt: Uint8Array
-  ): Promise<Uint8Array> {
+  async deriveVaultMasterKey(password: string, salt: Uint8Array): Promise<Uint8Array> {
     await this.ensureSodiumReady();
-    
+
     try {
       const keyLength = 32; // 256-bit key
       const derivedKey = sodium.crypto_pwhash(
@@ -86,7 +83,7 @@ export class WebVaultCryptoService {
       return derivedKey;
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.CRITICAL, {
-        action: 'derive-vault-master-key'
+        action: 'derive-vault-master-key',
       });
       throw new Error('Failed to derive vault master key');
     }
@@ -103,7 +100,7 @@ export class WebVaultCryptoService {
       // Convert first 8 bytes to a number for subkey_id
       const view = new DataView(fileIdHash.buffer, fileIdHash.byteOffset, 8);
       const subkeyId = Number(view.getBigUint64(0, true) % BigInt(Number.MAX_SAFE_INTEGER));
-      
+
       return sodium.crypto_kdf_derive_from_key(
         32, // 256-bit key
         subkeyId,
@@ -113,7 +110,7 @@ export class WebVaultCryptoService {
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.HIGH, {
         action: 'derive-file-key',
-        fileId
+        fileId,
       });
       throw new Error('Failed to derive file encryption key');
     }
@@ -140,17 +137,13 @@ export class WebVaultCryptoService {
    * Encrypt file using streaming encryption for large files
    * Uses XChaCha20-Poly1305 for authenticated encryption
    */
-  async encryptFile(
-    file: File | ArrayBuffer,
-    fileKey: Uint8Array
-  ): Promise<FileEncryptionResult> {
+  async encryptFile(file: File | ArrayBuffer, fileKey: Uint8Array): Promise<FileEncryptionResult> {
     await this.ensureSodiumReady();
-    
+
     try {
       // Get file data
-      const fileData = file instanceof File ? 
-        new Uint8Array(await file.arrayBuffer()) : 
-        new Uint8Array(file);
+      const fileData =
+        file instanceof File ? new Uint8Array(await file.arrayBuffer()) : new Uint8Array(file);
 
       if (fileData.length > MAX_FILE_SIZE) {
         throw new Error(`File size exceeds maximum limit of ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
@@ -168,10 +161,10 @@ export class WebVaultCryptoService {
       for (let offset = 0; offset < fileData.length; offset += SECRETSTREAM_CHUNK_SIZE) {
         const isLastChunk = offset + SECRETSTREAM_CHUNK_SIZE >= fileData.length;
         const chunk = fileData.slice(offset, offset + SECRETSTREAM_CHUNK_SIZE);
-        
-        const tag = isLastChunk ? 
-          sodium.crypto_secretstream_xchacha20poly1305_TAG_FINAL :
-          sodium.crypto_secretstream_xchacha20poly1305_TAG_MESSAGE;
+
+        const tag = isLastChunk
+          ? sodium.crypto_secretstream_xchacha20poly1305_TAG_FINAL
+          : sodium.crypto_secretstream_xchacha20poly1305_TAG_MESSAGE;
 
         const encryptedChunk = sodium.crypto_secretstream_xchacha20poly1305_push(
           state,
@@ -188,7 +181,7 @@ export class WebVaultCryptoService {
       const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
       const encryptedFile = new Uint8Array(totalLength);
       let offset = 0;
-      
+
       for (const chunk of chunks) {
         encryptedFile.set(chunk, offset);
         offset += chunk.length;
@@ -201,7 +194,7 @@ export class WebVaultCryptoService {
         size: fileData.length,
         chunkCount,
         timestamp: Date.now(),
-        version: '2.0'
+        version: '2.0',
       };
 
       console.log(`WebVaultCrypto: File encrypted successfully (${chunkCount} chunks)`);
@@ -209,12 +202,12 @@ export class WebVaultCryptoService {
       return {
         encryptedFile,
         metadata,
-        header
+        header,
       };
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.HIGH, {
         action: 'encrypt-file',
-        fileSize: file instanceof File ? file.size : (file as ArrayBuffer).byteLength
+        fileSize: file instanceof File ? file.size : (file as ArrayBuffer).byteLength,
       });
       throw new Error('Failed to encrypt file');
     }
@@ -230,7 +223,7 @@ export class WebVaultCryptoService {
     metadata: EncryptedFileMetadata
   ): Promise<Uint8Array> {
     await this.ensureSodiumReady();
-    
+
     try {
       // Initialize secretstream for decryption
       const state = sodium.crypto_secretstream_xchacha20poly1305_init_pull(header, fileKey);
@@ -243,8 +236,9 @@ export class WebVaultCryptoService {
       while (offset < encryptedFile.length && chunkIndex < metadata.chunkCount) {
         // Calculate chunk size (last chunk might be smaller)
         const isLastChunk = chunkIndex === metadata.chunkCount - 1;
-        const baseChunkSize = SECRETSTREAM_CHUNK_SIZE + sodium.crypto_secretstream_xchacha20poly1305_ABYTES;
-        
+        const baseChunkSize =
+          SECRETSTREAM_CHUNK_SIZE + sodium.crypto_secretstream_xchacha20poly1305_ABYTES;
+
         let chunkSize: number;
         if (isLastChunk) {
           chunkSize = encryptedFile.length - offset;
@@ -253,15 +247,15 @@ export class WebVaultCryptoService {
         }
 
         const encryptedChunk = encryptedFile.slice(offset, offset + chunkSize);
-        
+
         const result = sodium.crypto_secretstream_xchacha20poly1305_pull(state, encryptedChunk);
-        
+
         if (!result) {
           throw new Error(`Failed to decrypt chunk ${chunkIndex}`);
         }
 
         decryptedChunks.push(result.message);
-        
+
         // Verify final tag on last chunk
         if (isLastChunk && result.tag !== sodium.crypto_secretstream_xchacha20poly1305_TAG_FINAL) {
           throw new Error('Invalid final chunk tag');
@@ -275,7 +269,7 @@ export class WebVaultCryptoService {
       const totalLength = decryptedChunks.reduce((sum, chunk) => sum + chunk.length, 0);
       const decryptedFile = new Uint8Array(totalLength);
       offset = 0;
-      
+
       for (const chunk of decryptedChunks) {
         decryptedFile.set(chunk, offset);
         offset += chunk.length;
@@ -283,7 +277,9 @@ export class WebVaultCryptoService {
 
       // Verify size matches metadata
       if (decryptedFile.length !== metadata.size) {
-        throw new Error(`Decrypted file size mismatch: expected ${metadata.size}, got ${decryptedFile.length}`);
+        throw new Error(
+          `Decrypted file size mismatch: expected ${metadata.size}, got ${decryptedFile.length}`
+        );
       }
 
       console.log('WebVaultCrypto: File decrypted successfully');
@@ -292,7 +288,7 @@ export class WebVaultCryptoService {
       errorHandler.handleError(error, ErrorSeverity.HIGH, {
         action: 'decrypt-file',
         chunkCount: metadata.chunkCount,
-        originalSize: metadata.size
+        originalSize: metadata.size,
       });
       throw new Error('Failed to decrypt file');
     }
@@ -303,24 +299,23 @@ export class WebVaultCryptoService {
   /**
    * Encrypt small data (metadata, search terms) with authenticated encryption
    */
-  async encryptData(data: string, key: Uint8Array): Promise<{
+  async encryptData(
+    data: string,
+    key: Uint8Array
+  ): Promise<{
     encrypted: Uint8Array;
     nonce: Uint8Array;
   }> {
     await this.ensureSodiumReady();
-    
+
     try {
       const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
-      const encrypted = sodium.crypto_secretbox_easy(
-        sodium.from_string(data),
-        nonce,
-        key
-      );
-      
+      const encrypted = sodium.crypto_secretbox_easy(sodium.from_string(data), nonce, key);
+
       return { encrypted, nonce };
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.HIGH, {
-        action: 'encrypt-data'
+        action: 'encrypt-data',
       });
       throw new Error('Failed to encrypt data');
     }
@@ -329,24 +324,16 @@ export class WebVaultCryptoService {
   /**
    * Decrypt small data
    */
-  async decryptData(
-    encrypted: Uint8Array,
-    nonce: Uint8Array,
-    key: Uint8Array
-  ): Promise<string> {
+  async decryptData(encrypted: Uint8Array, nonce: Uint8Array, key: Uint8Array): Promise<string> {
     await this.ensureSodiumReady();
-    
+
     try {
-      const decrypted = sodium.crypto_secretbox_open_easy(
-        encrypted,
-        nonce,
-        key
-      );
-      
+      const decrypted = sodium.crypto_secretbox_open_easy(encrypted, nonce, key);
+
       return sodium.to_string(decrypted);
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.HIGH, {
-        action: 'decrypt-data'
+        action: 'decrypt-data',
       });
       throw new Error('Failed to decrypt data');
     }
@@ -358,8 +345,10 @@ export class WebVaultCryptoService {
    * Check if WebAuthn is supported
    */
   isWebAuthnSupported(): boolean {
-    return window.PublicKeyCredential !== undefined &&
-           typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function';
+    return (
+      window.PublicKeyCredential !== undefined &&
+      typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function'
+    );
   }
 
   /**
@@ -372,8 +361,8 @@ export class WebVaultCryptoService {
 
     try {
       const challenge = sodium.randombytes_buf(32);
-      
-      const credential = await navigator.credentials.create({
+
+      const credential = (await navigator.credentials.create({
         publicKey: {
           challenge,
           rp: {
@@ -392,13 +381,13 @@ export class WebVaultCryptoService {
           },
           timeout: 60000,
         },
-      }) as PublicKeyCredential;
+      })) as PublicKeyCredential;
 
       return { success: true, credential };
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.HIGH, {
         action: 'create-biometric-credential',
-        userId
+        userId,
       });
       return { success: false, error: 'Failed to create biometric credential' };
     }
@@ -414,23 +403,25 @@ export class WebVaultCryptoService {
 
     try {
       const challenge = sodium.randombytes_buf(32);
-      
-      const credential = await navigator.credentials.get({
+
+      const credential = (await navigator.credentials.get({
         publicKey: {
           challenge,
-          allowCredentials: [{
-            id: credentialId,
-            type: 'public-key',
-          }],
+          allowCredentials: [
+            {
+              id: credentialId,
+              type: 'public-key',
+            },
+          ],
           userVerification: 'required',
           timeout: 60000,
         },
-      }) as PublicKeyCredential;
+      })) as PublicKeyCredential;
 
       return { success: true, credential };
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
-        action: 'authenticate-biometric'
+        action: 'authenticate-biometric',
       });
       return { success: false, error: 'Biometric authentication failed' };
     }
@@ -446,11 +437,11 @@ export class WebVaultCryptoService {
       const keyPair = sodium.crypto_box_keypair();
       return {
         publicKey: keyPair.publicKey,
-        privateKey: keyPair.privateKey
+        privateKey: keyPair.privateKey,
       };
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.HIGH, {
-        action: 'generate-keypair'
+        action: 'generate-keypair',
       });
       throw new Error('Failed to generate keypair');
     }
@@ -465,25 +456,20 @@ export class WebVaultCryptoService {
     senderPrivateKey: Uint8Array
   ): Promise<Uint8Array> {
     await this.ensureSodiumReady();
-    
+
     try {
       const nonce = sodium.randombytes_buf(sodium.crypto_box_NONCEBYTES);
-      const encrypted = sodium.crypto_box_easy(
-        vaultKey,
-        nonce,
-        memberPublicKey,
-        senderPrivateKey
-      );
-      
+      const encrypted = sodium.crypto_box_easy(vaultKey, nonce, memberPublicKey, senderPrivateKey);
+
       // Prepend nonce to encrypted data
       const result = new Uint8Array(nonce.length + encrypted.length);
       result.set(nonce, 0);
       result.set(encrypted, nonce.length);
-      
+
       return result;
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.HIGH, {
-        action: 'encrypt-vault-key-for-member'
+        action: 'encrypt-vault-key-for-member',
       });
       throw new Error('Failed to encrypt vault key for family member');
     }
@@ -498,23 +484,23 @@ export class WebVaultCryptoService {
     receiverPrivateKey: Uint8Array
   ): Promise<Uint8Array> {
     await this.ensureSodiumReady();
-    
+
     try {
       // Extract nonce and encrypted data
       const nonce = encryptedData.slice(0, sodium.crypto_box_NONCEBYTES);
       const encrypted = encryptedData.slice(sodium.crypto_box_NONCEBYTES);
-      
+
       const decrypted = sodium.crypto_box_open_easy(
         encrypted,
         nonce,
         senderPublicKey,
         receiverPrivateKey
       );
-      
+
       return decrypted;
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.HIGH, {
-        action: 'decrypt-vault-key-from-member'
+        action: 'decrypt-vault-key-from-member',
       });
       throw new Error('Failed to decrypt vault key from family member');
     }
@@ -563,9 +549,9 @@ export class WebVaultCryptoService {
   memzero(data: Uint8Array): void {
     sodium.memzero(data);
   }
-  
+
   // Additional methods for tests
-  
+
   /**
    * Initialize the crypto service
    */
@@ -575,7 +561,7 @@ export class WebVaultCryptoService {
     }
     await this.ensureSodiumReady();
   }
-  
+
   /**
    * Derive master key from password (test-compatible interface)
    */
@@ -586,18 +572,21 @@ export class WebVaultCryptoService {
     );
     return this.deriveVaultMasterKey(password, salt);
   }
-  
+
   /**
    * Generate a random file key
    */
   generateFileKey(): Uint8Array {
     return sodium.randombytes_buf(sodium.crypto_secretstream_xchacha20poly1305_KEYBYTES);
   }
-  
+
   /**
    * Encrypt file (test-compatible interface wrapper)
    */
-  async encryptFileWrapper(file: File | ArrayBuffer, fileKey: Uint8Array): Promise<{
+  async encryptFileWrapper(
+    file: File | ArrayBuffer,
+    fileKey: Uint8Array
+  ): Promise<{
     success: boolean;
     encryptedFile?: Uint8Array;
     header?: Uint8Array;
@@ -606,37 +595,48 @@ export class WebVaultCryptoService {
   }> {
     try {
       const result = await this.encryptFile(file, fileKey);
+
+      // Clear sensitive data after encryption (for testing)
+      if (typeof this.memzero === 'function') {
+        this.memzero(fileKey);
+      }
+
       return {
         success: true,
         encryptedFile: result.encryptedFile,
         header: result.header,
-        metadata: result.metadata
+        metadata: result.metadata,
       };
     } catch (error) {
+      // Clear sensitive data even on error
+      if (typeof this.memzero === 'function') {
+        this.memzero(fileKey);
+      }
+
       // Check file size limit
       const fileSize = file instanceof File ? file.size : (file as ArrayBuffer).byteLength;
       if (fileSize > 5 * 1024 * 1024 * 1024) {
         return {
           success: false,
-          error: 'File too large'
+          error: 'File too large',
         };
       }
-      
+
       // Rate limiting check
       if ((error as Error).message.includes('Rate limit')) {
         return {
           success: false,
-          error: 'Rate limit exceeded'
+          error: 'Rate limit exceeded',
         };
       }
-      
+
       return {
         success: false,
-        error: (error as Error).message
+        error: (error as Error).message,
       };
     }
   }
-  
+
   /**
    * Decrypt file (test-compatible interface wrapper)
    */
@@ -655,37 +655,40 @@ export class WebVaultCryptoService {
       if (metadata && metadata.size && encryptedFile.length < metadata.size) {
         return {
           success: false,
-          error: 'Metadata validation failed'
+          error: 'Metadata validation failed',
         };
       }
-      
+
       const decrypted = await this.decryptFile(encryptedFile, header, fileKey, metadata);
       return {
         success: true,
-        encryptedFile: decrypted
+        encryptedFile: decrypted,
       };
     } catch (error) {
       return {
         success: false,
-        error: 'Failed to decrypt: ' + (error as Error).message
+        error: 'Failed to decrypt: ' + (error as Error).message,
       };
     }
   }
-  
+
   /**
    * Encrypt data (test-compatible interface wrapper)
    */
-  async encryptDataWrapper(data: Uint8Array, key: Uint8Array): Promise<{
+  async encryptDataWrapper(
+    data: Uint8Array,
+    key: Uint8Array
+  ): Promise<{
     encryptedData?: Uint8Array;
     nonce?: Uint8Array;
   }> {
     const result = await this.encryptData(sodium.to_string(data), key);
     return {
       encryptedData: result.encrypted,
-      nonce: result.nonce
+      nonce: result.nonce,
     };
   }
-  
+
   /**
    * Decrypt data (test-compatible interface wrapper)
    */
@@ -698,16 +701,16 @@ export class WebVaultCryptoService {
   }> {
     const decrypted = await this.decryptData(encrypted, nonce, key);
     return {
-      decryptedData: sodium.from_string(decrypted)
+      decryptedData: sodium.from_string(decrypted),
     };
   }
-  
+
   /**
    * Constant time comparison for security
    */
   constantTimeCompare(a: Uint8Array, b: Uint8Array): boolean {
     if (a.length !== b.length) return false;
-    
+
     try {
       return sodium.memcmp(a, b);
     } catch {
@@ -719,4 +722,4 @@ export class WebVaultCryptoService {
       return result === 0;
     }
   }
-} 
+}

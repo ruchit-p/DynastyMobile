@@ -1,7 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { BarChart3, Database, Download, Upload, CheckCircle, AlertTriangle, Clock, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Database,
+  Download,
+  Upload,
+  CheckCircle,
+  AlertTriangle,
+  Clock,
+  TrendingUp,
+} from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -39,10 +47,22 @@ interface B2MigrationMetrics {
   checksumVerifications: number;
 }
 
+interface R2Metrics {
+  totalRequests?: number;
+  totalBandwidth?: number;
+  averageLatency?: number;
+}
+
+interface FirebaseMetrics {
+  totalRequests?: number;
+  totalBandwidth?: number;
+  averageLatency?: number;
+}
+
 interface PerformanceComparison {
   b2: B2Metrics | null;
-  r2: any | null;
-  firebase: any | null;
+  r2: R2Metrics | null;
+  firebase: FirebaseMetrics | null;
 }
 
 interface RecentError {
@@ -62,63 +82,52 @@ export function B2MonitoringDashboard() {
   const [recentErrors, setRecentErrors] = useState<RecentError[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  
+
   const functionsClient = createFirebaseClient(functions);
   const { toast } = useToast();
 
   // Load B2 metrics
-  const loadMetrics = async (date?: string) => {
-    try {
-      setLoading(true);
-      
-      // Get B2 metrics
-      const metricsResult = await functionsClient.callFunction('getB2Metrics', { date });
-      setMetrics(metricsResult.data as B2Metrics);
+  const loadMetrics = useCallback(
+    async (date?: string) => {
+      try {
+        setLoading(true);
 
-      // Get migration metrics
-      const migrationResult = await functionsClient.callFunction('getB2MigrationMetrics', { date });
-      setMigrationMetrics(migrationResult.data as B2MigrationMetrics);
+        // Get B2 metrics
+        const metricsResult = await functionsClient.callFunction('getB2Metrics', { date });
+        setMetrics(metricsResult.data as B2Metrics);
 
-      // Get performance comparison
-      const comparisonResult = await functionsClient.callFunction('getB2PerformanceComparison', { date });
-      setComparison(comparisonResult.data as PerformanceComparison);
+        // Get migration metrics
+        const migrationResult = await functionsClient.callFunction('getB2MigrationMetrics', {
+          date,
+        });
+        setMigrationMetrics(migrationResult.data as B2MigrationMetrics);
 
-      // Get recent errors
-      const errorsResult = await functionsClient.callFunction('getB2RecentErrors', { limit: 10 });
-      setRecentErrors(errorsResult.data as RecentError[]);
+        // Get performance comparison
+        const comparisonResult = await functionsClient.callFunction('getB2PerformanceComparison', {
+          date,
+        });
+        setComparison(comparisonResult.data as PerformanceComparison);
 
-    } catch (error) {
-      console.error('Failed to load B2 metrics:', error);
-      toast({
-        title: 'Failed to Load Metrics',
-        description: 'Could not retrieve B2 monitoring data',
-        variant: 'destructive'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Get success rate
-  const getSuccessRate = async () => {
-    try {
-      const result = await functionsClient.callFunction('getB2SuccessRate', { date: selectedDate });
-      return result.data as {
-        date: string;
-        totalOperations: number;
-        successfulOperations: number;
-        successRate: number;
-        errorRate: number;
-      };
-    } catch (error) {
-      console.error('Failed to get success rate:', error);
-      return null;
-    }
-  };
+        // Get recent errors
+        const errorsResult = await functionsClient.callFunction('getB2RecentErrors', { limit: 10 });
+        setRecentErrors(errorsResult.data as RecentError[]);
+      } catch (error) {
+        console.error('Failed to load B2 metrics:', error);
+        toast({
+          title: 'Failed to Load Metrics',
+          description: 'Could not retrieve B2 monitoring data',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [functionsClient, toast]
+  );
 
   useEffect(() => {
     loadMetrics(selectedDate);
-  }, [selectedDate]);
+  }, [selectedDate, loadMetrics]);
 
   if (loading) {
     return (
@@ -131,15 +140,20 @@ export function B2MonitoringDashboard() {
     );
   }
 
-  const totalOperations = metrics ? 
-    metrics.uploadSuccess + metrics.uploadFailure + 
-    metrics.downloadSuccess + metrics.downloadFailure + 
-    metrics.deleteSuccess + metrics.deleteFailure +
-    metrics.copySuccess + metrics.copyFailure : 0;
+  const totalOperations = metrics
+    ? metrics.uploadSuccess +
+      metrics.uploadFailure +
+      metrics.downloadSuccess +
+      metrics.downloadFailure +
+      metrics.deleteSuccess +
+      metrics.deleteFailure +
+      metrics.copySuccess +
+      metrics.copyFailure
+    : 0;
 
-  const successfulOperations = metrics ?
-    metrics.uploadSuccess + metrics.downloadSuccess + 
-    metrics.deleteSuccess + metrics.copySuccess : 0;
+  const successfulOperations = metrics
+    ? metrics.uploadSuccess + metrics.downloadSuccess + metrics.deleteSuccess + metrics.copySuccess
+    : 0;
 
   const successRate = totalOperations > 0 ? (successfulOperations / totalOperations) * 100 : 0;
 
@@ -149,16 +163,14 @@ export function B2MonitoringDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">B2 Storage Monitoring</h2>
-          <p className="text-muted-foreground">
-            Backblaze B2 performance and usage analytics
-          </p>
+          <p className="text-muted-foreground">Backblaze B2 performance and usage analytics</p>
         </div>
-        
+
         <div className="flex items-center space-x-4">
           <input
             type="date"
             value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+            onChange={e => setSelectedDate(e.target.value)}
             className="px-3 py-2 border rounded-md"
           />
           <Button onClick={() => loadMetrics(selectedDate)} size="sm">
@@ -247,10 +259,14 @@ export function B2MonitoringDashboard() {
                 <div className="flex justify-between">
                   <span>Success Rate:</span>
                   <span className="font-medium">
-                    {metrics && (metrics.uploadSuccess + metrics.uploadFailure) > 0 ?
-                      ((metrics.uploadSuccess / (metrics.uploadSuccess + metrics.uploadFailure)) * 100).toFixed(1) :
-                      0
-                    }%
+                    {metrics && metrics.uploadSuccess + metrics.uploadFailure > 0
+                      ? (
+                          (metrics.uploadSuccess /
+                            (metrics.uploadSuccess + metrics.uploadFailure)) *
+                          100
+                        ).toFixed(1)
+                      : 0}
+                    %
                   </span>
                 </div>
               </div>
@@ -278,10 +294,14 @@ export function B2MonitoringDashboard() {
                 <div className="flex justify-between">
                   <span>Success Rate:</span>
                   <span className="font-medium">
-                    {metrics && (metrics.downloadSuccess + metrics.downloadFailure) > 0 ?
-                      ((metrics.downloadSuccess / (metrics.downloadSuccess + metrics.downloadFailure)) * 100).toFixed(1) :
-                      0
-                    }%
+                    {metrics && metrics.downloadSuccess + metrics.downloadFailure > 0
+                      ? (
+                          (metrics.downloadSuccess /
+                            (metrics.downloadSuccess + metrics.downloadFailure)) *
+                          100
+                        ).toFixed(1)
+                      : 0}
+                    %
                   </span>
                 </div>
               </div>
@@ -309,10 +329,14 @@ export function B2MonitoringDashboard() {
                 <div className="flex justify-between">
                   <span>Success Rate:</span>
                   <span className="font-medium">
-                    {metrics && (metrics.checksumVerifications + metrics.checksumFailures) > 0 ?
-                      ((metrics.checksumVerifications / (metrics.checksumVerifications + metrics.checksumFailures)) * 100).toFixed(1) :
-                      0
-                    }%
+                    {metrics && metrics.checksumVerifications + metrics.checksumFailures > 0
+                      ? (
+                          (metrics.checksumVerifications /
+                            (metrics.checksumVerifications + metrics.checksumFailures)) *
+                          100
+                        ).toFixed(1)
+                      : 0}
+                    %
                   </span>
                 </div>
               </div>
@@ -340,10 +364,13 @@ export function B2MonitoringDashboard() {
                 <div className="flex justify-between">
                   <span>Success Rate:</span>
                   <span className="font-medium">
-                    {metrics && (metrics.copySuccess + metrics.copyFailure) > 0 ?
-                      ((metrics.copySuccess / (metrics.copySuccess + metrics.copyFailure)) * 100).toFixed(1) :
-                      0
-                    }%
+                    {metrics && metrics.copySuccess + metrics.copyFailure > 0
+                      ? (
+                          (metrics.copySuccess / (metrics.copySuccess + metrics.copyFailure)) *
+                          100
+                        ).toFixed(1)
+                      : 0}
+                    %
                   </span>
                 </div>
               </div>
@@ -370,7 +397,9 @@ export function B2MonitoringDashboard() {
                   </div>
                   <div className="flex justify-between">
                     <span>Avg Time:</span>
-                    <span className="font-medium">{migrationMetrics.averageMigrationTime.toFixed(1)}s</span>
+                    <span className="font-medium">
+                      {migrationMetrics.averageMigrationTime.toFixed(1)}s
+                    </span>
                   </div>
                 </div>
               </Card>
@@ -477,9 +506,7 @@ export function B2MonitoringDashboard() {
             </div>
           ) : (
             <Card className="p-6">
-              <p className="text-muted-foreground text-center">
-                No comparison data available
-              </p>
+              <p className="text-muted-foreground text-center">No comparison data available</p>
             </Card>
           )}
         </TabsContent>
@@ -491,10 +518,10 @@ export function B2MonitoringDashboard() {
               <AlertTriangle className="h-5 w-5 mr-2 text-red-500" />
               Recent Errors ({recentErrors.length})
             </h3>
-            
+
             {recentErrors.length > 0 ? (
               <div className="space-y-3">
-                {recentErrors.map((error) => (
+                {recentErrors.map(error => (
                   <div key={error.id} className="border rounded-lg p-4 bg-red-50 border-red-200">
                     <div className="flex justify-between items-start mb-2">
                       <Badge variant="outline" className="text-red-600">
@@ -507,17 +534,13 @@ export function B2MonitoringDashboard() {
                     <p className="text-sm text-red-700 mb-2">{error.error}</p>
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
                       <span>Bucket: {error.bucket || 'N/A'}</span>
-                      {error.retryAttempt && (
-                        <span>Retry attempt: {error.retryAttempt}</span>
-                      )}
+                      {error.retryAttempt && <span>Retry attempt: {error.retryAttempt}</span>}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground text-center py-8">
-                No recent errors found
-              </p>
+              <p className="text-muted-foreground text-center py-8">No recent errors found</p>
             )}
           </Card>
         </TabsContent>

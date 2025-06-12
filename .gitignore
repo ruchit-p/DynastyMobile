@@ -118,3 +118,19 @@ apps/web/dynastyweb/.env.example
 apps/web/dynastyweb/.env.prod
 apps/web/dynastyweb/.env.prod
 apps/web/dynastyweb/.env.prod
+
+# Test results and coverage
+test-results/
+**/test-results/
+**/coverage/
+
+# Jest cache
+.jest-cache/
+**/.jest-cache/
+
+# Additional log files
+dev-server*.log
+**/dev-server*.log
+
+# Firebase cache
+**/.firebase/hosting.*.cache

@@ -96,7 +96,7 @@ class NetworkMonitor {
       await fetch('https://www.googleapis.com/generate_204', {
         method: 'HEAD',
         mode: 'no-cors',
-        signal: controller.signal
+        signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
@@ -118,13 +118,15 @@ class NetworkMonitor {
     if (typeof window === 'undefined') return null;
 
     // Use Network Information API if available
-    const nav = navigator as { connection?: { downlink?: number; effectiveType?: string; rtt?: number } };
+    const nav = navigator as {
+      connection?: { downlink?: number; effectiveType?: string; rtt?: number };
+    };
     if ('connection' in nav && nav.connection) {
       const connection = nav.connection;
       return {
         downlink: connection.downlink || 0,
         effectiveType: (connection.effectiveType || '4g') as '4g' | '3g' | '2g' | 'slow-2g',
-        rtt: connection.rtt || 0
+        rtt: connection.rtt || 0,
       };
     }
 
@@ -144,7 +146,7 @@ class NetworkMonitor {
       } catch (error) {
         errorHandler.handleError(error, ErrorSeverity.LOW, {
           action: 'network-status-listener',
-          context: { status, previousStatus }
+          context: { status, previousStatus },
         });
       }
     });
@@ -159,7 +161,7 @@ class NetworkMonitor {
     const promises = Array.from(this.syncCallbacks).map(callback => {
       return callback().catch(error => {
         errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
-          action: 'network-sync-callback'
+          action: 'network-sync-callback',
         });
       });
     });
@@ -186,7 +188,7 @@ class NetworkMonitor {
 
   addListener(listener: NetworkListener): () => void {
     this.listeners.add(listener);
-    
+
     // Return unsubscribe function
     return () => {
       this.listeners.delete(listener);
@@ -195,7 +197,7 @@ class NetworkMonitor {
 
   addSyncCallback(callback: () => Promise<void>): () => void {
     this.syncCallbacks.add(callback);
-    
+
     // Return unsubscribe function
     return () => {
       this.syncCallbacks.delete(callback);
@@ -206,13 +208,13 @@ class NetworkMonitor {
   async waitForOnline(timeout = 30000): Promise<boolean> {
     if (this.isOnline()) return true;
 
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       const timeoutId = setTimeout(() => {
         cleanup();
         resolve(false);
       }, timeout);
 
-      const cleanup = this.addListener((status) => {
+      const cleanup = this.addListener(status => {
         if (status === 'online') {
           clearTimeout(timeoutId);
           cleanup();
@@ -226,16 +228,19 @@ class NetworkMonitor {
 // Export singleton instance
 export const networkMonitor = NetworkMonitor.getInstance();
 
+// Export class for testing
+export default NetworkMonitor;
+
 // React hook for network status
 export function useNetworkStatus() {
-  const [status, setStatus] = React.useState<NetworkStatus>(() => 
+  const [status, setStatus] = React.useState<NetworkStatus>(() =>
     NetworkMonitor.getInstance().getStatus()
   );
 
   React.useEffect(() => {
     const monitor = NetworkMonitor.getInstance();
     const unsubscribe = monitor.addListener(setStatus);
-    
+
     // Start monitoring if not already started
     monitor.start();
 
@@ -246,6 +251,6 @@ export function useNetworkStatus() {
     status,
     isOnline: status === 'online',
     isOffline: status === 'offline',
-    isSlow: status === 'slow'
+    isSlow: status === 'slow',
   };
 }

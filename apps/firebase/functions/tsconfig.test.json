@@ -3,7 +3,14 @@
   "compilerOptions": {
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "allowUnusedLabels": true
+    "allowUnusedLabels": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "noImplicitReturns": false,
+    "noFallthroughCasesInSwitch": false
   },
   "include": [
     "src",
@@ -15,9 +22,5 @@
     "test/**/*",
     "jest.setup.js"
   ],
-  "exclude": [
-    "node_modules",
-    "lib",
-    "coverage"
-  ]
+  "exclude": ["node_modules", "lib", "coverage"]
 }

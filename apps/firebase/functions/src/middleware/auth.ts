@@ -1,14 +1,13 @@
-import {getFirestore} from "firebase-admin/firestore";
-import {logger} from "firebase-functions/v2";
-import {CallableRequest} from "firebase-functions/v2/https";
+import { getFirestore } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions/v2';
+import { CallableRequest } from 'firebase-functions/v2/https';
+import { createError, ErrorCode, withErrorHandling } from '../utils/errors';
+import { createLogContext, formatErrorForLogging } from '../utils/sanitization';
 import {
-  createError,
-  ErrorCode,
-  withErrorHandling,
-} from "../utils/errors";
-import {createLogContext, formatErrorForLogging} from "../utils/sanitization";
-import {checkRateLimit as checkRedisRateLimit, RateLimitType as RedisRateLimitType} from "../services/rateLimitService";
-import {getAuth} from "firebase-admin/auth";
+  checkRateLimit as checkRedisRateLimit,
+  RateLimitType as RedisRateLimitType,
+} from '../services/rateLimitService';
+import { getAuth } from 'firebase-admin/auth';
 
 // Lazy-load Firestore to avoid initialization issues in tests
 let db: FirebaseFirestore.Firestore | null = null;
@@ -27,44 +26,52 @@ const getDb = () => {
  * Resource types that can be accessed
  */
 export enum ResourceType {
-  EVENT = "event",
-  STORY = "story",
-  FAMILY_TREE = "family_tree",
-  VAULT = "vault",
-  USER = "user",
-  COMMENT = "comment",
-  NOTIFICATION = "notification",
-  CHAT = "chat",
+  EVENT = 'event',
+  STORY = 'story',
+  FAMILY_TREE = 'family_tree',
+  VAULT = 'vault',
+  USER = 'user',
+  COMMENT = 'comment',
+  NOTIFICATION = 'notification',
+  CHAT = 'chat',
 }
 
 /**
  * Permission types for resources
  */
 export enum Permission {
-  READ = "read",
-  WRITE = "write",
-  DELETE = "delete",
-  ADMIN = "admin",
+  READ = 'read',
+  WRITE = 'write',
+  DELETE = 'delete',
+  ADMIN = 'admin',
 }
 
 /**
  * Different permission levels used to authorize users
  */
 export enum PermissionLevel {
-  AUTHENTICATED = "authenticated", // Just needs to be logged in
-  PROFILE_OWNER = "profileOwner", // User ID matches requested resource owner
-  FAMILY_MEMBER = "familyMember", // User belongs to same family tree as resource
-  ADMIN = "admin", // User is resource admin
-  TREE_OWNER = "treeOwner", // User owns the family tree
-  HOST = "host", // User is the host (for events)
-  PUBLIC = "public" // No auth required (rare)
+  AUTHENTICATED = 'authenticated', // Just needs to be logged in
+  PROFILE_OWNER = 'profileOwner', // User ID matches requested resource owner
+  FAMILY_MEMBER = 'familyMember', // User belongs to same family tree as resource
+  ADMIN = 'admin', // User is resource admin
+  TREE_OWNER = 'treeOwner', // User owns the family tree
+  HOST = 'host', // User is the host (for events)
+  PUBLIC = 'public', // No auth required (rare)
 }
 
 /**
  * Interface for resource access check configuration
  */
 export interface ResourceAccessConfig {
-  resourceType: "event" | "story" | "family_tree" | "vault" | "user" | "comment" | "notification" | "chat";
+  resourceType:
+    | 'event'
+    | 'story'
+    | 'family_tree'
+    | 'vault'
+    | 'user'
+    | 'comment'
+    | 'notification'
+    | 'chat';
   resourceIdField?: string; // Field name in request data containing the resource ID (default: '{resourceType}Id')
   ownerIdField?: string; // Field in resource document indicating owner (default: 'hostId' or 'authorId' or 'ownerId')
   collectionPath?: string; // Override default collection path
@@ -77,34 +84,36 @@ export interface ResourceAccessConfig {
  * Rate limit types for different actions
  */
 export enum RateLimitType {
-  API = "api", // Default general rate limiting (mapped to API)
-  AUTH = "auth", // Authentication operations (login, signup, etc.)
-  MEDIA = "media", // Media uploads
-  UPLOAD = "upload", // Alias for media (backward compatibility)
-  WRITE = "write", // Write operations (create/update)
-  SENSITIVE = "sensitive", // Sensitive operations
-  SMS = "sms", // SMS operations
-  SUPPORT = "support", // Support messages
-  SIGNAL_KEY_PUBLISH = "signal_key_publish", // Signal Protocol key publishing operations
-  SIGNAL_KEY_RETRIEVE = "signal_key_retrieve", // Signal Protocol key retrieval operations
-  SIGNAL_VERIFICATION = "signal_verification", // Signal Protocol verification operations
-  SIGNAL_MAINTENANCE = "signal_maintenance", // Signal Protocol maintenance operations
-  EMAIL_VERIFICATION_SEND = "email_verification_send", // Email verification send operations
-  EMAIL_VERIFICATION_VERIFY = "email_verification_verify", // Email verification verify operations
+  API = 'api', // Default general rate limiting (mapped to API)
+  AUTH = 'auth', // Authentication operations (login, signup, etc.)
+  MEDIA = 'media', // Media uploads
+  UPLOAD = 'upload', // Alias for media (backward compatibility)
+  WRITE = 'write', // Write operations (create/update)
+  SENSITIVE = 'sensitive', // Sensitive operations
+  SMS = 'sms', // SMS operations
+  SUPPORT = 'support', // Support messages
+  SIGNAL_KEY_PUBLISH = 'signal_key_publish', // Signal Protocol key publishing operations
+  SIGNAL_KEY_RETRIEVE = 'signal_key_retrieve', // Signal Protocol key retrieval operations
+  SIGNAL_VERIFICATION = 'signal_verification', // Signal Protocol verification operations
+  SIGNAL_MAINTENANCE = 'signal_maintenance', // Signal Protocol maintenance operations
+  EMAIL_VERIFICATION_SEND = 'email_verification_send', // Email verification send operations
+  EMAIL_VERIFICATION_VERIFY = 'email_verification_verify', // Email verification verify operations
+  EMAIL_PREFERENCE_UPDATE = 'email_preference_update', // Email preference management operations
+  ADMIN_EMAIL_MANAGEMENT = 'admin_email_management', // Admin email suppression list management
 
   // Subscription operations
-  CHECKOUT = "checkout", // Stripe checkout session creation
-  SUBSCRIPTION_MODIFY = "subscription_modify", // Plan changes, addon management
-  REFERRAL = "referral", // Referral code operations
-  WEBHOOK = "webhook", // Stripe webhook endpoints
+  CHECKOUT = 'checkout', // Stripe checkout session creation
+  SUBSCRIPTION_MODIFY = 'subscription_modify', // Plan changes, addon management
+  REFERRAL = 'referral', // Referral code operations
+  WEBHOOK = 'webhook', // Stripe webhook endpoints
 
   // Phase 2: Enhanced Stripe operations
-  STRIPE_CHECKOUT = "stripe_checkout", // Enhanced checkout operations
-  STRIPE_SUBSCRIPTION_READ = "stripe_subscription_read", // Subscription status/history
-  STRIPE_SUBSCRIPTION_UPDATE = "stripe_subscription_update", // Plan changes, updates
-  STRIPE_FAMILY_UPDATE = "stripe_family_update", // Family member management
-  STRIPE_PORTAL = "stripe_portal", // Customer portal access
-  STRIPE_ADDON_MANAGE = "stripe_addon_manage", // Addon purchase/removal
+  STRIPE_CHECKOUT = 'stripe_checkout', // Enhanced checkout operations
+  STRIPE_SUBSCRIPTION_READ = 'stripe_subscription_read', // Subscription status/history
+  STRIPE_SUBSCRIPTION_UPDATE = 'stripe_subscription_update', // Plan changes, updates
+  STRIPE_FAMILY_UPDATE = 'stripe_family_update', // Family member management
+  STRIPE_PORTAL = 'stripe_portal', // Customer portal access
+  STRIPE_ADDON_MANAGE = 'stripe_addon_manage', // Addon purchase/removal
 }
 
 /**
@@ -137,10 +146,7 @@ export function requireAuth(request: CallableRequest): string {
   const uid = request.auth?.uid;
 
   if (!uid) {
-    throw createError(
-      ErrorCode.UNAUTHENTICATED,
-      "Authentication required for this operation."
-    );
+    throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required for this operation.');
   }
 
   return uid;
@@ -165,7 +171,7 @@ export async function requireVerifiedUser(request: CallableRequest): Promise<str
     }
 
     // If email is not verified, check phone verification from Firestore
-    const userDoc = await db.collection("users").doc(uid).get();
+    const userDoc = await db.collection('users').doc(uid).get();
     if (userDoc.exists) {
       const userData = userDoc.data();
       if (userData?.phoneNumberVerified) {
@@ -176,7 +182,7 @@ export async function requireVerifiedUser(request: CallableRequest): Promise<str
     // Neither email nor phone is verified
     throw createError(
       ErrorCode.PERMISSION_DENIED,
-      "Account verification required. Please verify your email address or phone number before proceeding."
+      'Account verification required. Please verify your email address or phone number before proceeding.'
     );
   } catch (error: any) {
     // Re-throw HttpsError instances
@@ -185,16 +191,16 @@ export async function requireVerifiedUser(request: CallableRequest): Promise<str
     }
 
     // Log unexpected errors
-    logger.error("requireVerifiedUser: Unexpected error", createLogContext({
-      uid,
-      errorType: typeof error,
-      errorMessage: error?.message || "Unknown error",
-    }));
-
-    throw createError(
-      ErrorCode.INTERNAL,
-      "Error verifying user status. Please try again."
+    logger.error(
+      'requireVerifiedUser: Unexpected error',
+      createLogContext({
+        uid,
+        errorType: typeof error,
+        errorMessage: error?.message || 'Unknown error',
+      })
     );
+
+    throw createError(ErrorCode.INTERNAL, 'Error verifying user status. Please try again.');
   }
 }
 
@@ -206,13 +212,13 @@ export async function requireVerifiedUser(request: CallableRequest): Promise<str
 export async function requireOnboardedUser(request: CallableRequest): Promise<string> {
   const uid = await requireVerifiedUser(request);
 
-  const userDoc = await getDb().collection("users").doc(uid).get();
+  const userDoc = await getDb().collection('users').doc(uid).get();
   const userData = userDoc.data();
 
   if (!userData?.onboardingCompleted) {
     throw createError(
       ErrorCode.PERMISSION_DENIED,
-      "Profile setup required. Please complete your profile before proceeding."
+      'Profile setup required. Please complete your profile before proceeding.'
     );
   }
 
@@ -228,7 +234,7 @@ export async function requireOnboardedUser(request: CallableRequest): Promise<st
 export async function checkResourceAccess(
   request: CallableRequest,
   config: ResourceAccessConfig
-): Promise<{uid: string, resource: any}> {
+): Promise<{ uid: string; resource: any }> {
   const uid = requireAuth(request);
   const {
     resourceType,
@@ -250,7 +256,7 @@ export async function checkResourceAccess(
   }
 
   // Default collection path based on resource type
-  const collection = collectionPath || resourceType + "s";
+  const collection = collectionPath || resourceType + 's';
 
   // Fetch the resource document
   const resourceRef = getDb().collection(collection).doc(resourceId);
@@ -268,21 +274,21 @@ export async function checkResourceAccess(
   // Skip further checks if PUBLIC permission is allowed
   const requiredLevels = Array.isArray(requiredLevel) ? requiredLevel : [requiredLevel];
   if (requiredLevels.includes(PermissionLevel.PUBLIC)) {
-    return {uid, resource};
+    return { uid, resource };
   }
 
   // Get the owner ID field based on resource type
   let ownerIdFieldName = ownerIdField;
   if (!ownerIdFieldName) {
     switch (resourceType) {
-    case "event":
-      ownerIdFieldName = "hostId";
-      break;
-    case "story":
-      ownerIdFieldName = "authorId";
-      break;
-    default:
-      ownerIdFieldName = "ownerId";
+      case 'event':
+        ownerIdFieldName = 'hostId';
+        break;
+      case 'story':
+        ownerIdFieldName = 'authorId';
+        break;
+      default:
+        ownerIdFieldName = 'ownerId';
     }
   }
 
@@ -290,45 +296,46 @@ export async function checkResourceAccess(
 
   // Check for PROFILE_OWNER level permission
   if (requiredLevels.includes(PermissionLevel.PROFILE_OWNER) && uid === resourceId) {
-    return {uid, resource};
+    return { uid, resource };
   }
 
   // Check for HOST/OWNER level permission
-  if ((
-    requiredLevels.includes(PermissionLevel.HOST) ||
-    requiredLevels.includes(PermissionLevel.ADMIN)
-  ) && resource![ownerIdFieldName!] === uid) {
-    return {uid, resource};
+  if (
+    (requiredLevels.includes(PermissionLevel.HOST) ||
+      requiredLevels.includes(PermissionLevel.ADMIN)) &&
+    resource![ownerIdFieldName!] === uid
+  ) {
+    return { uid, resource };
   }
 
   // Check for FAMILY_MEMBER level permission
   if (requiredLevels.includes(PermissionLevel.FAMILY_MEMBER) && resource!.familyTreeId) {
-    const userDoc = await getDb().collection("users").doc(uid).get();
+    const userDoc = await getDb().collection('users').doc(uid).get();
 
     if (userDoc.exists && userDoc.data()?.familyTreeId === resource!.familyTreeId) {
-      return {uid, resource};
+      return { uid, resource };
     }
   }
 
   // Check for TREE_OWNER level
   if (requiredLevels.includes(PermissionLevel.TREE_OWNER) && resource!.familyTreeId) {
-    const treeDoc = await getDb().collection("familyTrees").doc(resource!.familyTreeId).get();
+    const treeDoc = await getDb().collection('familyTrees').doc(resource!.familyTreeId).get();
 
     if (treeDoc.exists && treeDoc.data()?.ownerUserId === uid) {
-      return {uid, resource};
+      return { uid, resource };
     }
   }
 
   // Check for invitation if enabled
   if (checkInvitation && resource!.invitedMemberIds && resource!.invitedMemberIds.includes(uid)) {
-    return {uid, resource};
+    return { uid, resource };
   }
 
   // Run additional custom permission check if provided
   if (additionalPermissionCheck) {
     const hasCustomPermission = await additionalPermissionCheck(resource, uid);
     if (hasCustomPermission) {
-      return {uid, resource};
+      return { uid, resource };
     }
   }
 
@@ -351,37 +358,36 @@ export async function checkRateLimit(
 ): Promise<string> {
   const uid = requireAuth(request);
 
-  const {
-    type = RateLimitType.API,
-    ignoreAdmin = true,
-  } = config;
+  const { type = RateLimitType.API, ignoreAdmin = true } = config;
 
   // Map our RateLimitType to Redis RateLimitType
   const rateLimitTypeMap: Record<RateLimitType, RedisRateLimitType> = {
-    [RateLimitType.API]: "api",
-    [RateLimitType.AUTH]: "auth",
-    [RateLimitType.MEDIA]: "media",
-    [RateLimitType.UPLOAD]: "upload",
-    [RateLimitType.WRITE]: "write",
-    [RateLimitType.SENSITIVE]: "sensitive",
-    [RateLimitType.SMS]: "sms",
-    [RateLimitType.SUPPORT]: "support",
-    [RateLimitType.SIGNAL_KEY_PUBLISH]: "signalKeyPublish",
-    [RateLimitType.SIGNAL_KEY_RETRIEVE]: "signalKeyRetrieve",
-    [RateLimitType.SIGNAL_VERIFICATION]: "signalVerification",
-    [RateLimitType.SIGNAL_MAINTENANCE]: "signalMaintenance",
-    [RateLimitType.EMAIL_VERIFICATION_SEND]: "emailVerificationSend",
-    [RateLimitType.EMAIL_VERIFICATION_VERIFY]: "emailVerificationVerify",
-    [RateLimitType.CHECKOUT]: "checkout",
-    [RateLimitType.SUBSCRIPTION_MODIFY]: "subscriptionModify",
-    [RateLimitType.REFERRAL]: "referral",
-    [RateLimitType.WEBHOOK]: "webhook",
-    [RateLimitType.STRIPE_CHECKOUT]: "stripeCheckout",
-    [RateLimitType.STRIPE_SUBSCRIPTION_READ]: "stripeSubscriptionRead",
-    [RateLimitType.STRIPE_SUBSCRIPTION_UPDATE]: "stripeSubscriptionUpdate",
-    [RateLimitType.STRIPE_FAMILY_UPDATE]: "stripeFamilyUpdate",
-    [RateLimitType.STRIPE_PORTAL]: "stripePortal",
-    [RateLimitType.STRIPE_ADDON_MANAGE]: "stripeAddonManage",
+    [RateLimitType.API]: 'api',
+    [RateLimitType.AUTH]: 'auth',
+    [RateLimitType.MEDIA]: 'media',
+    [RateLimitType.UPLOAD]: 'upload',
+    [RateLimitType.WRITE]: 'write',
+    [RateLimitType.SENSITIVE]: 'sensitive',
+    [RateLimitType.SMS]: 'sms',
+    [RateLimitType.SUPPORT]: 'support',
+    [RateLimitType.SIGNAL_KEY_PUBLISH]: 'signalKeyPublish',
+    [RateLimitType.SIGNAL_KEY_RETRIEVE]: 'signalKeyRetrieve',
+    [RateLimitType.SIGNAL_VERIFICATION]: 'signalVerification',
+    [RateLimitType.SIGNAL_MAINTENANCE]: 'signalMaintenance',
+    [RateLimitType.EMAIL_VERIFICATION_SEND]: 'emailVerificationSend',
+    [RateLimitType.EMAIL_VERIFICATION_VERIFY]: 'emailVerificationVerify',
+    [RateLimitType.EMAIL_PREFERENCE_UPDATE]: 'emailPreferenceUpdate',
+    [RateLimitType.ADMIN_EMAIL_MANAGEMENT]: 'adminEmailManagement',
+    [RateLimitType.CHECKOUT]: 'checkout',
+    [RateLimitType.SUBSCRIPTION_MODIFY]: 'subscriptionModify',
+    [RateLimitType.REFERRAL]: 'referral',
+    [RateLimitType.WEBHOOK]: 'webhook',
+    [RateLimitType.STRIPE_CHECKOUT]: 'stripeCheckout',
+    [RateLimitType.STRIPE_SUBSCRIPTION_READ]: 'stripeSubscriptionRead',
+    [RateLimitType.STRIPE_SUBSCRIPTION_UPDATE]: 'stripeSubscriptionUpdate',
+    [RateLimitType.STRIPE_FAMILY_UPDATE]: 'stripeFamilyUpdate',
+    [RateLimitType.STRIPE_PORTAL]: 'stripePortal',
+    [RateLimitType.STRIPE_ADDON_MANAGE]: 'stripeAddonManage',
   };
 
   const redisType = rateLimitTypeMap[type];
@@ -390,13 +396,16 @@ export async function checkRateLimit(
   let skipForAdmin = false;
   if (ignoreAdmin) {
     try {
-      const userDoc = await getDb().collection("users").doc(uid).get();
+      const userDoc = await getDb().collection('users').doc(uid).get();
       if (userDoc.exists && userDoc.data()?.isAdmin) {
-        logger.debug("Rate limit bypassed for admin user", createLogContext({uid}));
+        logger.debug('Rate limit bypassed for admin user', createLogContext({ uid }));
         skipForAdmin = true;
       }
     } catch (error) {
-      logger.warn("Failed to check admin status for rate limiting", formatErrorForLogging(error, {uid}));
+      logger.warn(
+        'Failed to check admin status for rate limiting',
+        formatErrorForLogging(error, { uid })
+      );
       // Continue with rate limiting if admin check fails
     }
   }
@@ -412,16 +421,12 @@ export async function checkRateLimit(
     return uid;
   } catch (error: any) {
     // If it's a SecurityError (rate limit exceeded), convert to Firebase error
-    if (error.code === "RATE_LIMIT_EXCEEDED") {
-      throw createError(
-        ErrorCode.RESOURCE_EXHAUSTED,
-        error.message,
-        error.details
-      );
+    if (error.code === 'RATE_LIMIT_EXCEEDED') {
+      throw createError(ErrorCode.RESOURCE_EXHAUSTED, error.message, error.details);
     }
 
     // Log other errors but don't block the request
-    logger.error("Rate limit check failed", formatErrorForLogging(error, {uid}));
+    logger.error('Rate limit check failed', formatErrorForLogging(error, { uid }));
     return uid;
   }
 }
@@ -436,47 +441,48 @@ export async function checkRateLimitByIP(
   request: CallableRequest,
   config: RateLimitConfig = {}
 ): Promise<void> {
-  const {
-    type = RateLimitType.AUTH,
-  } = config;
+  const { type = RateLimitType.AUTH } = config;
 
   // Get IP address from request
-  const xForwardedFor = request.rawRequest?.headers?.["x-forwarded-for"];
-  const ip = request.rawRequest?.ip ||
-             (typeof xForwardedFor === "string" ? xForwardedFor.split(",")[0]?.trim() : undefined) ||
-             "unknown";
+  const xForwardedFor = request.rawRequest?.headers?.['x-forwarded-for'];
+  const ip =
+    request.rawRequest?.ip ||
+    (typeof xForwardedFor === 'string' ? xForwardedFor.split(',')[0]?.trim() : undefined) ||
+    'unknown';
 
-  if (ip === "unknown") {
-    logger.warn("Unable to determine IP address for rate limiting");
+  if (ip === 'unknown') {
+    logger.warn('Unable to determine IP address for rate limiting');
     return; // Don't block if we can't determine IP
   }
 
   // Map our RateLimitType to Redis RateLimitType
   const rateLimitTypeMap: Record<RateLimitType, RedisRateLimitType> = {
-    [RateLimitType.API]: "api",
-    [RateLimitType.AUTH]: "auth",
-    [RateLimitType.MEDIA]: "media",
-    [RateLimitType.UPLOAD]: "upload",
-    [RateLimitType.WRITE]: "write",
-    [RateLimitType.SENSITIVE]: "sensitive",
-    [RateLimitType.SMS]: "sms",
-    [RateLimitType.SUPPORT]: "support",
-    [RateLimitType.SIGNAL_KEY_PUBLISH]: "signalKeyPublish",
-    [RateLimitType.SIGNAL_KEY_RETRIEVE]: "signalKeyRetrieve",
-    [RateLimitType.SIGNAL_VERIFICATION]: "signalVerification",
-    [RateLimitType.SIGNAL_MAINTENANCE]: "signalMaintenance",
-    [RateLimitType.EMAIL_VERIFICATION_SEND]: "emailVerificationSend",
-    [RateLimitType.EMAIL_VERIFICATION_VERIFY]: "emailVerificationVerify",
-    [RateLimitType.CHECKOUT]: "checkout",
-    [RateLimitType.SUBSCRIPTION_MODIFY]: "subscriptionModify",
-    [RateLimitType.REFERRAL]: "referral",
-    [RateLimitType.WEBHOOK]: "webhook",
-    [RateLimitType.STRIPE_CHECKOUT]: "stripeCheckout",
-    [RateLimitType.STRIPE_SUBSCRIPTION_READ]: "stripeSubscriptionRead",
-    [RateLimitType.STRIPE_SUBSCRIPTION_UPDATE]: "stripeSubscriptionUpdate",
-    [RateLimitType.STRIPE_FAMILY_UPDATE]: "stripeFamilyUpdate",
-    [RateLimitType.STRIPE_PORTAL]: "stripePortal",
-    [RateLimitType.STRIPE_ADDON_MANAGE]: "stripeAddonManage",
+    [RateLimitType.API]: 'api',
+    [RateLimitType.AUTH]: 'auth',
+    [RateLimitType.MEDIA]: 'media',
+    [RateLimitType.UPLOAD]: 'upload',
+    [RateLimitType.WRITE]: 'write',
+    [RateLimitType.SENSITIVE]: 'sensitive',
+    [RateLimitType.SMS]: 'sms',
+    [RateLimitType.SUPPORT]: 'support',
+    [RateLimitType.SIGNAL_KEY_PUBLISH]: 'signalKeyPublish',
+    [RateLimitType.SIGNAL_KEY_RETRIEVE]: 'signalKeyRetrieve',
+    [RateLimitType.SIGNAL_VERIFICATION]: 'signalVerification',
+    [RateLimitType.SIGNAL_MAINTENANCE]: 'signalMaintenance',
+    [RateLimitType.EMAIL_VERIFICATION_SEND]: 'emailVerificationSend',
+    [RateLimitType.EMAIL_VERIFICATION_VERIFY]: 'emailVerificationVerify',
+    [RateLimitType.EMAIL_PREFERENCE_UPDATE]: 'emailPreferenceUpdate',
+    [RateLimitType.ADMIN_EMAIL_MANAGEMENT]: 'adminEmailManagement',
+    [RateLimitType.CHECKOUT]: 'checkout',
+    [RateLimitType.SUBSCRIPTION_MODIFY]: 'subscriptionModify',
+    [RateLimitType.REFERRAL]: 'referral',
+    [RateLimitType.WEBHOOK]: 'webhook',
+    [RateLimitType.STRIPE_CHECKOUT]: 'stripeCheckout',
+    [RateLimitType.STRIPE_SUBSCRIPTION_READ]: 'stripeSubscriptionRead',
+    [RateLimitType.STRIPE_SUBSCRIPTION_UPDATE]: 'stripeSubscriptionUpdate',
+    [RateLimitType.STRIPE_FAMILY_UPDATE]: 'stripeFamilyUpdate',
+    [RateLimitType.STRIPE_PORTAL]: 'stripePortal',
+    [RateLimitType.STRIPE_ADDON_MANAGE]: 'stripeAddonManage',
   };
 
   const redisType = rateLimitTypeMap[type];
@@ -489,26 +495,28 @@ export async function checkRateLimitByIP(
       skipForAdmin: false, // Never skip for IP-based rate limiting
     });
 
-    logger.debug("IP rate limit check passed", createLogContext({
-      ip: ip.substring(0, 8) + "...", // Log partial IP for debugging
-      type,
-    }));
+    logger.debug(
+      'IP rate limit check passed',
+      createLogContext({
+        ip: ip.substring(0, 8) + '...', // Log partial IP for debugging
+        type,
+      })
+    );
   } catch (error: any) {
     // If it's a SecurityError (rate limit exceeded), convert to Firebase error
-    if (error.code === "RATE_LIMIT_EXCEEDED") {
-      logger.warn("IP rate limit exceeded", createLogContext({
-        ip: ip.substring(0, 8) + "...",
-        type,
-      }));
-      throw createError(
-        ErrorCode.RESOURCE_EXHAUSTED,
-        error.message,
-        error.details
+    if (error.code === 'RATE_LIMIT_EXCEEDED') {
+      logger.warn(
+        'IP rate limit exceeded',
+        createLogContext({
+          ip: ip.substring(0, 8) + '...',
+          type,
+        })
       );
+      throw createError(ErrorCode.RESOURCE_EXHAUSTED, error.message, error.details);
     }
 
     // Log other errors but don't block the request
-    logger.error("IP rate limit check failed", formatErrorForLogging(error, {ip}));
+    logger.error('IP rate limit check failed', formatErrorForLogging(error, { ip }));
   }
 }
 
@@ -516,7 +524,7 @@ export async function checkRateLimitByIP(
  * Configuration for withAuth middleware
  */
 export interface AuthConfig {
-  authLevel?: "none" | "auth" | "verified" | "onboarded";
+  authLevel?: 'none' | 'auth' | 'verified' | 'onboarded';
   rateLimitConfig?: RateLimitConfig;
 }
 
@@ -531,7 +539,7 @@ export interface AuthConfig {
 export function withAuth<T>(
   handler: (request: CallableRequest) => Promise<T>,
   handlerName: string,
-  authLevel?: "none" | "auth" | "verified" | "onboarded",
+  authLevel?: 'none' | 'auth' | 'verified' | 'onboarded',
   rateLimitConfig?: RateLimitConfig
 ): (request: CallableRequest) => Promise<T>;
 export function withAuth<T>(
@@ -542,26 +550,26 @@ export function withAuth<T>(
 export function withAuth<T>(
   handler: (request: CallableRequest) => Promise<T>,
   handlerName: string,
-  authLevelOrConfig?: "none" | "auth" | "verified" | "onboarded" | AuthConfig,
+  authLevelOrConfig?: 'none' | 'auth' | 'verified' | 'onboarded' | AuthConfig,
   rateLimitConfig?: RateLimitConfig
 ) {
   // Handle both old and new API
   let config: AuthConfig;
-  if (typeof authLevelOrConfig === "string" || authLevelOrConfig === undefined) {
+  if (typeof authLevelOrConfig === 'string' || authLevelOrConfig === undefined) {
     config = {
-      authLevel: authLevelOrConfig || "auth",
+      authLevel: authLevelOrConfig || 'auth',
       rateLimitConfig,
     };
   } else {
     config = authLevelOrConfig;
   }
 
-  const {authLevel = "auth"} = config;
+  const { authLevel = 'auth' } = config;
 
   return withErrorHandling(async (request: CallableRequest): Promise<T> => {
     // Apply rate limiting if configured (before auth checks)
     if (config.rateLimitConfig) {
-      if (authLevel === "none") {
+      if (authLevel === 'none') {
         // For public endpoints, use IP-based rate limiting
         await checkRateLimitByIP(request, config.rateLimitConfig);
       } else {
@@ -571,21 +579,21 @@ export function withAuth<T>(
     }
 
     // Skip auth for 'none' level
-    if (authLevel === "none") {
+    if (authLevel === 'none') {
       return await handler(request);
     }
 
     // Apply appropriate auth check based on level
     switch (authLevel) {
-    case "auth":
-      requireAuth(request);
-      break;
-    case "verified":
-      await requireVerifiedUser(request);
-      break;
-    case "onboarded":
-      await requireOnboardedUser(request);
-      break;
+      case 'auth':
+        requireAuth(request);
+        break;
+      case 'verified':
+        await requireVerifiedUser(request);
+        break;
+      case 'onboarded':
+        await requireOnboardedUser(request);
+        break;
     }
 
     // Call the handler function
@@ -628,7 +636,7 @@ export function withResourceAccess<T>(
 ) {
   // Handle both old and new API
   let config: ResourceAccessMiddlewareConfig;
-  if ("resourceType" in resourceConfigOrConfig) {
+  if ('resourceType' in resourceConfigOrConfig) {
     // Old API
     config = {
       resourceConfig: resourceConfigOrConfig,
@@ -646,7 +654,7 @@ export function withResourceAccess<T>(
     }
 
     // Check resource access
-    const {resource} = await checkResourceAccess(request, config.resourceConfig);
+    const { resource } = await checkResourceAccess(request, config.resourceConfig);
 
     // Call the handler with the resource
     return await handler(request, resource);
@@ -673,4 +681,3 @@ export function createRateLimiter(
     });
   };
 }
-

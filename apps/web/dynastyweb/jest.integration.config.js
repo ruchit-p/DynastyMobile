@@ -1,9 +1,9 @@
-const nextJest = require('next/jest')
+const nextJest = require('next/jest');
 
 const createJestConfig = nextJest({
   // Provide the path to your Next.js app to load next.config.js and .env files in your test environment
   dir: './',
-})
+});
 
 // Integration test specific configuration
 const integrationJestConfig = {
@@ -13,7 +13,7 @@ const integrationJestConfig = {
   testEnvironment: 'jest-environment-jsdom',
   moduleDirectories: ['node_modules', 'src'],
   automock: false,
-  moduleNameMapping: {
+  moduleNameMapper: {
     // Handle module aliases (this will be automatically configured for you soon)
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@/components/(.*)$': '<rootDir>/src/components/$1',
@@ -27,9 +27,7 @@ const integrationJestConfig = {
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
   },
   // Only run integration tests
-  testMatch: [
-    '**/__tests__/integration/**/*.test.[jt]s?(x)',
-  ],
+  testMatch: ['**/__tests__/integration/**/*.test.[jt]s?(x)'],
   testPathIgnorePatterns: [
     '/node_modules/',
     '/.next/',
@@ -54,7 +52,7 @@ const integrationJestConfig = {
   maxWorkers: 1,
   // Environment variables for integration tests
   setupFiles: ['<rootDir>/src/__tests__/integration/env.js'],
-}
+};
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
-module.exports = createJestConfig(integrationJestConfig)
+module.exports = createJestConfig(integrationJestConfig);

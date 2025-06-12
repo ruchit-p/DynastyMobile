@@ -43,14 +43,14 @@ const TermsOfServiceScreen = () => {
           
           <View style={styles.header}>
             <Text style={styles.title}>Terms of Service</Text>
-            <Text style={styles.dateText}>Effective Date: [Insert Date]</Text>
-            <Text style={styles.dateText}>Last Updated: [Insert Date]</Text>
+            <Text style={styles.dateText}>Effective Date: January 6, 2025</Text>
+            <Text style={styles.dateText}>Last Updated: January 6, 2025</Text>
           </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>1. ACCEPTANCE OF TERMS</Text>
             <Text style={styles.bodyText}>
-              By using Dynasty, you agree to be bound by these Terms of Service. Dynasty is operated by [Company Name] and these Terms constitute a legally binding agreement between you and the Company.
+              By using Dynasty, you agree to be bound by these Terms of Service. Dynasty is operated by Dynasty Platforms LLC and these Terms constitute a legally binding agreement between you and the Company.
             </Text>
           </View>
 

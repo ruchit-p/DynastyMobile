@@ -12,7 +12,7 @@ jest.mock('@/services/VaultService');
 jest.mock('@/lib/firebase', () => ({
   auth: { currentUser: { uid: 'test-user-123' } },
   functions: {},
-  storage: {}
+  storage: {},
 }));
 
 // Mock IndexedDB
@@ -26,11 +26,11 @@ const mockIndexedDB = {
         objectStore: jest.fn(() => ({
           put: jest.fn(() => ({ onsuccess: jest.fn(), onerror: jest.fn() })),
           get: jest.fn(() => ({ onsuccess: jest.fn(), onerror: jest.fn() })),
-          delete: jest.fn(() => ({ onsuccess: jest.fn(), onerror: jest.fn() }))
-        }))
-      }))
-    }
-  }))
+          delete: jest.fn(() => ({ onsuccess: jest.fn(), onerror: jest.fn() })),
+        })),
+      })),
+    },
+  })),
 };
 
 // @ts-ignore
@@ -46,18 +46,18 @@ describe('Vault Encryption Integration', () => {
     // Initialize services
     cryptoService = WebVaultCryptoService.getInstance();
     keyManager = WebVaultKeyManager.getInstance();
-    
+
     // Mock vault service methods
     (vaultService.setUserId as jest.Mock) = jest.fn();
     (vaultService.isEncryptionEnabled as jest.Mock) = jest.fn().mockResolvedValue(true);
     (vaultService.uploadFile as jest.Mock) = jest.fn().mockResolvedValue({
       id: 'file-123',
       name: 'test.pdf',
-      isEncrypted: true
+      isEncrypted: true,
     });
-    (vaultService.downloadFile as jest.Mock) = jest.fn().mockResolvedValue(
-      new Blob(['decrypted content'], { type: 'application/pdf' })
-    );
+    (vaultService.downloadFile as jest.Mock) = jest
+      .fn()
+      .mockResolvedValue(new Blob(['decrypted content'], { type: 'application/pdf' }));
   });
 
   afterEach(() => {
@@ -71,8 +71,9 @@ describe('Vault Encryption Integration', () => {
     await act(async () => {
       const setupResult = await result.current.setupVault(testPassword, {
         enableBiometric: false,
-        keyRotation: true
+        keyRotation: true,
       });
+      console.log('Setup result:', setupResult);
       expect(setupResult.success).toBe(true);
     });
 
@@ -80,7 +81,7 @@ describe('Vault Encryption Integration', () => {
 
     // Step 2: Create test file
     const testFile = new File(['Test file content'], 'test.pdf', {
-      type: 'application/pdf'
+      type: 'application/pdf',
     });
 
     // Step 3: Encrypt and upload file
@@ -101,7 +102,7 @@ describe('Vault Encryption Integration', () => {
       undefined,
       expect.objectContaining({
         encrypt: expect.any(Function),
-        getCurrentKeyId: expect.any(Function)
+        getCurrentKeyId: expect.any(Function),
       })
     );
 
@@ -117,12 +118,12 @@ describe('Vault Encryption Integration', () => {
       mimeType: 'application/pdf',
       size: 1024,
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
     };
 
     await act(async () => {
       const blob = await vaultService.downloadFile(mockVaultItem, {
-        decrypt: result.current.decryptFile
+        decrypt: result.current.decryptFile,
       });
       expect(blob).toBeInstanceOf(Blob);
     });
@@ -151,7 +152,7 @@ describe('Vault Encryption Integration', () => {
 
     // Try to encrypt without setting up vault
     const largeFile = new File(['x'.repeat(1024 * 1024)], 'large.bin');
-    
+
     await act(async () => {
       const encryptResult = await result.current.encryptFile(largeFile, 'file-456');
       expect(encryptResult.success).toBe(false);
@@ -165,9 +166,9 @@ describe('Vault Encryption Integration', () => {
     // Test with weak password
     await act(async () => {
       const setupResult = await result.current.setupVault('weak', {
-        enableBiometric: false
+        enableBiometric: false,
       });
-      
+
       // The actual validation happens in the UI component
       // Here we just test that setup can handle any password
       expect(setupResult.success).toBe(true);
@@ -182,14 +183,14 @@ describe('Vault Encryption Integration', () => {
       response: {
         clientDataJSON: new ArrayBuffer(100),
         attestationObject: new ArrayBuffer(200),
-        getPublicKey: () => new ArrayBuffer(65)
+        getPublicKey: () => new ArrayBuffer(65),
       },
-      type: 'public-key'
+      type: 'public-key',
     };
 
     global.navigator.credentials = {
       create: jest.fn().mockResolvedValue(mockCredential),
-      get: jest.fn().mockResolvedValue(mockCredential)
+      get: jest.fn().mockResolvedValue(mockCredential),
     } as any;
 
     const { result } = renderHook(() => useWebVaultEncryption(userId));
@@ -197,7 +198,7 @@ describe('Vault Encryption Integration', () => {
     // Setup with biometric
     await act(async () => {
       const setupResult = await result.current.setupVault(testPassword, {
-        enableBiometric: true
+        enableBiometric: true,
       });
       expect(setupResult.success).toBe(true);
     });
@@ -228,7 +229,7 @@ describe('Vault Encryption Integration', () => {
     const files = [
       new File(['Content 1'], 'file1.txt', { type: 'text/plain' }),
       new File(['Content 2'], 'file2.txt', { type: 'text/plain' }),
-      new File(['Content 3'], 'file3.txt', { type: 'text/plain' })
+      new File(['Content 3'], 'file3.txt', { type: 'text/plain' }),
     ];
 
     const fileIds = ['file-1', 'file-2', 'file-3'];
@@ -236,7 +237,7 @@ describe('Vault Encryption Integration', () => {
     // Encrypt all files
     await act(async () => {
       const results = await result.current.encryptFiles(files, fileIds);
-      
+
       expect(results).toHaveLength(3);
       results.forEach(result => {
         expect(result.success).toBe(true);
@@ -249,7 +250,7 @@ describe('Vault Encryption Integration', () => {
       progress: 100,
       status: 'complete',
       totalFiles: 3,
-      processedFiles: 3
+      processedFiles: 3,
     });
   });
 
@@ -257,13 +258,13 @@ describe('Vault Encryption Integration', () => {
     // Mock share link creation
     (vaultService.shareItem as jest.Mock) = jest.fn().mockResolvedValue({
       shareId: 'share-123',
-      shareLink: 'https://mydynastyapp.com/vault/share/share-123'
+      shareLink: 'https://mydynastyapp.com/vault/share/share-123',
     });
 
     const shareResult = await vaultService.shareItem('file-123', {
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
       allowDownload: true,
-      password: 'SharePassword123'
+      password: 'SharePassword123',
     });
 
     expect(shareResult.shareId).toBe('share-123');
@@ -271,7 +272,7 @@ describe('Vault Encryption Integration', () => {
     expect(vaultService.shareItem).toHaveBeenCalledWith('file-123', {
       expiresAt: expect.any(Date),
       allowDownload: true,
-      password: 'SharePassword123'
+      password: 'SharePassword123',
     });
   });
 });
