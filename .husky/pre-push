@@ -2,9 +2,12 @@
 . "$(dirname -- "$0")/_/husky.sh"
 
 echo "🔍 Running pre-push checks (Web + Firebase only)..."
+echo "📱 Mobile app checks are EXCLUDED from pre-push hooks"
 
 # Run linting first (faster feedback)
-echo "📝 Checking linting..."
+# Note: This only checks apps/web/dynastyweb and apps/firebase/functions
+# Mobile app (apps/mobile) is NOT included in these checks
+echo "📝 Checking linting (Web + Firebase)..."
 npm run lint:all
 if [ $? -ne 0 ]; then
   echo "❌ Linting failed. Push aborted."
@@ -13,7 +16,9 @@ if [ $? -ne 0 ]; then
 fi
 
 # Run tests
-echo "🧪 Running tests..."
+# Note: This only runs tests for Web and Firebase
+# Mobile app tests are NOT included
+echo "🧪 Running tests (Web + Firebase)..."
 npm run test:all
 if [ $? -ne 0 ]; then
   echo "❌ Tests failed. Push aborted."
@@ -21,4 +26,4 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-echo "✅ All checks passed. Proceeding with push..."
+echo "✅ All checks passed (Web + Firebase only). Proceeding with push..."
