@@ -1,15 +1,15 @@
-import {getFirestore, Timestamp, FieldValue} from "firebase-admin/firestore";
-import {logger} from "firebase-functions/v2";
+import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions/v2';
 import {
   Subscription,
   SubscriptionPlan,
   FamilyPlanMember,
   AuditAction,
-} from "../types/subscription";
-import {createError, ErrorCode} from "../utils/errors";
-import {SubscriptionService} from "../services/subscriptionService";
-import {StorageCalculationService} from "../services/storageCalculationService";
-import {PLAN_LIMITS} from "../config/stripeProducts";
+} from '../types/subscription';
+import { createError, ErrorCode } from '../utils/errors';
+import { SubscriptionService } from '../services/subscriptionService';
+import { StorageCalculationService } from '../services/storageCalculationService';
+import { PLAN_LIMITS } from '../config/stripeProducts';
 
 export interface FamilyMemberInvitation {
   id: string;
@@ -23,7 +23,7 @@ export interface FamilyMemberInvitation {
   invitedBy: string;
   invitedAt: Timestamp;
   expiresAt: Timestamp;
-  status: "pending" | "accepted" | "declined" | "expired" | "revoked";
+  status: 'pending' | 'accepted' | 'declined' | 'expired' | 'revoked';
   acceptedAt?: Timestamp;
   declinedAt?: Timestamp;
   revokedAt?: Timestamp;
@@ -55,7 +55,7 @@ export interface FamilyStorageReport {
     lastActivity?: Timestamp;
   }>;
   storageWarnings: Array<{
-    type: "approaching_limit" | "over_limit" | "member_inactive";
+    type: 'approaching_limit' | 'over_limit' | 'member_inactive';
     message: string;
     data?: any;
   }>;
@@ -100,26 +100,28 @@ export class FamilyPlanService {
       // Get subscription and validate
       const subscription = await this.subscriptionService.getSubscription(params.subscriptionId);
       if (!subscription) {
-        throw createError(ErrorCode.SUBSCRIPTION_NOT_FOUND, "Subscription not found");
+        throw createError(ErrorCode.SUBSCRIPTION_NOT_FOUND, 'Subscription not found');
       }
 
       if (subscription.plan !== SubscriptionPlan.FAMILY) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, "Not a family plan subscription");
+        throw createError(ErrorCode.INVALID_ARGUMENT, 'Not a family plan subscription');
       }
 
       if (subscription.userId !== params.familyOwnerId) {
-        throw createError(ErrorCode.PERMISSION_DENIED, "Only family owner can add members");
+        throw createError(ErrorCode.PERMISSION_DENIED, 'Only family owner can add members');
       }
 
       // Validate family member
       const validation = await this.validateFamilyMember(params.memberId, params.subscriptionId);
       if (!validation.isValid) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, validation.reason || "Invalid family member");
+        throw createError(ErrorCode.INVALID_ARGUMENT, validation.reason || 'Invalid family member');
       }
 
-      // Check family size limit
-      const currentMemberCount = (subscription.familyMembers?.filter((m) => m.status === "active").length || 0) + 1; // +1 for owner
-      if (currentMemberCount >= PLAN_LIMITS.family.maxMembers) {
+      // OPTIMIZATION: Use O(1) counter instead of O(n) array filtering
+      // Check family size limit using activeMemberCount counter
+      const currentActiveCount = subscription.activeMemberCount || 0;
+      if (currentActiveCount >= PLAN_LIMITS.family.maxMembers - 1) {
+        // -1 for owner
         throw createError(
           ErrorCode.FAMILY_MEMBER_LIMIT_EXCEEDED,
           `Family plan supports up to ${PLAN_LIMITS.family.maxMembers} members including the owner`
@@ -128,11 +130,14 @@ export class FamilyPlanService {
 
       // Verify family tree relationship (unless skipped)
       if (!params.skipFamilyTreeVerification) {
-        const isRelated = await this.verifyFamilyTreeRelationship(params.familyOwnerId, params.memberId);
+        const isRelated = await this.verifyFamilyTreeRelationship(
+          params.familyOwnerId,
+          params.memberId
+        );
         if (!isRelated) {
           throw createError(
             ErrorCode.FAMILY_RELATIONSHIP_NOT_VERIFIED,
-            "Family relationship could not be verified in family tree"
+            'Family relationship could not be verified in family tree'
           );
         }
       }
@@ -152,19 +157,22 @@ export class FamilyPlanService {
         userId: params.memberId,
         email: params.memberEmail,
         displayName: params.memberName,
-        role: "member",
-        status: "invited",
+        role: 'member',
+        status: 'invited',
         invitedAt: Timestamp.now(),
         invitedBy: params.invitedBy,
         addedBy: params.invitedBy,
         storageUsedBytes: 0,
       };
 
-      await this.db.collection("subscriptions").doc(params.subscriptionId).update({
-        familyMembers: FieldValue.arrayUnion(memberToAdd),
-        updatedAt: Timestamp.now(),
-        lastModifiedBy: params.invitedBy,
-      });
+      await this.db
+        .collection('subscriptions')
+        .doc(params.subscriptionId)
+        .update({
+          familyMembers: FieldValue.arrayUnion(memberToAdd),
+          updatedAt: Timestamp.now(),
+          lastModifiedBy: params.invitedBy,
+        });
 
       // Add audit log entry
       await this.subscriptionService.addAuditLogEntry(params.subscriptionId, {
@@ -183,7 +191,7 @@ export class FamilyPlanService {
         await this.sendFamilyInvitationEmail(invitation);
       }
 
-      logger.info("Family member added successfully", {
+      logger.info('Family member added successfully', {
         subscriptionId: params.subscriptionId,
         memberId: params.memberId,
         invitationId: invitation.id,
@@ -192,7 +200,7 @@ export class FamilyPlanService {
 
       return invitation;
     } catch (error) {
-      logger.error("Failed to add family member", {params, error});
+      logger.error('Failed to add family member', { params, error });
       throw error;
     }
   }
@@ -205,34 +213,35 @@ export class FamilyPlanService {
       // Get subscription and validate
       const subscription = await this.subscriptionService.getSubscription(params.subscriptionId);
       if (!subscription) {
-        throw createError(ErrorCode.SUBSCRIPTION_NOT_FOUND, "Subscription not found");
+        throw createError(ErrorCode.SUBSCRIPTION_NOT_FOUND, 'Subscription not found');
       }
 
       if (subscription.userId !== params.familyOwnerId) {
-        throw createError(ErrorCode.PERMISSION_DENIED, "Only family owner can remove members");
+        throw createError(ErrorCode.PERMISSION_DENIED, 'Only family owner can remove members');
       }
 
       // Find the member
-      const memberIndex = subscription.familyMembers?.findIndex((m) => m.userId === params.memberId);
+      const memberIndex = subscription.familyMembers?.findIndex(m => m.userId === params.memberId);
       if (memberIndex === undefined || memberIndex === -1) {
-        throw createError(ErrorCode.NOT_FOUND, "Family member not found");
+        throw createError(ErrorCode.NOT_FOUND, 'Family member not found');
       }
 
       const member = subscription.familyMembers![memberIndex];
 
       // Check if member has accepted the invitation
-      const hasAcceptedInvitation = member.status === "active" && member.acceptedAt;
+      const hasAcceptedInvitation = member.status === 'active' && member.acceptedAt;
 
       // Calculate grace period if applicable
       const gracePeriodDays = params.gracePeriodDays || (hasAcceptedInvitation ? 7 : 0);
-      const gracePeriodEnd = gracePeriodDays > 0 ?
-        new Date(Date.now() + gracePeriodDays * 24 * 60 * 60 * 1000) :
-        new Date();
+      const gracePeriodEnd =
+        gracePeriodDays > 0
+          ? new Date(Date.now() + gracePeriodDays * 24 * 60 * 60 * 1000)
+          : new Date();
 
       // Update member status
       const updatedMember: FamilyPlanMember = {
         ...member,
-        status: "removed",
+        status: 'removed',
         removedAt: Timestamp.now(),
         removedBy: params.removedBy,
         removalReason: params.reason,
@@ -242,16 +251,16 @@ export class FamilyPlanService {
       const updatedMembers = [...(subscription.familyMembers || [])];
       updatedMembers[memberIndex] = updatedMember;
 
-      await this.db.collection("subscriptions").doc(params.subscriptionId).update({
+      await this.db.collection('subscriptions').doc(params.subscriptionId).update({
         familyMembers: updatedMembers,
         updatedAt: Timestamp.now(),
         lastModifiedBy: params.removedBy,
       });
 
       // Update member's user document to remove family plan access
-      await this.db.collection("users").doc(params.memberId).update({
+      await this.db.collection('users').doc(params.memberId).update({
         familyPlanOwnerId: FieldValue.delete(),
-        familyPlanStatus: "removed",
+        familyPlanStatus: 'removed',
         familyPlanRemovedAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
       });
@@ -278,7 +287,7 @@ export class FamilyPlanService {
       // Recalculate family storage allocation
       await this.recalculateFamilyStorage(params.subscriptionId);
 
-      logger.info("Family member removed successfully", {
+      logger.info('Family member removed successfully', {
         subscriptionId: params.subscriptionId,
         memberId: params.memberId,
         removedBy: params.removedBy,
@@ -286,7 +295,7 @@ export class FamilyPlanService {
         gracePeriodDays,
       });
     } catch (error) {
-      logger.error("Failed to remove family member", {params, error});
+      logger.error('Failed to remove family member', { params, error });
       throw error;
     }
   }
@@ -297,49 +306,49 @@ export class FamilyPlanService {
   async acceptFamilyInvitation(invitationId: string, memberId: string): Promise<void> {
     try {
       // Get invitation
-      const invitationDoc = await this.db.collection("familyInvitations").doc(invitationId).get();
+      const invitationDoc = await this.db.collection('familyInvitations').doc(invitationId).get();
       if (!invitationDoc.exists) {
-        throw createError(ErrorCode.NOT_FOUND, "Invitation not found");
+        throw createError(ErrorCode.NOT_FOUND, 'Invitation not found');
       }
 
       const invitation = invitationDoc.data() as FamilyMemberInvitation;
 
       // Validate invitation
       if (invitation.memberId !== memberId) {
-        throw createError(ErrorCode.PERMISSION_DENIED, "Not authorized to accept this invitation");
+        throw createError(ErrorCode.PERMISSION_DENIED, 'Not authorized to accept this invitation');
       }
 
-      if (invitation.status !== "pending") {
+      if (invitation.status !== 'pending') {
         throw createError(ErrorCode.INVALID_ARGUMENT, `Invitation is ${invitation.status}`);
       }
 
       if (invitation.expiresAt.toDate() < new Date()) {
-        throw createError(ErrorCode.INVITATION_EXPIRED, "Invitation has expired");
+        throw createError(ErrorCode.INVITATION_EXPIRED, 'Invitation has expired');
       }
 
       // Update invitation status
-      await this.db.collection("familyInvitations").doc(invitationId).update({
-        status: "accepted",
+      await this.db.collection('familyInvitations').doc(invitationId).update({
+        status: 'accepted',
         acceptedAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
       });
 
       // Update subscription
-      const subscriptionRef = this.db.collection("subscriptions").doc(invitation.subscriptionId);
+      const subscriptionRef = this.db.collection('subscriptions').doc(invitation.subscriptionId);
       const subscriptionDoc = await subscriptionRef.get();
 
       if (!subscriptionDoc.exists) {
-        throw createError(ErrorCode.SUBSCRIPTION_NOT_FOUND, "Subscription not found");
+        throw createError(ErrorCode.SUBSCRIPTION_NOT_FOUND, 'Subscription not found');
       }
 
       const subscription = subscriptionDoc.data() as Subscription;
-      const memberIndex = subscription.familyMembers?.findIndex((m) => m.userId === memberId);
+      const memberIndex = subscription.familyMembers?.findIndex(m => m.userId === memberId);
 
       if (memberIndex !== undefined && memberIndex !== -1) {
         const updatedMembers = [...(subscription.familyMembers || [])];
         updatedMembers[memberIndex] = {
           ...updatedMembers[memberIndex],
-          status: "active",
+          status: 'active',
           acceptedAt: Timestamp.now(),
           joinedAt: Timestamp.now(),
         };
@@ -351,9 +360,9 @@ export class FamilyPlanService {
       }
 
       // Update member's user document
-      await this.db.collection("users").doc(memberId).update({
+      await this.db.collection('users').doc(memberId).update({
         familyPlanOwnerId: invitation.familyOwnerId,
-        familyPlanStatus: "active",
+        familyPlanStatus: 'active',
         familyPlanJoinedAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
       });
@@ -361,14 +370,14 @@ export class FamilyPlanService {
       // Send welcome notification
       await this.sendFamilyWelcomeNotification(invitation);
 
-      logger.info("Family invitation accepted", {
+      logger.info('Family invitation accepted', {
         invitationId,
         subscriptionId: invitation.subscriptionId,
         memberId,
         familyOwnerId: invitation.familyOwnerId,
       });
     } catch (error) {
-      logger.error("Failed to accept family invitation", {invitationId, memberId, error});
+      logger.error('Failed to accept family invitation', { invitationId, memberId, error });
       throw error;
     }
   }
@@ -381,11 +390,11 @@ export class FamilyPlanService {
       // Get subscription
       const subscription = await this.subscriptionService.getSubscription(subscriptionId);
       if (!subscription) {
-        throw createError(ErrorCode.SUBSCRIPTION_NOT_FOUND, "Subscription not found");
+        throw createError(ErrorCode.SUBSCRIPTION_NOT_FOUND, 'Subscription not found');
       }
 
       if (subscription.plan !== SubscriptionPlan.FAMILY) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, "Not a family plan subscription");
+        throw createError(ErrorCode.INVALID_ARGUMENT, 'Not a family plan subscription');
       }
 
       // Calculate family storage
@@ -395,7 +404,7 @@ export class FamilyPlanService {
       );
 
       // Build member usage array
-      const memberUsage = familyStorage.memberBreakdown.map((member) => ({
+      const memberUsage = familyStorage.memberBreakdown.map(member => ({
         userId: member.userId,
         email: member.email,
         displayName: member.displayName,
@@ -405,35 +414,40 @@ export class FamilyPlanService {
       }));
 
       // Generate warnings
-      const warnings: FamilyStorageReport["storageWarnings"] = [];
-      const usagePercentage = (familyStorage.sharedUsageBytes / (familyStorage.totalFamilyStorageGB * 1024 * 1024 * 1024)) * 100;
+      const warnings: FamilyStorageReport['storageWarnings'] = [];
+      const usagePercentage =
+        (familyStorage.sharedUsageBytes /
+          (familyStorage.totalFamilyStorageGB * 1024 * 1024 * 1024)) *
+        100;
 
       if (usagePercentage > 90) {
         warnings.push({
-          type: "approaching_limit",
-          message: "Family storage is over 90% full. Consider upgrading or removing files.",
-          data: {usagePercentage},
+          type: 'approaching_limit',
+          message: 'Family storage is over 90% full. Consider upgrading or removing files.',
+          data: { usagePercentage },
         });
       }
 
       if (familyStorage.availableBytes <= 0) {
         warnings.push({
-          type: "over_limit",
-          message: "Family storage limit exceeded. New uploads will be blocked.",
-          data: {overageBytes: Math.abs(familyStorage.availableBytes)},
+          type: 'over_limit',
+          message: 'Family storage limit exceeded. New uploads will be blocked.',
+          data: { overageBytes: Math.abs(familyStorage.availableBytes) },
         });
       }
 
       return {
         totalFamilyStorageGB: familyStorage.totalFamilyStorageGB,
-        usedStorageGB: Math.round((familyStorage.sharedUsageBytes / (1024 * 1024 * 1024)) * 100) / 100,
-        availableStorageGB: Math.round((familyStorage.availableBytes / (1024 * 1024 * 1024)) * 100) / 100,
+        usedStorageGB:
+          Math.round((familyStorage.sharedUsageBytes / (1024 * 1024 * 1024)) * 100) / 100,
+        availableStorageGB:
+          Math.round((familyStorage.availableBytes / (1024 * 1024 * 1024)) * 100) / 100,
         usagePercentage,
         memberUsage,
         storageWarnings: warnings,
       };
     } catch (error) {
-      logger.error("Failed to generate family storage report", {subscriptionId, error});
+      logger.error('Failed to generate family storage report', { subscriptionId, error });
       throw error;
     }
   }
@@ -441,12 +455,15 @@ export class FamilyPlanService {
   /**
    * Validate family member eligibility
    */
-  private async validateFamilyMember(memberId: string, subscriptionId: string): Promise<FamilyMemberValidationResult> {
+  private async validateFamilyMember(
+    memberId: string,
+    subscriptionId: string
+  ): Promise<FamilyMemberValidationResult> {
     try {
       // Check if member exists
-      const memberDoc = await this.db.collection("users").doc(memberId).get();
+      const memberDoc = await this.db.collection('users').doc(memberId).get();
       if (!memberDoc.exists) {
-        return {isValid: false, reason: "User not found"};
+        return { isValid: false, reason: 'User not found' };
       }
 
       const memberData = memberDoc.data()!;
@@ -454,22 +471,22 @@ export class FamilyPlanService {
       // Check if member is already in this family plan
       const subscription = await this.subscriptionService.getSubscription(subscriptionId);
       const isAlreadyMember = subscription?.familyMembers?.some(
-        (m) => m.userId === memberId && (m.status === "active" || m.status === "invited")
+        m => m.userId === memberId && (m.status === 'active' || m.status === 'invited')
       );
 
       if (isAlreadyMember) {
-        return {isValid: false, reason: "User is already a member of this family plan"};
+        return { isValid: false, reason: 'User is already a member of this family plan' };
       }
 
       // Check if member is in another family plan
       if (memberData.familyPlanOwnerId) {
-        return {isValid: false, reason: "User is already in another family plan"};
+        return { isValid: false, reason: 'User is already in another family plan' };
       }
 
       // Check if member has their own subscription
       const memberSubscription = await this.subscriptionService.getUserSubscription(memberId);
-      if (memberSubscription && memberSubscription.status === "active") {
-        return {isValid: false, reason: "User has their own active subscription"};
+      if (memberSubscription && memberSubscription.status === 'active') {
+        return { isValid: false, reason: 'User has their own active subscription' };
       }
 
       return {
@@ -481,8 +498,8 @@ export class FamilyPlanService {
         },
       };
     } catch (error) {
-      logger.error("Failed to validate family member", {memberId, subscriptionId, error});
-      return {isValid: false, reason: "Validation failed"};
+      logger.error('Failed to validate family member', { memberId, subscriptionId, error });
+      return { isValid: false, reason: 'Validation failed' };
     }
   }
 
@@ -495,10 +512,11 @@ export class FamilyPlanService {
       // For now, we'll implement a basic check
 
       // Get family tree connections for the owner
-      const connectionsQuery = await this.db.collection("familyConnections")
-        .where("fromUserId", "==", ownerId)
-        .where("toUserId", "==", memberId)
-        .where("verified", "==", true)
+      const connectionsQuery = await this.db
+        .collection('familyConnections')
+        .where('fromUserId', '==', ownerId)
+        .where('toUserId', '==', memberId)
+        .where('verified', '==', true)
         .limit(1)
         .get();
 
@@ -507,16 +525,17 @@ export class FamilyPlanService {
       }
 
       // Check reverse connection
-      const reverseConnectionsQuery = await this.db.collection("familyConnections")
-        .where("fromUserId", "==", memberId)
-        .where("toUserId", "==", ownerId)
-        .where("verified", "==", true)
+      const reverseConnectionsQuery = await this.db
+        .collection('familyConnections')
+        .where('fromUserId', '==', memberId)
+        .where('toUserId', '==', ownerId)
+        .where('verified', '==', true)
         .limit(1)
         .get();
 
       return !reverseConnectionsQuery.empty;
     } catch (error) {
-      logger.error("Failed to verify family tree relationship", {ownerId, memberId, error});
+      logger.error('Failed to verify family tree relationship', { ownerId, memberId, error });
       return false;
     }
   }
@@ -533,25 +552,25 @@ export class FamilyPlanService {
     invitedBy: string;
   }): Promise<FamilyMemberInvitation> {
     // Get family owner details
-    const ownerDoc = await this.db.collection("users").doc(params.familyOwnerId).get();
+    const ownerDoc = await this.db.collection('users').doc(params.familyOwnerId).get();
     const ownerData = ownerDoc.data();
 
     const invitation: FamilyMemberInvitation = {
-      id: "", // Will be set by Firestore
+      id: '', // Will be set by Firestore
       subscriptionId: params.subscriptionId,
       familyOwnerId: params.familyOwnerId,
-      familyOwnerEmail: ownerData?.email || "",
-      familyOwnerName: ownerData?.displayName || ownerData?.email || "",
+      familyOwnerEmail: ownerData?.email || '',
+      familyOwnerName: ownerData?.displayName || ownerData?.email || '',
       memberId: params.memberId,
       memberEmail: params.memberEmail,
       memberName: params.memberName,
       invitedBy: params.invitedBy,
       invitedAt: Timestamp.now(),
       expiresAt: Timestamp.fromDate(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)), // 14 days
-      status: "pending",
+      status: 'pending',
     };
 
-    const docRef = await this.db.collection("familyInvitations").add(invitation);
+    const docRef = await this.db.collection('familyInvitations').add(invitation);
     invitation.id = docRef.id;
 
     return invitation;
@@ -570,18 +589,18 @@ export class FamilyPlanService {
         subscription
       );
 
-      await this.db.collection("subscriptions").doc(subscriptionId).update({
-        "storageAllocation.lastCalculated": Timestamp.now(),
-        "updatedAt": Timestamp.now(),
+      await this.db.collection('subscriptions').doc(subscriptionId).update({
+        'storageAllocation.lastCalculated': Timestamp.now(),
+        updatedAt: Timestamp.now(),
       });
 
-      logger.info("Family storage recalculated", {
+      logger.info('Family storage recalculated', {
         subscriptionId,
         totalStorageGB: storageResult.totalFamilyStorageGB,
         usedBytes: storageResult.sharedUsageBytes,
       });
     } catch (error) {
-      logger.error("Failed to recalculate family storage", {subscriptionId, error});
+      logger.error('Failed to recalculate family storage', { subscriptionId, error });
     }
   }
 
@@ -591,7 +610,7 @@ export class FamilyPlanService {
   private async sendFamilyInvitationEmail(invitation: FamilyMemberInvitation): Promise<void> {
     try {
       // This would integrate with your email service
-      logger.info("Would send family invitation email", {
+      logger.info('Would send family invitation email', {
         to: invitation.memberEmail,
         from: invitation.familyOwnerEmail,
         invitationId: invitation.id,
@@ -600,7 +619,7 @@ export class FamilyPlanService {
       // TODO: Implement email sending logic
       // await emailService.sendFamilyInvitation(invitation);
     } catch (error) {
-      logger.error("Failed to send family invitation email", {invitation, error});
+      logger.error('Failed to send family invitation email', { invitation, error });
     }
   }
 
@@ -613,7 +632,7 @@ export class FamilyPlanService {
     gracePeriodDays?: number
   ): Promise<void> {
     try {
-      logger.info("Would send family removal notification", {
+      logger.info('Would send family removal notification', {
         to: member.email,
         memberId: member.userId,
         reason,
@@ -622,7 +641,7 @@ export class FamilyPlanService {
 
       // TODO: Implement notification sending logic
     } catch (error) {
-      logger.error("Failed to send family removal notification", {member, error});
+      logger.error('Failed to send family removal notification', { member, error });
     }
   }
 
@@ -631,14 +650,14 @@ export class FamilyPlanService {
    */
   private async sendFamilyWelcomeNotification(invitation: FamilyMemberInvitation): Promise<void> {
     try {
-      logger.info("Would send family welcome notification", {
+      logger.info('Would send family welcome notification', {
         to: invitation.memberEmail,
         familyOwner: invitation.familyOwnerName,
       });
 
       // TODO: Implement welcome notification logic
     } catch (error) {
-      logger.error("Failed to send family welcome notification", {invitation, error});
+      logger.error('Failed to send family welcome notification', { invitation, error });
     }
   }
 }

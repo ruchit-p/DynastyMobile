@@ -226,7 +226,7 @@ export const sendMessageNotification = onCall(
         });
 
         // Process each user in batch, handling missing users
-        batch.forEach(userId => {
+        batch.forEach((userId: string) => {
           const userData = batchResults.get(userId);
           recipientData.push({
             userId,
