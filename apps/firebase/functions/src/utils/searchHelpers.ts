@@ -7,14 +7,14 @@
  * removing special characters, and trimming whitespace
  */
 export function normalizeSearchText(text: string): string {
-  if (!text) return '';
+  if (!text) return "";
 
   return text
     .toLowerCase()
-    .normalize('NFD') // Normalize unicode characters
-    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
-    .replace(/[^a-z0-9\s]/g, ' ') // Replace special chars with spaces
-    .replace(/\s+/g, ' ') // Collapse multiple spaces
+    .normalize("NFD") // Normalize unicode characters
+    .replace(/[\u0300-\u036f]/g, "") // Remove diacritics
+    .replace(/[^a-z0-9\s]/g, " ") // Replace special chars with spaces
+    .replace(/\s+/g, " ") // Collapse multiple spaces
     .trim();
 }
 
@@ -26,12 +26,12 @@ export function extractKeywords(text: string): string[] {
   if (!text) return [];
 
   const normalized = normalizeSearchText(text);
-  const words = normalized.split(' ');
+  const words = normalized.split(" ");
 
   // Filter out short words and create unique set
   const keywords = new Set<string>();
 
-  words.forEach(word => {
+  words.forEach((word) => {
     if (word.length >= 3) {
       keywords.add(word);
 
@@ -73,15 +73,15 @@ export function generateStorySearchFields(
   }
 
   // Extract text content from blocks
-  let contentText = '';
+  let contentText = "";
   if (subtitle) {
-    contentText += subtitle + ' ';
+    contentText += subtitle + " ";
   }
 
   if (blocks && Array.isArray(blocks)) {
-    blocks.forEach(block => {
-      if (block.type === 'text' && block.data) {
-        contentText += block.data + ' ';
+    blocks.forEach((block) => {
+      if (block.type === "text" && block.data) {
+        contentText += block.data + " ";
       }
     });
   }
@@ -91,7 +91,7 @@ export function generateStorySearchFields(
   }
 
   // Generate keywords from title and content
-  const allText = `${title || ''} ${subtitle || ''} ${contentText}`;
+  const allText = `${title || ""} ${subtitle || ""} ${contentText}`;
   fields.searchKeywords = extractKeywords(allText);
 
   return fields;
@@ -123,7 +123,7 @@ export function generateEventSearchFields(
   }
 
   // Generate keywords from all text
-  const allText = `${title || ''} ${description || ''} ${locationAddress || ''}`;
+  const allText = `${title || ""} ${description || ""} ${locationAddress || ""}`;
   fields.searchKeywords = extractKeywords(allText);
 
   return fields;

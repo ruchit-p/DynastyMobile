@@ -1,6 +1,6 @@
-import * as crypto from 'crypto';
-import { logger } from 'firebase-functions/v2';
-import { createLogContext } from '../../utils/sanitization';
+import * as crypto from "crypto";
+import {logger} from "firebase-functions/v2";
+import {createLogContext} from "../../utils/sanitization";
 
 interface SNSMessage {
   Type: string;
@@ -23,9 +23,9 @@ interface SNSMessage {
 export async function validateSNSSignature(message: SNSMessage): Promise<boolean> {
   try {
     // Check signature version
-    if (message.SignatureVersion !== '1') {
+    if (message.SignatureVersion !== "1") {
       logger.warn(
-        'Unsupported SNS signature version',
+        "Unsupported SNS signature version",
         createLogContext({
           signatureVersion: message.SignatureVersion,
           messageId: message.MessageId,
@@ -37,7 +37,7 @@ export async function validateSNSSignature(message: SNSMessage): Promise<boolean
     // Validate signing certificate URL
     if (!isValidSigningCertURL(message.SigningCertURL)) {
       logger.warn(
-        'Invalid signing certificate URL',
+        "Invalid signing certificate URL",
         createLogContext({
           signingCertURL: message.SigningCertURL,
           messageId: message.MessageId,
@@ -50,7 +50,7 @@ export async function validateSNSSignature(message: SNSMessage): Promise<boolean
     const certificate = await downloadSigningCertificateWithCache(message.SigningCertURL);
     if (!certificate) {
       logger.error(
-        'Failed to download signing certificate',
+        "Failed to download signing certificate",
         createLogContext({
           signingCertURL: message.SigningCertURL,
           messageId: message.MessageId,
@@ -67,7 +67,7 @@ export async function validateSNSSignature(message: SNSMessage): Promise<boolean
 
     if (!isValid) {
       logger.warn(
-        'SNS signature verification failed',
+        "SNS signature verification failed",
         createLogContext({
           messageId: message.MessageId,
           type: message.Type,
@@ -78,7 +78,7 @@ export async function validateSNSSignature(message: SNSMessage): Promise<boolean
     return isValid;
   } catch (error) {
     logger.error(
-      'Error validating SNS signature',
+      "Error validating SNS signature",
       createLogContext({
         error: error instanceof Error ? error.message : String(error),
         messageId: message.MessageId,
@@ -96,13 +96,13 @@ function isValidSigningCertURL(url: string): boolean {
     const parsedURL = new URL(url);
 
     // Must be HTTPS
-    if (parsedURL.protocol !== 'https:') {
+    if (parsedURL.protocol !== "https:") {
       return false;
     }
 
     // Must be from sns.amazonaws.com or sns.<region>.amazonaws.com
     const hostname = parsedURL.hostname;
-    if (!hostname.endsWith('.amazonaws.com')) {
+    if (!hostname.endsWith(".amazonaws.com")) {
       return false;
     }
 
@@ -112,7 +112,7 @@ function isValidSigningCertURL(url: string): boolean {
     }
 
     // Path must end with .pem
-    if (!parsedURL.pathname.endsWith('.pem')) {
+    if (!parsedURL.pathname.endsWith(".pem")) {
       return false;
     }
 
@@ -133,7 +133,7 @@ async function downloadSigningCertificate(url: string): Promise<string | null> {
 
     if (!response.ok) {
       logger.error(
-        'Failed to download certificate',
+        "Failed to download certificate",
         createLogContext({
           url,
           status: response.status,
@@ -147,11 +147,11 @@ async function downloadSigningCertificate(url: string): Promise<string | null> {
 
     // Basic validation that it looks like a PEM certificate
     if (
-      !certificate.includes('-----BEGIN CERTIFICATE-----') ||
-      !certificate.includes('-----END CERTIFICATE-----')
+      !certificate.includes("-----BEGIN CERTIFICATE-----") ||
+      !certificate.includes("-----END CERTIFICATE-----")
     ) {
       logger.error(
-        'Downloaded content is not a valid PEM certificate',
+        "Downloaded content is not a valid PEM certificate",
         createLogContext({
           url,
           contentPreview: certificate.substring(0, 100),
@@ -163,7 +163,7 @@ async function downloadSigningCertificate(url: string): Promise<string | null> {
     return certificate;
   } catch (error) {
     logger.error(
-      'Error downloading signing certificate',
+      "Error downloading signing certificate",
       createLogContext({
         url,
         error: error instanceof Error ? error.message : String(error),
@@ -181,9 +181,9 @@ function buildStringToSign(message: SNSMessage): string {
 
   // Fields to include based on message type
   const fieldsToSign =
-    message.Type === 'SubscriptionConfirmation' || message.Type === 'UnsubscribeConfirmation'
-      ? ['Message', 'MessageId', 'SubscribeURL', 'Timestamp', 'Token', 'TopicArn', 'Type']
-      : ['Message', 'MessageId', 'Subject', 'Timestamp', 'TopicArn', 'Type'];
+    message.Type === "SubscriptionConfirmation" || message.Type === "UnsubscribeConfirmation" ?
+      ["Message", "MessageId", "SubscribeURL", "Timestamp", "Token", "TopicArn", "Type"] :
+      ["Message", "MessageId", "Subject", "Timestamp", "TopicArn", "Type"];
 
   // Build canonical string
   for (const field of fieldsToSign) {
@@ -193,7 +193,7 @@ function buildStringToSign(message: SNSMessage): string {
     }
   }
 
-  return fields.join('');
+  return fields.join("");
 }
 
 /**
@@ -202,14 +202,14 @@ function buildStringToSign(message: SNSMessage): string {
 function verifySignature(stringToSign: string, signature: string, certificate: string): boolean {
   try {
     // Create verifier
-    const verifier = crypto.createVerify('RSA-SHA1');
-    verifier.update(stringToSign, 'utf8');
+    const verifier = crypto.createVerify("RSA-SHA1");
+    verifier.update(stringToSign, "utf8");
 
     // Verify signature
-    return verifier.verify(certificate, signature, 'base64');
+    return verifier.verify(certificate, signature, "base64");
   } catch (error) {
     logger.error(
-      'Error verifying signature',
+      "Error verifying signature",
       createLogContext({
         error: error instanceof Error ? error.message : String(error),
       })

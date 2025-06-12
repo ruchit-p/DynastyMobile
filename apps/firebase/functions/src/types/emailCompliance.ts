@@ -1,4 +1,4 @@
-import { Timestamp } from 'firebase-admin/firestore';
+import {Timestamp} from "firebase-admin/firestore";
 
 /**
  * Email suppression list entry
@@ -8,9 +8,9 @@ export interface EmailSuppressionEntry {
   /** Normalized email address (lowercase) */
   email: string;
   /** Reason for suppression */
-  reason: 'bounce' | 'complaint' | 'unsubscribe';
+  reason: "bounce" | "complaint" | "unsubscribe";
   /** Type of suppression */
-  type: 'hard' | 'soft' | 'transient';
+  type: "hard" | "soft" | "transient";
   /** When the email was suppressed */
   suppressedAt: Timestamp;
   /** Whether the suppression is currently active */
@@ -84,7 +84,7 @@ export interface EmailPreferences {
   /** Consent history for GDPR compliance */
   consentHistory: Array<{
     /** Type of consent given/withdrawn */
-    type: 'opt-in' | 'opt-out' | 'preference-change';
+    type: "opt-in" | "opt-out" | "preference-change";
     /** Categories affected */
     categories: string[];
     /** When consent was given/withdrawn */
@@ -96,7 +96,7 @@ export interface EmailPreferences {
     /** Version of terms/privacy policy */
     policyVersion?: string;
     /** Method of consent (web, mobile, email link) */
-    method: 'web' | 'mobile' | 'email' | 'admin';
+    method: "web" | "mobile" | "email" | "admin";
   }>;
 }
 
@@ -111,7 +111,7 @@ export interface EmailAuditLog {
   /** Template used */
   templateType?: string;
   /** Email status */
-  status: 'sent' | 'delivered' | 'bounced' | 'complained' | 'suppressed';
+  status: "sent" | "delivered" | "bounced" | "complained" | "suppressed";
   /** When the email was sent */
   timestamp: Timestamp;
   /** Source email address */
@@ -129,7 +129,7 @@ export interface EmailAuditLog {
   /** User ID who triggered the email (if applicable) */
   triggeredByUserId?: string;
   /** Email type classification */
-  emailType: 'transactional' | 'marketing';
+  emailType: "transactional" | "marketing";
 }
 
 /**
@@ -137,7 +137,7 @@ export interface EmailAuditLog {
  */
 export interface EmailEventLog {
   /** SES event type */
-  eventType: 'send' | 'reject' | 'bounce' | 'complaint' | 'delivery' | 'open' | 'click';
+  eventType: "send" | "reject" | "bounce" | "complaint" | "delivery" | "open" | "click";
   /** SES message ID */
   messageId: string;
   /** Event timestamp from SES */
@@ -232,7 +232,7 @@ export interface UnsubscribeToken {
   /** Categories this token can modify */
   allowedCategories: string[];
   /** Type of unsubscribe action */
-  actionType: 'unsubscribe-all' | 'manage-preferences' | 'unsubscribe-category';
+  actionType: "unsubscribe-all" | "manage-preferences" | "unsubscribe-category";
   /** Specific category for category unsubscribes */
   category?: string;
 }

@@ -3,11 +3,11 @@ import {
   SendTemplatedEmailCommand,
   GetIdentityVerificationAttributesCommand,
   GetSendStatisticsCommand,
-} from '@aws-sdk/client-ses';
-import { logger } from 'firebase-functions/v2';
-import { createError, ErrorCode } from '../utils/errors';
-import { createLogContext } from '../utils/sanitization';
-import { getEmailSuppressionService } from './emailSuppressionService';
+} from "@aws-sdk/client-ses";
+import {logger} from "firebase-functions/v2";
+import {createError, ErrorCode} from "../utils/errors";
+import {createLogContext} from "../utils/sanitization";
+import {getEmailSuppressionService} from "./emailSuppressionService";
 
 interface SESConfig {
   region: string;
@@ -23,7 +23,7 @@ interface SendTemplatedEmailOptions {
   templateData: Record<string, any>;
   replyTo?: string[];
   configurationSet?: string;
-  emailType?: 'transactional' | 'marketing';
+  emailType?: "transactional" | "marketing";
   allowSuppressionOverride?: boolean;
 }
 
@@ -62,7 +62,7 @@ export class SESService {
    */
   async sendTemplatedEmail(options: SendTemplatedEmailOptions): Promise<void> {
     if (!this.initialized) {
-      throw createError(ErrorCode.INTERNAL, 'SES service not initialized');
+      throw createError(ErrorCode.INTERNAL, "SES service not initialized");
     }
 
     const {
@@ -71,7 +71,7 @@ export class SESService {
       templateData,
       replyTo,
       configurationSet,
-      emailType = 'marketing',
+      emailType = "marketing",
       allowSuppressionOverride = false,
     } = options;
 
@@ -95,9 +95,9 @@ export class SESService {
       } else {
         suppressedRecipients.push(email);
         logger.info(
-          'Email blocked by suppression list',
+          "Email blocked by suppression list",
           createLogContext({
-            email: email.substring(0, 3) + '***',
+            email: email.substring(0, 3) + "***",
             reason: validation.reason,
             template,
           })
@@ -108,7 +108,7 @@ export class SESService {
     // If no valid recipients, don't send
     if (validRecipients.length === 0) {
       logger.warn(
-        'All recipients suppressed, email not sent',
+        "All recipients suppressed, email not sent",
         createLogContext({
           template,
           suppressedCount: suppressedRecipients.length,
@@ -121,7 +121,7 @@ export class SESService {
     // Log if some recipients were suppressed
     if (suppressedRecipients.length > 0) {
       logger.info(
-        'Some recipients suppressed',
+        "Some recipients suppressed",
         createLogContext({
           template,
           validRecipients: validRecipients.length,
@@ -138,7 +138,7 @@ export class SESService {
       },
       Template: template,
       TemplateData: JSON.stringify(templateData),
-      ConfigurationSetName: configurationSet || 'dynasty-email-events', // Use default configuration set
+      ConfigurationSetName: configurationSet || "dynasty-email-events", // Use default configuration set
     };
 
     // Add optional parameters
@@ -151,7 +151,7 @@ export class SESService {
       const result = await this.sesClient.send(command);
 
       logger.info(
-        'Email sent successfully via SES',
+        "Email sent successfully via SES",
         createLogContext({
           messageId: result.MessageId,
           to: validRecipients,
@@ -162,7 +162,7 @@ export class SESService {
       );
     } catch (error: any) {
       logger.error(
-        'Failed to send email via SES',
+        "Failed to send email via SES",
         createLogContext({
           error: error.message,
           code: error.code || error.name,
@@ -175,23 +175,23 @@ export class SESService {
 
       // Handle specific SES errors
       const errorCode = error.code || error.name;
-      if (errorCode === 'MessageRejected') {
+      if (errorCode === "MessageRejected") {
         throw createError(
           ErrorCode.INVALID_ARGUMENT,
-          'Email rejected by SES. Please check the recipient address.'
+          "Email rejected by SES. Please check the recipient address."
         );
-      } else if (errorCode === 'TemplateDoesNotExist') {
+      } else if (errorCode === "TemplateDoesNotExist") {
         throw createError(ErrorCode.NOT_FOUND, `Email template '${template}' not found in SES.`);
-      } else if (errorCode === 'ConfigurationSetDoesNotExist') {
-        throw createError(ErrorCode.NOT_FOUND, 'SES configuration set not found.');
+      } else if (errorCode === "ConfigurationSetDoesNotExist") {
+        throw createError(ErrorCode.NOT_FOUND, "SES configuration set not found.");
       } else if (
-        errorCode === 'Throttling' ||
-        errorCode === 'SendingQuotaExceeded' ||
-        errorCode === 'TooManyRequestsException'
+        errorCode === "Throttling" ||
+        errorCode === "SendingQuotaExceeded" ||
+        errorCode === "TooManyRequestsException"
       ) {
         throw createError(
           ErrorCode.RESOURCE_EXHAUSTED,
-          'Email sending limit exceeded. Please try again later.'
+          "Email sending limit exceeded. Please try again later."
         );
       } else {
         throw createError(ErrorCode.INTERNAL, `Failed to send email: ${error.message}`);
@@ -210,10 +210,10 @@ export class SESService {
       const result = await this.sesClient.send(command);
 
       const attributes = result.VerificationAttributes?.[email];
-      return attributes?.VerificationStatus === 'Success';
+      return attributes?.VerificationStatus === "Success";
     } catch (error) {
       logger.error(
-        'Failed to check email verification status',
+        "Failed to check email verification status",
         createLogContext({
           email,
           error: error instanceof Error ? error.message : String(error),
@@ -232,12 +232,12 @@ export class SESService {
       return await this.sesClient.send(command);
     } catch (error) {
       logger.error(
-        'Failed to get sending statistics',
+        "Failed to get sending statistics",
         createLogContext({
           error: error instanceof Error ? error.message : String(error),
         })
       );
-      throw createError(ErrorCode.INTERNAL, 'Failed to retrieve sending statistics');
+      throw createError(ErrorCode.INTERNAL, "Failed to retrieve sending statistics");
     }
   }
 }
@@ -252,7 +252,7 @@ export function getSESService(config?: SESConfig): SESService {
   if (!sesInstance && !config) {
     throw createError(
       ErrorCode.INTERNAL,
-      'SES service not configured. Please provide configuration.'
+      "SES service not configured. Please provide configuration."
     );
   }
 
@@ -267,13 +267,13 @@ export function getSESService(config?: SESConfig): SESService {
  * Template name mapping from SendGrid to SES
  */
 export const SES_TEMPLATE_NAMES = {
-  verification: 'verify-email',
-  passwordReset: 'password-reset',
-  invite: 'invite',
-  mfa: 'mfa',
-  paymentFailed: 'payment-failed',
-  paymentRetry: 'payment-retry',
-  subscriptionSuspended: 'subscription-suspended',
+  verification: "verify-email",
+  passwordReset: "password-reset",
+  invite: "invite",
+  mfa: "mfa",
+  paymentFailed: "payment-failed",
+  paymentRetry: "payment-retry",
+  subscriptionSuspended: "subscription-suspended",
 } as const;
 
 /**
@@ -286,73 +286,73 @@ export function mapTemplateVariables(
   const baseVariables = {
     ...sendGridVariables,
     year: new Date().getFullYear().toString(),
-    baseUrl: sendGridVariables.baseUrl || process.env.FRONTEND_URL || 'https://mydynastyapp.com',
+    baseUrl: sendGridVariables.baseUrl || process.env.FRONTEND_URL || "https://mydynastyapp.com",
   };
 
   switch (templateType) {
-    case 'verification':
-      return {
-        ...baseVariables,
-        username: sendGridVariables.userName || sendGridVariables.username,
-        verificationLink: sendGridVariables.verificationUrl || sendGridVariables.verificationLink,
-        expiryTime: sendGridVariables.expiryTime || '30 minutes',
-      };
+  case "verification":
+    return {
+      ...baseVariables,
+      username: sendGridVariables.userName || sendGridVariables.username,
+      verificationLink: sendGridVariables.verificationUrl || sendGridVariables.verificationLink,
+      expiryTime: sendGridVariables.expiryTime || "30 minutes",
+    };
 
-    case 'passwordReset':
-      // Password reset variables match perfectly
-      return baseVariables;
+  case "passwordReset":
+    // Password reset variables match perfectly
+    return baseVariables;
 
-    case 'invite':
-      return {
-        ...baseVariables,
-        signUpLink: sendGridVariables.acceptLink || sendGridVariables.signUpLink,
-      };
+  case "invite":
+    return {
+      ...baseVariables,
+      signUpLink: sendGridVariables.acceptLink || sendGridVariables.signUpLink,
+    };
 
-    case 'mfa':
-      return {
-        ...baseVariables,
-        username: sendGridVariables.username,
-        code: sendGridVariables.code,
-        expiryMinutes: sendGridVariables.expiryMinutes || '10',
-      };
+  case "mfa":
+    return {
+      ...baseVariables,
+      username: sendGridVariables.username,
+      code: sendGridVariables.code,
+      expiryMinutes: sendGridVariables.expiryMinutes || "10",
+    };
 
-    case 'paymentFailed':
-      return {
-        ...baseVariables,
-        username: sendGridVariables.userName || sendGridVariables.username,
-        plan: sendGridVariables.plan,
-        amount: sendGridVariables.amount,
-        currency: sendGridVariables.currency || 'USD',
-        failureReason: sendGridVariables.failureReason,
-        updatePaymentUrl: sendGridVariables.updatePaymentUrl,
-        supportUrl: sendGridVariables.supportUrl || `${baseVariables.baseUrl}/support`,
-      };
+  case "paymentFailed":
+    return {
+      ...baseVariables,
+      username: sendGridVariables.userName || sendGridVariables.username,
+      plan: sendGridVariables.plan,
+      amount: sendGridVariables.amount,
+      currency: sendGridVariables.currency || "USD",
+      failureReason: sendGridVariables.failureReason,
+      updatePaymentUrl: sendGridVariables.updatePaymentUrl,
+      supportUrl: sendGridVariables.supportUrl || `${baseVariables.baseUrl}/support`,
+    };
 
-    case 'paymentRetry':
-      return {
-        ...baseVariables,
-        username: sendGridVariables.userName || sendGridVariables.username,
-        plan: sendGridVariables.plan,
-        amount: sendGridVariables.amount,
-        currency: sendGridVariables.currency || 'USD',
-        retryDate: sendGridVariables.retryDate,
-        attemptNumber: sendGridVariables.attemptNumber,
-        updatePaymentUrl: sendGridVariables.updatePaymentUrl,
-        supportUrl: sendGridVariables.supportUrl || `${baseVariables.baseUrl}/support`,
-      };
+  case "paymentRetry":
+    return {
+      ...baseVariables,
+      username: sendGridVariables.userName || sendGridVariables.username,
+      plan: sendGridVariables.plan,
+      amount: sendGridVariables.amount,
+      currency: sendGridVariables.currency || "USD",
+      retryDate: sendGridVariables.retryDate,
+      attemptNumber: sendGridVariables.attemptNumber,
+      updatePaymentUrl: sendGridVariables.updatePaymentUrl,
+      supportUrl: sendGridVariables.supportUrl || `${baseVariables.baseUrl}/support`,
+    };
 
-    case 'subscriptionSuspended':
-      return {
-        ...baseVariables,
-        username: sendGridVariables.userName || sendGridVariables.username,
-        plan: sendGridVariables.plan,
-        suspensionDate: sendGridVariables.suspensionDate,
-        gracePeriodEnds: sendGridVariables.gracePeriodEnds,
-        reactivateUrl: sendGridVariables.reactivateUrl,
-        supportUrl: sendGridVariables.supportUrl || `${baseVariables.baseUrl}/support`,
-      };
+  case "subscriptionSuspended":
+    return {
+      ...baseVariables,
+      username: sendGridVariables.userName || sendGridVariables.username,
+      plan: sendGridVariables.plan,
+      suspensionDate: sendGridVariables.suspensionDate,
+      gracePeriodEnds: sendGridVariables.gracePeriodEnds,
+      reactivateUrl: sendGridVariables.reactivateUrl,
+      supportUrl: sendGridVariables.supportUrl || `${baseVariables.baseUrl}/support`,
+    };
 
-    default:
-      return baseVariables;
+  default:
+    return baseVariables;
   }
 }

@@ -1,10 +1,10 @@
-import { onCall } from 'firebase-functions/v2/https';
-import * as admin from 'firebase-admin';
-import { withAuth } from './middleware/auth';
-import { createError, ErrorCode, handleError } from './utils/errors';
-import { sanitizeUserInput, detectXSSPatterns, logXSSAttempt } from './utils/xssSanitization';
-import { validateRequest } from './utils/request-validator';
-import { VALIDATION_SCHEMAS } from './config/validation-schemas';
+import {onCall} from "firebase-functions/v2/https";
+import * as admin from "firebase-admin";
+import {withAuth} from "./middleware/auth";
+import {createError, ErrorCode, handleError} from "./utils/errors";
+import {sanitizeUserInput, detectXSSPatterns, logXSSAttempt} from "./utils/xssSanitization";
+import {validateRequest} from "./utils/request-validator";
+import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
 
 // Initialize if not already done
 if (!admin.apps.length) {
@@ -17,7 +17,7 @@ const messaging = admin.messaging();
 interface MessageData {
   text?: string;
   mediaUrls?: string[];
-  type: 'text' | 'media' | 'voice' | 'file';
+  type: "text" | "media" | "voice" | "file";
   encryptedContent?: Record<string, string>; // For E2EE messages
   metadata?: any;
 }
@@ -27,43 +27,43 @@ interface MessageData {
  * Supports both encrypted and non-encrypted messages
  */
 export const sendMessage = onCall(
-  withAuth(async request => {
+  withAuth(async (request) => {
     try {
       const senderId = request.auth!.uid;
 
       // Validate and sanitize input using centralized validator
       const validatedData = validateRequest(request.data, VALIDATION_SCHEMAS.sendMessage, senderId);
 
-      const { chatId, message } = validatedData;
+      const {chatId, message} = validatedData;
 
       // Validate message structure
-      const { text, mediaUrls, type = 'text', encryptedContent, metadata } = message as MessageData;
+      const {text, mediaUrls, type = "text", encryptedContent, metadata} = message as MessageData;
 
-      if (!type || !['text', 'media', 'voice', 'file'].includes(type)) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid message type');
+      if (!type || !["text", "media", "voice", "file"].includes(type)) {
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid message type");
       }
 
       // Get chat details
-      const chatDoc = await db.collection('chats').doc(chatId).get();
+      const chatDoc = await db.collection("chats").doc(chatId).get();
       if (!chatDoc.exists) {
-        throw createError(ErrorCode.NOT_FOUND, 'Chat not found');
+        throw createError(ErrorCode.NOT_FOUND, "Chat not found");
       }
 
       const chat = chatDoc.data()!;
 
       // Verify sender is participant
       if (!chat.participants.includes(senderId)) {
-        throw createError(ErrorCode.PERMISSION_DENIED, 'You are not a participant in this chat');
+        throw createError(ErrorCode.PERMISSION_DENIED, "You are not a participant in this chat");
       }
 
       // Get sender details
-      const senderDoc = await db.collection('users').doc(senderId).get();
+      const senderDoc = await db.collection("users").doc(senderId).get();
       const senderData = senderDoc.data()!;
 
       // Build message data
       const messageData: any = {
         senderId,
-        senderName: senderData.name || 'Unknown',
+        senderName: senderData.name || "Unknown",
         type,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         delivered: [],
@@ -77,7 +77,7 @@ export const sendMessage = onCall(
         messageData.isEncrypted = true;
         messageData.encryptedContent = encryptedContent;
         // Store a placeholder for notification
-        messageData.notificationText = type === 'text' ? 'Encrypted message' : `Encrypted ${type}`;
+        messageData.notificationText = type === "text" ? "Encrypted message" : `Encrypted ${type}`;
       } else {
         // Regular message - sanitize content
         messageData.isEncrypted = false;
@@ -95,9 +95,9 @@ export const sendMessage = onCall(
             logXSSAttempt(text, {
               userId: senderId,
               chatId,
-              functionName: 'sendMessage',
+              functionName: "sendMessage",
             });
-            throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid characters detected in message');
+            throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid characters detected in message");
           }
 
           messageData.text = sanitizedText;
@@ -105,7 +105,7 @@ export const sendMessage = onCall(
 
         if (mediaUrls && mediaUrls.length > 0) {
           // Sanitize media URLs
-          messageData.mediaUrls = mediaUrls.map(url =>
+          messageData.mediaUrls = mediaUrls.map((url) =>
             sanitizeUserInput(url, {
               allowHtml: false,
               maxLength: 1000,
@@ -116,14 +116,14 @@ export const sendMessage = onCall(
 
       // Add message to chat
       const messageRef = await db
-        .collection('chats')
+        .collection("chats")
         .doc(chatId)
-        .collection('messages')
+        .collection("messages")
         .add(messageData);
 
       // Update chat metadata
       await db
-        .collection('chats')
+        .collection("chats")
         .doc(chatId)
         .update({
           lastMessage: messageData,
@@ -132,7 +132,7 @@ export const sendMessage = onCall(
         });
 
       // Update last read for sender
-      await db.collection('users').doc(senderId).collection('chats').doc(chatId).update({
+      await db.collection("users").doc(senderId).collection("chats").doc(chatId).update({
         lastRead: admin.firestore.FieldValue.serverTimestamp(),
       });
 
@@ -145,16 +145,16 @@ export const sendMessage = onCall(
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       };
     } catch (error) {
-      return handleError(error, 'sendMessage');
+      return handleError(error, "sendMessage");
     }
-  }, 'sendMessage')
+  }, "sendMessage")
 );
 
 /**
  * Send push notification for a new message
  */
 export const sendMessageNotification = onCall(
-  withAuth(async request => {
+  withAuth(async (request) => {
     try {
       const senderId = request.auth!.uid;
 
@@ -165,38 +165,38 @@ export const sendMessageNotification = onCall(
         senderId
       );
 
-      const { chatId, messageId } = validatedData;
+      const {chatId, messageId} = validatedData;
 
       // Get chat details
-      const chatDoc = await db.collection('chats').doc(chatId).get();
+      const chatDoc = await db.collection("chats").doc(chatId).get();
       if (!chatDoc.exists) {
-        throw createError(ErrorCode.NOT_FOUND, 'Chat not found');
+        throw createError(ErrorCode.NOT_FOUND, "Chat not found");
       }
 
       const chat = chatDoc.data()!;
 
       // Verify sender is participant
       if (!chat.participants.includes(senderId)) {
-        throw createError(ErrorCode.PERMISSION_DENIED, 'You are not a participant in this chat');
+        throw createError(ErrorCode.PERMISSION_DENIED, "You are not a participant in this chat");
       }
 
       // Get message details
       const messageDoc = await db
-        .collection('chats')
+        .collection("chats")
         .doc(chatId)
-        .collection('messages')
+        .collection("messages")
         .doc(messageId)
         .get();
 
       if (!messageDoc.exists) {
-        throw createError(ErrorCode.NOT_FOUND, 'Message not found');
+        throw createError(ErrorCode.NOT_FOUND, "Message not found");
       }
 
       const message = messageDoc.data()!;
 
       // Get sender details
-      const senderDoc = await db.collection('users').doc(senderId).get();
-      const senderName = senderDoc.data()?.displayName || 'Someone';
+      const senderDoc = await db.collection("users").doc(senderId).get();
+      const senderName = senderDoc.data()?.displayName || "Someone";
 
       // Get recipients (all participants except sender)
       const recipients = chat.participants.filter((p: string) => p !== senderId);
@@ -215,13 +215,13 @@ export const sendMessageNotification = onCall(
         const batch = recipients.slice(i, i + BATCH_SIZE);
 
         const batchQuery = await db
-          .collection('users')
-          .where(admin.firestore.FieldPath.documentId(), 'in', batch)
+          .collection("users")
+          .where(admin.firestore.FieldPath.documentId(), "in", batch)
           .get();
 
         // Create map for quick lookup of fetched user data
         const batchResults = new Map<string, any>();
-        batchQuery.docs.forEach(doc => {
+        batchQuery.docs.forEach((doc) => {
           batchResults.set(doc.id, doc.data());
         });
 
@@ -239,7 +239,7 @@ export const sendMessageNotification = onCall(
       // Prepare notification payload
       const notificationPayload: admin.messaging.MulticastMessage = {
         data: {
-          type: 'message',
+          type: "message",
           chatId,
           messageId,
           senderId,
@@ -252,11 +252,11 @@ export const sendMessageNotification = onCall(
           body: getNotificationBody(message.type),
         },
         android: {
-          priority: 'high',
+          priority: "high",
           notification: {
-            channelId: 'dynasty_messages',
-            icon: 'ic_notification',
-            color: '#4CAF50',
+            channelId: "dynasty_messages",
+            icon: "ic_notification",
+            color: "#4CAF50",
           },
         },
         apns: {
@@ -267,9 +267,9 @@ export const sendMessageNotification = onCall(
                 body: getNotificationBody(message.type),
               },
               badge: 1,
-              sound: 'default',
+              sound: "default",
               threadId: chatId,
-              category: 'MESSAGE',
+              category: "MESSAGE",
             },
           },
         },
@@ -287,8 +287,8 @@ export const sendMessageNotification = onCall(
       }
 
       if (allTokens.length === 0) {
-        console.log('No FCM tokens found for recipients');
-        return { success: true, sent: 0 };
+        console.log("No FCM tokens found for recipients");
+        return {success: true, sent: 0};
       }
 
       // Remove duplicates
@@ -303,7 +303,7 @@ export const sendMessageNotification = onCall(
         const failedTokens: string[] = [];
         response.responses.forEach((resp, idx) => {
           if (!resp.success && resp.error) {
-            console.error('FCM send error:', resp.error);
+            console.error("FCM send error:", resp.error);
             failedTokens.push(uniqueTokens[idx]);
           }
         });
@@ -320,16 +320,16 @@ export const sendMessageNotification = onCall(
         failed: response.failureCount,
       };
     } catch (error) {
-      return handleError(error, 'sendMessageNotification');
+      return handleError(error, "sendMessageNotification");
     }
-  }, 'sendMessageNotification')
+  }, "sendMessageNotification")
 );
 
 /**
  * Handle notification settings update
  */
 export const updateNotificationSettings = onCall(
-  withAuth(async request => {
+  withAuth(async (request) => {
     try {
       const userId = request.auth!.uid;
 
@@ -340,26 +340,26 @@ export const updateNotificationSettings = onCall(
         userId
       );
 
-      const { settings } = validatedData;
+      const {settings} = validatedData;
 
       // Update user's notification settings
-      await db.collection('users').doc(userId).update({
+      await db.collection("users").doc(userId).update({
         notificationSettings: settings,
         notificationSettingsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      return { success: true };
+      return {success: true};
     } catch (error) {
-      return handleError(error, 'updateNotificationSettings');
+      return handleError(error, "updateNotificationSettings");
     }
-  }, 'updateNotificationSettings')
+  }, "updateNotificationSettings")
 );
 
 /**
  * Register FCM token
  */
 export const registerFCMToken = onCall(
-  withAuth(async request => {
+  withAuth(async (request) => {
     try {
       const userId = request.auth!.uid;
 
@@ -370,29 +370,29 @@ export const registerFCMToken = onCall(
         userId
       );
 
-      const { token } = validatedData;
+      const {token} = validatedData;
 
       // Add token to user's token array
       await db
-        .collection('users')
+        .collection("users")
         .doc(userId)
         .update({
           fcmTokens: admin.firestore.FieldValue.arrayUnion(token),
           lastTokenUpdate: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-      return { success: true };
+      return {success: true};
     } catch (error) {
-      return handleError(error, 'registerFCMToken');
+      return handleError(error, "registerFCMToken");
     }
-  }, 'registerFCMToken')
+  }, "registerFCMToken")
 );
 
 /**
  * Remove FCM token
  */
 export const removeFCMToken = onCall(
-  withAuth(async request => {
+  withAuth(async (request) => {
     try {
       const userId = request.auth!.uid;
 
@@ -403,29 +403,29 @@ export const removeFCMToken = onCall(
         userId
       );
 
-      const { token } = validatedData;
+      const {token} = validatedData;
 
       // Remove token from user's token array
       await db
-        .collection('users')
+        .collection("users")
         .doc(userId)
         .update({
           fcmTokens: admin.firestore.FieldValue.arrayRemove(token),
           lastTokenUpdate: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-      return { success: true };
+      return {success: true};
     } catch (error) {
-      return handleError(error, 'removeFCMToken');
+      return handleError(error, "removeFCMToken");
     }
-  }, 'removeFCMToken')
+  }, "removeFCMToken")
 );
 
 /**
  * Send typing indicator notification
  */
 export const sendTypingNotification = onCall(
-  withAuth(async request => {
+  withAuth(async (request) => {
     try {
       const userId = request.auth!.uid;
 
@@ -436,23 +436,23 @@ export const sendTypingNotification = onCall(
         userId
       );
 
-      const { chatId, isTyping } = validatedData;
+      const {chatId, isTyping} = validatedData;
 
       // Get chat details
-      const chatDoc = await db.collection('chats').doc(chatId).get();
+      const chatDoc = await db.collection("chats").doc(chatId).get();
       if (!chatDoc.exists) {
-        throw createError(ErrorCode.NOT_FOUND, 'Chat not found');
+        throw createError(ErrorCode.NOT_FOUND, "Chat not found");
       }
 
       const chat = chatDoc.data()!;
 
       // Verify user is participant
       if (!chat.participants.includes(userId)) {
-        throw createError(ErrorCode.PERMISSION_DENIED, 'You are not a participant in this chat');
+        throw createError(ErrorCode.PERMISSION_DENIED, "You are not a participant in this chat");
       }
 
       // Update typing status in Firestore
-      const typingRef = db.collection('chats').doc(chatId).collection('typing').doc(userId);
+      const typingRef = db.collection("chats").doc(chatId).collection("typing").doc(userId);
 
       if (isTyping) {
         await typingRef.set({
@@ -463,27 +463,27 @@ export const sendTypingNotification = onCall(
         await typingRef.delete();
       }
 
-      return { success: true };
+      return {success: true};
     } catch (error) {
-      return handleError(error, 'sendTypingNotification');
+      return handleError(error, "sendTypingNotification");
     }
-  }, 'sendTypingNotification')
+  }, "sendTypingNotification")
 );
 
 // Helper functions
 
 function getNotificationBody(messageType: string): string {
   switch (messageType) {
-    case 'text':
-      return 'Sent you a message';
-    case 'voice':
-      return '🎤 Sent a voice message';
-    case 'media':
-      return '📷 Sent a photo';
-    case 'file':
-      return '📎 Sent a file';
-    default:
-      return 'Sent you a message';
+  case "text":
+    return "Sent you a message";
+  case "voice":
+    return "🎤 Sent a voice message";
+  case "media":
+    return "📷 Sent a photo";
+  case "file":
+    return "📎 Sent a file";
+  default:
+    return "Sent you a message";
   }
 }
 
@@ -491,11 +491,11 @@ async function removeInvalidTokens(tokens: string[]) {
   try {
     // Find all users with these tokens
     const usersSnapshot = await db
-      .collection('users')
-      .where('fcmTokens', 'array-contains-any', tokens)
+      .collection("users")
+      .where("fcmTokens", "array-contains-any", tokens)
       .get();
 
-    const updatePromises = usersSnapshot.docs.map(async doc => {
+    const updatePromises = usersSnapshot.docs.map(async (doc) => {
       const userTokens = doc.data().fcmTokens || [];
       const validTokens = userTokens.filter((t: string) => !tokens.includes(t));
 
@@ -508,6 +508,6 @@ async function removeInvalidTokens(tokens: string[]) {
     await Promise.all(updatePromises);
     console.log(`Removed ${tokens.length} invalid FCM tokens`);
   } catch (error) {
-    console.error('Failed to remove invalid tokens:', error);
+    console.error("Failed to remove invalid tokens:", error);
   }
 }

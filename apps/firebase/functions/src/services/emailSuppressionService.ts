@@ -1,12 +1,12 @@
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
-import { createError, ErrorCode } from '../utils/errors';
-import { createLogContext } from '../utils/sanitization';
+import {getFirestore, FieldValue} from "firebase-admin/firestore";
+import {logger} from "firebase-functions/v2";
+import {createError, ErrorCode} from "../utils/errors";
+import {createLogContext} from "../utils/sanitization";
 
 export interface SuppressionEntry {
   email: string;
-  reason: 'bounce' | 'complaint' | 'unsubscribe';
-  type: 'hard' | 'soft' | 'transient';
+  reason: "bounce" | "complaint" | "unsubscribe";
+  type: "hard" | "soft" | "transient";
   suppressedAt: FirebaseFirestore.Timestamp;
   metadata: any;
   active: boolean;
@@ -38,24 +38,24 @@ export class EmailSuppressionService {
   async isEmailSuppressed(email: string): Promise<SuppressionCheckResult> {
     try {
       const normalizedEmail = email.toLowerCase().trim();
-      const suppressionRef = this.db.collection('emailSuppressionList').doc(normalizedEmail);
+      const suppressionRef = this.db.collection("emailSuppressionList").doc(normalizedEmail);
       const suppressionDoc = await suppressionRef.get();
 
       if (!suppressionDoc.exists) {
-        return { isSuppressed: false };
+        return {isSuppressed: false};
       }
 
       const data = suppressionDoc.data() as SuppressionEntry;
 
       // Check if suppression is still active
       if (!data.active) {
-        return { isSuppressed: false };
+        return {isSuppressed: false};
       }
 
       // Check if it's a transient suppression that has expired
-      if (data.type === 'transient' && this.isTransientSuppressionExpired(data)) {
+      if (data.type === "transient" && this.isTransientSuppressionExpired(data)) {
         await this.removeFromSuppressionList(normalizedEmail);
-        return { isSuppressed: false };
+        return {isSuppressed: false};
       }
 
       return {
@@ -63,19 +63,19 @@ export class EmailSuppressionService {
         reason: data.reason,
         type: data.type,
         suppressedAt: data.suppressedAt.toDate(),
-        canOverride: data.type === 'soft' || data.reason === 'unsubscribe',
+        canOverride: data.type === "soft" || data.reason === "unsubscribe",
       };
     } catch (error) {
       logger.error(
-        'Error checking email suppression',
+        "Error checking email suppression",
         createLogContext({
-          email: email.substring(0, 3) + '***',
+          email: email.substring(0, 3) + "***",
           error: error instanceof Error ? error.message : String(error),
         })
       );
 
       // In case of error, allow email to proceed (fail open)
-      return { isSuppressed: false };
+      return {isSuppressed: false};
     }
   }
 
@@ -84,14 +84,14 @@ export class EmailSuppressionService {
    */
   async addToSuppressionList(
     email: string,
-    reason: 'bounce' | 'complaint' | 'unsubscribe',
-    type: 'hard' | 'soft' | 'transient',
+    reason: "bounce" | "complaint" | "unsubscribe",
+    type: "hard" | "soft" | "transient",
     metadata: any = {},
     userId?: string
   ): Promise<void> {
     try {
       const normalizedEmail = email.toLowerCase().trim();
-      const suppressionRef = this.db.collection('emailSuppressionList').doc(normalizedEmail);
+      const suppressionRef = this.db.collection("emailSuppressionList").doc(normalizedEmail);
 
       await suppressionRef.set(
         {
@@ -104,13 +104,13 @@ export class EmailSuppressionService {
           userId: userId || null,
           updatedAt: FieldValue.serverTimestamp(),
         },
-        { merge: true }
+        {merge: true}
       );
 
       logger.info(
-        'Added email to suppression list',
+        "Added email to suppression list",
         createLogContext({
-          email: email.substring(0, 3) + '***',
+          email: email.substring(0, 3) + "***",
           reason,
           type,
           userId,
@@ -118,15 +118,15 @@ export class EmailSuppressionService {
       );
     } catch (error) {
       logger.error(
-        'Error adding email to suppression list',
+        "Error adding email to suppression list",
         createLogContext({
-          email: email.substring(0, 3) + '***',
+          email: email.substring(0, 3) + "***",
           reason,
           type,
           error: error instanceof Error ? error.message : String(error),
         })
       );
-      throw createError(ErrorCode.INTERNAL, 'Failed to add email to suppression list');
+      throw createError(ErrorCode.INTERNAL, "Failed to add email to suppression list");
     }
   }
 
@@ -136,7 +136,7 @@ export class EmailSuppressionService {
   async removeFromSuppressionList(email: string): Promise<void> {
     try {
       const normalizedEmail = email.toLowerCase().trim();
-      const suppressionRef = this.db.collection('emailSuppressionList').doc(normalizedEmail);
+      const suppressionRef = this.db.collection("emailSuppressionList").doc(normalizedEmail);
 
       await suppressionRef.update({
         active: false,
@@ -144,20 +144,20 @@ export class EmailSuppressionService {
       });
 
       logger.info(
-        'Removed email from suppression list',
+        "Removed email from suppression list",
         createLogContext({
-          email: email.substring(0, 3) + '***',
+          email: email.substring(0, 3) + "***",
         })
       );
     } catch (error) {
       logger.error(
-        'Error removing email from suppression list',
+        "Error removing email from suppression list",
         createLogContext({
-          email: email.substring(0, 3) + '***',
+          email: email.substring(0, 3) + "***",
           error: error instanceof Error ? error.message : String(error),
         })
       );
-      throw createError(ErrorCode.INTERNAL, 'Failed to remove email from suppression list');
+      throw createError(ErrorCode.INTERNAL, "Failed to remove email from suppression list");
     }
   }
 
@@ -171,13 +171,13 @@ export class EmailSuppressionService {
     const batchSize = 10;
     for (let i = 0; i < emails.length; i += batchSize) {
       const batch = emails.slice(i, i + batchSize);
-      const batchPromises = batch.map(async email => {
+      const batchPromises = batch.map(async (email) => {
         const result = await this.isEmailSuppressed(email);
-        return { email, result };
+        return {email, result};
       });
 
       const batchResults = await Promise.all(batchPromises);
-      batchResults.forEach(({ email, result }) => {
+      batchResults.forEach(({email, result}) => {
         results.set(email, result);
       });
     }
@@ -196,11 +196,11 @@ export class EmailSuppressionService {
   }> {
     try {
       const suppressionQuery = this.db
-        .collection('emailSuppressionList')
-        .where('active', '==', true);
+        .collection("emailSuppressionList")
+        .where("active", "==", true);
 
       const snapshot = await suppressionQuery.get();
-      const entries = snapshot.docs.map(doc => doc.data() as SuppressionEntry);
+      const entries = snapshot.docs.map((doc) => doc.data() as SuppressionEntry);
 
       const stats = {
         total: entries.length,
@@ -211,7 +211,7 @@ export class EmailSuppressionService {
 
       const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-      entries.forEach(entry => {
+      entries.forEach((entry) => {
         // Count by reason
         stats.byReason[entry.reason] = (stats.byReason[entry.reason] || 0) + 1;
 
@@ -227,12 +227,12 @@ export class EmailSuppressionService {
       return stats;
     } catch (error) {
       logger.error(
-        'Error getting suppression stats',
+        "Error getting suppression stats",
         createLogContext({
           error: error instanceof Error ? error.message : String(error),
         })
       );
-      throw createError(ErrorCode.INTERNAL, 'Failed to get suppression statistics');
+      throw createError(ErrorCode.INTERNAL, "Failed to get suppression statistics");
     }
   }
 
@@ -240,30 +240,30 @@ export class EmailSuppressionService {
    * Export suppression list for compliance
    */
   async exportSuppressionList(
-    reason?: 'bounce' | 'complaint' | 'unsubscribe',
+    reason?: "bounce" | "complaint" | "unsubscribe",
     startDate?: Date,
     endDate?: Date
   ): Promise<SuppressionEntry[]> {
     try {
-      let query = this.db.collection('emailSuppressionList').where('active', '==', true);
+      let query = this.db.collection("emailSuppressionList").where("active", "==", true);
 
       if (reason) {
-        query = query.where('reason', '==', reason);
+        query = query.where("reason", "==", reason);
       }
 
       if (startDate) {
-        query = query.where('suppressedAt', '>=', startDate);
+        query = query.where("suppressedAt", ">=", startDate);
       }
 
       if (endDate) {
-        query = query.where('suppressedAt', '<=', endDate);
+        query = query.where("suppressedAt", "<=", endDate);
       }
 
       const snapshot = await query.get();
-      return snapshot.docs.map(doc => doc.data() as SuppressionEntry);
+      return snapshot.docs.map((doc) => doc.data() as SuppressionEntry);
     } catch (error) {
       logger.error(
-        'Error exporting suppression list',
+        "Error exporting suppression list",
         createLogContext({
           reason,
           startDate: startDate?.toISOString(),
@@ -271,7 +271,7 @@ export class EmailSuppressionService {
           error: error instanceof Error ? error.message : String(error),
         })
       );
-      throw createError(ErrorCode.INTERNAL, 'Failed to export suppression list');
+      throw createError(ErrorCode.INTERNAL, "Failed to export suppression list");
     }
   }
 
@@ -281,9 +281,9 @@ export class EmailSuppressionService {
   async cleanupExpiredSuppressions(): Promise<number> {
     try {
       const transientQuery = this.db
-        .collection('emailSuppressionList')
-        .where('active', '==', true)
-        .where('type', '==', 'transient');
+        .collection("emailSuppressionList")
+        .where("active", "==", true)
+        .where("type", "==", "transient");
 
       const snapshot = await transientQuery.get();
       let cleanedCount = 0;
@@ -295,7 +295,7 @@ export class EmailSuppressionService {
           batch.update(doc.ref, {
             active: false,
             removedAt: FieldValue.serverTimestamp(),
-            removalReason: 'expired',
+            removalReason: "expired",
           });
           cleanedCount++;
         }
@@ -304,7 +304,7 @@ export class EmailSuppressionService {
       if (cleanedCount > 0) {
         await batch.commit();
         logger.info(
-          'Cleaned up expired transient suppressions',
+          "Cleaned up expired transient suppressions",
           createLogContext({
             cleanedCount,
           })
@@ -314,7 +314,7 @@ export class EmailSuppressionService {
       return cleanedCount;
     } catch (error) {
       logger.error(
-        'Error cleaning up expired suppressions',
+        "Error cleaning up expired suppressions",
         createLogContext({
           error: error instanceof Error ? error.message : String(error),
         })
@@ -337,31 +337,31 @@ export class EmailSuppressionService {
    */
   async validateEmailForSending(
     email: string,
-    emailType: 'transactional' | 'marketing' = 'marketing',
+    emailType: "transactional" | "marketing" = "marketing",
     allowOverride: boolean = false
   ): Promise<{ canSend: boolean; reason?: string }> {
     const suppressionCheck = await this.isEmailSuppressed(email);
 
     if (!suppressionCheck.isSuppressed) {
-      return { canSend: true };
+      return {canSend: true};
     }
 
     // Always allow critical transactional emails (password reset, security alerts)
-    if (emailType === 'transactional' && suppressionCheck.reason === 'unsubscribe') {
-      return { canSend: true };
+    if (emailType === "transactional" && suppressionCheck.reason === "unsubscribe") {
+      return {canSend: true};
     }
 
     // Allow override for soft suppressions if explicitly requested
     if (allowOverride && suppressionCheck.canOverride) {
       logger.info(
-        'Email suppression overridden',
+        "Email suppression overridden",
         createLogContext({
-          email: email.substring(0, 3) + '***',
+          email: email.substring(0, 3) + "***",
           reason: suppressionCheck.reason,
           type: suppressionCheck.type,
         })
       );
-      return { canSend: true };
+      return {canSend: true};
     }
 
     return {

@@ -1,6 +1,6 @@
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
-import { createError, ErrorCode } from '../utils/errors';
+import {getFirestore, Timestamp} from "firebase-admin/firestore";
+import {logger} from "firebase-functions/v2";
+import {createError, ErrorCode} from "../utils/errors";
 
 /**
  * Comprehensive subscription analytics and metrics service for Dynasty Stripe integration.
@@ -140,8 +140,8 @@ export interface ConversionFunnel {
 
 export class SubscriptionAnalyticsService {
   private db = getFirestore();
-  private readonly SUBSCRIPTIONS_COLLECTION = 'subscriptions';
-  private readonly ANALYTICS_COLLECTION = 'subscriptionAnalytics';
+  private readonly SUBSCRIPTIONS_COLLECTION = "subscriptions";
+  private readonly ANALYTICS_COLLECTION = "subscriptionAnalytics";
 
   /**
    * Calculate comprehensive subscription metrics for a specified time period.
@@ -184,7 +184,7 @@ export class SubscriptionAnalyticsService {
    */
   async calculateSubscriptionMetrics(startDate: Date, endDate: Date): Promise<SubscriptionMetrics> {
     try {
-      logger.info('Calculating subscription metrics', {
+      logger.info("Calculating subscription metrics", {
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
       });
@@ -241,8 +241,8 @@ export class SubscriptionAnalyticsService {
 
       return metrics;
     } catch (error) {
-      logger.error('Failed to calculate subscription metrics', { error });
-      throw createError(ErrorCode.INTERNAL, 'Failed to calculate subscription metrics');
+      logger.error("Failed to calculate subscription metrics", {error});
+      throw createError(ErrorCode.INTERNAL, "Failed to calculate subscription metrics");
     }
   }
 
@@ -266,10 +266,10 @@ export class SubscriptionAnalyticsService {
   private async getActiveSubscriptions(): Promise<any[]> {
     const snapshot = await this.db
       .collection(this.SUBSCRIPTIONS_COLLECTION)
-      .where('status', 'in', ['active', 'trialing', 'past_due'])
+      .where("status", "in", ["active", "trialing", "past_due"])
       .get();
 
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map((doc) => ({id: doc.id, ...doc.data()}));
   }
 
   /**
@@ -296,9 +296,9 @@ export class SubscriptionAnalyticsService {
    */
   private calculateMRR(subscriptions: any[]): number {
     return subscriptions.reduce((total, sub) => {
-      if (sub.status === 'active' || sub.status === 'trialing') {
+      if (sub.status === "active" || sub.status === "trialing") {
         // Normalize to monthly amount
-        const monthlyAmount = sub.interval === 'year' ? sub.amount / 12 : sub.amount;
+        const monthlyAmount = sub.interval === "year" ? sub.amount / 12 : sub.amount;
         return total + monthlyAmount / 100; // Convert from cents
       }
       return total;
@@ -344,21 +344,21 @@ export class SubscriptionAnalyticsService {
     const distribution: Record<string, { count: number; revenue: number }> = {};
     let totalRevenue = 0;
 
-    subscriptions.forEach(sub => {
-      const planKey = `${sub.plan}_${sub.tier || 'standard'}`;
+    subscriptions.forEach((sub) => {
+      const planKey = `${sub.plan}_${sub.tier || "standard"}`;
       if (!distribution[planKey]) {
-        distribution[planKey] = { count: 0, revenue: 0 };
+        distribution[planKey] = {count: 0, revenue: 0};
       }
 
       distribution[planKey].count++;
-      const monthlyRevenue = sub.interval === 'year' ? sub.amount / 12 : sub.amount;
+      const monthlyRevenue = sub.interval === "year" ? sub.amount / 12 : sub.amount;
       distribution[planKey].revenue += monthlyRevenue / 100;
       totalRevenue += monthlyRevenue / 100;
     });
 
     // Add percentages
     const result: Record<string, any> = {};
-    Object.keys(distribution).forEach(planKey => {
+    Object.keys(distribution).forEach((planKey) => {
       result[planKey] = {
         ...distribution[planKey],
         percentage: totalRevenue > 0 ? (distribution[planKey].revenue / totalRevenue) * 100 : 0,
@@ -393,14 +393,14 @@ export class SubscriptionAnalyticsService {
    * @performance O(n) where n is the number of family plan subscriptions
    */
   private calculateFamilyPlanMetrics(subscriptions: any[]): any {
-    const familyPlans = subscriptions.filter(sub => sub.plan === 'family');
+    const familyPlans = subscriptions.filter((sub) => sub.plan === "family");
     const totalMembers = familyPlans.reduce(
       (sum, plan) => sum + (plan.familyMembers?.length || 0),
       0
     );
 
     const familyRevenue = familyPlans.reduce((sum, plan) => {
-      const monthlyRevenue = plan.interval === 'year' ? plan.amount / 12 : plan.amount;
+      const monthlyRevenue = plan.interval === "year" ? plan.amount / 12 : plan.amount;
       return sum + monthlyRevenue / 100;
     }, 0);
 
@@ -442,17 +442,17 @@ export class SubscriptionAnalyticsService {
     let addonRevenue = 0;
     const addonCounts: Record<string, { count: number; revenue: number }> = {};
 
-    subscriptions.forEach(sub => {
+    subscriptions.forEach((sub) => {
       if (sub.addons && sub.addons.length > 0) {
         sub.addons.forEach((addon: any) => {
-          if (addon.status === 'active') {
+          if (addon.status === "active") {
             totalAddons++;
             // This would need to be calculated based on addon pricing
             const addonPrice = this.getAddonPrice();
             addonRevenue += addonPrice;
 
             if (!addonCounts[addon.type]) {
-              addonCounts[addon.type] = { count: 0, revenue: 0 };
+              addonCounts[addon.type] = {count: 0, revenue: 0};
             }
             addonCounts[addon.type].count++;
             addonCounts[addon.type].revenue += addonPrice;
@@ -462,7 +462,7 @@ export class SubscriptionAnalyticsService {
     });
 
     const popularAddons = Object.entries(addonCounts)
-      .map(([type, data]) => ({ type, ...data }))
+      .map(([type, data]) => ({type, ...data}))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
@@ -470,9 +470,9 @@ export class SubscriptionAnalyticsService {
       totalActiveAddons: totalAddons,
       addonRevenue,
       addonAttachmentRate:
-        subscriptions.length > 0
-          ? (subscriptions.filter(s => s.addons?.length > 0).length / subscriptions.length) * 100
-          : 0,
+        subscriptions.length > 0 ?
+          (subscriptions.filter((s) => s.addons?.length > 0).length / subscriptions.length) * 100 :
+          0,
       popularAddons,
     };
   }
@@ -537,11 +537,11 @@ export class SubscriptionAnalyticsService {
   private async getHistoricalSubscriptionData(startDate: Date, endDate: Date): Promise<any[]> {
     const snapshot = await this.db
       .collection(this.SUBSCRIPTIONS_COLLECTION)
-      .where('createdAt', '>=', Timestamp.fromDate(startDate))
-      .where('createdAt', '<=', Timestamp.fromDate(endDate))
+      .where("createdAt", ">=", Timestamp.fromDate(startDate))
+      .where("createdAt", "<=", Timestamp.fromDate(endDate))
       .get();
 
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map((doc) => ({id: doc.id, ...doc.data()}));
   }
 
   /**
@@ -575,9 +575,9 @@ export class SubscriptionAnalyticsService {
   private async calculateChurnMetrics(startDate: Date, endDate: Date): Promise<any> {
     const churnedSnapshot = await this.db
       .collection(this.SUBSCRIPTIONS_COLLECTION)
-      .where('status', '==', 'canceled')
-      .where('canceledAt', '>=', Timestamp.fromDate(startDate))
-      .where('canceledAt', '<=', Timestamp.fromDate(endDate))
+      .where("status", "==", "canceled")
+      .where("canceledAt", ">=", Timestamp.fromDate(startDate))
+      .where("canceledAt", "<=", Timestamp.fromDate(endDate))
       .get();
 
     const activeAtStart = await this.getActiveSubscriptionsAtDate();
@@ -618,7 +618,7 @@ export class SubscriptionAnalyticsService {
    */
   private calculateGrowthMetrics(historicalData: any[], startDate: Date, endDate: Date): any {
     const newSubs = historicalData.filter(
-      sub => sub.createdAt.toDate() >= startDate && sub.createdAt.toDate() <= endDate
+      (sub) => sub.createdAt.toDate() >= startDate && sub.createdAt.toDate() <= endDate
     ).length;
 
     // Additional calculations would be implemented here
@@ -677,7 +677,7 @@ export class SubscriptionAnalyticsService {
 
   // Helper methods (implementations would be added)
   private countTrialSubscriptions(subscriptions: any[]): number {
-    return subscriptions.filter(sub => sub.status === 'trialing').length;
+    return subscriptions.filter((sub) => sub.status === "trialing").length;
   }
 
   private calculateMemberUtilization(): number {

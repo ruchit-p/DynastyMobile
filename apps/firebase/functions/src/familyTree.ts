@@ -1,21 +1,21 @@
-import { onCall } from 'firebase-functions/v2/https';
-import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
-import * as crypto from 'crypto';
-import { DEFAULT_REGION, FUNCTION_TIMEOUT, DEFAULT_MEMORY } from './common';
-import { createError, ErrorCode } from './utils/errors';
-import { withAuth, withResourceAccess, PermissionLevel, RateLimitType } from './middleware';
-import { FRONTEND_URL } from './auth/config/secrets';
-import { sendEmailUniversal } from './auth/config/emailConfig';
-import { validateRequest } from './utils/request-validator';
-import { VALIDATION_SCHEMAS } from './config/validation-schemas';
+import {onCall} from "firebase-functions/v2/https";
+import {getFirestore, FieldValue, Timestamp} from "firebase-admin/firestore";
+import {logger} from "firebase-functions/v2";
+import * as crypto from "crypto";
+import {DEFAULT_REGION, FUNCTION_TIMEOUT, DEFAULT_MEMORY} from "./common";
+import {createError, ErrorCode} from "./utils/errors";
+import {withAuth, withResourceAccess, PermissionLevel, RateLimitType} from "./middleware";
+import {FRONTEND_URL} from "./auth/config/secrets";
+import {sendEmailUniversal} from "./auth/config/emailConfig";
+import {validateRequest} from "./utils/request-validator";
+import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
 
 // MARK: - Function Configuration
 
 // Helper function to generate a secure random token
 const generateSecureToken = (): string => {
-  const token = crypto.randomBytes(32).toString('hex');
-  logger.debug('Generated new token:', {
+  const token = crypto.randomBytes(32).toString("hex");
+  logger.debug("Generated new token:", {
     tokenLength: token.length,
     tokenFirstChars: token.substring(0, 4),
     tokenLastChars: token.substring(token.length - 4),
@@ -25,8 +25,8 @@ const generateSecureToken = (): string => {
 
 // Helper function to hash a token
 const hashToken = (token: string): string => {
-  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-  logger.debug('Hashed token:', {
+  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+  logger.debug("Hashed token:", {
     originalTokenLength: token.length,
     hashedTokenLength: hashedToken.length,
     originalTokenFirstChars: token.substring(0, 4),
@@ -39,11 +39,11 @@ const hashToken = (token: string): string => {
 
 interface FamilyMember {
   id: string;
-  gender: 'male' | 'female' | 'other';
-  parents: Array<{ id: string; type: 'blood' }>;
-  children: Array<{ id: string; type: 'blood' }>;
-  siblings: Array<{ id: string; type: 'blood' }>;
-  spouses: Array<{ id: string; type: 'married' }>;
+  gender: "male" | "female" | "other";
+  parents: Array<{ id: string; type: "blood" }>;
+  children: Array<{ id: string; type: "blood" }>;
+  siblings: Array<{ id: string; type: "blood" }>;
+  spouses: Array<{ id: string; type: "married" }>;
   attributes?: {
     displayName: string;
     profilePicture?: string;
@@ -118,17 +118,17 @@ function getBloodRelatedSet(
 
   // Build map of docs for quick lookup
   const docsMap = new Map<string, any>();
-  docs.forEach(d => {
+  docs.forEach((d) => {
     if (d.exists) {
       docsMap.set(d.id, d.data());
     }
   });
 
   const visited = new Set<string>();
-  const queue: Array<{ id: string; depth: number }> = [{ id: currentUserId, depth: 0 }];
+  const queue: Array<{ id: string; depth: number }> = [{id: currentUserId, depth: 0}];
 
   while (queue.length) {
-    const { id, depth } = queue.shift()!;
+    const {id, depth} = queue.shift()!;
     if (depth > MAX_RELATION_TRAVERSAL_DEPTH) {
       logger.warn(
         `Max blood relation depth ${MAX_RELATION_TRAVERSAL_DEPTH} exceeded during blood relation scan`
@@ -144,7 +144,7 @@ function getBloodRelatedSet(
     // Enqueue parents and children
     const relatives = [...(data.parentIds || []), ...(data.childrenIds || [])];
     for (const relId of relatives) {
-      if (!visited.has(relId)) queue.push({ id: relId, depth: depth + 1 });
+      if (!visited.has(relId)) queue.push({id: relId, depth: depth + 1});
     }
   }
 
@@ -162,12 +162,12 @@ function buildRelationshipMaps(docs: FirebaseFirestore.QueryDocumentSnapshot[]):
   const validUserIds = new Set<string>();
 
   // First pass: collect all valid user IDs
-  docs.forEach(doc => {
+  docs.forEach((doc) => {
     validUserIds.add(doc.id);
   });
 
   // Second pass: build relationship maps
-  docs.forEach(doc => {
+  docs.forEach((doc) => {
     const data = doc.data();
     const userId = doc.id;
 
@@ -234,10 +234,10 @@ function findSiblings(
   const parents = childToParentsMap.get(userId);
 
   if (parents) {
-    parents.forEach(parentId => {
+    parents.forEach((parentId) => {
       const children = parentToChildrenMap.get(parentId);
       if (children) {
-        children.forEach(childId => {
+        children.forEach((childId) => {
           if (childId !== userId) {
             siblings.add(childId);
           }
@@ -262,7 +262,7 @@ export const getFamilyTreeData = onCall(
     secrets: [FRONTEND_URL],
   },
   withAuth(
-    async request => {
+    async (request) => {
       // Validate and sanitize input using centralized validator
       const validatedData = validateRequest(
         request.data,
@@ -270,47 +270,47 @@ export const getFamilyTreeData = onCall(
         request.auth!.uid
       );
 
-      const { userId } = validatedData;
+      const {userId} = validatedData;
       const db = getFirestore();
 
       // Get the user document which contains the familyTreeId
-      const userDoc = await db.collection('users').doc(userId).get();
+      const userDoc = await db.collection("users").doc(userId).get();
       if (!userDoc.exists) {
-        throw createError(ErrorCode.NOT_FOUND, 'User not found');
+        throw createError(ErrorCode.NOT_FOUND, "User not found");
       }
 
       const userData = userDoc.data();
       const familyTreeId = userData?.familyTreeId;
       if (!familyTreeId) {
-        throw createError(ErrorCode.NOT_FOUND, 'No family tree found for this user');
+        throw createError(ErrorCode.NOT_FOUND, "No family tree found for this user");
       }
 
       // Get all users in the same family tree with projection to minimize data transfer
       const usersSnapshot = await db
-        .collection('users')
-        .where('familyTreeId', '==', familyTreeId)
+        .collection("users")
+        .where("familyTreeId", "==", familyTreeId)
         .select(
-          'parentIds',
-          'childrenIds',
-          'spouseIds',
-          'displayName',
-          'firstName',
-          'lastName',
-          'profilePicture',
-          'gender',
-          'familyTreeId',
-          'email',
-          'phoneNumber'
+          "parentIds",
+          "childrenIds",
+          "spouseIds",
+          "displayName",
+          "firstName",
+          "lastName",
+          "profilePicture",
+          "gender",
+          "familyTreeId",
+          "email",
+          "phoneNumber"
         )
         .get();
 
-      const validUserDocs = usersSnapshot.docs.filter(doc => doc.exists);
+      const validUserDocs = usersSnapshot.docs.filter((doc) => doc.exists);
 
       // Get the family tree document right after getting the user document
-      const treeRef = db.collection('familyTrees').doc(familyTreeId);
+      const treeRef = db.collection("familyTrees").doc(familyTreeId);
       const treeDoc = await treeRef.get();
       if (!treeDoc.exists) {
-        throw createError(ErrorCode.NOT_FOUND, 'Family tree not found');
+        throw createError(ErrorCode.NOT_FOUND, "Family tree not found");
       }
       const treeData = treeDoc.data() as FamilyTreeDocument;
 
@@ -319,43 +319,43 @@ export const getFamilyTreeData = onCall(
 
       // Performance optimization: Pre-compute relationship maps for O(1) lookups
       const relationshipMaps = buildRelationshipMaps(validUserDocs);
-      const { childToParentsMap, parentToChildrenMap, personToSpousesMap, validUserIds } =
+      const {childToParentsMap, parentToChildrenMap, personToSpousesMap, validUserIds} =
         relationshipMaps;
 
       // Transform user data into relatives-tree Node format
-      const treeNodes = validUserDocs.map(userDoc => {
+      const treeNodes = validUserDocs.map((userDoc) => {
         const data = userDoc.data();
         const userDocId = userDoc.id;
 
         // Find siblings using pre-computed maps - O(1) lookup instead of O(m)
         const siblingsSet = findSiblings(userDocId, childToParentsMap, parentToChildrenMap);
         const siblings = Array.from(siblingsSet)
-          .filter(id => validUserIds.has(id))
-          .map(id => ({
+          .filter((id) => validUserIds.has(id))
+          .map((id) => ({
             id,
-            type: 'blood' as const,
+            type: "blood" as const,
           }));
 
         // Get parents using pre-computed map - O(1) lookup
         const parentSet = childToParentsMap.get(userDocId) || new Set<string>();
         const parents = Array.from(parentSet)
-          .filter(id => validUserIds.has(id))
-          .map(id => ({ id, type: 'blood' as const }));
+          .filter((id) => validUserIds.has(id))
+          .map((id) => ({id, type: "blood" as const}));
 
         // Get children using pre-computed map - O(1) lookup
         const childrenSet = parentToChildrenMap.get(userDocId) || new Set<string>();
         const children = Array.from(childrenSet)
-          .filter(id => validUserIds.has(id))
-          .map(id => ({ id, type: 'blood' as const }));
+          .filter((id) => validUserIds.has(id))
+          .map((id) => ({id, type: "blood" as const}));
 
         // Get spouses using pre-computed map - O(1) lookup
         const spouseSet = personToSpousesMap.get(userDocId) || new Set<string>();
         const spouses = Array.from(spouseSet)
-          .filter(id => validUserIds.has(id))
-          .map(id => ({ id, type: 'married' as const }));
+          .filter((id) => validUserIds.has(id))
+          .map((id) => ({id, type: "married" as const}));
 
-        const gender = (data.gender || 'other').toLowerCase();
-        const validGender = gender === 'male' || gender === 'female' ? gender : 'other';
+        const gender = (data.gender || "other").toLowerCase();
+        const validGender = gender === "male" || gender === "female" ? gender : "other";
 
         // Create node with parent-child relationships and attributes
         const node: FamilyMember = {
@@ -379,11 +379,11 @@ export const getFamilyTreeData = onCall(
         return node;
       });
 
-      return { treeNodes };
+      return {treeNodes};
     },
-    'getFamilyTreeData',
-    'verified',
-    { type: RateLimitType.API }
+    "getFamilyTreeData",
+    "verified",
+    {type: RateLimitType.API}
   )
 );
 
@@ -405,10 +405,10 @@ export const updateFamilyRelationships = onCall(
         request.auth!.uid
       );
 
-      const { userId, updates } = validatedData;
+      const {userId, updates} = validatedData;
       const db = getFirestore();
 
-      const userRef = db.collection('users').doc(userId);
+      const userRef = db.collection("users").doc(userId);
 
       // Use the pre-fetched resource instead of making another database call
       const userData = resource as {
@@ -423,7 +423,7 @@ export const updateFamilyRelationships = onCall(
         const currentParents = new Set(userData.parentIds || []);
         updates.addParents?.forEach((id: string) => currentParents.add(id));
         updates.removeParents?.forEach((id: string) => currentParents.delete(id));
-        batch.update(userRef, { parentIds: Array.from(currentParents) });
+        batch.update(userRef, {parentIds: Array.from(currentParents)});
       }
 
       // Update children
@@ -431,7 +431,7 @@ export const updateFamilyRelationships = onCall(
         const currentChildren = new Set(userData.childrenIds || []);
         updates.addChildren?.forEach((id: string) => currentChildren.add(id));
         updates.removeChildren?.forEach((id: string) => currentChildren.delete(id));
-        batch.update(userRef, { childrenIds: Array.from(currentChildren) });
+        batch.update(userRef, {childrenIds: Array.from(currentChildren)});
       }
 
       // Update spouses
@@ -439,20 +439,20 @@ export const updateFamilyRelationships = onCall(
         const currentSpouses = new Set(userData.spouseIds || []);
         updates.addSpouses?.forEach((id: string) => currentSpouses.add(id));
         updates.removeSpouses?.forEach((id: string) => currentSpouses.delete(id));
-        batch.update(userRef, { spouseIds: Array.from(currentSpouses) });
+        batch.update(userRef, {spouseIds: Array.from(currentSpouses)});
       }
 
       await batch.commit();
-      return { success: true };
+      return {success: true};
     },
-    'updateFamilyRelationships',
+    "updateFamilyRelationships",
     {
       resourceConfig: {
-        resourceType: 'user',
-        resourceIdField: 'userId',
+        resourceType: "user",
+        resourceIdField: "userId",
         requiredLevel: [PermissionLevel.FAMILY_MEMBER, PermissionLevel.TREE_OWNER],
       },
-      rateLimitConfig: { type: RateLimitType.WRITE },
+      rateLimitConfig: {type: RateLimitType.WRITE},
     }
   )
 );
@@ -478,7 +478,7 @@ export const createFamilyMember = onCall(
         auth.uid
       );
 
-      const { userData, relationType, selectedNodeId, options } = validatedData;
+      const {userData, relationType, selectedNodeId, options} = validatedData;
 
       logger.info(
         `Creating ${relationType} relationship: ${selectedNodeId} -> new member: ${userData.firstName} ${userData.lastName}`
@@ -486,35 +486,35 @@ export const createFamilyMember = onCall(
 
       // Additional validation for userData
       if (!userData.familyTreeId) {
-        throw createError(ErrorCode.MISSING_PARAMETERS, 'Family Tree ID is missing in userData.');
+        throw createError(ErrorCode.MISSING_PARAMETERS, "Family Tree ID is missing in userData.");
       }
 
       const db = getFirestore();
       const batch = db.batch();
 
       // Create a new document for the family member
-      const newUserId = userData.id || db.collection('users').doc().id;
-      const newUserRef = db.collection('users').doc(newUserId);
+      const newUserId = userData.id || db.collection("users").doc().id;
+      const newUserRef = db.collection("users").doc(newUserId);
 
       const selectedNodeData = selectedNode as UserDocument;
 
       // Get the family tree document
-      const treeDoc = await db.collection('familyTrees').doc(userData.familyTreeId).get();
+      const treeDoc = await db.collection("familyTrees").doc(userData.familyTreeId).get();
       if (!treeDoc.exists) {
-        throw createError(ErrorCode.NOT_FOUND, 'Family tree not found');
+        throw createError(ErrorCode.NOT_FOUND, "Family tree not found");
       }
       const treeData = treeDoc.data() as FamilyTreeDocument;
 
       // Get the current user's document for inviter information
-      const currentUserDoc = await db.collection('users').doc(auth.uid).get();
+      const currentUserDoc = await db.collection("users").doc(auth.uid).get();
       if (!currentUserDoc.exists) {
-        throw createError(ErrorCode.NOT_FOUND, 'Current user not found');
+        throw createError(ErrorCode.NOT_FOUND, "Current user not found");
       }
       const currentUserData = currentUserDoc.data();
       if (!currentUserData) {
-        throw createError(ErrorCode.INTERNAL, 'Current user data is missing');
+        throw createError(ErrorCode.INTERNAL, "Current user data is missing");
       }
-      const inviterName = currentUserData.displayName || 'A family member';
+      const inviterName = currentUserData.displayName || "A family member";
 
       // Initialize relationship arrays
       let parentIds: string[] = [];
@@ -522,19 +522,19 @@ export const createFamilyMember = onCall(
       let spouseIds: string[] = [];
 
       // Set up relationships based on type
-      if (relationType === 'child') {
+      if (relationType === "child") {
         parentIds = [selectedNodeId];
         const spouseId = selectedNodeData.spouseIds?.[0];
         if (options?.connectToSpouse && spouseId) {
           parentIds.push(spouseId);
         }
-      } else if (relationType === 'parent') {
+      } else if (relationType === "parent") {
         childrenIds = [selectedNodeId];
         const existingParentId = selectedNodeData.parentIds?.[0];
         if (options?.connectToExistingParent && existingParentId) {
           spouseIds = [existingParentId];
         }
-      } else if (relationType === 'spouse') {
+      } else if (relationType === "spouse") {
         spouseIds = [selectedNodeId];
         if (options?.connectToChildren) {
           childrenIds = selectedNodeData.childrenIds || [];
@@ -559,20 +559,20 @@ export const createFamilyMember = onCall(
         updatedAt: FieldValue.serverTimestamp(),
       };
 
-      if (relationType === 'parent') {
+      if (relationType === "parent") {
         selectedNodeUpdates.parentIds = FieldValue.arrayUnion(newUserId);
-      } else if (relationType === 'child') {
+      } else if (relationType === "child") {
         selectedNodeUpdates.childrenIds = FieldValue.arrayUnion(newUserId);
-      } else if (relationType === 'spouse') {
+      } else if (relationType === "spouse") {
         selectedNodeUpdates.spouseIds = FieldValue.arrayUnion(newUserId);
       }
-      const selectedNodeRef = db.collection('users').doc(selectedNodeId);
+      const selectedNodeRef = db.collection("users").doc(selectedNodeId);
       batch.update(selectedNodeRef, selectedNodeUpdates);
 
       // Update other related members' relationships
       const spouseId = selectedNodeData.spouseIds?.[0];
-      if (relationType === 'child' && options?.connectToSpouse && spouseId) {
-        const spouseRef = db.collection('users').doc(spouseId);
+      if (relationType === "child" && options?.connectToSpouse && spouseId) {
+        const spouseRef = db.collection("users").doc(spouseId);
         batch.update(spouseRef, {
           childrenIds: FieldValue.arrayUnion(newUserId),
           updatedAt: FieldValue.serverTimestamp(),
@@ -580,8 +580,8 @@ export const createFamilyMember = onCall(
       }
 
       const existingParentId = selectedNodeData.parentIds?.[0];
-      if (relationType === 'parent' && options?.connectToExistingParent && existingParentId) {
-        const existingParentRef = db.collection('users').doc(existingParentId);
+      if (relationType === "parent" && options?.connectToExistingParent && existingParentId) {
+        const existingParentRef = db.collection("users").doc(existingParentId);
         batch.update(existingParentRef, {
           spouseIds: FieldValue.arrayUnion(newUserId),
           updatedAt: FieldValue.serverTimestamp(),
@@ -590,12 +590,12 @@ export const createFamilyMember = onCall(
 
       const existingChildrenIds = selectedNodeData.childrenIds || [];
       if (
-        relationType === 'spouse' &&
+        relationType === "spouse" &&
         options?.connectToChildren &&
         existingChildrenIds.length > 0
       ) {
         existingChildrenIds.forEach((childId: string) => {
-          const childRef = db.collection('users').doc(childId);
+          const childRef = db.collection("users").doc(childId);
           batch.update(childRef, {
             parentIds: FieldValue.arrayUnion(newUserId),
             updatedAt: FieldValue.serverTimestamp(),
@@ -604,7 +604,7 @@ export const createFamilyMember = onCall(
       }
 
       // Add new user to family tree members
-      const treeRef = db.collection('familyTrees').doc(userData.familyTreeId);
+      const treeRef = db.collection("familyTrees").doc(userData.familyTreeId);
       batch.update(treeRef, {
         memberUserIds: FieldValue.arrayUnion(newUserId),
         updatedAt: FieldValue.serverTimestamp(),
@@ -619,17 +619,17 @@ export const createFamilyMember = onCall(
           // Create invitation data
           const invitationData: InvitationData = {
             inviteeId: newUserId,
-            inviteeName: userData.displayName || '',
-            inviteeEmail: userData.email || '',
+            inviteeName: userData.displayName || "",
+            inviteeEmail: userData.email || "",
             inviterId: auth.uid,
             inviterName: inviterName,
             familyTreeId: userData.familyTreeId,
             familyTreeName: treeData.treeName,
-            firstName: userData.firstName || '',
-            lastName: userData.lastName || '',
+            firstName: userData.firstName || "",
+            lastName: userData.lastName || "",
             dateOfBirth: userData.dateOfBirth || new Date(),
-            gender: userData.gender || 'other',
-            phoneNumber: userData.phone || '',
+            gender: userData.gender || "other",
+            phoneNumber: userData.phone || "",
             relationship: relationType,
           };
 
@@ -643,7 +643,7 @@ export const createFamilyMember = onCall(
           const firestoreExpiry = Timestamp.fromDate(expiryTime);
 
           // Store invitation data in Firestore
-          const invitationRef = db.collection('invitations').doc();
+          const invitationRef = db.collection("invitations").doc();
           await invitationRef.set({
             id: invitationRef.id,
             inviteeId: newUserId,
@@ -652,7 +652,7 @@ export const createFamilyMember = onCall(
             familyTreeId: userData.familyTreeId,
             token: hashedToken,
             expires: firestoreExpiry,
-            status: 'pending',
+            status: "pending",
             createdAt: now,
             // Store prefill data
             prefillData: {
@@ -671,10 +671,10 @@ export const createFamilyMember = onCall(
             frontendUrl = FRONTEND_URL.value();
           } catch (error) {
             // Fallback for local development when secret is not set
-            if (process.env.FUNCTIONS_EMULATOR === 'true') {
-              frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            if (process.env.FUNCTIONS_EMULATOR === "true") {
+              frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
               logger.warn(
-                'FRONTEND_URL secret not set, using environment variable or default for family tree invitation',
+                "FRONTEND_URL secret not set, using environment variable or default for family tree invitation",
                 {
                   fallbackUrl: frontendUrl,
                 }
@@ -682,7 +682,7 @@ export const createFamilyMember = onCall(
             } else {
               throw createError(
                 ErrorCode.INTERNAL,
-                'Email service configuration error prevents sending invitation.'
+                "Email service configuration error prevents sending invitation."
               );
             }
           }
@@ -690,7 +690,7 @@ export const createFamilyMember = onCall(
           if (!frontendUrl) {
             throw createError(
               ErrorCode.INTERNAL,
-              'Email service configuration error prevents sending invitation.'
+              "Email service configuration error prevents sending invitation."
             );
           }
 
@@ -700,7 +700,7 @@ export const createFamilyMember = onCall(
           // Send invitation email
           await sendEmailUniversal({
             to: invitationData.inviteeEmail,
-            templateType: 'invite',
+            templateType: "invite",
             dynamicTemplateData: {
               name: invitationData.inviteeName,
               inviterName: invitationData.inviterName,
@@ -713,21 +713,21 @@ export const createFamilyMember = onCall(
             `Sent invitation email to ${userData.email} for family tree ${userData.familyTreeId}`
           );
         } catch (emailError) {
-          logger.error('Error sending invitation email:', emailError);
+          logger.error("Error sending invitation email:", emailError);
           // Don't throw the error as the member was already created successfully
         }
       }
 
-      return { success: true, userId: newUserId };
+      return {success: true, userId: newUserId};
     },
-    'createFamilyMember',
+    "createFamilyMember",
     {
       resourceConfig: {
-        resourceType: 'user',
-        resourceIdField: 'selectedNodeId',
+        resourceType: "user",
+        resourceIdField: "selectedNodeId",
         requiredLevel: [PermissionLevel.FAMILY_MEMBER, PermissionLevel.TREE_OWNER],
       },
-      rateLimitConfig: { type: RateLimitType.WRITE },
+      rateLimitConfig: {type: RateLimitType.WRITE},
     }
   )
 );
@@ -757,19 +757,19 @@ export const deleteFamilyMember = onCall(
         currentUserId
       );
 
-      const { memberId, familyTreeId } = validatedData;
+      const {memberId, familyTreeId} = validatedData;
       const db = getFirestore();
       const batch = db.batch();
 
       const memberData = member as UserDocument;
 
       // Get the family tree document
-      const treeRef = db.collection('familyTrees').doc(familyTreeId);
+      const treeRef = db.collection("familyTrees").doc(familyTreeId);
       const treeDoc = await treeRef.get();
       if (!treeDoc.exists) {
         throw createError(
           ErrorCode.NOT_FOUND,
-          'The family tree could not be found. Please refresh the page and try again.'
+          "The family tree could not be found. Please refresh the page and try again."
         );
       }
       const treeData = treeDoc.data() as FamilyTreeDocument;
@@ -788,12 +788,12 @@ export const deleteFamilyMember = onCall(
       // Check if member has an active account
       if (
         memberData.status &&
-        memberData.status !== 'pending' &&
+        memberData.status !== "pending" &&
         memberData.treeOwnerId !== currentUserId
       ) {
         throw createError(
           ErrorCode.PERMISSION_DENIED,
-          'This member has an active account. Only the tree owner can remove members with active accounts.'
+          "This member has an active account. Only the tree owner can remove members with active accounts."
         );
       }
 
@@ -804,7 +804,7 @@ export const deleteFamilyMember = onCall(
 
       // If they have children, check if all children are shared with spouse
       let canDelete = !hasChildren; // Default case: can delete if no children
-      let deleteBlockedReason = '';
+      let deleteBlockedReason = "";
 
       if (
         hasChildren &&
@@ -815,14 +815,14 @@ export const deleteFamilyMember = onCall(
       ) {
         // Get spouse's children
         const spouseId = memberData.spouseIds[0]; // Get first spouse
-        const spouseDoc = await db.collection('users').doc(spouseId).get();
+        const spouseDoc = await db.collection("users").doc(spouseId).get();
         if (spouseDoc.exists) {
           const spouseData = spouseDoc.data() as UserDocument;
           const spouseChildren = new Set(spouseData.childrenIds || []);
           const memberChildren = new Set(memberData.childrenIds || []);
 
           // Check if all member's children are also spouse's children
-          const allChildrenShared = Array.from(memberChildren).every(childId =>
+          const allChildrenShared = Array.from(memberChildren).every((childId) =>
             spouseChildren.has(childId)
           );
 
@@ -830,28 +830,28 @@ export const deleteFamilyMember = onCall(
             canDelete = true;
           } else {
             deleteBlockedReason =
-              'This member has individual children not shared with their spouse. Please remove these relationships first.';
+              "This member has individual children not shared with their spouse. Please remove these relationships first.";
           }
         }
       } else if (hasChildren) {
         deleteBlockedReason =
-          'This member has children in the family tree. Please remove all children first.';
+          "This member has children in the family tree. Please remove all children first.";
       } else if (hasParents) {
         deleteBlockedReason =
-          'This member is connected to parents. Please remove parent relationships first.';
+          "This member is connected to parents. Please remove parent relationships first.";
       }
 
       if (!canDelete) {
         throw createError(
           ErrorCode.ABORTED,
-          deleteBlockedReason || 'Cannot delete this member due to existing family relationships.'
+          deleteBlockedReason || "Cannot delete this member due to existing family relationships."
         );
       }
 
       // Update parent relationships if they exist
       if (hasParents && memberData.parentIds) {
         for (const parentId of memberData.parentIds) {
-          const parentRef = db.collection('users').doc(parentId);
+          const parentRef = db.collection("users").doc(parentId);
           batch.update(parentRef, {
             childrenIds: FieldValue.arrayRemove(memberId),
             updatedAt: FieldValue.serverTimestamp(),
@@ -862,7 +862,7 @@ export const deleteFamilyMember = onCall(
       // Update spouse relationships if they exist
       if (hasSpouses && memberData.spouseIds) {
         for (const spouseId of memberData.spouseIds) {
-          const spouseRef = db.collection('users').doc(spouseId);
+          const spouseRef = db.collection("users").doc(spouseId);
           batch.update(spouseRef, {
             spouseIds: FieldValue.arrayRemove(memberId),
             updatedAt: FieldValue.serverTimestamp(),
@@ -873,7 +873,7 @@ export const deleteFamilyMember = onCall(
       // Update children's parent relationships if they exist
       if (hasChildren && memberData.childrenIds) {
         for (const childId of memberData.childrenIds) {
-          const childRef = db.collection('users').doc(childId);
+          const childRef = db.collection("users").doc(childId);
           batch.update(childRef, {
             parentIds: FieldValue.arrayRemove(memberId),
             updatedAt: FieldValue.serverTimestamp(),
@@ -890,7 +890,7 @@ export const deleteFamilyMember = onCall(
       });
 
       // Delete the member document
-      const memberRef = db.collection('users').doc(memberId);
+      const memberRef = db.collection("users").doc(memberId);
       batch.delete(memberRef);
 
       // Commit all changes atomically
@@ -898,54 +898,54 @@ export const deleteFamilyMember = onCall(
 
       // Fetch updated tree data after deletion
       const updatedUsersSnapshot = await db
-        .collection('users')
-        .where('familyTreeId', '==', familyTreeId)
+        .collection("users")
+        .where("familyTreeId", "==", familyTreeId)
         .get();
 
-      const validUserDocs = updatedUsersSnapshot.docs.filter(doc => doc.exists);
+      const validUserDocs = updatedUsersSnapshot.docs.filter((doc) => doc.exists);
 
       // Performance optimization: Pre-compute all blood relations once
       const bloodRelatedSet = getBloodRelatedSet(currentUserId, validUserDocs);
 
       // Performance optimization: Pre-compute relationship maps for O(1) lookups
       const relationshipMaps = buildRelationshipMaps(validUserDocs);
-      const { childToParentsMap, parentToChildrenMap, personToSpousesMap, validUserIds } =
+      const {childToParentsMap, parentToChildrenMap, personToSpousesMap, validUserIds} =
         relationshipMaps;
 
       // Transform user data into relatives-tree Node format
-      const treeNodes = validUserDocs.map(userDoc => {
+      const treeNodes = validUserDocs.map((userDoc) => {
         const data = userDoc.data();
         const userDocId = userDoc.id;
 
         // Find siblings using pre-computed maps - O(1) lookup instead of O(m)
         const siblingsSet = findSiblings(userDocId, childToParentsMap, parentToChildrenMap);
         const siblings = Array.from(siblingsSet)
-          .filter(id => validUserIds.has(id))
-          .map(id => ({
+          .filter((id) => validUserIds.has(id))
+          .map((id) => ({
             id,
-            type: 'blood' as const,
+            type: "blood" as const,
           }));
 
         // Get parents using pre-computed map - O(1) lookup
         const parentSet = childToParentsMap.get(userDocId) || new Set<string>();
         const parents = Array.from(parentSet)
-          .filter(id => validUserIds.has(id))
-          .map(id => ({ id, type: 'blood' as const }));
+          .filter((id) => validUserIds.has(id))
+          .map((id) => ({id, type: "blood" as const}));
 
         // Get children using pre-computed map - O(1) lookup
         const childrenSet = parentToChildrenMap.get(userDocId) || new Set<string>();
         const children = Array.from(childrenSet)
-          .filter(id => validUserIds.has(id))
-          .map(id => ({ id, type: 'blood' as const }));
+          .filter((id) => validUserIds.has(id))
+          .map((id) => ({id, type: "blood" as const}));
 
         // Get spouses using pre-computed map - O(1) lookup
         const spouseSet = personToSpousesMap.get(userDocId) || new Set<string>();
         const spouses = Array.from(spouseSet)
-          .filter(id => validUserIds.has(id))
-          .map(id => ({ id, type: 'married' as const }));
+          .filter((id) => validUserIds.has(id))
+          .map((id) => ({id, type: "married" as const}));
 
-        const gender = (data.gender || 'other').toLowerCase();
-        const validGender = gender === 'male' || gender === 'female' ? gender : 'other';
+        const gender = (data.gender || "other").toLowerCase();
+        const validGender = gender === "male" || gender === "female" ? gender : "other";
 
         // Create node with parent-child relationships and attributes
         const node: FamilyMember = {
@@ -973,7 +973,7 @@ export const deleteFamilyMember = onCall(
       let rootNode = currentUserId;
 
       // If current user is not in the tree (edge case), fallback to first available node
-      if (!treeNodes.some(node => node.id === currentUserId) && treeNodes.length > 0) {
+      if (!treeNodes.some((node) => node.id === currentUserId) && treeNodes.length > 0) {
         rootNode = treeNodes[0].id;
       }
 
@@ -983,18 +983,18 @@ export const deleteFamilyMember = onCall(
         rootNode,
       };
     },
-    'deleteFamilyMember',
+    "deleteFamilyMember",
     {
       resourceConfig: {
-        resourceType: 'user',
-        resourceIdField: 'memberId',
+        resourceType: "user",
+        resourceIdField: "memberId",
         requiredLevel: [PermissionLevel.TREE_OWNER, PermissionLevel.ADMIN],
         additionalPermissionCheck: async (resource: any, uid: string) => {
           // Allow if user is admin of the family tree
           const familyTreeId = resource.familyTreeId;
           if (familyTreeId) {
             const db = getFirestore();
-            const treeDoc = await db.collection('familyTrees').doc(familyTreeId).get();
+            const treeDoc = await db.collection("familyTrees").doc(familyTreeId).get();
             if (treeDoc.exists) {
               const treeData = treeDoc.data();
               return treeData?.adminUserIds?.includes(uid) || false;
@@ -1003,7 +1003,7 @@ export const deleteFamilyMember = onCall(
           return false;
         },
       },
-      rateLimitConfig: { type: RateLimitType.WRITE },
+      rateLimitConfig: {type: RateLimitType.WRITE},
     }
   )
 );
@@ -1030,17 +1030,17 @@ export const updateFamilyMember = onCall(
         currentUserId
       );
 
-      const { memberId, updatedData } = validatedData;
-      const { familyTreeId, ...updates } = updatedData;
+      const {memberId, updatedData} = validatedData;
+      const {familyTreeId, ...updates} = updatedData;
 
       if (!familyTreeId) {
-        throw createError(ErrorCode.MISSING_PARAMETERS, 'Family Tree ID is required.');
+        throw createError(ErrorCode.MISSING_PARAMETERS, "Family Tree ID is required.");
       }
 
       const db = getFirestore();
       const batch = db.batch();
 
-      const memberRef = db.collection('users').doc(memberId);
+      const memberRef = db.collection("users").doc(memberId);
       const memberData = member as UserDocument & {
         email?: string;
         isPendingSignUp?: boolean;
@@ -1053,12 +1053,12 @@ export const updateFamilyMember = onCall(
       };
 
       // Get the family tree document
-      const treeRef = db.collection('familyTrees').doc(familyTreeId);
+      const treeRef = db.collection("familyTrees").doc(familyTreeId);
       const treeDoc = await treeRef.get();
       if (!treeDoc.exists) {
         throw createError(
           ErrorCode.NOT_FOUND,
-          'The family tree could not be found. Please refresh the page and try again.'
+          "The family tree could not be found. Please refresh the page and try again."
         );
       }
       const treeData = treeDoc.data() as FamilyTreeDocument;
@@ -1102,28 +1102,28 @@ export const updateFamilyMember = onCall(
       if (isNewEmail && updates.email) {
         try {
           // Get the current user (updater) information
-          const updaterDoc = await db.collection('users').doc(currentUserId).get();
+          const updaterDoc = await db.collection("users").doc(currentUserId).get();
           const updaterData = updaterDoc.data() || {};
           const updaterName =
             updaterData.displayName ||
-            `${updaterData.firstName || ''} ${updaterData.lastName || ''}`.trim() ||
-            'A family member';
+            `${updaterData.firstName || ""} ${updaterData.lastName || ""}`.trim() ||
+            "A family member";
 
           // Create invitation data
           const invitationData: InvitationData = {
             inviteeId: memberId,
-            inviteeName: updates.displayName || memberData.displayName || '',
-            inviteeEmail: updates.email || '',
+            inviteeName: updates.displayName || memberData.displayName || "",
+            inviteeEmail: updates.email || "",
             inviterId: currentUserId,
             inviterName: updaterName,
             familyTreeId: familyTreeId,
             familyTreeName: treeData.treeName,
-            firstName: updates.firstName || memberData.firstName || '',
-            lastName: updates.lastName || memberData.lastName || '',
+            firstName: updates.firstName || memberData.firstName || "",
+            lastName: updates.lastName || memberData.lastName || "",
             dateOfBirth: memberData.dateOfBirth || new Date(),
-            gender: updates.gender || memberData.gender || 'other',
-            phoneNumber: updates.phone || memberData.phone || '',
-            relationship: 'update',
+            gender: updates.gender || memberData.gender || "other",
+            phoneNumber: updates.phone || memberData.phone || "",
+            relationship: "update",
           };
 
           // Generate invitation token
@@ -1136,7 +1136,7 @@ export const updateFamilyMember = onCall(
           const firestoreExpiry = Timestamp.fromDate(expiryTime);
 
           // Store invitation data in Firestore
-          const invitationRef = db.collection('invitations').doc();
+          const invitationRef = db.collection("invitations").doc();
           await invitationRef.set({
             id: invitationRef.id,
             inviteeId: memberId,
@@ -1145,7 +1145,7 @@ export const updateFamilyMember = onCall(
             familyTreeId: familyTreeId,
             token: hashedToken,
             expires: firestoreExpiry,
-            status: 'pending',
+            status: "pending",
             createdAt: now,
             // Store prefill data
             prefillData: {
@@ -1154,7 +1154,7 @@ export const updateFamilyMember = onCall(
               dateOfBirth: memberData.dateOfBirth,
               gender: updates.gender || memberData.gender,
               phoneNumber: updates.phone || memberData.phone,
-              relationship: 'existing',
+              relationship: "existing",
             },
           });
 
@@ -1164,10 +1164,10 @@ export const updateFamilyMember = onCall(
             frontendUrl = FRONTEND_URL.value();
           } catch (error) {
             // Fallback for local development when secret is not set
-            if (process.env.FUNCTIONS_EMULATOR === 'true') {
-              frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            if (process.env.FUNCTIONS_EMULATOR === "true") {
+              frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
               logger.warn(
-                'FRONTEND_URL secret not set, using environment variable or default for family tree invitation',
+                "FRONTEND_URL secret not set, using environment variable or default for family tree invitation",
                 {
                   fallbackUrl: frontendUrl,
                 }
@@ -1175,7 +1175,7 @@ export const updateFamilyMember = onCall(
             } else {
               throw createError(
                 ErrorCode.INTERNAL,
-                'Email service configuration error prevents sending invitation.'
+                "Email service configuration error prevents sending invitation."
               );
             }
           }
@@ -1183,7 +1183,7 @@ export const updateFamilyMember = onCall(
           if (!frontendUrl) {
             throw createError(
               ErrorCode.INTERNAL,
-              'Email service configuration error prevents sending invitation.'
+              "Email service configuration error prevents sending invitation."
             );
           }
 
@@ -1192,7 +1192,7 @@ export const updateFamilyMember = onCall(
           // Send invitation email
           await sendEmailUniversal({
             to: updates.email,
-            templateType: 'invite',
+            templateType: "invite",
             dynamicTemplateData: {
               name: invitationData.inviteeName,
               inviterName: invitationData.inviterName,
@@ -1203,25 +1203,25 @@ export const updateFamilyMember = onCall(
           });
           logger.info(`Sent invitation email to ${updates.email} for family tree ${familyTreeId}`);
         } catch (emailError) {
-          logger.error('Error sending invitation email:', emailError);
+          logger.error("Error sending invitation email:", emailError);
           // Don't throw the error as the member was already updated successfully
         }
       }
 
-      return { success: true };
+      return {success: true};
     },
-    'updateFamilyMember',
+    "updateFamilyMember",
     {
       resourceConfig: {
-        resourceType: 'user',
-        resourceIdField: 'memberId',
+        resourceType: "user",
+        resourceIdField: "memberId",
         requiredLevel: [PermissionLevel.FAMILY_MEMBER, PermissionLevel.TREE_OWNER],
         additionalPermissionCheck: async (resource: any, uid: string) => {
           // Allow if user is admin of the family tree
           const familyTreeId = resource.familyTreeId;
           if (familyTreeId) {
             const db = getFirestore();
-            const treeDoc = await db.collection('familyTrees').doc(familyTreeId).get();
+            const treeDoc = await db.collection("familyTrees").doc(familyTreeId).get();
             if (treeDoc.exists) {
               const treeData = treeDoc.data();
               return treeData?.adminUserIds?.includes(uid) || false;
@@ -1230,7 +1230,7 @@ export const updateFamilyMember = onCall(
           return false;
         },
       },
-      rateLimitConfig: { type: RateLimitType.WRITE },
+      rateLimitConfig: {type: RateLimitType.WRITE},
     }
   )
 );
@@ -1261,28 +1261,28 @@ export const promoteToAdmin = onCall(
         currentUserId
       );
 
-      const { memberId, familyTreeId } = validatedData;
+      const {memberId, familyTreeId} = validatedData;
       const db = getFirestore();
 
       const treeData = familyTree as FamilyTreeDocument;
-      const treeRef = db.collection('familyTrees').doc(familyTreeId);
+      const treeRef = db.collection("familyTrees").doc(familyTreeId);
 
       // Check if the member is already an admin
       if (treeData.adminUserIds.includes(memberId)) {
-        return { success: true, message: 'This member is already an admin.' };
+        return {success: true, message: "This member is already an admin."};
       }
 
       // Verify the member exists and is part of the tree
-      const memberRef = db.collection('users').doc(memberId);
+      const memberRef = db.collection("users").doc(memberId);
       const memberDoc = await memberRef.get();
       if (!memberDoc.exists) {
-        throw createError(ErrorCode.NOT_FOUND, 'This family member no longer exists in the tree.');
+        throw createError(ErrorCode.NOT_FOUND, "This family member no longer exists in the tree.");
       }
       const memberData = memberDoc.data() as UserDocument;
       if (!memberData.familyTreeId || memberData.familyTreeId !== familyTreeId) {
         throw createError(
           ErrorCode.INVALID_ARGUMENT,
-          'This member is not part of this family tree.'
+          "This member is not part of this family tree."
         );
       }
 
@@ -1295,17 +1295,17 @@ export const promoteToAdmin = onCall(
       logger.info(
         `User ${currentUserId} promoted member ${memberId} to admin in family tree ${familyTreeId}`
       );
-      return { success: true };
+      return {success: true};
     },
-    'promoteToAdmin',
+    "promoteToAdmin",
     {
       resourceConfig: {
-        resourceType: 'family_tree',
-        resourceIdField: 'familyTreeId',
-        collectionPath: 'familyTrees',
+        resourceType: "family_tree",
+        resourceIdField: "familyTreeId",
+        collectionPath: "familyTrees",
         requiredLevel: PermissionLevel.TREE_OWNER,
       },
-      rateLimitConfig: { type: RateLimitType.WRITE },
+      rateLimitConfig: {type: RateLimitType.WRITE},
     }
   )
 );
@@ -1336,23 +1336,23 @@ export const demoteToMember = onCall(
         currentUserId
       );
 
-      const { memberId, familyTreeId } = validatedData;
+      const {memberId, familyTreeId} = validatedData;
       const db = getFirestore();
 
       const treeData = familyTree as FamilyTreeDocument;
-      const treeRef = db.collection('familyTrees').doc(familyTreeId);
+      const treeRef = db.collection("familyTrees").doc(familyTreeId);
 
       // Prevent demoting the tree owner (who is implicitly an admin)
       if (memberId === treeData.ownerUserId) {
         throw createError(
           ErrorCode.PERMISSION_DENIED,
-          'The tree owner cannot be demoted from admin status.'
+          "The tree owner cannot be demoted from admin status."
         );
       }
 
       // Check if the member is actually an admin
       if (!treeData.adminUserIds.includes(memberId)) {
-        return { success: true, message: 'This member is not an admin.' };
+        return {success: true, message: "This member is not an admin."};
       }
 
       // Remove the member from the adminUserIds array
@@ -1364,17 +1364,17 @@ export const demoteToMember = onCall(
       logger.info(
         `User ${currentUserId} demoted admin ${memberId} to regular member in family tree ${familyTreeId}`
       );
-      return { success: true };
+      return {success: true};
     },
-    'demoteToMember',
+    "demoteToMember",
     {
       resourceConfig: {
-        resourceType: 'family_tree',
-        resourceIdField: 'familyTreeId',
-        collectionPath: 'familyTrees',
+        resourceType: "family_tree",
+        resourceIdField: "familyTreeId",
+        collectionPath: "familyTrees",
         requiredLevel: PermissionLevel.TREE_OWNER,
       },
-      rateLimitConfig: { type: RateLimitType.WRITE },
+      rateLimitConfig: {type: RateLimitType.WRITE},
     }
   )
 );
@@ -1389,7 +1389,7 @@ export const getFamilyTreeMembers = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(
-    async request => {
+    async (request) => {
       // Validate and sanitize input using centralized validator
       const validatedData = validateRequest(
         request.data,
@@ -1397,23 +1397,23 @@ export const getFamilyTreeMembers = onCall(
         request.auth!.uid
       );
 
-      const { familyTreeId } = validatedData;
+      const {familyTreeId} = validatedData;
       const db = getFirestore();
 
       // Get the family tree document
-      const treeDoc = await db.collection('familyTrees').doc(familyTreeId).get();
+      const treeDoc = await db.collection("familyTrees").doc(familyTreeId).get();
       if (!treeDoc.exists) {
-        throw createError(ErrorCode.NOT_FOUND, 'Family tree not found');
+        throw createError(ErrorCode.NOT_FOUND, "Family tree not found");
       }
       const treeData = treeDoc.data() as FamilyTreeDocument;
 
       // Get all members in the family tree
       const membersSnapshot = await db
-        .collection('users')
-        .where('familyTreeId', '==', familyTreeId)
+        .collection("users")
+        .where("familyTreeId", "==", familyTreeId)
         .get();
 
-      const members = membersSnapshot.docs.map(doc => {
+      const members = membersSnapshot.docs.map((doc) => {
         const data = doc.data();
         const isOwner = doc.id === treeData.ownerUserId;
         const isAdmin = treeData.adminUserIds?.includes(doc.id) || false;
@@ -1421,11 +1421,11 @@ export const getFamilyTreeMembers = onCall(
         return {
           id: doc.id,
           displayName: data.displayName || `${data.firstName} ${data.lastName}`.trim(),
-          email: data.email || '',
+          email: data.email || "",
           profilePicture: data.profilePicture,
-          role: isOwner ? 'owner' : isAdmin ? 'admin' : 'member',
+          role: isOwner ? "owner" : isAdmin ? "admin" : "member",
           joinedAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-          status: data.isPendingSignUp ? 'invited' : 'active',
+          status: data.isPendingSignUp ? "invited" : "active",
           canAddMembers: isOwner || isAdmin,
           canEdit: data.isPendingSignUp || false,
           relationship: data.relationship,
@@ -1438,11 +1438,11 @@ export const getFamilyTreeMembers = onCall(
         };
       });
 
-      return { members };
+      return {members};
     },
-    'getFamilyTreeMembers',
-    'verified',
-    { type: RateLimitType.API }
+    "getFamilyTreeMembers",
+    "verified",
+    {type: RateLimitType.API}
   )
 );
 
@@ -1456,7 +1456,7 @@ export const getPendingInvitations = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(
-    async request => {
+    async (request) => {
       // Validate and sanitize input using centralized validator
       const validatedData = validateRequest(
         request.data,
@@ -1464,27 +1464,27 @@ export const getPendingInvitations = onCall(
         request.auth!.uid
       );
 
-      const { familyTreeId } = validatedData;
+      const {familyTreeId} = validatedData;
       const db = getFirestore();
 
       // Get pending invitations for this family tree
       const invitationsSnapshot = await db
-        .collection('invitations')
-        .where('familyTreeId', '==', familyTreeId)
-        .where('status', '==', 'pending')
-        .orderBy('createdAt', 'desc')
+        .collection("invitations")
+        .where("familyTreeId", "==", familyTreeId)
+        .where("status", "==", "pending")
+        .orderBy("createdAt", "desc")
         .get();
 
-      const invitations = invitationsSnapshot.docs.map(doc => {
+      const invitations = invitationsSnapshot.docs.map((doc) => {
         const data = doc.data();
         return {
           id: doc.id,
-          email: data.inviteeEmail || '',
-          firstName: data.prefillData?.firstName || '',
-          lastName: data.prefillData?.lastName || '',
-          invitedBy: data.inviterId || '',
+          email: data.inviteeEmail || "",
+          firstName: data.prefillData?.firstName || "",
+          lastName: data.prefillData?.lastName || "",
+          invitedBy: data.inviterId || "",
           invitedAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-          status: data.status || 'pending',
+          status: data.status || "pending",
           inviteeEmail: data.inviteeEmail,
           inviteeName: data.inviteeName,
           invitedByName: data.inviterName,
@@ -1493,11 +1493,11 @@ export const getPendingInvitations = onCall(
         };
       });
 
-      return { invitations };
+      return {invitations};
     },
-    'getPendingInvitations',
-    'verified',
-    { type: RateLimitType.API }
+    "getPendingInvitations",
+    "verified",
+    {type: RateLimitType.API}
   )
 );
 
@@ -1515,39 +1515,39 @@ export const getFamilyManagementData = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(
-    async request => {
+    async (request) => {
       const db = getFirestore();
       const auth = request.auth!;
       const userId = auth.uid;
 
       // Get user document to find familyTreeId
-      const userRef = db.collection('users').doc(userId);
+      const userRef = db.collection("users").doc(userId);
       const userDoc = await userRef.get();
       if (!userDoc.exists) {
-        throw createError(ErrorCode.NOT_FOUND, 'User document not found');
+        throw createError(ErrorCode.NOT_FOUND, "User document not found");
       }
       const userData = userDoc.data() as UserDocument;
       const familyTreeId = userData.familyTreeId;
       if (!familyTreeId) {
-        throw createError(ErrorCode.NOT_FOUND, 'No family tree associated with this user');
+        throw createError(ErrorCode.NOT_FOUND, "No family tree associated with this user");
       }
       // Get the family tree document
-      const treeRef = db.collection('familyTrees').doc(familyTreeId);
+      const treeRef = db.collection("familyTrees").doc(familyTreeId);
       const treeDoc = await treeRef.get();
       if (!treeDoc.exists) {
-        throw createError(ErrorCode.NOT_FOUND, 'Family tree not found');
+        throw createError(ErrorCode.NOT_FOUND, "Family tree not found");
       }
       const treeData = treeDoc.data() as FamilyTreeDocument;
       // Log debug info
       logger.info(`Fetching family management data for tree ${familyTreeId}`);
       logger.info(`Tree Owner ID: ${treeData.ownerUserId}, Current User ID: ${userId}`);
-      logger.info(`Admin IDs: ${treeData.adminUserIds.join(', ')}`);
+      logger.info(`Admin IDs: ${treeData.adminUserIds.join(", ")}`);
       // Get all family members
       const membersQuery = await db
-        .collection('users')
-        .where('familyTreeId', '==', familyTreeId)
+        .collection("users")
+        .where("familyTreeId", "==", familyTreeId)
         .get();
-      const members = membersQuery.docs.map(doc => {
+      const members = membersQuery.docs.map((doc) => {
         const data = doc.data() as UserDocument;
         const isOwner = doc.id === treeData.ownerUserId;
         const isAdmin = treeData.adminUserIds?.includes(doc.id) || false;
@@ -1578,8 +1578,8 @@ export const getFamilyManagementData = onCall(
         members: members,
       };
     },
-    'getFamilyManagementData',
-    'onboarded',
-    { type: RateLimitType.API }
+    "getFamilyManagementData",
+    "onboarded",
+    {type: RateLimitType.API}
   )
 );

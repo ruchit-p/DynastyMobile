@@ -1,51 +1,51 @@
-import { Timestamp } from 'firebase-admin/firestore';
+import {Timestamp} from "firebase-admin/firestore";
 
 // Subscription Plan Types
 export enum SubscriptionPlan {
-  FREE = 'free',
-  INDIVIDUAL = 'individual',
-  FAMILY = 'family',
+  FREE = "free",
+  INDIVIDUAL = "individual",
+  FAMILY = "family",
 }
 
 // Subscription Tiers
 export enum SubscriptionTier {
   // Individual Plan tier
-  PLUS = 'plus',
+  PLUS = "plus",
 
   // Family Plan tiers
-  FAMILY_2_5TB = 'family_2_5tb',
-  FAMILY_7_5TB = 'family_7_5tb',
-  FAMILY_12TB = 'family_12tb',
+  FAMILY_2_5TB = "family_2_5tb",
+  FAMILY_7_5TB = "family_7_5tb",
+  FAMILY_12TB = "family_12tb",
 
   // Legacy tier names for backward compatibility
-  LITE = 'lite',
-  PRO = 'pro',
+  LITE = "lite",
+  PRO = "pro",
 }
 
 // Subscription Status
 export enum SubscriptionStatus {
-  ACTIVE = 'active',
-  PAST_DUE = 'past_due',
-  CANCELED = 'canceled',
-  INCOMPLETE = 'incomplete',
-  INCOMPLETE_EXPIRED = 'incomplete_expired',
-  TRIALING = 'trialing',
-  PAUSED = 'paused',
-  UNPAID = 'unpaid',
-  SUSPENDED = 'suspended', // Added for payment failure recovery
+  ACTIVE = "active",
+  PAST_DUE = "past_due",
+  CANCELED = "canceled",
+  INCOMPLETE = "incomplete",
+  INCOMPLETE_EXPIRED = "incomplete_expired",
+  TRIALING = "trialing",
+  PAUSED = "paused",
+  UNPAID = "unpaid",
+  SUSPENDED = "suspended", // Added for payment failure recovery
 }
 
 // Grace Period Status
 export enum GracePeriodStatus {
-  ACTIVE = 'active',
-  EXPIRED = 'expired',
-  CLEARED = 'cleared',
+  ACTIVE = "active",
+  EXPIRED = "expired",
+  CLEARED = "cleared",
 }
 
 // Grace Period Information
 export interface GracePeriod {
   status: GracePeriodStatus;
-  type: 'paymentFailed' | 'subscriptionExpired' | 'paymentMethodExpired';
+  type: "paymentFailed" | "subscriptionExpired" | "paymentMethodExpired";
   startedAt: Timestamp;
   endsAt: Timestamp;
   reason: string;
@@ -76,14 +76,14 @@ export interface PaymentFailureRecord {
 // Storage Addon Types - updated for pricing matrix
 export interface SubscriptionAddon {
   id?: string;
-  type: 'storage_1tb' | 'storage_2tb' | 'storage_5tb' | 'storage_20tb';
+  type: "storage_1tb" | "storage_2tb" | "storage_5tb" | "storage_20tb";
   name?: string;
   storageGB?: number;
   priceMonthly?: number;
   stripeProductId?: string;
   stripePriceId?: string;
   addedAt?: Timestamp;
-  status: 'active' | 'canceled';
+  status: "active" | "canceled";
 }
 
 // Family Plan Member
@@ -91,14 +91,14 @@ export interface FamilyPlanMember {
   userId: string;
   email: string;
   displayName: string;
-  role?: 'owner' | 'member';
+  role?: "owner" | "member";
   joinedAt?: Timestamp;
   addedAt?: Timestamp;
   addedBy?: string;
   invitedAt?: Timestamp;
   invitedBy?: string;
   storageUsedBytes?: number;
-  status: 'active' | 'invited' | 'removed';
+  status: "active" | "invited" | "removed";
   acceptedAt?: Timestamp;
   removedAt?: Timestamp;
   removedBy?: string;
@@ -107,16 +107,16 @@ export interface FamilyPlanMember {
 
 // Audit Log Entry
 export enum AuditAction {
-  SUBSCRIPTION_CREATED = 'subscription_created',
-  SUBSCRIPTION_UPDATED = 'subscription_updated',
-  SUBSCRIPTION_CANCELED = 'subscription_canceled',
-  SUBSCRIPTION_REACTIVATED = 'subscription_reactivated',
-  FAMILY_MEMBER_ADDED = 'family_member_added',
-  FAMILY_MEMBER_REMOVED = 'family_member_removed',
-  ADDON_ADDED = 'addon_added',
-  ADDON_REMOVED = 'addon_removed',
-  PAYMENT_SUCCEEDED = 'payment_succeeded',
-  PAYMENT_FAILED = 'payment_failed',
+  SUBSCRIPTION_CREATED = "subscription_created",
+  SUBSCRIPTION_UPDATED = "subscription_updated",
+  SUBSCRIPTION_CANCELED = "subscription_canceled",
+  SUBSCRIPTION_REACTIVATED = "subscription_reactivated",
+  FAMILY_MEMBER_ADDED = "family_member_added",
+  FAMILY_MEMBER_REMOVED = "family_member_removed",
+  ADDON_ADDED = "addon_added",
+  ADDON_REMOVED = "addon_removed",
+  PAYMENT_SUCCEEDED = "payment_succeeded",
+  PAYMENT_FAILED = "payment_failed",
 }
 
 export interface AuditLogEntry {
@@ -181,7 +181,7 @@ export interface Subscription {
   priceMonthly: number;
   amount: number; // Added for payment recovery
   currency: string;
-  lastPaymentStatus: 'succeeded' | 'failed' | 'pending';
+  lastPaymentStatus: "succeeded" | "failed" | "pending";
   lastPaymentAt?: Timestamp;
   nextPaymentAt?: Timestamp;
   paymentMethodLast4?: string;
@@ -222,7 +222,7 @@ export interface Subscription {
   createdAt: Timestamp;
   updatedAt: Timestamp;
   lastModifiedBy: string;
-  interval?: 'month' | 'year';
+  interval?: "month" | "year";
   cancelReason?: string;
   auditLog?: AuditLogEntry[];
   metadata?: Record<string, any>;
@@ -245,17 +245,17 @@ export interface SubscriptionHistoryEntry {
   subscriptionId: string;
   userId: string;
   action:
-    | 'created'
-    | 'upgraded'
-    | 'downgraded'
-    | 'canceled'
-    | 'reactivated'
-    | 'addon_added'
-    | 'addon_removed'
-    | 'payment_failed'
-    | 'payment_succeeded'
-    | 'family_member_added'
-    | 'family_member_removed';
+    | "created"
+    | "upgraded"
+    | "downgraded"
+    | "canceled"
+    | "reactivated"
+    | "addon_added"
+    | "addon_removed"
+    | "payment_failed"
+    | "payment_succeeded"
+    | "family_member_added"
+    | "family_member_removed";
   previousState?: Partial<Subscription>;
   newState?: Partial<Subscription>;
   metadata?: Record<string, any>;
@@ -270,7 +270,7 @@ export interface Referral {
   referrerUserId: string;
   referredUserId: string;
   referralCode: string;
-  status: 'pending' | 'completed' | 'expired' | 'invalid';
+  status: "pending" | "completed" | "expired" | "invalid";
   createdAt: Timestamp;
   completedAt?: Timestamp;
   expiresAt: Timestamp;
@@ -297,12 +297,12 @@ export interface PlanPricing {
 
 // Stripe webhook event types we handle
 export type StripeWebhookEvent =
-  | 'checkout.session.completed'
-  | 'customer.subscription.created'
-  | 'customer.subscription.updated'
-  | 'customer.subscription.deleted'
-  | 'invoice.payment_failed'
-  | 'invoice.payment_succeeded'
-  | 'customer.updated'
-  | 'payment_method.attached'
-  | 'payment_method.detached';
+  | "checkout.session.completed"
+  | "customer.subscription.created"
+  | "customer.subscription.updated"
+  | "customer.subscription.deleted"
+  | "invoice.payment_failed"
+  | "invoice.payment_succeeded"
+  | "customer.updated"
+  | "payment_method.attached"
+  | "payment_method.detached";

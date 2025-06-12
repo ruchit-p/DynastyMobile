@@ -1,9 +1,9 @@
-import { onRequest } from 'firebase-functions/v2/https';
-import { logger } from 'firebase-functions/v2';
-import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
-import { DEFAULT_REGION, FUNCTION_TIMEOUT } from '../../common';
-import { createLogContext } from '../../utils/sanitization';
-import { validateSNSSignature, isTimestampRecent } from './snsValidator';
+import {onRequest} from "firebase-functions/v2/https";
+import {logger} from "firebase-functions/v2";
+import {getFirestore, Timestamp, FieldValue} from "firebase-admin/firestore";
+import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "../../common";
+import {createLogContext} from "../../utils/sanitization";
+import {validateSNSSignature, isTimestampRecent} from "./snsValidator";
 
 interface SNSMessage {
   Type: string;
@@ -19,7 +19,7 @@ interface SNSMessage {
 }
 
 interface SESEvent {
-  eventType: 'send' | 'reject' | 'bounce' | 'complaint' | 'delivery' | 'open' | 'click';
+  eventType: "send" | "reject" | "bounce" | "complaint" | "delivery" | "open" | "click";
   mail: {
     timestamp: string;
     source: string;
@@ -39,7 +39,7 @@ interface SESEvent {
   };
   bounce?: {
     feedbackId: string;
-    bounceType: 'Undetermined' | 'Permanent' | 'Transient';
+    bounceType: "Undetermined" | "Permanent" | "Transient";
     bounceSubType: string;
     bouncedRecipients: Array<{
       emailAddress: string;
@@ -85,12 +85,12 @@ export const handleSESWebhook = onRequest(
   async (request, response) => {
     try {
       // Only accept POST requests
-      if (request.method !== 'POST') {
-        logger.warn('Invalid HTTP method for SES webhook', {
+      if (request.method !== "POST") {
+        logger.warn("Invalid HTTP method for SES webhook", {
           method: request.method,
           headers: request.headers,
         });
-        response.status(405).send('Method Not Allowed');
+        response.status(405).send("Method Not Allowed");
         return;
       }
 
@@ -98,7 +98,7 @@ export const handleSESWebhook = onRequest(
       const snsMessage: SNSMessage = request.body;
 
       logger.info(
-        'Received SES webhook',
+        "Received SES webhook",
         createLogContext({
           messageId: snsMessage.MessageId,
           type: snsMessage.Type,
@@ -111,79 +111,79 @@ export const handleSESWebhook = onRequest(
       const isValidSignature = await validateSNSSignature(snsMessage);
       if (!isValidSignature) {
         logger.error(
-          'Invalid SNS signature',
+          "Invalid SNS signature",
           createLogContext({
             messageId: snsMessage.MessageId,
             topicArn: snsMessage.TopicArn,
           })
         );
-        response.status(403).send('Forbidden: Invalid signature');
+        response.status(403).send("Forbidden: Invalid signature");
         return;
       }
 
       // Validate timestamp to prevent replay attacks
       if (!isTimestampRecent(snsMessage.Timestamp)) {
         logger.warn(
-          'SNS message timestamp too old',
+          "SNS message timestamp too old",
           createLogContext({
             messageId: snsMessage.MessageId,
             timestamp: snsMessage.Timestamp,
             topicArn: snsMessage.TopicArn,
           })
         );
-        response.status(400).send('Bad Request: Message timestamp too old');
+        response.status(400).send("Bad Request: Message timestamp too old");
         return;
       }
 
       // Handle different SNS message types
-      if (snsMessage.Type === 'SubscriptionConfirmation') {
+      if (snsMessage.Type === "SubscriptionConfirmation") {
         // For initial SNS topic subscription
         logger.info(
-          'SNS subscription confirmation',
+          "SNS subscription confirmation",
           createLogContext({
             topicArn: snsMessage.TopicArn,
             subscribeURL: snsMessage.UnsubscribeURL,
           })
         );
-        response.status(200).send('Subscription confirmed');
+        response.status(200).send("Subscription confirmed");
         return;
       }
 
-      if (snsMessage.Type === 'Notification') {
+      if (snsMessage.Type === "Notification") {
         // Parse the SES event from the SNS message
         let sesEvent: SESEvent;
         try {
           sesEvent = JSON.parse(snsMessage.Message);
         } catch (parseError) {
           logger.error(
-            'Failed to parse SES event',
+            "Failed to parse SES event",
             createLogContext({
               error: parseError instanceof Error ? parseError.message : String(parseError),
               message: snsMessage.Message,
             })
           );
-          response.status(400).send('Bad Request: Invalid SES event format');
+          response.status(400).send("Bad Request: Invalid SES event format");
           return;
         }
 
         // Process the event based on type
         await processSESEvent(sesEvent, snsMessage);
-        response.status(200).send('OK');
+        response.status(200).send("OK");
         return;
       }
 
       // Unknown message type
       logger.warn(
-        'Unknown SNS message type',
+        "Unknown SNS message type",
         createLogContext({
           type: snsMessage.Type,
           messageId: snsMessage.MessageId,
         })
       );
-      response.status(200).send('OK'); // Still return 200 to avoid retries
+      response.status(200).send("OK"); // Still return 200 to avoid retries
     } catch (error) {
       logger.error(
-        'Error processing SES webhook',
+        "Error processing SES webhook",
         createLogContext({
           error: error instanceof Error ? error.message : String(error),
           body: request.body,
@@ -191,7 +191,7 @@ export const handleSESWebhook = onRequest(
       );
 
       // Return 500 to trigger SNS retry
-      response.status(500).send('Internal Server Error');
+      response.status(500).send("Internal Server Error");
     }
   }
 );
@@ -206,26 +206,26 @@ async function processSESEvent(event: SESEvent, snsMessage: SNSMessage): Promise
   await logEmailEvent(event, snsMessage);
 
   switch (event.eventType) {
-    case 'bounce':
-      await processBounceEvent(event, db);
-      break;
-    case 'complaint':
-      await processComplaintEvent(event, db);
-      break;
-    case 'delivery':
-      await processDeliveryEvent(event, db);
-      break;
-    case 'send':
-      await processSendEvent(event, db);
-      break;
-    default:
-      logger.info(
-        'Unhandled SES event type',
-        createLogContext({
-          eventType: event.eventType,
-          messageId: event.mail.messageId,
-        })
-      );
+  case "bounce":
+    await processBounceEvent(event, db);
+    break;
+  case "complaint":
+    await processComplaintEvent(event, db);
+    break;
+  case "delivery":
+    await processDeliveryEvent(event, db);
+    break;
+  case "send":
+    await processSendEvent(event, db);
+    break;
+  default:
+    logger.info(
+      "Unhandled SES event type",
+      createLogContext({
+        eventType: event.eventType,
+        messageId: event.mail.messageId,
+      })
+    );
   }
 }
 
@@ -235,10 +235,10 @@ async function processSESEvent(event: SESEvent, snsMessage: SNSMessage): Promise
 async function processBounceEvent(event: SESEvent, db: FirebaseFirestore.Firestore): Promise<void> {
   if (!event.bounce) return;
 
-  const { bounce, mail } = event;
+  const {bounce, mail} = event;
 
   logger.info(
-    'Processing bounce event',
+    "Processing bounce event",
     createLogContext({
       messageId: mail.messageId,
       bounceType: bounce.bounceType,
@@ -252,25 +252,25 @@ async function processBounceEvent(event: SESEvent, db: FirebaseFirestore.Firesto
     const email = recipient.emailAddress.toLowerCase();
 
     // Determine suppression type based on bounce type
-    let suppressionType: 'hard' | 'soft' | 'transient';
-    if (bounce.bounceType === 'Permanent') {
-      suppressionType = 'hard';
-    } else if (bounce.bounceType === 'Transient') {
-      suppressionType = 'transient';
+    let suppressionType: "hard" | "soft" | "transient";
+    if (bounce.bounceType === "Permanent") {
+      suppressionType = "hard";
+    } else if (bounce.bounceType === "Transient") {
+      suppressionType = "transient";
     } else {
-      suppressionType = 'soft';
+      suppressionType = "soft";
     }
 
     // Only suppress hard bounces and repeated soft bounces
-    if (suppressionType === 'hard') {
-      await addToSuppressionList(db, email, 'bounce', suppressionType, {
+    if (suppressionType === "hard") {
+      await addToSuppressionList(db, email, "bounce", suppressionType, {
         bounceType: bounce.bounceType,
         bounceSubType: bounce.bounceSubType,
         diagnosticCode: recipient.diagnosticCode,
         messageId: mail.messageId,
         feedbackId: bounce.feedbackId,
       });
-    } else if (suppressionType === 'soft') {
+    } else if (suppressionType === "soft") {
       // Track soft bounces and suppress after 3 occurrences
       await trackSoftBounce(db, email, {
         bounceType: bounce.bounceType,
@@ -291,10 +291,10 @@ async function processComplaintEvent(
 ): Promise<void> {
   if (!event.complaint) return;
 
-  const { complaint, mail } = event;
+  const {complaint, mail} = event;
 
   logger.info(
-    'Processing complaint event',
+    "Processing complaint event",
     createLogContext({
       messageId: mail.messageId,
       complaintType: complaint.complaintFeedbackType,
@@ -306,7 +306,7 @@ async function processComplaintEvent(
   for (const recipient of complaint.complainedRecipients) {
     const email = recipient.emailAddress.toLowerCase();
 
-    await addToSuppressionList(db, email, 'complaint', 'hard', {
+    await addToSuppressionList(db, email, "complaint", "hard", {
       complaintType: complaint.complaintFeedbackType,
       complaintSubType: complaint.complaintSubType,
       messageId: mail.messageId,
@@ -328,10 +328,10 @@ async function processDeliveryEvent(
 ): Promise<void> {
   if (!event.delivery) return;
 
-  const { delivery, mail } = event;
+  const {delivery, mail} = event;
 
   logger.info(
-    'Processing delivery event',
+    "Processing delivery event",
     createLogContext({
       messageId: mail.messageId,
       recipients: delivery.recipients.length,
@@ -340,10 +340,10 @@ async function processDeliveryEvent(
   );
 
   // Update audit log with delivery confirmation
-  await db.collection('emailAuditLog').add({
+  await db.collection("emailAuditLog").add({
     messageId: mail.messageId,
     recipients: delivery.recipients,
-    status: 'delivered',
+    status: "delivered",
     timestamp: Timestamp.fromDate(new Date(delivery.timestamp)),
     processingTimeMillis: delivery.processingTimeMillis,
     smtpResponse: delivery.smtpResponse,
@@ -355,10 +355,10 @@ async function processDeliveryEvent(
  * Process send events for tracking
  */
 async function processSendEvent(event: SESEvent, db: FirebaseFirestore.Firestore): Promise<void> {
-  const { mail } = event;
+  const {mail} = event;
 
   logger.info(
-    'Processing send event',
+    "Processing send event",
     createLogContext({
       messageId: mail.messageId,
       destinations: mail.destination.length,
@@ -367,10 +367,10 @@ async function processSendEvent(event: SESEvent, db: FirebaseFirestore.Firestore
   );
 
   // Log the send event
-  await db.collection('emailAuditLog').add({
+  await db.collection("emailAuditLog").add({
     messageId: mail.messageId,
     recipients: mail.destination,
-    status: 'sent',
+    status: "sent",
     timestamp: Timestamp.fromDate(new Date(mail.timestamp)),
     source: mail.source,
     subject: mail.commonHeaders.subject,
@@ -383,11 +383,11 @@ async function processSendEvent(event: SESEvent, db: FirebaseFirestore.Firestore
 async function addToSuppressionList(
   db: FirebaseFirestore.Firestore,
   email: string,
-  reason: 'bounce' | 'complaint' | 'unsubscribe',
-  type: 'hard' | 'soft' | 'transient',
+  reason: "bounce" | "complaint" | "unsubscribe",
+  type: "hard" | "soft" | "transient",
   metadata: any
 ): Promise<void> {
-  const suppressionRef = db.collection('emailSuppressionList').doc(email);
+  const suppressionRef = db.collection("emailSuppressionList").doc(email);
 
   await suppressionRef.set(
     {
@@ -398,13 +398,13 @@ async function addToSuppressionList(
       metadata,
       active: true,
     },
-    { merge: true }
+    {merge: true}
   );
 
   logger.info(
-    'Added email to suppression list',
+    "Added email to suppression list",
     createLogContext({
-      email: email.substring(0, 3) + '***', // Mask email for privacy
+      email: email.substring(0, 3) + "***", // Mask email for privacy
       reason,
       type,
     })
@@ -419,7 +419,7 @@ async function trackSoftBounce(
   email: string,
   bounceInfo: any
 ): Promise<void> {
-  const bounceRef = db.collection('emailBounceTracking').doc(email);
+  const bounceRef = db.collection("emailBounceTracking").doc(email);
   const bounceDoc = await bounceRef.get();
 
   if (bounceDoc.exists) {
@@ -437,7 +437,7 @@ async function trackSoftBounce(
 
     // Suppress after 3 soft bounces
     if (bounceCount >= 3) {
-      await addToSuppressionList(db, email, 'bounce', 'soft', {
+      await addToSuppressionList(db, email, "bounce", "soft", {
         softBounceCount: bounceCount,
         lastBounceInfo: bounceInfo,
       });
@@ -466,22 +466,22 @@ async function optOutUserFromMarketing(
   email: string
 ): Promise<void> {
   // Find user by email
-  const usersQuery = await db.collection('users').where('email', '==', email).limit(1).get();
+  const usersQuery = await db.collection("users").where("email", "==", email).limit(1).get();
 
   if (!usersQuery.empty) {
     const userDoc = usersQuery.docs[0];
     await userDoc.ref.update({
-      'emailPreferences.marketing': false,
-      'emailPreferences.familyUpdates': false,
-      'emailPreferences.eventInvitations': false,
-      'emailPreferences.lastUpdated': FieldValue.serverTimestamp(),
+      "emailPreferences.marketing": false,
+      "emailPreferences.familyUpdates": false,
+      "emailPreferences.eventInvitations": false,
+      "emailPreferences.lastUpdated": FieldValue.serverTimestamp(),
     });
 
     logger.info(
-      'User opted out of marketing emails',
+      "User opted out of marketing emails",
       createLogContext({
         userId: userDoc.id,
-        email: email.substring(0, 3) + '***',
+        email: email.substring(0, 3) + "***",
       })
     );
   }
@@ -493,7 +493,7 @@ async function optOutUserFromMarketing(
 async function logEmailEvent(event: SESEvent, snsMessage: SNSMessage): Promise<void> {
   const db = getFirestore();
 
-  await db.collection('emailEventLog').add({
+  await db.collection("emailEventLog").add({
     eventType: event.eventType,
     messageId: event.mail.messageId,
     timestamp: Timestamp.fromDate(new Date(event.mail.timestamp)),
