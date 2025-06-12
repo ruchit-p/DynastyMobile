@@ -101,7 +101,7 @@ class LandingImageOptimizer {
 
         results.set(baseName, {
           original: URL.createObjectURL(file),
-          optimized: optimizedUrls as any,
+          optimized: optimizedUrls as OptimizedImage['optimized'],
           placeholder,
         });
 
@@ -180,7 +180,16 @@ class LandingImageOptimizer {
       try {
         // Note: This is a simplified version. The actual implementation
         // would need to properly integrate with R2MediaService's internal methods
-        return await (r2MediaService as any).uploadToStorage(blob, path, 'image/jpeg', metadata);
+        return await (
+          r2MediaService as unknown as {
+            uploadToStorage: (
+              blob: Blob,
+              path: string,
+              mimeType: string,
+              metadata: Record<string, string>
+            ) => Promise<string>;
+          }
+        ).uploadToStorage(blob, path, 'image/jpeg', metadata);
       } catch (error) {
         lastError = error as Error;
         if (attempt < maxRetries) {
