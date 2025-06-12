@@ -5,9 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Recent Updates (January 2025)
 
 ### FingerprintJS Library Removal (January 2025)
+
 The Dynasty codebase has been fully cleaned of FingerprintJS device fingerprinting library while preserving all encryption and security-related fingerprint functionality.
 
 **Key changes:**
+
 - Removed all FingerprintJS dependencies from package.json files across all apps
 - Deleted FingerprintJS service files: `FingerprintService.ts`, `EnhancedFingerprintService.ts`, `FingerprintProvider.tsx`
 - Updated trusted device management to use native device properties instead of FingerprintJS
@@ -15,13 +17,15 @@ The Dynasty codebase has been fully cleaned of FingerprintJS device fingerprinti
 - Rebuilt package-lock.json files without FingerprintJS packages
 
 **What was removed:**
+
 - `@fingerprintjs/fingerprintjs` (web app)
-- `@fingerprintjs/fingerprintjs-pro-react` (web app)  
+- `@fingerprintjs/fingerprintjs-pro-react` (web app)
 - `@fingerprintjs/fingerprintjs-pro-react-native` (mobile app)
 - `@fingerprintjs/fingerprintjs-pro-server-api` (Firebase functions)
 - All related service implementations and provider components
 
 **What was preserved:**
+
 - Cryptographic key fingerprints for Signal Protocol verification
 - E2EE key fingerprint generation (`e2eeService.generateFingerprint`)
 - Biometric authentication (Touch ID/Face ID) functionality
@@ -29,15 +33,18 @@ The Dynasty codebase has been fully cleaned of FingerprintJS device fingerprinti
 - Device identification now uses native device properties (`Device.brand`, `Device.modelName`, etc.)
 
 **Migration notes:**
+
 - Trusted device functionality continues to work using device-based IDs
 - No impact on end-to-end encryption or security features
 - All cryptographic fingerprints remain functional for key verification
 - Device registration uses platform-native identification methods
 
 ### Email Provider Migration to AWS SES (January 2025)
+
 The Dynasty codebase has been fully migrated from SendGrid to AWS SES for all email functionality.
 
 **Key changes:**
+
 - All email sending now uses the universal `sendEmailUniversal` function that routes to AWS SES
 - SendGrid package dependency (`@sendgrid/mail`) has been removed from package.json
 - SendGrid configuration files have been deprecated and renamed with `.deprecated.ts` extension
@@ -46,23 +53,27 @@ The Dynasty codebase has been fully migrated from SendGrid to AWS SES for all em
 - Attempting to use SendGrid now throws an error directing users to use AWS SES
 
 **Domain configuration:**
-- **Production**: `mydynastyapp.com` 
+
+- **Production**: `mydynastyapp.com`
 - **Staging**: `dynastytest.com` (added to CORS configurations)
 - **Development**: `localhost` with configurable port via `FRONTEND_PORT` environment variable
 - Removed unused `staging.mydynastyapp.com` domain
 
 **CORS updates:**
+
 - R2 staging CORS now includes `dynastytest.com` and `www.dynastytest.com`
 - Firebase functions CORS properly handles staging domains with default fallbacks
 - Production CORS remains configured for `mydynastyapp.com` domains only
 
 **Migration notes:**
+
 - The `EMAIL_PROVIDER` environment variable/secret now defaults to "ses"
 - To use SendGrid (not recommended), you would need to restore the deprecated files
 - All email templates are automatically mapped from SendGrid format to SES format
 - **Production Ready**: Comprehensive error handling, rate limiting, and security measures
 
 **Implementation details:**
+
 - Universal email function (`sendEmailUniversal`) routes to appropriate provider
 - SES templates created: `verify-email`, `password-reset`, `invite`, `mfa`
 - **IAM role authentication** for production (no hardcoded credentials stored)
@@ -72,6 +83,7 @@ The Dynasty codebase has been fully migrated from SendGrid to AWS SES for all em
 - Production uses role ARN in SES_CONFIG secret
 
 **Configuration:**
+
 - Set `EMAIL_PROVIDER=ses` to switch to AWS SES
 - Configure `SES_CONFIG` with region, fromEmail, fromName, and roleArn (production)
 - All email functions automatically use the configured provider
@@ -80,9 +92,11 @@ The Dynasty codebase has been fully migrated from SendGrid to AWS SES for all em
 - Instant rollback capability by switching provider
 
 ### Vault Encryption Implementation
+
 The Dynasty Vault has been fully implemented with zero-knowledge encryption architecture using XChaCha20-Poly1305, ensuring complete privacy and security for user files.
 
 **Key features:**
+
 - **Zero-Knowledge Architecture**: Server never has access to unencrypted content or encryption keys
 - **Client-Side Encryption**: All files encrypted on-device before upload using libsodium
 - **Backblaze B2 Storage**: Migrated from Firebase Storage for better performance and cost
@@ -92,6 +106,7 @@ The Dynasty Vault has been fully implemented with zero-knowledge encryption arch
 - **Security Monitoring**: Real-time incident detection and admin notifications
 
 **Implementation details:**
+
 - All vault functions use `withAuth` middleware with appropriate authentication levels
 - Comprehensive input validation using `vault-sanitization` utilities
 - Rate limiting configured for different operations (uploads: 10/hour, downloads: 100/hour)
@@ -99,6 +114,7 @@ The Dynasty Vault has been fully implemented with zero-knowledge encryption arch
 - Soft delete with 30-day retention for accidental deletion recovery
 
 **Security measures:**
+
 - PBKDF2 key derivation with 100,000 iterations
 - XChaCha20-Poly1305 authenticated encryption
 - Dangerous file extensions automatically appended with .txt
@@ -106,9 +122,11 @@ The Dynasty Vault has been fully implemented with zero-knowledge encryption arch
 - Admin-only access to security monitoring functions
 
 ### Signal Protocol Security Implementation
+
 The Signal Protocol functions have been updated to use standardized authentication middleware, input validation, and rate limiting for production-ready security.
 
 **Key changes:**
+
 - All 7 Signal Protocol functions now use `withAuth` middleware with appropriate authentication levels
 - Comprehensive input validation using centralized validation schemas
 - Rate limiting configured for different operation types (key publishing: 3/hour, key retrieval: 20/hour, verification: 5/day, maintenance: 10/minute)
@@ -116,28 +134,42 @@ The Signal Protocol functions have been updated to use standardized authenticati
 - Standardized error handling using `createError` instead of `HttpsError`
 
 **Security improvements:**
+
 - High-security functions (key publishing) require verified users
 - Medium-security functions (key retrieval, verification) require verified users
 - Low-security functions (status checks) require basic authentication
 - All cryptographic keys are validated for base64 format and appropriate length
 - Rate limiting prevents abuse and DoS attacks
 
+### CSRF Protection Removed
+
+The codebase has been updated to remove CSRF protection from Firebase callable functions. Firebase's built-in authentication (bearer tokens) provides sufficient security without the need for additional CSRF tokens.
+
+**Key changes:**
+
+- All Firebase functions no longer use `enableCSRF` parameter
+- Web app uses direct Firebase function calls via `FirebaseFunctionsClient`
+- Removed all CSRF-related middleware, contexts, and utilities
 - Services and utilities now self-initialize with Firebase functions client
 
 **Security note:** Firebase callable functions are inherently secure through:
+
 - Bearer token authentication (not cookie-based)
 - Automatic token validation
 - Built-in CORS protection
 
 ### Backblaze B2 Storage Configuration (January 2025)
+
 The Dynasty codebase is transitioning to Backblaze B2 for object storage, providing cost-effective and reliable cloud storage with S3-compatible APIs.
 
 **Bucket configuration:**
+
 - **Production**: `dynastyprod`
 - **Staging**: `dynastytest`
 - **Local/Emulator**: `dynastylocal`
 
 **Key features:**
+
 - S3-compatible API for easy migration
 - Automatic fallback to Firebase Storage emulator for local development
 - No CORS configuration required - uses signed URLs for all operations
@@ -145,6 +177,7 @@ The Dynasty codebase is transitioning to Backblaze B2 for object storage, provid
 - Egress-free bandwidth within Cloudflare network
 
 **Implementation details:**
+
 - StorageAdapter provides unified interface for storage operations
 - Bucket names are auto-selected based on environment (NODE_ENV)
 - Signed URLs bypass CORS restrictions for uploads/downloads
@@ -152,12 +185,14 @@ The Dynasty codebase is transitioning to Backblaze B2 for object storage, provid
 - Uses AWS SDK S3 client for compatibility
 
 **Configuration:**
+
 - B2 credentials stored in Firebase secrets (`B2_CONFIG`)
 - Application key ID and application key required
 - S3-compatible endpoint: `https://s3.us-west-004.backblazeb2.com`
 - Bucket region: `us-west-004`
 
 **Migration from R2:**
+
 - Same bucket naming convention maintained
 - No changes required to application code
 - Only configuration update needed in secrets
@@ -167,6 +202,7 @@ The Dynasty codebase is transitioning to Backblaze B2 for object storage, provid
 When implementing new features, use the automated workflow to ensure proper testing and CI/CD integration:
 
 ### Quick Start
+
 ```bash
 # Standard feature development
 yarn feature "feature-name" "feat: your commit message"
@@ -182,19 +218,22 @@ yarn feature:ts "feature-name" "feat: your commit message" --skip-local-tests
 ```
 
 ### Options
+
 - `--skip-local-tests` - Skip local test validation (useful for setup/config changes)
 - `--no-verify` - Skip git hooks during commit
 - `--force` - Continue even if tests fail locally
 
-### Workflow Steps (Automated)
-1. **Branch Creation**: Automatically creates feature branch from dev
-2. **Local Testing**: Runs all tests before pushing
-3. **Auto-fix**: Attempts to fix linting issues
-4. **Git Operations**: Commits and pushes changes
-5. **PR Creation**: Creates PR with proper description
-6. **CI Monitoring**: Watches GitHub Actions status
+### Manual Workflow Steps
 
-### Manual Commands if Needed
+1. **Branch Creation**: Create feature branch from dev
+2. **Local Testing**: Run all tests before committing
+3. **Manual Review**: Check linting and build issues
+4. **Git Operations**: Commit and push changes
+5. **PR Creation**: Create PR with proper description
+6. **Manual Review**: Code review and approval process
+
+### Development Commands
+
 ```bash
 # 1. Start from dev branch
 git checkout dev && git pull origin dev
@@ -202,7 +241,7 @@ git checkout dev && git pull origin dev
 # 2. Create feature branch
 git checkout -b feature/your-feature
 
-# 3. Run tests locally
+# 3. Run tests locally (REQUIRED)
 cd apps/web/dynastyweb && yarn test
 cd apps/mobile && yarn test
 cd apps/firebase/functions && npm test
@@ -210,11 +249,11 @@ cd apps/firebase/functions && npm test
 # 4. Create PR
 gh pr create --base dev --title "feat: your feature"
 
-# 5. Monitor CI
-gh pr checks --watch
+# 5. Manual review and merge
 ```
 
 ### Prerequisites Status
+
 ✅ **GitHub CLI**: Installed and authenticated as `ruchit-p`
 ✅ **ts-node**: Installed globally at `/Users/ruchitpatel/.nvm/versions/node/v20.18.3/bin/ts-node`
 ✅ **Automation Scripts**: Ready at `/scripts/claude-feature-workflow.sh` and `/scripts/claude-dev-assistant.ts`
@@ -226,11 +265,12 @@ The automated workflow is now fully configured and ready to use!
 Dynasty uses a **consolidated monorepo architecture** for all platforms:
 
 ### Repository Structure
+
 ```
 DynastyMobile/                    # Main monorepo
 ├── apps/
 │   ├── mobile/                   # React Native (Expo) app
-│   ├── web/dynastyweb/          # Next.js web application  
+│   ├── web/dynastyweb/          # Next.js web application
 │   └── firebase/                # Firebase Functions backend
 ├── docs/                        # Shared documentation
 └── scripts/                     # Automation scripts
@@ -238,111 +278,101 @@ DynastyMobile/                    # Main monorepo
 
 **Monorepo Benefits**: Single CI/CD pipeline, atomic commits, shared dependencies.
 **Deployment Targets**:
+
 - Web: Vercel from `apps/web/dynastyweb/`
 - Mobile: EAS from `apps/mobile/`
 - Backend: Firebase from `apps/firebase/functions/`
 
-## CI/CD Pipeline Overview
+## Manual Deployment Pipeline
 
 ### Branch Strategy
+
 - **dev** → Development branch (feature branches merge here)
-- **staging** → Staging environment (automated deployment to Vercel staging)
-- **main** → Production branch (requires manual approval)
+- **staging** → Staging environment (manual deployment)
+- **main** → Production branch (manual deployment)
 
-### Automated Workflows
-1. **Pull Request Checks** (`.github/workflows/dev-checks.yml`)
-   - Runs on all PRs to dev branch
-   - Tests: Web (Jest), Mobile (Jest), Firebase (Jest), Security scan
-   - Blocks merge if tests fail
+### Manual Deployment Process
 
-2. **Staging Deployment** (`.github/workflows/staging-deploy.yml`)
-   - Triggers when dev merges to staging
-   - Deploys to Vercel staging environment
-   - Runs integration tests
-   - Notifies team on Slack
+1. **Local Testing**
 
-3. **Production Deployment** (`.github/workflows/production-deploy.yml`)
-   - Requires manual approval
-   - Includes Cloudflare cache purging
-   - Blue-green deployment support
-   - Rollback capabilities
+   - Run tests for all apps: Web (Jest), Mobile (Jest), Firebase (Jest)
+   - Lint and TypeScript compilation checks
+   - Local security validation
 
-### Environment Variables
-Set in both GitHub Secrets and Vercel:
-- `VERCEL_ORG_ID`
-- `VERCEL_PROJECT_ID`
-- `VERCEL_TOKEN`
-- `CLOUDFLARE_ZONE_ID`
-- `CLOUDFLARE_API_TOKEN`
+2. **Staging Deployment**
 
-### CI/CD Scripts
+   - Manual deployment to Vercel staging
+   - Manual Firebase Functions deployment with staging config
+   - Integration testing in staging environment
+
+3. **Production Deployment**
+   - Manual approval and review process
+   - Deploy using deployment scripts
+   - Manual verification and monitoring
+
+### Manual Deployment Scripts
+
 ```bash
-# Create and push branches
-./scripts/setup-branches.sh
+# Deploy Firebase Functions to production
+cd apps/firebase/functions
+./scripts/deploy-production-secrets.sh
+firebase deploy --only functions
 
-# Automated feature workflow
-yarn feature "feature-name" "commit message"
+# Deploy web app to Vercel
+cd apps/web/dynastyweb
+vercel deploy --prod
 
-# CI error auto-fix
-yarn fix:ci --branch dev
+# Deploy B2 configuration
+./scripts/deploy-b2-production.sh
 ```
 
-## CI/CD Error Auto-Fix Workflow
+## Manual Testing and Quality Assurance
 
-When CI/CD tests fail, use the automated error fixing workflow:
+### Local Development Testing
 
-### Quick Fix Commands
 ```bash
-# Fix errors for a specific PR
-yarn fix:pr 123
+# Run all tests before committing
+cd apps/web/dynastyweb && yarn test
+cd apps/mobile && yarn test
+cd apps/firebase/functions && npm test
 
-# Fix errors on current branch
-yarn fix:ci --branch feature/my-feature
-
-# Use TypeScript version with advanced fixes
-yarn fix:ci:ts --pr 123 --auto-commit true
-
-# Manual fix workflow
-yarn fix:ci
+# Lint and build checks
+cd apps/web/dynastyweb && npm run lint && npm run build
+cd apps/mobile && npm run lint
+cd apps/firebase/functions && npm run lint && npm run build
 ```
 
-### How It Works
-1. **Analyzes CI Failures** - Detects what tests are failing
-2. **Applies Auto-Fixes**:
-   - ESLint errors (`--fix`)
-   - TypeScript common issues
-   - Import path problems
-   - Unused variables
-   - React Hook dependencies
-3. **Intelligent Pattern Matching** - Recognizes error patterns and applies appropriate fixes
-4. **Multiple Attempts** - Retries fixes up to 3 times
-5. **Optional Auto-Commit** - Can automatically commit and push fixes
+### Code Quality Tools
 
-### Common Fixes Applied
-- **ESLint**: Auto-fixable style issues, formatting
-- **TypeScript**: Replace `any` with `unknown`, add type assertions
-- **React**: Add missing useEffect dependencies
-- **Imports**: Fix relative import paths
-- **Variables**: Prefix unused vars with underscore
+1. **ESLint**: Automated linting and formatting
 
-### GitHub Action Integration
-The repo includes an auto-fix workflow that triggers when CI fails on a PR:
-- Automatically attempts to fix errors
-- Creates a commit with fixes
-- Comments on the PR with changes made
+   ```bash
+   npm run lint        # Check for issues
+   npm run lint:fix    # Auto-fix issues
+   ```
 
-### Manual Usage Examples
-```bash
-# When PR #42 has failing tests
-yarn fix:pr 42
+2. **TypeScript**: Type checking and compilation
 
-# Fix and auto-commit
-yarn fix:ci:ts --pr 42 --auto-commit true
+   ```bash
+   npm run build       # Full TypeScript compilation
+   tsc --noEmit        # Type check only
+   ```
 
-# Fix current branch without PR
-git checkout feature/broken-tests
-yarn fix:ci --branch feature/broken-tests
-```
+3. **Testing**: Comprehensive test suites
+   ```bash
+   npm test            # Run all tests
+   npm test -- --watch # Run tests in watch mode
+   npm test -- --coverage # Generate coverage report
+   ```
+
+### Pre-Deployment Checklist
+
+- [ ] All tests pass locally
+- [ ] No linting errors
+- [ ] TypeScript compilation successful
+- [ ] Manual smoke testing completed
+- [ ] Environment secrets configured
+- [ ] Backup plan ready for rollback
 
 ## Project Overview
 
@@ -355,6 +385,7 @@ yarn fix:ci --branch feature/broken-tests
 ## Development Commands
 
 ### Mobile App
+
 ```bash
 cd apps/mobile
 npm start        # Start Expo dev server
@@ -365,6 +396,7 @@ yarn test        # Run Jest tests
 ```
 
 ### Web App
+
 ```bash
 cd apps/web/dynastyweb
 npm run dev      # Start Next.js dev server
@@ -374,6 +406,7 @@ yarn test        # Run Jest tests
 ```
 
 ### Firebase Functions
+
 ```bash
 cd apps/firebase/functions
 npm run build    # Build TypeScript
@@ -400,6 +433,7 @@ firebase functions:secrets:get STRIPE_SECRET_KEY
 ## Critical Guidelines
 
 ### Firebase Integration (Mobile)
+
 ```typescript
 // ✅ CORRECT - React Native Firebase
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
@@ -409,14 +443,16 @@ import { Timestamp } from 'firebase/firestore';
 ```
 
 ### Performance
+
 - Use `FlashList` instead of `FlatList`
 - Always specify `estimatedItemSize`
 - Implement proper memoization
 
 ### Error Handling
+
 ```typescript
 const { handleError, withErrorHandling } = useErrorHandler({
-  title: 'Screen Error'
+  title: 'Screen Error',
 });
 
 const fetchData = withErrorHandling(async () => {
@@ -425,6 +461,7 @@ const fetchData = withErrorHandling(async () => {
 ```
 
 ### Offline Support
+
 ```typescript
 const { isOnline, forceSync } = useOffline();
 
@@ -437,24 +474,29 @@ const onRefresh = async () => {
 ## Design System
 
 ### Colors
+
 Dynasty uses a consistent color palette across mobile and web:
 
 **Primary Greens:**
+
 - Dark Green: `#163D21` (British racing green)
 - Primary: `#14562D` (Cal Poly green) - Main brand color
 - Light: `#6DBC74` (Mantis)
 - Extra Light: `#B0EDB1` (Celadon)
 
 **Gold Colors:**
+
 - Light Gold: `#FFB81F` (Selective yellow)
 - Dark Gold: `#D4AF4A` (Gold metallic)
 
 **Neutral Colors:**
+
 - Black: `#1E1D1E` (Eerie black)
 - Gray: `#595E65` (Davy's gray)
 - Light Gray: `#DFDFDF` (Platinum)
 - Off-White: `#F8F8F8` (Seasalt)
 - White: `#FFFFFF`
+
 ```typescript
 // Mobile
 import { Colors } from '../constants/Colors';
@@ -467,9 +509,12 @@ const gold = Colors.dynastyGoldLight; // #FFB81F
 ```
 
 ### Typography
+
 Font family is standardized across platforms:
+
 - Primary: `'Helvetica Neue'`
 - Fallbacks: System fonts (San Francisco on iOS, Roboto on Android)
+
 ```typescript
 // Mobile
 import Typography from '../constants/Typography';
@@ -481,6 +526,7 @@ font-family: 'Helvetica Neue', -apple-system, BlinkMacSystemFont, 'Segoe UI', sy
 ```
 
 ### Spacing
+
 ```typescript
 import { Spacing, BorderRadius } from '../constants/Spacing';
 const padding = Spacing.md; // 16px
@@ -488,6 +534,7 @@ const radius = BorderRadius.lg; // 12px
 ```
 
 ### Accessibility & Font Scaling
+
 ```typescript
 // Mobile - Use the font scale hook
 import { useFontScale } from '../src/hooks/useFontScale';
@@ -505,6 +552,7 @@ const { getScaledRem } = useFontScale();
 ```
 
 ## Core Features
+
 - **Authentication**: Email/password, phone, social logins
 - **Family Tree**: High-performance visualization
 - **Stories & Events**: Offline support with media
@@ -514,6 +562,7 @@ const { getScaledRem } = useFontScale();
 - **Mobile Features**: Camera, audio, documents, haptics, push notifications
 
 ## Code Quality Checks
+
 ```bash
 npm run lint      # Check for errors
 npm run build     # TypeScript check (functions)
@@ -523,11 +572,13 @@ yarn test         # Run tests
 ## Production Setup
 
 ### Mobile App Configuration
+
 - **EAS Build**: Configuration in `/apps/mobile/eas.json`
 - **Environment Variables**: Use `.env` files with `EXPO_PUBLIC_` prefix
 - **Firebase Service Files**: `GoogleService-Info.plist` (iOS), `google-services.json` (Android)
 
 ### iOS-Specific Configuration
+
 - **Info.plist Requirements**:
   ```xml
   <key>NSFaceIDUsageDescription</key>
@@ -537,10 +588,12 @@ yarn test         # Run tests
 - **Key Rotation**: Automatic rotation policies
 
 ### Universal Links / Deep Linking
+
 - **Domain**: `mydynastyapp.com`
 - **Configuration**: `/apps/mobile/src/config/deepLinking.ts`
 
 ## Best Practices
+
 - Use appropriate contexts (Auth, Offline)
 - Always use error boundaries and handlers
 - Implement virtualization for lists (FlashList)
@@ -548,6 +601,7 @@ yarn test         # Run tests
 - Use TypeScript types consistently
 
 ## Common Pitfalls
+
 - **Firebase**: Never mix JS SDK with React Native Firebase
 - **Navigation**: Use expo-router only
 - **Lists**: Always use FlashList with estimatedItemSize
@@ -555,15 +609,17 @@ yarn test         # Run tests
 - **Offline**: Show indicators when offline
 
 ## Testing
+
 ```bash
 yarn test              # Run all tests
-yarn test:watch        # Watch mode  
+yarn test:watch        # Watch mode
 yarn test:coverage     # Coverage report
 ```
 
 ## Documentation
 
 For detailed documentation, see `/docs/README.md`. Key references:
+
 - **Architecture**: `/docs/architecture/`
 - **API Reference**: `/docs/api-reference/`
 - **Feature Guides**: `/docs/features/`
@@ -572,7 +628,8 @@ For detailed documentation, see `/docs/README.md`. Key references:
 For implementation history, see [CHANGELOG.md](./CHANGELOG.md).
 
 # important-instruction-reminders
+
 Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
-NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+NEVER proactively create documentation files (\*.md) or README files. Only create documentation files if explicitly requested by the User.

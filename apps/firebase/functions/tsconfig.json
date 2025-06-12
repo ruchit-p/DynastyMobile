@@ -14,12 +14,17 @@
   "compileOnSave": true,
   "include": ["src"],
   "exclude": [
+    "src/**/__tests__/**/*",
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts",
     "src/__tests__/**/*",
     "src/__tests__.bak/**/*",
     "src/biometric-auth.ts",
     "src/key-rotation.ts",
     "src/vault-bulk-operations.ts",
     "src/test/**/*",
-    "src/middleware/__tests__/**/*"
+    "src/middleware/__tests__/**/*",
+    "**/*.test.ts",
+    "**/*.spec.ts"
   ]
 }

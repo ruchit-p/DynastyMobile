@@ -45,34 +45,34 @@ class B2MediaService {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.src = URL.createObjectURL(file);
-      
+
       img.onload = () => {
         // Calculate new dimensions
         let width = img.width;
         let height = img.height;
-        
+
         if (width > maxWidth || height > maxHeight) {
           const ratio = Math.min(maxWidth / width, maxHeight / height);
           width = width * ratio;
           height = height * ratio;
         }
-        
+
         // Create canvas and resize
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
-        
+
         if (!ctx) {
           reject(new Error('Failed to get canvas context'));
           return;
         }
-        
+
         ctx.drawImage(img, 0, 0, width, height);
-        
+
         // Convert to blob
         canvas.toBlob(
-          (blob) => {
+          blob => {
             if (blob) {
               resolve(blob);
             } else {
@@ -82,11 +82,11 @@ class B2MediaService {
           'image/jpeg',
           quality
         );
-        
+
         // Clean up
         URL.revokeObjectURL(img.src);
       };
-      
+
       img.onerror = () => {
         URL.revokeObjectURL(img.src);
         reject(new Error('Failed to load image'));
@@ -112,15 +112,11 @@ class B2MediaService {
         path,
         contentType,
         fileSize: data.size,
-        metadata
+        metadata,
       });
 
-      const { 
-        signedUrl, 
-        storagePath, 
-        storageProvider
-      } = uploadData as { 
-        signedUrl: string; 
+      const { signedUrl, storagePath, storageProvider } = uploadData as {
+        signedUrl: string;
         storagePath: string;
         storageProvider: 'firebase' | 'r2' | 'b2';
         itemId?: string;
@@ -129,20 +125,10 @@ class B2MediaService {
       // Upload based on storage provider
       if (storageProvider === 'b2') {
         // Upload to B2
-        return await this.uploadToB2(
-          signedUrl,
-          data,
-          uploadId,
-          callbacks
-        );
+        return await this.uploadToB2(signedUrl, data, uploadId, callbacks);
       } else if (storageProvider === 'r2') {
         // Upload to R2
-        return await this.uploadToR2(
-          signedUrl,
-          data,
-          uploadId,
-          callbacks
-        );
+        return await this.uploadToR2(signedUrl, data, uploadId, callbacks);
       } else {
         // Fallback to Firebase Storage
         return await this.uploadToFirebase(
@@ -158,7 +144,7 @@ class B2MediaService {
       errorHandler.handleError(error, ErrorSeverity.HIGH, {
         action: 'media-upload-init',
         path,
-        storageProvider: 'b2'
+        storageProvider: 'b2',
       });
       throw error;
     }
@@ -176,9 +162,9 @@ class B2MediaService {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       this.uploadTasks.set(uploadId, xhr);
-      
+
       // Track upload progress
-      xhr.upload.addEventListener('progress', (event) => {
+      xhr.upload.addEventListener('progress', event => {
         if (event.lengthComputable && callbacks?.onProgress) {
           const progress = (event.loaded / event.total) * 100;
           callbacks.onProgress(progress);
@@ -189,7 +175,7 @@ class B2MediaService {
       xhr.addEventListener('load', async () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           this.uploadTasks.delete(uploadId);
-          
+
           // For B2, return the base URL without query parameters
           // B2 provides public URLs for uploaded files
           const publicUrl = signedUrl.split('?')[0];
@@ -222,12 +208,12 @@ class B2MediaService {
       xhr.open('PUT', signedUrl);
       const fileType = data instanceof File ? data.type : 'application/octet-stream';
       xhr.setRequestHeader('Content-Type', fileType);
-      
+
       // B2-specific headers (if needed)
       if (data.size > 0) {
         xhr.setRequestHeader('Content-Length', data.size.toString());
       }
-      
+
       // Send the file
       xhr.send(data);
     });
@@ -245,9 +231,9 @@ class B2MediaService {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       this.uploadTasks.set(uploadId, xhr);
-      
+
       // Track upload progress
-      xhr.upload.addEventListener('progress', (event) => {
+      xhr.upload.addEventListener('progress', event => {
         if (event.lengthComputable && callbacks?.onProgress) {
           const progress = (event.loaded / event.total) * 100;
           callbacks.onProgress(progress);
@@ -258,7 +244,7 @@ class B2MediaService {
       xhr.addEventListener('load', async () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           this.uploadTasks.delete(uploadId);
-          
+
           // Generate public URL for R2
           const publicUrl = signedUrl.split('?')[0];
           resolve(publicUrl);
@@ -282,7 +268,7 @@ class B2MediaService {
       xhr.open('PUT', signedUrl);
       const fileType = data instanceof File ? data.type : 'application/octet-stream';
       xhr.setRequestHeader('Content-Type', fileType);
-      
+
       // Send the file
       xhr.send(data);
     });
@@ -302,7 +288,7 @@ class B2MediaService {
     const storageRef = ref(storage, storagePath);
     const uploadTask = uploadBytesResumable(storageRef, data, {
       contentType,
-      customMetadata: metadata
+      customMetadata: metadata,
     });
 
     this.uploadTasks.set(uploadId, uploadTask);
@@ -310,11 +296,11 @@ class B2MediaService {
     return new Promise((resolve, reject) => {
       uploadTask.on(
         'state_changed',
-        (snapshot) => {
+        snapshot => {
           const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
           callbacks?.onProgress?.(progress);
         },
-        (error) => {
+        error => {
           this.uploadTasks.delete(uploadId);
           callbacks?.onError?.(error);
           reject(error);
@@ -346,7 +332,7 @@ class B2MediaService {
       const compressedBlob = await this.compressImage(imageBlob as File, {
         maxWidth: 400,
         maxHeight: 400,
-        quality: 0.8
+        quality: 0.8,
       }).catch(() => imageBlob); // Use original if compression fails
 
       const timestamp = Date.now();
@@ -361,7 +347,7 @@ class B2MediaService {
         {
           uploadedBy: userId,
           uploadedAt: new Date().toISOString(),
-          mediaType: 'profile'
+          mediaType: 'profile',
         },
         callbacks
       );
@@ -384,13 +370,13 @@ class B2MediaService {
     try {
       let processedBlob: Blob = file;
       let contentType = file.type;
-      
+
       // Compress images
       if (type === 'image') {
         processedBlob = await this.compressImage(file, {
           maxWidth: 1200,
           maxHeight: 1200,
-          quality: 0.85
+          quality: 0.85,
         }).catch(() => file);
         contentType = 'image/jpeg';
       }
@@ -399,14 +385,16 @@ class B2MediaService {
       const maxSizes = {
         image: 10 * 1024 * 1024, // 10MB
         video: 1 * 1024 * 1024 * 1024, // 1GB (B2 can handle much larger)
-        audio: 100 * 1024 * 1024 // 100MB
+        audio: 100 * 1024 * 1024, // 100MB
       };
 
       if (processedBlob.size > maxSizes[type]) {
         throw new Error(`${type} file size must be less than ${maxSizes[type] / (1024 * 1024)}MB`);
       }
 
-      const filename = `${type}_${Date.now()}_${Math.random().toString(36).substring(2)}.${file.name.split('.').pop()}`;
+      const filename = `${type}_${Date.now()}_${Math.random().toString(36).substring(2)}.${file.name
+        .split('.')
+        .pop()}`;
       const path = `stories/${storyId}/media/${filename}`;
 
       return await this.uploadToStorage(
@@ -416,7 +404,7 @@ class B2MediaService {
         {
           uploadedBy: 'unknown', // Will be set by backend
           storyId,
-          mediaType: type
+          mediaType: type,
         },
         callbacks
       );
@@ -440,10 +428,10 @@ class B2MediaService {
       const compressedBlob = await this.compressImage(file, {
         maxWidth: 1200,
         maxHeight: 800,
-        quality: 0.85
+        quality: 0.85,
       }).catch(() => file);
 
-      const sanitizedFileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "")}`;
+      const sanitizedFileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '')}`;
       const path = `events/${eventId}/covers/${sanitizedFileName}`;
 
       return await this.uploadToStorage(
@@ -453,7 +441,7 @@ class B2MediaService {
         {
           uploadedBy: 'unknown', // Will be set by backend
           eventId,
-          mediaType: 'cover'
+          mediaType: 'cover',
         },
         callbacks
       );
@@ -469,7 +457,7 @@ class B2MediaService {
    */
   async uploadVaultFile(
     file: File,
-    parentId: string | null = null,
+    _parentId: string | null = null, // eslint-disable-line @typescript-eslint/no-unused-vars
     callbacks?: UploadProgressCallback
   ): Promise<string> {
     try {
@@ -498,13 +486,13 @@ class B2MediaService {
     try {
       let processedBlob: Blob = file;
       let contentType = file.type;
-      
+
       // Compress images if requested
       if (options?.compress && file.type.startsWith('image/')) {
         processedBlob = await this.compressImage(file, {
           maxWidth: 1200,
           maxHeight: 1200,
-          quality: 0.85
+          quality: 0.85,
         }).catch(() => file);
         contentType = 'image/jpeg';
       }
@@ -519,16 +507,10 @@ class B2MediaService {
         uploadedAt: new Date().toISOString(),
         originalName: file.name,
         originalSize: file.size.toString(),
-        ...options?.metadata
+        ...options?.metadata,
       };
 
-      return await this.uploadToStorage(
-        processedBlob,
-        path,
-        contentType,
-        metadata,
-        callbacks
-      );
+      return await this.uploadToStorage(processedBlob, path, contentType, metadata, callbacks);
     } catch (error) {
       const finalError = error as Error;
       callbacks?.onError?.(finalError);
@@ -569,7 +551,7 @@ class B2MediaService {
         return (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
       }
     }
-    
+
     return null;
   }
 
