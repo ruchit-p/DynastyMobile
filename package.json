@@ -48,7 +48,7 @@
   },
   "dependencies": {
     "@craftzdog/react-native-buffer": "^6.0.5",
-    "@react-native-community/datetimepicker": "^8.3.0",
+    "@react-native-community/datetimepicker": "^8.4.1",
     "@react-native-picker/picker": "^2.11.0",
     "@signalapp/libsignal-client": "^0.72.1",
     "expo": "~53.0.8",
