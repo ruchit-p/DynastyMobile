@@ -1,5 +1,5 @@
 import { onCall } from 'firebase-functions/v2/https';
-import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { DEFAULT_REGION, FUNCTION_TIMEOUT } from '../common';
 import { createError, withErrorHandling, ErrorCode } from '../utils/errors';
@@ -20,7 +20,7 @@ import { VALIDATION_SCHEMAS } from '../config/validation-schemas';
 export const migrateFamilyMemberCounters = onCall(
   {
     region: DEFAULT_REGION,
-    timeoutSeconds: FUNCTION_TIMEOUT,
+    timeoutSeconds: FUNCTION_TIMEOUT.LONG, // Migration may take longer due to batch processing
     maxInstances: 1, // Single instance to avoid race conditions
   },
   withErrorHandling(async request => {
