@@ -116,13 +116,11 @@ describe('Subscription Flow Integration Tests', () => {
 
     // Mock configurations
     jest.mocked(getStripeClient).mockReturnValue(testEnv.mockStripeClient);
-    jest
-      .mocked(getStripeConfig)
-      .mockReturnValue({
-        webhookSecret: 'test-secret',
-        secretKey: 'test-key',
-        publishableKey: 'test-pub-key',
-      } as any);
+    jest.mocked(getStripeConfig).mockReturnValue({
+      webhookSecret: 'test-secret',
+      secretKey: 'test-key',
+      publishableKey: 'test-pub-key',
+    } as any);
 
     // Mock processor constructors
     jest.mocked(SubscriptionWebhookProcessor).mockImplementation(() => mockSubscriptionProcessor);
