@@ -141,10 +141,6 @@ The Signal Protocol functions have been updated to use standardized authenticati
 - All cryptographic keys are validated for base64 format and appropriate length
 - Rate limiting prevents abuse and DoS attacks
 
-### CSRF Protection Removed
-
-The codebase has been updated to remove CSRF protection from Firebase callable functions. Firebase's built-in authentication (bearer tokens) provides sufficient security without the need for additional CSRF tokens.
-
 **Key changes:**
 
 - All Firebase functions no longer use `enableCSRF` parameter
