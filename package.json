@@ -32,19 +32,6 @@
     "pre-commit": "lint-staged",
     "pre-push": "npm run test:all"
   },
-  "lint-staged": {
-    "apps/web/dynastyweb/**/*.{js,jsx,ts,tsx}": [
-      "cd apps/web/dynastyweb && yarn lint --fix --",
-      "prettier --write"
-    ],
-    "apps/firebase/functions/**/*.{js,ts}": [
-      "cd apps/firebase/functions && npm run lint -- --fix",
-      "prettier --write"
-    ],
-    "*.{json,md,yml,yaml}": [
-      "prettier --write"
-    ]
-  },
   "devDependencies": {
     "babel-plugin-module-resolver": "^5.0.2",
     "babel-preset-expo": "^13.1.11",
