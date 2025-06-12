@@ -18,6 +18,10 @@ import {
   PerformanceAssertions,
   LoadTestUtils,
 } from '../utils/loadTestUtils';
+import { SubscriptionWebhookProcessor } from '../../webhooks/processors/subscriptionProcessor';
+import { getStripeClient, createCheckoutSessionConfig } from '../../config/stripeConfig';
+import { getStripeConfig } from '../../config/stripeSecrets';
+import * as stripeProducts from '../../config/stripeProducts';
 
 // Create test environment
 const testEnv = new StripeTestEnvironment();
@@ -30,6 +34,7 @@ jest.mock('../../middleware/auth');
 jest.mock('../../services/rateLimitService');
 jest.mock('firebase-admin/firestore');
 jest.mock('firebase-functions/v2');
+jest.mock('../../webhooks/processors/subscriptionProcessor');
 
 // Extended timeout for load tests
 const LOAD_TEST_TIMEOUT = 120000; // 2 minutes
@@ -73,15 +78,11 @@ describe('Real-World Load Testing', () => {
     );
 
     // Mock configurations
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const stripeProducts = require('../../config/stripeProducts');
-    stripeProducts.getStripePriceId = jest.fn().mockReturnValue('price_test_123');
-    stripeProducts.isEligibleForPlan = jest.fn().mockReturnValue(true);
-    stripeProducts.getStorageAllocation = jest.fn().mockReturnValue(10);
+    (stripeProducts.getStripePriceId as jest.Mock) = jest.fn().mockReturnValue('price_test_123');
+    (stripeProducts.isEligibleForPlan as jest.Mock) = jest.fn().mockReturnValue(true);
+    (stripeProducts.getStorageAllocation as jest.Mock) = jest.fn().mockReturnValue(10);
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { createCheckoutSessionConfig } = require('../../config/stripeConfig');
-    createCheckoutSessionConfig.mockReturnValue({
+    (createCheckoutSessionConfig as jest.Mock).mockReturnValue({
       mode: 'subscription',
       success_url: 'https://example.com/success',
       cancel_url: 'https://example.com/cancel',
@@ -129,21 +130,15 @@ describe('Real-World Load Testing', () => {
       processCheckoutEvent: jest.fn().mockResolvedValue({ success: true, message: 'Processed' }),
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const {
-      SubscriptionWebhookProcessor,
-    } = require('../../webhooks/processors/subscriptionProcessor');
-    SubscriptionWebhookProcessor.mockImplementation(() => mockProcessor);
+    (
+      SubscriptionWebhookProcessor as jest.MockedClass<typeof SubscriptionWebhookProcessor>
+    ).mockImplementation(() => mockProcessor as any);
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { getStripeClient } = require('../../config/stripeConfig');
-    getStripeClient.mockReturnValue(testEnv.mockStripeClient);
+    (getStripeClient as jest.Mock).mockReturnValue(testEnv.mockStripeClient);
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { getStripeConfig } = require('../../config/stripeSecrets');
-    getStripeConfig.mockReturnValue({ webhookSecret: 'test-secret' });
+    (getStripeConfig as jest.Mock).mockReturnValue({ webhookSecret: 'test-secret' });
 
-    testEnv.mockStripeClient.webhooks.constructEvent.mockImplementation(rawBody => {
+    testEnv.mockStripeClient.webhooks.constructEvent.mockImplementation((rawBody: Buffer) => {
       return JSON.parse(rawBody.toString());
     });
   }
@@ -228,7 +223,7 @@ describe('Real-World Load Testing', () => {
             userEmail: user.email,
             plan: SubscriptionPlan.INDIVIDUAL,
             tier: SubscriptionTier.PLUS,
-            interval: 'annual' as const, // More annual plans during sales
+            interval: 'year' as const, // More annual plans during sales
             referralCode: Math.random() < 0.3 ? 'BLACKFRIDAY2024' : undefined, // 30% use promo codes
           });
         };

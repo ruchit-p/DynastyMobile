@@ -11,6 +11,9 @@ import { SubscriptionPlan, SubscriptionTier, SubscriptionStatus } from '../../ty
 import { StripeTestEnvironment, testDataGenerators } from '../utils/testHelpers';
 import { webhookEvents, createWebhookRequest } from '../mocks/stripeWebhookFixtures';
 import { createMockStripeCustomer, createMockCheckoutSession } from '../mocks/stripeMocks';
+import { SubscriptionWebhookProcessor } from '../../webhooks/processors/subscriptionProcessor';
+import { getStripeClient } from '../../config/stripeConfig';
+import { getStripeConfig } from '../../config/stripeSecrets';
 
 // Create test environment
 const testEnv = new StripeTestEnvironment();
@@ -23,6 +26,7 @@ jest.mock('../../middleware/auth');
 jest.mock('../../services/rateLimitService');
 jest.mock('firebase-admin/firestore');
 jest.mock('firebase-functions/v2');
+jest.mock('../../webhooks/processors/subscriptionProcessor');
 
 // Performance test timeouts
 const PERFORMANCE_TIMEOUT = 30000; // 30 seconds
@@ -82,21 +86,15 @@ describe('Subscription Performance Testing', () => {
       processCheckoutEvent: jest.fn().mockResolvedValue({ success: true, message: 'Processed' }),
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const {
-      SubscriptionWebhookProcessor,
-    } = require('../../webhooks/processors/subscriptionProcessor');
-    SubscriptionWebhookProcessor.mockImplementation(() => mockProcessor);
+    (
+      SubscriptionWebhookProcessor as jest.MockedClass<typeof SubscriptionWebhookProcessor>
+    ).mockImplementation(() => mockProcessor as any);
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { getStripeClient } = require('../../config/stripeConfig');
-    getStripeClient.mockReturnValue(testEnv.mockStripeClient);
+    (getStripeClient as jest.Mock).mockReturnValue(testEnv.mockStripeClient);
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { getStripeConfig } = require('../../config/stripeSecrets');
-    getStripeConfig.mockReturnValue({ webhookSecret: 'test-secret' });
+    (getStripeConfig as jest.Mock).mockReturnValue({ webhookSecret: 'test-secret' });
 
-    testEnv.mockStripeClient.webhooks.constructEvent.mockImplementation(rawBody => {
+    testEnv.mockStripeClient.webhooks.constructEvent.mockImplementation((rawBody: Buffer) => {
       return JSON.parse(rawBody.toString());
     });
   });
