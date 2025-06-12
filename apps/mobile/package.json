@@ -35,7 +35,7 @@
     "@react-native-firebase/crashlytics": "^22.1.0",
     "@react-native-firebase/firestore": "^22.1.0",
     "@react-native-firebase/functions": "^22.1.0",
-    "@react-native-firebase/messaging": "^22.1.0",
+    "@react-native-firebase/messaging": "^22.2.1",
     "@react-native-firebase/remote-config": "^22.2.0",
     "@react-native-firebase/storage": "^22.1.0",
     "@react-native-google-signin/google-signin": "^14.0.0",
