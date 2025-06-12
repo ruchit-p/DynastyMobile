@@ -51,7 +51,7 @@ async function migrateLandingImages(): Promise<void> {
 
   const results: MigrationResult[] = [];
   let totalOriginalSize = 0;
-  let totalProcessed = 0;
+  const totalProcessed = 0;
 
   try {
     // Read source directory
