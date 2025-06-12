@@ -1,5 +1,8 @@
 // Mock environment variables
+process.env.NODE_ENV = 'test';
 process.env.GCLOUD_PROJECT = 'test-project';
+process.env.FIREBASE_PROJECT_ID = 'test-project';
+process.env.FUNCTIONS_EMULATOR = 'true';
 process.env.FIREBASE_CONFIG = JSON.stringify({
   projectId: 'test-project',
   databaseURL: 'https://test-project.firebaseio.com',
