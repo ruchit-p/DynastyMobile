@@ -1,6 +1,6 @@
-import {getFirestore, Timestamp, FieldValue} from "firebase-admin/firestore";
-import {logger} from "firebase-functions/v2";
-import Stripe from "stripe";
+import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions/v2';
+import Stripe from 'stripe';
 import {
   Subscription,
   SubscriptionPlan,
@@ -11,17 +11,18 @@ import {
   ReferralInfo,
   AuditLogEntry,
   AuditAction,
-} from "../types/subscription";
-import {createError, ErrorCode} from "../utils/errors";
-import {StripeService} from "./stripeService";
-import {StorageCalculationService} from "./storageCalculationService";
+} from '../types/subscription';
+import { createError, ErrorCode } from '../utils/errors';
+import { StripeService } from './stripeService';
+import { StorageCalculationService } from './storageCalculationService';
+// Note: Analytics services can be imported when needed
 import {
   isEligibleForPlan,
   PLAN_LIMITS,
   getPlanFeatures,
   getStorageAllocation,
   getMonthlyPrice,
-} from "../config/stripeProducts";
+} from '../config/stripeProducts';
 
 export interface CreateSubscriptionParams {
   userId: string;
@@ -30,7 +31,7 @@ export interface CreateSubscriptionParams {
   stripeCustomerId: string;
   plan: SubscriptionPlan;
   tier?: SubscriptionTier;
-  interval: "month" | "year";
+  interval: 'month' | 'year';
   status: SubscriptionStatus;
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
@@ -83,7 +84,7 @@ export class SubscriptionService {
     try {
       // Validate plan eligibility
       if (!isEligibleForPlan(params.plan, params.tier)) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid plan configuration");
+        throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid plan configuration');
       }
 
       // Validate family members for family plan
@@ -122,19 +123,21 @@ export class SubscriptionService {
         priceMonthly: this.getMonthlyPrice(params.plan, params.tier, params.interval),
         amount: this.getMonthlyPrice(params.plan, params.tier, params.interval) * 100, // Convert to cents
         planDisplayName: this.getPlanDisplayName(params.plan, params.tier),
-        currency: "usd",
-        lastPaymentStatus: "succeeded",
+        currency: 'usd',
+        lastPaymentStatus: 'succeeded',
         lastPaymentAt: Timestamp.now(),
-        addons: params.addons ? params.addons.map((type) => ({
-          type: type as any,
-          status: "active",
-          addedAt: Timestamp.now(),
-        })) : [],
+        addons: params.addons
+          ? params.addons.map(type => ({
+              type: type as any,
+              status: 'active',
+              addedAt: Timestamp.now(),
+            }))
+          : [],
         familyMembers: [],
         referralInfo: await this.processReferralCode(params.userId, params.referralCode),
         metadata: {
-          source: "web",
-          createdVia: "checkout",
+          source: 'web',
+          createdVia: 'checkout',
         },
         auditLog: [],
         createdAt: Timestamp.now(),
@@ -169,7 +172,7 @@ export class SubscriptionService {
       };
 
       // Save to Firestore
-      await this.db.collection("subscriptions").doc(subscriptionId).set(subscription);
+      await this.db.collection('subscriptions').doc(subscriptionId).set(subscription);
 
       // Update user document
       await this.updateUserSubscriptionStatus(params.userId, {
@@ -199,7 +202,9 @@ export class SubscriptionService {
         );
       }
 
-      logger.info("Created subscription", {
+      // Note: Analytics tracking can be implemented when analytics services are integrated
+
+      logger.info('Created subscription', {
         subscriptionId,
         userId: params.userId,
         plan: params.plan,
@@ -208,7 +213,7 @@ export class SubscriptionService {
 
       return subscription;
     } catch (error) {
-      logger.error("Failed to create subscription", {params, error});
+      logger.error('Failed to create subscription', { params, error });
       throw error;
     }
   }
@@ -217,7 +222,7 @@ export class SubscriptionService {
    * Get subscription by ID
    */
   async getSubscription(subscriptionId: string): Promise<Subscription | null> {
-    const doc = await this.db.collection("subscriptions").doc(subscriptionId).get();
+    const doc = await this.db.collection('subscriptions').doc(subscriptionId).get();
     return doc.exists ? (doc.data() as Subscription) : null;
   }
 
@@ -225,14 +230,15 @@ export class SubscriptionService {
    * Get user's active subscription
    */
   async getUserSubscription(userId: string): Promise<Subscription | null> {
-    const snapshot = await this.db.collection("subscriptions")
-      .where("userId", "==", userId)
-      .where("status", "in", [
+    const snapshot = await this.db
+      .collection('subscriptions')
+      .where('userId', '==', userId)
+      .where('status', 'in', [
         SubscriptionStatus.ACTIVE,
         SubscriptionStatus.TRIALING,
         SubscriptionStatus.PAST_DUE,
       ])
-      .orderBy("createdAt", "desc")
+      .orderBy('createdAt', 'desc')
       .limit(1)
       .get();
 
@@ -248,11 +254,11 @@ export class SubscriptionService {
    */
   async updateSubscription(params: UpdateSubscriptionParams): Promise<Subscription> {
     try {
-      const subscriptionRef = this.db.collection("subscriptions").doc(params.subscriptionId);
+      const subscriptionRef = this.db.collection('subscriptions').doc(params.subscriptionId);
       const subscriptionDoc = await subscriptionRef.get();
 
       if (!subscriptionDoc.exists) {
-        throw createError(ErrorCode.SUBSCRIPTION_NOT_FOUND, "Subscription not found");
+        throw createError(ErrorCode.SUBSCRIPTION_NOT_FOUND, 'Subscription not found');
       }
 
       const currentSubscription = subscriptionDoc.data() as Subscription;
@@ -266,27 +272,29 @@ export class SubscriptionService {
       // Update plan/tier
       if (params.plan !== undefined && params.plan !== currentSubscription.plan) {
         updates.plan = params.plan;
-        changes.plan = {from: currentSubscription.plan, to: params.plan};
+        changes.plan = { from: currentSubscription.plan, to: params.plan };
 
         if (params.tier !== undefined) {
           updates.tier = params.tier;
-          changes.tier = {from: currentSubscription.tier, to: params.tier};
+          changes.tier = { from: currentSubscription.tier, to: params.tier };
         }
 
         // Validate new plan
         if (!isEligibleForPlan(params.plan, params.tier)) {
-          throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid plan configuration");
+          throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid plan configuration');
         }
       }
 
       // Update status
       if (params.status !== undefined && params.status !== currentSubscription.status) {
         updates.status = params.status;
-        changes.status = {from: currentSubscription.status, to: params.status};
+        changes.status = { from: currentSubscription.status, to: params.status };
 
         // Handle status-specific updates
         if (params.status === SubscriptionStatus.CANCELED) {
-          updates.canceledAt = params.canceledAt ? Timestamp.fromDate(params.canceledAt) : Timestamp.now();
+          updates.canceledAt = params.canceledAt
+            ? Timestamp.fromDate(params.canceledAt)
+            : Timestamp.now();
           updates.cancelReason = params.cancelReason;
         }
       }
@@ -339,11 +347,27 @@ export class SubscriptionService {
         });
       }
 
-      // Return updated subscription
+      // Get updated subscription for return and analytics
       const updatedDoc = await subscriptionRef.get();
-      return updatedDoc.data() as Subscription;
+      const updatedSubscription = updatedDoc.data() as Subscription;
+
+      // Trigger analytics tracking for significant changes (async, don't block subscription update)
+      if (Object.keys(changes).length > 0) {
+        this.trackSubscriptionUpdated(updatedSubscription, changes).catch(
+          (analyticsError: Error) => {
+            logger.warn('Failed to track subscription update analytics', {
+              subscriptionId: params.subscriptionId,
+              userId: currentSubscription.userId,
+              changes,
+              error: analyticsError.message,
+            });
+          }
+        );
+      }
+
+      return updatedSubscription;
     } catch (error) {
-      logger.error("Failed to update subscription", {params, error});
+      logger.error('Failed to update subscription', { params, error });
       throw error;
     }
   }
@@ -359,12 +383,12 @@ export class SubscriptionService {
     try {
       const subscription = await this.getSubscription(subscriptionId);
       if (!subscription) {
-        throw createError(ErrorCode.SUBSCRIPTION_NOT_FOUND, "Subscription not found");
+        throw createError(ErrorCode.SUBSCRIPTION_NOT_FOUND, 'Subscription not found');
       }
 
       // Cancel in Stripe
       await this.stripeService.cancelSubscription({
-        subscriptionId: subscription.stripeSubscriptionId || "",
+        subscriptionId: subscription.stripeSubscriptionId || '',
         cancelImmediately,
         reason,
       });
@@ -379,7 +403,7 @@ export class SubscriptionService {
 
       return await this.updateSubscription(updates);
     } catch (error) {
-      logger.error("Failed to cancel subscription", {subscriptionId, error});
+      logger.error('Failed to cancel subscription', { subscriptionId, error });
       throw error;
     }
   }
@@ -389,22 +413,22 @@ export class SubscriptionService {
    */
   async addFamilyMember(params: AddFamilyMemberParams): Promise<void> {
     try {
-      const subscriptionRef = this.db.collection("subscriptions").doc(params.subscriptionId);
+      const subscriptionRef = this.db.collection('subscriptions').doc(params.subscriptionId);
       const subscriptionDoc = await subscriptionRef.get();
 
       if (!subscriptionDoc.exists) {
-        throw createError(ErrorCode.SUBSCRIPTION_NOT_FOUND, "Subscription not found");
+        throw createError(ErrorCode.SUBSCRIPTION_NOT_FOUND, 'Subscription not found');
       }
 
       const subscription = subscriptionDoc.data() as Subscription;
 
       // Validate family plan
       if (subscription.plan !== SubscriptionPlan.FAMILY) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, "Not a family plan subscription");
+        throw createError(ErrorCode.INVALID_ARGUMENT, 'Not a family plan subscription');
       }
 
       // Check member limit
-      const currentMembers = subscription.familyMembers?.filter((m) => m.status === "active") || [];
+      const currentMembers = subscription.familyMembers?.filter(m => m.status === 'active') || [];
       if (currentMembers.length >= PLAN_LIMITS.family.maxMembers - 1) {
         throw createError(
           ErrorCode.FAMILY_MEMBER_LIMIT_EXCEEDED,
@@ -413,9 +437,9 @@ export class SubscriptionService {
       }
 
       // Check if member already exists
-      const existingMember = subscription.familyMembers?.find((m) => m.userId === params.memberId);
-      if (existingMember && existingMember.status === "active") {
-        throw createError(ErrorCode.ALREADY_EXISTS, "Member already in family plan");
+      const existingMember = subscription.familyMembers?.find(m => m.userId === params.memberId);
+      if (existingMember && existingMember.status === 'active') {
+        throw createError(ErrorCode.ALREADY_EXISTS, 'Member already in family plan');
       }
 
       // Add or update member
@@ -424,13 +448,13 @@ export class SubscriptionService {
         email: params.memberEmail,
         displayName: params.memberName,
         joinedAt: Timestamp.now(),
-        status: "active",
+        status: 'active',
         invitedBy: params.invitedBy,
         invitedAt: Timestamp.now(),
       };
 
       const updatedMembers = subscription.familyMembers || [];
-      const memberIndex = updatedMembers.findIndex((m) => m.userId === params.memberId);
+      const memberIndex = updatedMembers.findIndex(m => m.userId === params.memberId);
 
       if (memberIndex >= 0) {
         updatedMembers[memberIndex] = newMember;
@@ -445,7 +469,7 @@ export class SubscriptionService {
       });
 
       // Update member's user document
-      await this.db.collection("users").doc(params.memberId).update({
+      await this.db.collection('users').doc(params.memberId).update({
         familyPlanOwnerId: subscription.userId,
         familyPlanJoinedAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
@@ -461,12 +485,12 @@ export class SubscriptionService {
         },
       });
 
-      logger.info("Added family member", {
+      logger.info('Added family member', {
         subscriptionId: params.subscriptionId,
         memberId: params.memberId,
       });
     } catch (error) {
-      logger.error("Failed to add family member", {params, error});
+      logger.error('Failed to add family member', { params, error });
       throw error;
     }
   }
@@ -476,29 +500,30 @@ export class SubscriptionService {
    */
   async removeFamilyMember(params: RemoveFamilyMemberParams): Promise<void> {
     try {
-      const subscriptionRef = this.db.collection("subscriptions").doc(params.subscriptionId);
+      const subscriptionRef = this.db.collection('subscriptions').doc(params.subscriptionId);
       const subscriptionDoc = await subscriptionRef.get();
 
       if (!subscriptionDoc.exists) {
-        throw createError(ErrorCode.SUBSCRIPTION_NOT_FOUND, "Subscription not found");
+        throw createError(ErrorCode.SUBSCRIPTION_NOT_FOUND, 'Subscription not found');
       }
 
       const subscription = subscriptionDoc.data() as Subscription;
 
       // Find member
-      const memberIndex = subscription.familyMembers?.findIndex(
-        (m) => m.userId === params.memberId && m.status === "active"
-      ) ?? -1;
+      const memberIndex =
+        subscription.familyMembers?.findIndex(
+          m => m.userId === params.memberId && m.status === 'active'
+        ) ?? -1;
 
       if (memberIndex === -1) {
-        throw createError(ErrorCode.NOT_FOUND, "Family member not found");
+        throw createError(ErrorCode.NOT_FOUND, 'Family member not found');
       }
 
       // Update member status
       const updatedMembers = [...(subscription.familyMembers || [])];
       updatedMembers[memberIndex] = {
         ...updatedMembers[memberIndex],
-        status: "removed",
+        status: 'removed',
         removedAt: Timestamp.now(),
         removedBy: params.removedBy,
         removalReason: params.reason,
@@ -511,7 +536,7 @@ export class SubscriptionService {
       });
 
       // Update member's user document
-      await this.db.collection("users").doc(params.memberId).update({
+      await this.db.collection('users').doc(params.memberId).update({
         familyPlanOwnerId: FieldValue.delete(),
         familyPlanJoinedAt: FieldValue.delete(),
         familyPlanRemovedAt: Timestamp.now(),
@@ -528,12 +553,12 @@ export class SubscriptionService {
         },
       });
 
-      logger.info("Removed family member", {
+      logger.info('Removed family member', {
         subscriptionId: params.subscriptionId,
         memberId: params.memberId,
       });
     } catch (error) {
-      logger.error("Failed to remove family member", {params, error});
+      logger.error('Failed to remove family member', { params, error });
       throw error;
     }
   }
@@ -547,8 +572,9 @@ export class SubscriptionService {
       const stripeSubscription = await this.stripeService.getSubscription(stripeSubscriptionId);
 
       // Find local subscription
-      const snapshot = await this.db.collection("subscriptions")
-        .where("stripeSubscriptionId", "==", stripeSubscriptionId)
+      const snapshot = await this.db
+        .collection('subscriptions')
+        .where('stripeSubscriptionId', '==', stripeSubscriptionId)
         .limit(1)
         .get();
 
@@ -556,7 +582,7 @@ export class SubscriptionService {
         // Create new subscription if doesn't exist
         const userId = stripeSubscription.metadata.userId;
         if (!userId) {
-          throw createError(ErrorCode.INVALID_ARGUMENT, "Missing userId in Stripe metadata");
+          throw createError(ErrorCode.INVALID_ARGUMENT, 'Missing userId in Stripe metadata');
         }
 
         const plan = stripeSubscription.metadata.plan as SubscriptionPlan;
@@ -569,13 +595,13 @@ export class SubscriptionService {
           stripeCustomerId: stripeSubscription.customer as string,
           plan,
           tier,
-          interval: stripeSubscription.items.data[0].price.recurring?.interval as "month" | "year",
+          interval: stripeSubscription.items.data[0].price.recurring?.interval as 'month' | 'year',
           status: this.stripeService.mapSubscriptionStatus(stripeSubscription.status),
           currentPeriodStart: new Date((stripeSubscription as any).current_period_start * 1000),
           currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000),
-          trialEnd: stripeSubscription.trial_end ?
-            new Date(stripeSubscription.trial_end * 1000) :
-            undefined,
+          trialEnd: stripeSubscription.trial_end
+            ? new Date(stripeSubscription.trial_end * 1000)
+            : undefined,
         });
       }
 
@@ -587,12 +613,12 @@ export class SubscriptionService {
         subscriptionId,
         status,
         currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000),
-        canceledAt: stripeSubscription.canceled_at ?
-          new Date(stripeSubscription.canceled_at * 1000) :
-          undefined,
+        canceledAt: stripeSubscription.canceled_at
+          ? new Date(stripeSubscription.canceled_at * 1000)
+          : undefined,
       });
     } catch (error) {
-      logger.error("Failed to sync subscription from Stripe", {stripeSubscriptionId, error});
+      logger.error('Failed to sync subscription from Stripe', { stripeSubscriptionId, error });
       throw error;
     }
   }
@@ -610,35 +636,39 @@ export class SubscriptionService {
 
     try {
       // Find referrer by code
-      const referrerSnapshot = await this.db.collection("users")
-        .where("referralCode", "==", referralCode)
+      const referrerSnapshot = await this.db
+        .collection('users')
+        .where('referralCode', '==', referralCode)
         .limit(1)
         .get();
 
       if (referrerSnapshot.empty) {
-        logger.warn("Invalid referral code", {referralCode});
+        logger.warn('Invalid referral code', { referralCode });
         return undefined;
       }
 
       const referrerId = referrerSnapshot.docs[0].id;
 
       // Create referral record
-      await this.db.collection("referrals").add({
+      await this.db.collection('referrals').add({
         referrerUserId: referrerId,
         referredUserId: userId,
         referralCode,
-        status: "completed",
+        status: 'completed',
         createdAt: Timestamp.now(),
         completedAt: Timestamp.now(),
       });
 
       // Update referrer's referral count
-      await this.db.collection("users").doc(referrerId).update({
-        totalReferrals: FieldValue.increment(1),
-        updatedAt: Timestamp.now(),
-      });
+      await this.db
+        .collection('users')
+        .doc(referrerId)
+        .update({
+          totalReferrals: FieldValue.increment(1),
+          updatedAt: Timestamp.now(),
+        });
 
-      logger.info("Processed referral", {
+      logger.info('Processed referral', {
         referrerId,
         referredUserId: userId,
         referralCode,
@@ -654,7 +684,7 @@ export class SubscriptionService {
         storageEarnedGB: 0,
       };
     } catch (error) {
-      logger.error("Failed to process referral code", {referralCode, error});
+      logger.error('Failed to process referral code', { referralCode, error });
       return undefined;
     }
   }
@@ -667,38 +697,38 @@ export class SubscriptionService {
     ownerId: string,
     memberIds: string[]
   ): Promise<void> {
-    const ownerDoc = await this.db.collection("users").doc(ownerId).get();
+    const ownerDoc = await this.db.collection('users').doc(ownerId).get();
     const ownerData = ownerDoc.data();
 
     for (const memberId of memberIds) {
       try {
-        const memberDoc = await this.db.collection("users").doc(memberId).get();
+        const memberDoc = await this.db.collection('users').doc(memberId).get();
         if (!memberDoc.exists) {
-          logger.warn("Family member not found", {memberId});
+          logger.warn('Family member not found', { memberId });
           continue;
         }
 
         const memberData = memberDoc.data();
 
         // Send invitation (this would trigger an email notification)
-        await this.db.collection("familyInvitations").add({
+        await this.db.collection('familyInvitations').add({
           subscriptionId,
           inviterId: ownerId,
           inviterEmail: ownerData?.email,
           inviterName: ownerData?.displayName,
           inviteeId: memberId,
           inviteeEmail: memberData?.email,
-          status: "pending",
+          status: 'pending',
           createdAt: Timestamp.now(),
           expiresAt: Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)), // 7 days
         });
 
-        logger.info("Created family invitation", {
+        logger.info('Created family invitation', {
           subscriptionId,
           inviteeId: memberId,
         });
       } catch (error) {
-        logger.error("Failed to create family invitation", {memberId, error});
+        logger.error('Failed to create family invitation', { memberId, error });
       }
     }
   }
@@ -732,7 +762,7 @@ export class SubscriptionService {
       userUpdates.subscriptionTier = updates.tier;
     }
 
-    await this.db.collection("users").doc(userId).update(userUpdates);
+    await this.db.collection('users').doc(userId).update(userUpdates);
   }
 
   /**
@@ -740,34 +770,41 @@ export class SubscriptionService {
    */
   async addAuditLogEntry(
     subscriptionId: string,
-    entry: Omit<AuditLogEntry, "timestamp">
+    entry: Omit<AuditLogEntry, 'timestamp'>
   ): Promise<void> {
     const auditEntry: AuditLogEntry = {
       ...entry,
       timestamp: Timestamp.now(),
     };
 
-    await this.db.collection("subscriptions").doc(subscriptionId).update({
-      auditLog: FieldValue.arrayUnion(auditEntry),
-    });
+    await this.db
+      .collection('subscriptions')
+      .doc(subscriptionId)
+      .update({
+        auditLog: FieldValue.arrayUnion(auditEntry),
+      });
   }
 
   /**
    * Get user's subscription history
    */
   async getUserSubscriptionHistory(userId: string): Promise<Subscription[]> {
-    const snapshot = await this.db.collection("subscriptions")
-      .where("userId", "==", userId)
-      .orderBy("createdAt", "desc")
+    const snapshot = await this.db
+      .collection('subscriptions')
+      .where('userId', '==', userId)
+      .orderBy('createdAt', 'desc')
       .get();
 
-    return snapshot.docs.map((doc) => doc.data() as Subscription);
+    return snapshot.docs.map(doc => doc.data() as Subscription);
   }
 
   /**
    * Get plan features based on plan and tier
    */
-  private getPlanFeatures(plan: SubscriptionPlan, tier?: SubscriptionTier): Subscription["features"] {
+  private getPlanFeatures(
+    plan: SubscriptionPlan,
+    tier?: SubscriptionTier
+  ): Subscription['features'] {
     const features = getPlanFeatures(plan, tier);
 
     return {
@@ -784,12 +821,16 @@ export class SubscriptionService {
   /**
    * Calculate monthly price for a plan
    */
-  private getMonthlyPrice(plan: SubscriptionPlan, tier?: SubscriptionTier, interval?: "month" | "year"): number {
+  private getMonthlyPrice(
+    plan: SubscriptionPlan,
+    tier?: SubscriptionTier,
+    interval?: 'month' | 'year'
+  ): number {
     // Use pricing from configuration (pricing matrix)
     const monthlyPrice = getMonthlyPrice(plan, tier);
 
     // Apply yearly discount if applicable (10% discount for yearly)
-    if (interval === "year") {
+    if (interval === 'year') {
       return monthlyPrice * 0.9; // 10% yearly discount
     }
 
@@ -801,27 +842,27 @@ export class SubscriptionService {
    */
   private getPlanDisplayName(plan: SubscriptionPlan, tier?: SubscriptionTier): string {
     if (plan === SubscriptionPlan.FREE) {
-      return "Dynasty Free";
+      return 'Dynasty Free';
     }
 
     if (plan === SubscriptionPlan.INDIVIDUAL) {
-      return "Dynasty Individual Plus";
+      return 'Dynasty Individual Plus';
     }
 
     if (plan === SubscriptionPlan.FAMILY) {
       switch (tier) {
-      case SubscriptionTier.FAMILY_2_5TB:
-        return "Dynasty Family 2.5TB";
-      case SubscriptionTier.FAMILY_7_5TB:
-        return "Dynasty Family 7.5TB";
-      case SubscriptionTier.FAMILY_12TB:
-        return "Dynasty Family 12TB";
-      default:
-        return "Dynasty Family";
+        case SubscriptionTier.FAMILY_2_5TB:
+          return 'Dynasty Family 2.5TB';
+        case SubscriptionTier.FAMILY_7_5TB:
+          return 'Dynasty Family 7.5TB';
+        case SubscriptionTier.FAMILY_12TB:
+          return 'Dynasty Family 12TB';
+        default:
+          return 'Dynasty Family';
       }
     }
 
-    return "Dynasty Plan";
+    return 'Dynasty Plan';
   }
 
   /**
@@ -833,7 +874,7 @@ export class SubscriptionService {
       return [];
     }
 
-    return subscription.familyMembers?.filter((m) => m.status === "active") || [];
+    return subscription.familyMembers?.filter(m => m.status === 'active') || [];
   }
 
   /**
@@ -858,14 +899,16 @@ export class SubscriptionService {
     }
 
     // Check if user is part of a family plan
-    const userDoc = await this.db.collection("users").doc(userId).get();
+    const userDoc = await this.db.collection('users').doc(userId).get();
     const userData = userDoc.data();
 
     if (userData?.familyPlanOwnerId) {
       const familySubscription = await this.getUserSubscription(userData.familyPlanOwnerId);
-      if (familySubscription &&
-          familySubscription.status === SubscriptionStatus.ACTIVE &&
-          familySubscription.plan === SubscriptionPlan.FAMILY) {
+      if (
+        familySubscription &&
+        familySubscription.status === SubscriptionStatus.ACTIVE &&
+        familySubscription.plan === SubscriptionPlan.FAMILY
+      ) {
         return {
           hasAccess: true,
           plan: SubscriptionPlan.FAMILY,
@@ -879,5 +922,223 @@ export class SubscriptionService {
       hasAccess: false,
       isOwner: false,
     };
+  }
+
+  /**
+   * Track subscription updates for analytics
+   * Records subscription change events for real-time analytics and business intelligence
+   * @param subscription - The updated subscription
+   * @param changes - The changes made to the subscription
+   */
+  private async trackSubscriptionUpdated(
+    subscription: Subscription,
+    changes: Record<string, any>
+  ): Promise<void> {
+    const db = getFirestore();
+    const timestamp = Timestamp.now();
+
+    // Calculate revenue impact of changes
+    let revenueImpact = 0;
+    let previousMRR = 0;
+    let currentMRR = 0;
+
+    if (changes.plan || changes.tier || changes.status || changes.interval) {
+      // Calculate previous MRR
+      if (changes.status && changes.status.from === SubscriptionStatus.ACTIVE) {
+        previousMRR = this.calculateMRR(
+          changes.plan?.from || subscription.plan,
+          changes.tier?.from || subscription.tier,
+          changes.interval?.from || subscription.interval
+        );
+      }
+
+      // Calculate current MRR
+      if (subscription.status === SubscriptionStatus.ACTIVE) {
+        currentMRR = this.calculateMRR(subscription.plan, subscription.tier, subscription.interval);
+      }
+
+      revenueImpact = currentMRR - previousMRR;
+    }
+
+    // Create subscription event record
+    const eventData = {
+      eventId: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+      subscriptionId: subscription.id,
+      userId: subscription.userId,
+      eventType: this.determineEventType(changes),
+      timestamp,
+
+      // Subscription state
+      currentPlan: subscription.plan,
+      currentTier: subscription.tier,
+      currentStatus: subscription.status,
+      currentInterval: subscription.interval,
+
+      // Changes
+      changes,
+      changedFields: Object.keys(changes),
+
+      // Revenue metrics
+      previousMRR,
+      currentMRR,
+      revenueImpact,
+
+      // Additional context
+      stripeCustomerId: subscription.stripeCustomerId,
+      stripeSubscriptionId: subscription.stripeSubscriptionId,
+      isUpgrade: revenueImpact > 0,
+      isDowngrade: revenueImpact < 0,
+
+      // Metadata
+      createdAt: timestamp,
+      year: new Date().getFullYear(),
+      month: new Date().getMonth() + 1,
+      day: new Date().getDate(),
+    };
+
+    // Store event in subscription_events collection for analytics
+    await db.collection('subscription_events').add(eventData);
+
+    // Update real-time metrics cache
+    await this.updateRealtimeMetrics(subscription, revenueImpact);
+
+    logger.info('Subscription event tracked for analytics', {
+      eventId: eventData.eventId,
+      subscriptionId: subscription.id,
+      eventType: eventData.eventType,
+      revenueImpact,
+    });
+  }
+
+  /**
+   * Calculate Monthly Recurring Revenue for a subscription
+   */
+  private calculateMRR(
+    plan: SubscriptionPlan,
+    tier?: SubscriptionTier,
+    interval?: 'month' | 'year'
+  ): number {
+    const monthlyPrice = this.getMonthlyPrice(plan, tier, interval);
+    return monthlyPrice;
+  }
+
+  /**
+   * Determine the type of subscription event based on changes
+   */
+  private determineEventType(changes: Record<string, any>): string {
+    if (changes.status) {
+      if (changes.status.to === SubscriptionStatus.CANCELED) return 'subscription.canceled';
+      if (
+        changes.status.to === SubscriptionStatus.ACTIVE &&
+        changes.status.from === SubscriptionStatus.TRIALING
+      )
+        return 'subscription.trial_ended';
+      if (changes.status.to === SubscriptionStatus.ACTIVE) return 'subscription.activated';
+    }
+
+    if (changes.plan || changes.tier) {
+      const isPlanUpgrade = changes.plan && this.isPlanUpgrade(changes.plan.from, changes.plan.to);
+      const isTierUpgrade = changes.tier && this.isTierUpgrade(changes.tier.from, changes.tier.to);
+
+      if (isPlanUpgrade || isTierUpgrade) return 'subscription.upgraded';
+      return 'subscription.downgraded';
+    }
+
+    if (changes.addons) return 'subscription.addon_changed';
+    if (changes.interval) return 'subscription.interval_changed';
+
+    return 'subscription.updated';
+  }
+
+  /**
+   * Check if plan change is an upgrade
+   */
+  private isPlanUpgrade(fromPlan: SubscriptionPlan, toPlan: SubscriptionPlan): boolean {
+    const planHierarchy = {
+      [SubscriptionPlan.FREE]: 0,
+      [SubscriptionPlan.INDIVIDUAL]: 1,
+      [SubscriptionPlan.FAMILY]: 2,
+    };
+
+    return planHierarchy[toPlan] > planHierarchy[fromPlan];
+  }
+
+  /**
+   * Check if tier change is an upgrade
+   */
+  private isTierUpgrade(fromTier: SubscriptionTier, toTier: SubscriptionTier): boolean {
+    const tierHierarchy: Record<SubscriptionTier, number> = {
+      [SubscriptionTier.LITE]: 0, // Legacy
+      [SubscriptionTier.PLUS]: 1, // Individual Plus
+      [SubscriptionTier.PRO]: 1, // Legacy Pro (same level as Plus)
+      [SubscriptionTier.FAMILY_2_5TB]: 2,
+      [SubscriptionTier.FAMILY_7_5TB]: 3,
+      [SubscriptionTier.FAMILY_12TB]: 4,
+    };
+
+    const fromValue = tierHierarchy[fromTier] ?? 0;
+    const toValue = tierHierarchy[toTier] ?? 0;
+
+    return toValue > fromValue;
+  }
+
+  /**
+   * Update real-time metrics cache for dashboard
+   */
+  private async updateRealtimeMetrics(
+    subscription: Subscription,
+    revenueImpact: number
+  ): Promise<void> {
+    const db = getFirestore();
+    const metricsRef = db.collection('realtime_metrics').doc('current');
+
+    await db.runTransaction(async transaction => {
+      const metricsDoc = await transaction.get(metricsRef);
+      const currentMetrics = metricsDoc.exists
+        ? metricsDoc.data()
+        : {
+            totalMRR: 0,
+            activeSubscriptions: 0,
+            lastUpdated: Timestamp.now(),
+            subscriptions: {},
+          };
+
+      // Update metrics based on subscription status
+      const updates: any = {
+        lastUpdated: Timestamp.now(),
+      };
+
+      if (revenueImpact !== 0) {
+        updates.totalMRR = FieldValue.increment(revenueImpact);
+      }
+
+      const hasExistingSubscription = currentMetrics?.subscriptions?.[subscription.id];
+
+      if (subscription.status === SubscriptionStatus.ACTIVE && !hasExistingSubscription) {
+        updates.activeSubscriptions = FieldValue.increment(1);
+      } else if (subscription.status === SubscriptionStatus.CANCELED && hasExistingSubscription) {
+        updates.activeSubscriptions = FieldValue.increment(-1);
+      }
+
+      // Track individual subscription state
+      updates[`subscriptions.${subscription.id}`] = {
+        plan: subscription.plan,
+        status: subscription.status,
+        mrr:
+          subscription.status === SubscriptionStatus.ACTIVE
+            ? this.calculateMRR(subscription.plan, subscription.tier, subscription.interval)
+            : 0,
+      };
+
+      if (metricsDoc.exists) {
+        transaction.update(metricsRef, updates);
+      } else {
+        // Create the document if it doesn't exist
+        transaction.set(metricsRef, {
+          ...currentMetrics,
+          ...updates,
+        });
+      }
+    });
   }
 }
