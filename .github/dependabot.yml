@@ -1,0 +1,120 @@
+# To get started with Dependabot version updates, you'll need to specify which
+# package ecosystems to update and where the package manifests are located.
+# Please see the documentation for all configuration options:
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # Root workspace dependencies
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+    open-pull-requests-limit: 10
+    reviewers:
+      - 'your-username' # Replace with your GitHub username
+    labels:
+      - 'dependencies'
+      - 'root'
+    commit-message:
+      prefix: 'chore(deps)'
+      include: 'scope'
+
+  # Mobile app dependencies (React Native/Expo)
+  - package-ecosystem: 'npm'
+    directory: '/apps/mobile'
+    schedule:
+      interval: 'weekly'
+      day: 'tuesday'
+      time: '09:00'
+    open-pull-requests-limit: 10
+    reviewers:
+      - 'ruchit-p' # Replace with your GitHub username
+    labels:
+      - 'dependencies'
+      - 'mobile'
+    commit-message:
+      prefix: 'chore(mobile)'
+      include: 'scope'
+    # Group React Native and Expo related updates
+    groups:
+      react-native:
+        patterns:
+          - 'react-native*'
+          - '@react-native*'
+          - 'react-native'
+      expo:
+        patterns:
+          - 'expo*'
+          - '@expo*'
+          - 'expo'
+
+  # Web app dependencies (Next.js)
+  - package-ecosystem: 'npm'
+    directory: '/apps/web/dynastyweb'
+    schedule:
+      interval: 'weekly'
+      day: 'wednesday'
+      time: '09:00'
+    open-pull-requests-limit: 10
+    reviewers:
+      - 'ruchit-p' # Replace with your GitHub username
+    labels:
+      - 'dependencies'
+      - 'web'
+    commit-message:
+      prefix: 'chore(web)'
+      include: 'scope'
+    # Group React and Next.js related updates
+    groups:
+      react:
+        patterns:
+          - 'react*'
+          - '@types/react*'
+      nextjs:
+        patterns:
+          - 'next*'
+          - '@next*'
+
+  # Firebase functions dependencies
+  - package-ecosystem: 'npm'
+    directory: '/apps/firebase/functions'
+    schedule:
+      interval: 'weekly'
+      day: 'thursday'
+      time: '09:00'
+    open-pull-requests-limit: 10
+    reviewers:
+      - 'ruchit-p' # Replace with your GitHub username
+    labels:
+      - 'dependencies'
+      - 'firebase'
+    commit-message:
+      prefix: 'chore(firebase)'
+      include: 'scope'
+    # Group Firebase related updates
+    groups:
+      firebase:
+        patterns:
+          - 'firebase*'
+          - 'firebase-admin*'
+          - 'firebase-functions*'
+
+  # GitHub Actions dependencies
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'friday'
+      time: '09:00'
+    open-pull-requests-limit: 5
+    reviewers:
+      - 'ruchit-p' # Replace with your GitHub username
+    labels:
+      - 'dependencies'
+      - 'github-actions'
+    commit-message:
+      prefix: 'chore(ci)'
+      include: 'scope'
