@@ -1,8 +1,11 @@
 {
   "projects": {
     "default": "dynasty-eba63",
-    "development": "dynasty-eba63",
+    "development": "dynasty-dev-1b042",
     "staging": "dynasty-dev-1b042",
-    "production": "dynasty-prod"
-  }
+    "production": "dynasty-eba63",
+    "evelopment": "dynasty-dev-1b042"
+  },
+  "targets": {},
+  "etags": {}
 }
