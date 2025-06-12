@@ -1031,8 +1031,9 @@ export class SubscriptionService {
       if (
         changes.status.to === SubscriptionStatus.ACTIVE &&
         changes.status.from === SubscriptionStatus.TRIALING
-      )
+      ) {
         return 'subscription.trial_ended';
+      }
       if (changes.status.to === SubscriptionStatus.ACTIVE) return 'subscription.activated';
     }
 
