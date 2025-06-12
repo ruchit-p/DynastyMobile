@@ -30,12 +30,16 @@ const eslintConfig = [
       "**/__mocks__/**",
       "jest.config.js",
       "jest.setup.js",
+      "jest.setup.enhanced.js",
+      "jest.integration.config.js",
       // Coverage reports
       "coverage/**",
       // Config files
       "next.config.js",
       "tailwind.config.ts",
       "postcss.config.mjs",
+      // Utility scripts
+      "scripts/**",
       // Environment files
       ".env*",
       // Other
