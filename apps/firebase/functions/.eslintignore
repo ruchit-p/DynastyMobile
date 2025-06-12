@@ -1,0 +1,29 @@
+# Test files
+**/*.test.ts
+**/*.test.js
+**/*.spec.ts
+**/*.spec.js
+**/__tests__/**
+**/__mocks__/**
+**/test/**
+**/tests/**
+**/testHelpers.ts
+**/testSetup.ts
+**/loadTestUtils.ts
+**/stripeMocks.ts
+**/stripeWebhookFixtures.ts
+
+# Build output
+lib/**
+generated/**
+coverage/**
+
+# Config files
+jest.config.js
+jest.subscription.config.js
+jest.setup.js
+.eslintrc.js
+
+# Scripts
+scripts/**/*.js
+scripts/**/*.ts
