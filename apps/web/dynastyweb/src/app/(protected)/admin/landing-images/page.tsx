@@ -33,7 +33,7 @@ export default function LandingImageManager() {
     return (
       <div className="container mx-auto p-6">
         <Alert variant="destructive">
-          <AlertDescription>You don't have permission to access this page.</AlertDescription>
+          <AlertDescription>You don&apos;t have permission to access this page.</AlertDescription>
         </Alert>
       </div>
     );
