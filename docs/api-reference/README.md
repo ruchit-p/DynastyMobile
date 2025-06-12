@@ -100,7 +100,6 @@ Push notification settings and delivery.
 | Header | Description | Required |
 |--------|-------------|----------|
 | `Authorization` | Firebase ID token | Yes |
-| `X-CSRF-Token` | CSRF protection token | Web only |
 | `X-Device-ID` | Unique device identifier | Mobile only |
 | `X-App-Version` | Client app version | Recommended |
 

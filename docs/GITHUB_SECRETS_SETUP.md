@@ -9,7 +9,6 @@ This document lists all the GitHub secrets that need to be configured for the Dy
 - **Email Service**: Migrated from SendGrid to AWS SES (January 2025)
 - **Storage Service**: Migrated from Cloudflare R2 to Backblaze B2 (January 2025)  
 - **Device Fingerprinting**: Removed FingerprintJS dependency - now uses native device properties (January 2025)
-- **CSRF Protection**: Removed from Firebase functions - using Firebase's built-in authentication (January 2025)
 
 If you have existing secrets from previous services, they can be removed from your GitHub repository settings.
 

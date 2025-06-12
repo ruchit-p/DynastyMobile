@@ -15,38 +15,6 @@ All platforms have been updated to use **210,000 iterations** for PBKDF2-SHA256,
   - `E2EEService.ts` (Line 396)
   - `KeyBackupService.ts` (Line 34)
 
-## 2. CSRF Protection ✅
-
-CSRF protection infrastructure is in place but needs to be enabled for state-changing operations:
-
-### Infrastructure Ready:
-- **Backend**: `/apps/firebase/functions/src/middleware/csrf.ts`
-- **Web**: `/apps/web/dynastyweb/src/hooks/useCSRF.ts`
-- **Mobile**: Correctly skipped (not applicable)
-
-### Functions with CSRF Enabled:
-- ✅ `createStory`, `updateStory`, `deleteStory`
-- ✅ `likeStory`, `unlikeStory`
-
-### Functions Needing CSRF Enablement:
-To enable CSRF protection, update the `withAuth` or `withResourceAccess` calls to include `enableCSRF: true`:
-
-```typescript
-// Example update pattern:
-withAuth(handler, "functionName", {
-  authLevel: "verified",
-  enableCSRF: true,
-  rateLimitConfig: { ... }
-})
-```
-
-Priority functions to update:
-- Authentication: `handleSignUp`, `resetPassword`, `changePassword`
-- User Management: `handleAccountDeletion`, `updateUserProfile`
-- Events: `createEvent`, `updateEvent`, `deleteEvent`
-- Vault: `addVaultFile`, `deleteVaultItem`, `shareVaultItem`
-- Chat: `createChat`, `sendMessage`, `deleteChat`
-
 ## 3. Security Headers ✅
 
 ### Next.js Web App ✅
@@ -83,26 +51,18 @@ Created centralized security configuration at `/apps/firebase/functions/src/conf
 
 ### Immediate Actions Required:
 
-1. **Enable CSRF Protection** (Critical):
-   ```bash
-   # Update all state-changing functions to include enableCSRF: true
-   # See the list in security-config.ts for functions needing updates
-   ```
-
-2. **Apply Rate Limiting** (High Priority):
+1. **Apply Rate Limiting** (High Priority):
    ```typescript
    // Update authentication functions with proper rate limits:
    import { SECURITY_CONFIG } from "../config/security-config";
    
    withAuth(handler, "handleSignUp", {
      authLevel: "none",
-     enableCSRF: true,
-     rateLimitConfig: SECURITY_CONFIG.rateLimits.auth
-   })
+    rateLimitConfig: SECURITY_CONFIG.rateLimits.auth
+  })
    ```
 
-3. **Test Security Enhancements**:
-   - Verify CSRF tokens are required for state-changing operations
+2. **Test Security Enhancements**:
    - Test rate limiting thresholds
    - Confirm security headers are present in responses
 
@@ -116,13 +76,6 @@ Created centralized security configuration at `/apps/firebase/functions/src/conf
 6. **Monitor Security Events** with proper alerting
 
 ## 7. Testing Security Features
-
-### Test CSRF Protection:
-```bash
-# From web app:
-cd apps/web/dynastyweb
-node test-csrf-frontend.js
-```
 
 ### Test Rate Limiting:
 ```bash
@@ -139,7 +92,6 @@ done
 The security foundation is solid with:
 - ✅ Strong PBKDF2 iterations (210,000)
 - ✅ Security headers configured
-- ✅ CSRF protection infrastructure ready
 - ✅ Rate limiting infrastructure ready
 
-**Next Step**: Enable CSRF protection and rate limiting for all state-changing operations by updating the function middleware configurations.
+**Next Step**: Enable rate limiting for all state-changing operations using the security configuration.

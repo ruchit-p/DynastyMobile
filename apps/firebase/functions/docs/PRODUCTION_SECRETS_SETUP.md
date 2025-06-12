@@ -163,13 +163,10 @@ Dynasty requires several types of secrets for secure production operation:
    # Check Firebase Console → Functions → Health
    ```
 
-## CSRF Protection Details
 
 ### Enabled Functions
 
-The following authentication functions now have CSRF protection:
 
-| Function | Module | CSRF Protected |
 |----------|--------|----------------|
 | `handleSignUp` | authentication.ts | ✅ |
 | `updateUserPassword` | password-management.ts | ✅ |
@@ -188,7 +185,6 @@ Each protected function has rate limiting configured:
 
 ### Mobile App Exemption
 
-Mobile apps are exempt from CSRF protection based on User-Agent detection:
 - React Native apps automatically detected
 - Expo apps automatically detected
 - Custom mobile User-Agent patterns supported
@@ -215,10 +211,7 @@ Mobile apps are exempt from CSRF protection based on User-Agent detection:
    firebase functions:log --only auth-handleSignUp
    ```
 
-3. **CSRF Validation Fails**:
    ```bash
-   # Verify CSRF secret is set
-   firebase functions:config:get security.csrf_secret
    
    # Check if mobile app exemption is working
    # Ensure User-Agent contains "ReactNative" or "Expo"
@@ -253,7 +246,6 @@ Mobile apps are exempt from CSRF protection based on User-Agent detection:
 
 4. **Security Issues**:
    - Review security configuration
-   - Check CSRF token generation
    - Verify rate limiting is working
    - Monitor for suspicious activity
 
@@ -261,7 +253,6 @@ Mobile apps are exempt from CSRF protection based on User-Agent detection:
 
 - [ ] All core security secrets generated and deployed
 - [ ] External service API keys configured and tested
-- [ ] CSRF protection enabled on critical functions
 - [ ] Rate limiting configured and tested
 - [ ] Function health checks passing
 - [ ] Mobile app exemption working correctly
@@ -273,9 +264,7 @@ Mobile apps are exempt from CSRF protection based on User-Agent detection:
 ## Success Criteria
 
 ✅ **Configuration Complete**: All required secrets deployed to Firebase Functions
-✅ **CSRF Protection Active**: Critical authentication functions protected
 ✅ **External Services Working**: Email, SMS, fingerprinting, file storage operational  
 ✅ **Rate Limiting Active**: Request limits enforced per function
-✅ **Mobile Apps Exempt**: Native apps bypass CSRF checks appropriately
 ✅ **Monitoring Ready**: Health checks and logging configured
 ✅ **Security Hardened**: All production security measures in place

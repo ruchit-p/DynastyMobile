@@ -62,7 +62,6 @@ This report presents a comprehensive security audit of the Dynasty application, 
 - ✅ Comprehensive security headers in Next.js config
 - ✅ CSP (Content Security Policy) implemented
 - ✅ HSTS, X-Frame-Options, and other security headers
-- ✅ CSRF token integration
 
 **Weaknesses:**
 - ❌ No rate limiting on frontend auth attempts
@@ -90,18 +89,7 @@ This report presents a comprehensive security audit of the Dynasty application, 
 
 **Impact:** The mobile app's broken encryption makes all "encrypted" messages readable by anyone who intercepts them.
 
-### 3. CSRF Protection
 
-**Implementation Status:**
-- ✅ Double-submit cookie pattern implemented
-- ✅ Token generation and validation endpoints
-- ✅ Automatic exemption for mobile apps
-- ✅ Integration with auth middleware
-
-**Issues:**
-- ⚠️ CSRF not enforced on all state-changing operations
-- ⚠️ Token stored in regular cookie (not httpOnly)
-- ⚠️ Web client's fetch interception is hacky
 
 ### 4. Input Validation & Sanitization
 
@@ -169,7 +157,6 @@ This report presents a comprehensive security audit of the Dynasty application, 
 1. **Account Takeover** - No account lockout or 2FA
 2. **Session Hijacking** - No session management
 3. **Information Disclosure** - Verbose error messages
-4. **CSRF on Some Endpoints** - Incomplete CSRF coverage
 
 ### Medium Risks
 1. **Performance Issues** - Complex permission checks
@@ -202,7 +189,6 @@ const { publicKey, privateKey } = generateKeyPairSync('x25519', {
 - Use secure storage for sensitive mobile data
 - Reduce error message verbosity
 
-4. **Complete CSRF Protection**
 - Apply to all state-changing operations
 - Use httpOnly cookies for tokens
 - Improve web client implementation
@@ -251,7 +237,6 @@ const { publicKey, privateKey } = generateKeyPairSync('x25519', {
 - XSS injection tests
 - SQL/NoSQL injection tests
 - Authentication bypass attempts
-- CSRF attack simulations
 
 2. **Encryption Verification**
 - Cross-platform encryption/decryption tests

@@ -7,7 +7,6 @@ This guide explains how to set up a complete staging environment for Dynasty's F
 The staging environment allows you to:
 - Test new features before production deployment
 - Use separate API keys and secrets from production
-- Validate CSRF protection and security features
 - Perform integration testing with external services
 
 ## Quick Setup
@@ -58,7 +57,6 @@ firebase deploy --only functions --project your-staging-project
 ```
 
 This generates:
-- CSRF Secret Key (256-bit)
 - JWT Secret Key (256-bit)
 - Encryption Master Key (256-bit)
 - Session Secret (256-bit)
@@ -113,7 +111,6 @@ export FIREBASE_STAGING_PROJECT=dynasty-staging
 
 Expected output:
 ```
-✅ CONFIGURED: CSRF Secret Key
 ✅ CONFIGURED: JWT Secret Key
 ✅ CONFIGURED: Encryption Master Key
 ✅ CONFIGURED: Session Secret
@@ -134,7 +131,6 @@ firebase deploy --only functions:auth-handleSignUp --project dynasty-staging
 
 ## Testing in Staging
 
-### CSRF Protection Testing
 
 1. **Web Testing**:
    ```javascript
@@ -144,7 +140,6 @@ firebase deploy --only functions:auth-handleSignUp --project dynasty-staging
 
 2. **Mobile Testing**:
    ```javascript
-   // Mobile apps are exempt from CSRF
    // Ensure User-Agent contains "ReactNative" or "Expo"
    ```
 

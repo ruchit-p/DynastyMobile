@@ -43,7 +43,6 @@ Security documentation and best practices.
 
 - [Security Overview](./security/README.md) - Security principles
 - [Audit Report](./security/audit-report.md) - Latest security audit
-- [CSRF Protection](./security/csrf-protection.md) - Cross-site request forgery
 - [Encryption](./security/encryption.md) - Encryption methods and implementation
 - [Best Practices](./security/best-practices.md) - Security guidelines
 

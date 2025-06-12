@@ -6,7 +6,6 @@ Successfully generated all necessary production secrets for Dynasty's secure dep
 ## Generated Secrets
 
 ### 🔐 Core Security Keys (256-bit)
-- ✅ **CSRF Secret Key** - `6f07da912e3d213b96bc653cea0a6ffe22609b3221d4e2d58f02cae27314b444`
 - ✅ **JWT Secret Key** - `77ffae0261280ae7fcd4664604e88d8dbf9358c525c5fadfea6d6f0af3e07263`
 - ✅ **Encryption Master Key** - `4dcea271bc32ebddc77d791b6083571c777f5331740440763b90546ef280bfc8`
 - ✅ **Session Secret** - `dab7140410d3ec0d8d61397a1e2cc972d06c43eb8541f4ae4a9849141485149c`
@@ -48,7 +47,6 @@ Production deployment script that:
 - Provides deployment verification steps
 
 ### 🛠️ Existing Scripts Enhanced
-- ✅ `generate-csrf-secret.sh` - Individual CSRF key generation
 - ✅ `setup-firebase-secrets.sh` - R2 and Firebase configuration
 - ✅ `setup-ses-secrets.sh` - AWS SES configuration
 
@@ -93,7 +91,6 @@ firebase deploy --only functions --project production
 ## Secret Rotation Strategy
 
 ### Recommended Schedule:
-- **Critical secrets** (CSRF, JWT, Encryption): Every 90 days
 - **External API keys**: As per service recommendations
 - **Database keys**: Every 180 days (with migration plan)
 
@@ -107,7 +104,6 @@ firebase deploy --only functions --project production
 ## Security Benefits
 
 ### 🛡️ Protection Against:
-- Cross-Site Request Forgery (CSRF) attacks
 - JWT token compromise
 - Session hijacking
 - Data encryption breaches
@@ -127,7 +123,6 @@ firebase deploy --only functions --project production
 2. 🔄 **External Services** - Configure AWS SES, Twilio
 3. 🔄 **Domain Setup** - Configure production domains
 4. 🔄 **Deployment** - Deploy with secrets configured
-5. 🔄 **Testing** - Verify CSRF protection and security measures
 6. 🔄 **Monitoring** - Set up security monitoring and alerts
 
 ## Important Security Notes

@@ -35,7 +35,6 @@ This document summarizes the comprehensive test suite created for the Dynasty ap
 - ✅ End-to-end encryption
 - ✅ Vault security
 - ✅ Data sanitization (XSS, SQL injection)
-- ✅ CSRF protection
 - ✅ Device fingerprinting
 - ✅ Cryptographic operations
 - ✅ Audit logging
