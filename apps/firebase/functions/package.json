@@ -49,7 +49,7 @@
   "devDependencies": {
     "@eslint/config-array": "^0.19.2",
     "@eslint/object-schema": "^2.1.6",
-    "@jest/globals": "^29.7.0",
+    "@jest/globals": "^30.0.0",
     "@types/jest": "^29.5.14",
     "@types/stripe": "^8.0.416",
     "@typescript-eslint/eslint-plugin": "^7.1.0",
