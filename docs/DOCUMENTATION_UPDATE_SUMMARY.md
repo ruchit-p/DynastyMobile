@@ -73,7 +73,6 @@ This document summarizes the comprehensive documentation update performed to ref
 ### Removed Services
 - **FingerprintJS**: All references removed, using native device identification
 - **SendGrid**: Completely migrated to AWS SES
-- **CSRF Protection**: Removed as unnecessary with Firebase auth
 
 ### Current Services
 - **Email**: AWS SES (with templates: verify-email, password-reset, invite, mfa)

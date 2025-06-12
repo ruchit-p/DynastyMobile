@@ -40,7 +40,6 @@ June 11, 2025
   - Terms of service acceptance
   - Security indicators
   - Loading states during payment processing
-  - CSRF protection through existing middleware
 
 ### 4. Success Page ✅
 - **Location**: `/src/app/(protected)/checkout/success/page.tsx`

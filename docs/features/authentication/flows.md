@@ -248,8 +248,7 @@ sequenceDiagram
 - Offline token validation
 - Background token refresh
 
-### Web Considerations
-- CSRF protection on all forms
+-### Web Considerations
 - Secure cookie configuration
 - SSR session validation
 - Cross-tab session sync
