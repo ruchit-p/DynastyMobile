@@ -96,6 +96,16 @@ interface InvitationData {
 const MAX_RELATION_TRAVERSAL_DEPTH = 10;
 
 /**
+ * Interface for pre-computed relationship maps
+ */
+interface RelationshipMaps {
+  childToParentsMap: Map<string, Set<string>>;
+  parentToChildrenMap: Map<string, Set<string>>;
+  personToSpousesMap: Map<string, Set<string>>;
+  validUserIds: Set<string>;
+}
+
+/**
  * Gets all blood-related members from the current user using BFS
  * Performance optimization: O(V + E) instead of O(n * (V + E))
  */
@@ -139,6 +149,104 @@ function getBloodRelatedSet(
   }
 
   return bloodRelated;
+}
+
+/**
+ * Pre-computes relationship maps for O(1) lookups
+ * Performance optimization: Build once O(m), lookup many times O(1)
+ */
+function buildRelationshipMaps(docs: FirebaseFirestore.QueryDocumentSnapshot[]): RelationshipMaps {
+  const childToParentsMap = new Map<string, Set<string>>();
+  const parentToChildrenMap = new Map<string, Set<string>>();
+  const personToSpousesMap = new Map<string, Set<string>>();
+  const validUserIds = new Set<string>();
+
+  // First pass: collect all valid user IDs
+  docs.forEach(doc => {
+    validUserIds.add(doc.id);
+  });
+
+  // Second pass: build relationship maps
+  docs.forEach(doc => {
+    const data = doc.data();
+    const userId = doc.id;
+
+    // Build parent-child relationships
+    if (data.parentIds?.length > 0) {
+      childToParentsMap.set(userId, new Set(data.parentIds));
+      data.parentIds.forEach((parentId: string) => {
+        if (!parentToChildrenMap.has(parentId)) {
+          parentToChildrenMap.set(parentId, new Set());
+        }
+        parentToChildrenMap.get(parentId)!.add(userId);
+      });
+    }
+
+    // Build child-parent relationships (reverse lookup)
+    if (data.childrenIds?.length > 0) {
+      data.childrenIds.forEach((childId: string) => {
+        if (!childToParentsMap.has(childId)) {
+          childToParentsMap.set(childId, new Set());
+        }
+        childToParentsMap.get(childId)!.add(userId);
+
+        if (!parentToChildrenMap.has(userId)) {
+          parentToChildrenMap.set(userId, new Set());
+        }
+        parentToChildrenMap.get(userId)!.add(childId);
+      });
+    }
+
+    // Build spouse relationships (bidirectional)
+    if (data.spouseIds?.length > 0) {
+      data.spouseIds.forEach((spouseId: string) => {
+        if (!personToSpousesMap.has(userId)) {
+          personToSpousesMap.set(userId, new Set());
+        }
+        personToSpousesMap.get(userId)!.add(spouseId);
+
+        if (!personToSpousesMap.has(spouseId)) {
+          personToSpousesMap.set(spouseId, new Set());
+        }
+        personToSpousesMap.get(spouseId)!.add(userId);
+      });
+    }
+  });
+
+  return {
+    childToParentsMap,
+    parentToChildrenMap,
+    personToSpousesMap,
+    validUserIds,
+  };
+}
+
+/**
+ * Finds siblings by checking for shared parents
+ * Performance: O(p) where p is number of parents (typically small)
+ */
+function findSiblings(
+  userId: string,
+  childToParentsMap: Map<string, Set<string>>,
+  parentToChildrenMap: Map<string, Set<string>>
+): Set<string> {
+  const siblings = new Set<string>();
+  const parents = childToParentsMap.get(userId);
+
+  if (parents) {
+    parents.forEach(parentId => {
+      const children = parentToChildrenMap.get(parentId);
+      if (children) {
+        children.forEach(childId => {
+          if (childId !== userId) {
+            siblings.add(childId);
+          }
+        });
+      }
+    });
+  }
+
+  return siblings;
 }
 
 // MARK: - Cloud Functions
@@ -209,56 +317,42 @@ export const getFamilyTreeData = onCall(
       // Performance optimization: Pre-compute all blood relations once
       const bloodRelatedSet = getBloodRelatedSet(userId, validUserDocs);
 
+      // Performance optimization: Pre-compute relationship maps for O(1) lookups
+      const relationshipMaps = buildRelationshipMaps(validUserDocs);
+      const { childToParentsMap, parentToChildrenMap, personToSpousesMap, validUserIds } =
+        relationshipMaps;
+
       // Transform user data into relatives-tree Node format
       const treeNodes = validUserDocs.map(userDoc => {
         const data = userDoc.data();
+        const userDocId = userDoc.id;
 
-        // Find siblings by looking for users with the same parents
-        const siblings = validUserDocs
-          .filter(
-            otherDoc =>
-              otherDoc.id !== userDoc.id &&
-              ((data.parentIds?.length > 0 &&
-                data.parentIds.some((parentId: string) =>
-                  otherDoc.data().parentIds?.includes(parentId)
-                )) ||
-                otherDoc
-                  .data()
-                  .parentIds?.some((parentId: string) => data.parentIds?.includes(parentId)))
-          )
-          .map(sibling => ({
-            id: sibling.id,
+        // Find siblings using pre-computed maps - O(1) lookup instead of O(m)
+        const siblingsSet = findSiblings(userDocId, childToParentsMap, parentToChildrenMap);
+        const siblings = Array.from(siblingsSet)
+          .filter(id => validUserIds.has(id))
+          .map(id => ({
+            id,
             type: 'blood' as const,
           }));
 
-        // Ensure all IDs exist before creating relationships
-        const parents = (data.parentIds || [])
-          .filter((id: string) => validUserDocs.some(doc => doc.id === id))
-          .map((id: string) => ({ id, type: 'blood' as const }));
+        // Get parents using pre-computed map - O(1) lookup
+        const parentSet = childToParentsMap.get(userDocId) || new Set<string>();
+        const parents = Array.from(parentSet)
+          .filter(id => validUserIds.has(id))
+          .map(id => ({ id, type: 'blood' as const }));
 
-        // Find all children (both direct and those who list this user as parent)
-        const childrenIds = new Set([
-          ...(data.childrenIds || []),
-          ...validUserDocs
-            .filter(doc => doc.data().parentIds?.includes(userDoc.id))
-            .map(doc => doc.id),
-        ]);
+        // Get children using pre-computed map - O(1) lookup
+        const childrenSet = parentToChildrenMap.get(userDocId) || new Set<string>();
+        const children = Array.from(childrenSet)
+          .filter(id => validUserIds.has(id))
+          .map(id => ({ id, type: 'blood' as const }));
 
-        const children = Array.from(childrenIds)
-          .filter((id: string) => validUserDocs.some(doc => doc.id === id))
-          .map((id: string) => ({ id, type: 'blood' as const }));
-
-        // Find all spouses (both direct and those who list this user as spouse)
-        const spouseIds = new Set([
-          ...(data.spouseIds || []),
-          ...validUserDocs
-            .filter(doc => doc.data().spouseIds?.includes(userDoc.id))
-            .map(doc => doc.id),
-        ]);
-
-        const spouses = Array.from(spouseIds)
-          .filter((id: string) => validUserDocs.some(doc => doc.id === id))
-          .map((id: string) => ({ id, type: 'married' as const }));
+        // Get spouses using pre-computed map - O(1) lookup
+        const spouseSet = personToSpousesMap.get(userDocId) || new Set<string>();
+        const spouses = Array.from(spouseSet)
+          .filter(id => validUserIds.has(id))
+          .map(id => ({ id, type: 'married' as const }));
 
         const gender = (data.gender || 'other').toLowerCase();
         const validGender = gender === 'male' || gender === 'female' ? gender : 'other';
@@ -813,56 +907,42 @@ export const deleteFamilyMember = onCall(
       // Performance optimization: Pre-compute all blood relations once
       const bloodRelatedSet = getBloodRelatedSet(currentUserId, validUserDocs);
 
+      // Performance optimization: Pre-compute relationship maps for O(1) lookups
+      const relationshipMaps = buildRelationshipMaps(validUserDocs);
+      const { childToParentsMap, parentToChildrenMap, personToSpousesMap, validUserIds } =
+        relationshipMaps;
+
       // Transform user data into relatives-tree Node format
       const treeNodes = validUserDocs.map(userDoc => {
         const data = userDoc.data();
+        const userDocId = userDoc.id;
 
-        // Find siblings by looking for users with the same parents
-        const siblings = validUserDocs
-          .filter(
-            otherDoc =>
-              otherDoc.id !== userDoc.id &&
-              ((data.parentIds?.length > 0 &&
-                data.parentIds.some((parentId: string) =>
-                  otherDoc.data().parentIds?.includes(parentId)
-                )) ||
-                otherDoc
-                  .data()
-                  .parentIds?.some((parentId: string) => data.parentIds?.includes(parentId)))
-          )
-          .map(sibling => ({
-            id: sibling.id,
+        // Find siblings using pre-computed maps - O(1) lookup instead of O(m)
+        const siblingsSet = findSiblings(userDocId, childToParentsMap, parentToChildrenMap);
+        const siblings = Array.from(siblingsSet)
+          .filter(id => validUserIds.has(id))
+          .map(id => ({
+            id,
             type: 'blood' as const,
           }));
 
-        // Ensure all IDs exist before creating relationships
-        const parents = (data.parentIds || [])
-          .filter((id: string) => validUserDocs.some(doc => doc.id === id))
-          .map((id: string) => ({ id, type: 'blood' as const }));
+        // Get parents using pre-computed map - O(1) lookup
+        const parentSet = childToParentsMap.get(userDocId) || new Set<string>();
+        const parents = Array.from(parentSet)
+          .filter(id => validUserIds.has(id))
+          .map(id => ({ id, type: 'blood' as const }));
 
-        // Find all children (both direct and those who list this user as parent)
-        const childrenIds = new Set([
-          ...(data.childrenIds || []),
-          ...validUserDocs
-            .filter(doc => doc.data().parentIds?.includes(userDoc.id))
-            .map(doc => doc.id),
-        ]);
+        // Get children using pre-computed map - O(1) lookup
+        const childrenSet = parentToChildrenMap.get(userDocId) || new Set<string>();
+        const children = Array.from(childrenSet)
+          .filter(id => validUserIds.has(id))
+          .map(id => ({ id, type: 'blood' as const }));
 
-        const children = Array.from(childrenIds)
-          .filter((id: string) => validUserDocs.some(doc => doc.id === id))
-          .map((id: string) => ({ id, type: 'blood' as const }));
-
-        // Find all spouses (both direct and those who list this user as spouse)
-        const spouseIds = new Set([
-          ...(data.spouseIds || []),
-          ...validUserDocs
-            .filter(doc => doc.data().spouseIds?.includes(userDoc.id))
-            .map(doc => doc.id),
-        ]);
-
-        const spouses = Array.from(spouseIds)
-          .filter((id: string) => validUserDocs.some(doc => doc.id === id))
-          .map((id: string) => ({ id, type: 'married' as const }));
+        // Get spouses using pre-computed map - O(1) lookup
+        const spouseSet = personToSpousesMap.get(userDocId) || new Set<string>();
+        const spouses = Array.from(spouseSet)
+          .filter(id => validUserIds.has(id))
+          .map(id => ({ id, type: 'married' as const }));
 
         const gender = (data.gender || 'other').toLowerCase();
         const validGender = gender === 'male' || gender === 'female' ? gender : 'other';
