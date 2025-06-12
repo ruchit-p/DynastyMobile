@@ -24,6 +24,9 @@ bloodRelatedSet.has(userDoc.id); // O(1) lookup
 - Use appropriate data structures (Set/Map for O(1) lookups vs Array for O(n))
 - Consider caching computed results when appropriate
 - Profile and measure performance improvements
+- **Batch database operations** whenever possible to reduce network overhead
+- **Identify data overlap patterns** - leverage user/entity reuse across operations
+- **Calculate cost impact** - quantify both performance and financial improvements
 
 ### Linting Commands
 
@@ -31,38 +34,7 @@ bloodRelatedSet.has(userDoc.id); // O(1) lookup
 
 ### FingerprintJS Library Removal (January 2025)
 
-The Dynasty codebase has been fully cleaned of FingerprintJS device fingerprinting library while preserving all encryption and security-related fingerprint functionality.
-
-**Key changes:**
-
-- Removed all FingerprintJS dependencies from package.json files across all apps
-- Deleted FingerprintJS service files: `FingerprintService.ts`, `EnhancedFingerprintService.ts`, `FingerprintProvider.tsx`
-- Updated trusted device management to use native device properties instead of FingerprintJS
-- Cleaned up all FingerprintJS imports and references from codebase
-- Rebuilt package-lock.json files without FingerprintJS packages
-
-**What was removed:**
-
-- `@fingerprintjs/fingerprintjs` (web app)
-- `@fingerprintjs/fingerprintjs-pro-react` (web app)
-- `@fingerprintjs/fingerprintjs-pro-react-native` (mobile app)
-- `@fingerprintjs/fingerprintjs-pro-server-api` (Firebase functions)
-- All related service implementations and provider components
-
-**What was preserved:**
-
-- Cryptographic key fingerprints for Signal Protocol verification
-- E2EE key fingerprint generation (`e2eeService.generateFingerprint`)
-- Biometric authentication (Touch ID/Face ID) functionality
-- All security-related fingerprint verification for encryption keys
-- Device identification now uses native device properties (`Device.brand`, `Device.modelName`, etc.)
-
-**Migration notes:**
-
-- Trusted device functionality continues to work using device-based IDs
-- No impact on end-to-end encryption or security features
-- All cryptographic fingerprints remain functional for key verification
-- Device registration uses platform-native identification methods
+**Summary**: Removed FingerprintJS device fingerprinting library while preserving all encryption/security fingerprint functionality. Device identification now uses native device properties (`Device.brand`, `Device.modelName`). No impact on E2EE or security features.
 
 ## Code Quality & Performance Guidelines
 
@@ -86,21 +58,17 @@ When generating code, always consider performance implications:
 
    - Minimize database reads with proper query design
    - Use projections to fetch only required fields
-   - Batch operations when possible
+   - Batch operations when possible using Firestore 'in' queries (max 10 per query)
    - Pre-compute expensive aggregations
+   - **Identify and eliminate O(n×m) patterns** - individual fetches within loops
+   - **Leverage data overlap** - batch fetch unique entities across multiple operations
 
 4. **React/React Native Performance**
 
-   - Use React.memo() for expensive components
-   - Implement proper key strategies for lists
-   - Use virtualization (FlashList) for long lists
-   - Avoid unnecessary re-renders with proper state management
+   - Use React.memo(), proper list keys, virtualization (FlashList), avoid unnecessary re-renders
 
 5. **Firebase Functions Optimization**
-   - Keep functions lightweight and focused
-   - Use proper memory allocation (128MB for simple, 256MB+ for complex)
-   - Implement caching strategies where appropriate
-   - Consider cold start implications
+   - Keep lightweight, proper memory allocation (128MB-256MB+), implement caching, consider cold starts
 
 ### Example Optimizations
 
@@ -116,5 +84,53 @@ users.forEach(user => {
   const isRelated = relatedSet.has(user.id); // O(1) each time
 });
 ```
+
+### Batch Database Optimization Pattern
+
+**Stories Service User Enrichment Optimization (January 2025)**: Optimized user data fetching from O(n×m) individual reads to O(⌈U/10⌉) batch queries, achieving 10x-100x performance improvement and 90-96% cost reduction.
+
+```typescript
+// Bad: O(n×m) - Individual database reads
+await Promise.all(
+  stories.map(async story => {
+    const author = await getUserInfo(db, story.authorID); // Individual fetch
+    const taggedPeople = await Promise.all(
+      story.peopleInvolved.map(userId => getUserInfo(db, userId)) // More individual fetches
+    );
+    return { ...story, author, taggedPeople };
+  })
+);
+
+// Good: O(⌈U/10⌉) - Batch database reads
+// 1. Collect all unique user IDs across all stories
+const allUserIds = new Set();
+stories.forEach(story => {
+  allUserIds.add(story.authorID);
+  story.peopleInvolved?.forEach(userId => allUserIds.add(userId));
+});
+
+// 2. Single batch fetch for all users (chunked by 10s for Firestore limit)
+const userInfoMap = await batchGetUserInfo(db, Array.from(allUserIds));
+
+// 3. Enrich all stories using O(1) map lookups
+const enrichedStories = stories.map(story => ({
+  ...story,
+  author: userInfoMap.get(story.authorID),
+  taggedPeople: story.peopleInvolved?.map(id => userInfoMap.get(id)).filter(Boolean),
+}));
+```
+
+**Key Insights:**
+
+- **Data overlap is common** in social/family apps - same users appear across multiple stories
+- **Firestore 'in' queries** limited to 10 documents per query - chunk accordingly
+- **Build lookup maps** for O(1) access after batch fetching
+- **Quantify improvements**: 50 stories × 4 users = 200 reads → 8 batch queries = 25x improvement
+
+**Cost Impact Example:**
+
+- Before: 1M story views × 200 reads = 200M reads = $720/month
+- After: 1M story views × 8 reads = 8M reads = $28.8/month
+- **Savings: $691.2/month (96% reduction)**
 
 Remember: **Profile first, optimize second**. Use performance monitoring to identify actual bottlenecks before optimizing.

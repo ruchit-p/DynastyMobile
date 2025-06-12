@@ -134,6 +134,8 @@ export class SubscriptionService {
             }))
           : [],
         familyMembers: [],
+        // OPTIMIZATION: Initialize activeMemberCount for family plans
+        ...(params.plan === SubscriptionPlan.FAMILY ? { activeMemberCount: 0 } : {}),
         referralInfo: await this.processReferralCode(params.userId, params.referralCode),
         metadata: {
           source: 'web',
@@ -427,9 +429,10 @@ export class SubscriptionService {
         throw createError(ErrorCode.INVALID_ARGUMENT, 'Not a family plan subscription');
       }
 
-      // Check member limit
-      const currentMembers = subscription.familyMembers?.filter(m => m.status === 'active') || [];
-      if (currentMembers.length >= PLAN_LIMITS.family.maxMembers - 1) {
+      // OPTIMIZATION: Use O(1) counter instead of O(n) array filtering
+      // Check member limit using activeMemberCount counter
+      const currentActiveCount = subscription.activeMemberCount || 0;
+      if (currentActiveCount >= PLAN_LIMITS.family.maxMembers - 1) {
         throw createError(
           ErrorCode.FAMILY_MEMBER_LIMIT_EXCEEDED,
           `Maximum ${PLAN_LIMITS.family.maxMembers} members allowed including owner`
@@ -456,17 +459,31 @@ export class SubscriptionService {
       const updatedMembers = subscription.familyMembers || [];
       const memberIndex = updatedMembers.findIndex(m => m.userId === params.memberId);
 
+      let isNewActiveMember = false;
       if (memberIndex >= 0) {
+        // Update existing member
+        const previousStatus = updatedMembers[memberIndex].status;
         updatedMembers[memberIndex] = newMember;
+        isNewActiveMember = previousStatus !== 'active'; // Only increment if changing to active
       } else {
+        // Add new member
         updatedMembers.push(newMember);
+        isNewActiveMember = true;
       }
 
-      // Update subscription
-      await subscriptionRef.update({
+      // OPTIMIZATION: Atomically update both familyMembers array and activeMemberCount
+      const updates: any = {
         familyMembers: updatedMembers,
         updatedAt: Timestamp.now(),
-      });
+      };
+
+      // Only increment counter if adding a new active member
+      if (isNewActiveMember) {
+        updates.activeMemberCount = FieldValue.increment(1);
+      }
+
+      // Atomic update of subscription
+      await subscriptionRef.update(updates);
 
       // Update member's user document
       await this.db.collection('users').doc(params.memberId).update({
@@ -482,12 +499,15 @@ export class SubscriptionService {
         details: {
           memberId: params.memberId,
           memberEmail: params.memberEmail,
+          isNewActiveMember,
         },
       });
 
       logger.info('Added family member', {
         subscriptionId: params.subscriptionId,
         memberId: params.memberId,
+        isNewActiveMember,
+        newActiveCount: currentActiveCount + (isNewActiveMember ? 1 : 0),
       });
     } catch (error) {
       logger.error('Failed to add family member', { params, error });
@@ -519,6 +539,9 @@ export class SubscriptionService {
         throw createError(ErrorCode.NOT_FOUND, 'Family member not found');
       }
 
+      const memberToRemove = subscription.familyMembers![memberIndex];
+      const wasActive = memberToRemove.status === 'active';
+
       // Update member status
       const updatedMembers = [...(subscription.familyMembers || [])];
       updatedMembers[memberIndex] = {
@@ -529,11 +552,19 @@ export class SubscriptionService {
         removalReason: params.reason,
       };
 
-      // Update subscription
-      await subscriptionRef.update({
+      // OPTIMIZATION: Atomically update both familyMembers array and activeMemberCount
+      const updates: any = {
         familyMembers: updatedMembers,
         updatedAt: Timestamp.now(),
-      });
+      };
+
+      // Only decrement counter if removing an active member
+      if (wasActive) {
+        updates.activeMemberCount = FieldValue.increment(-1);
+      }
+
+      // Atomic update of subscription
+      await subscriptionRef.update(updates);
 
       // Update member's user document
       await this.db.collection('users').doc(params.memberId).update({
@@ -550,12 +581,15 @@ export class SubscriptionService {
         details: {
           memberId: params.memberId,
           reason: params.reason,
+          wasActive,
         },
       });
 
       logger.info('Removed family member', {
         subscriptionId: params.subscriptionId,
         memberId: params.memberId,
+        wasActive,
+        newActiveCount: (subscription.activeMemberCount || 0) - (wasActive ? 1 : 0),
       });
     } catch (error) {
       logger.error('Failed to remove family member', { params, error });

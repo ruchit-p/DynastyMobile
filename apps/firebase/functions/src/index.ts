@@ -72,6 +72,7 @@ export * from './messaging'; // Chat messaging and notifications
 export * from './chatManagement'; // Chat management APIs
 export * from './migrations/userDocumentConsistency'; // User document consistency migration
 export * from './migrations/userSubscriptionFieldsMigration'; // User subscription fields migration
+export * from './migrations/addSearchableFields'; // Add searchable fields for optimized search
 export * from './signal'; // Signal Protocol key management and verification
 export * from './sms'; // Twilio SMS functions for invitations and notifications
 export * from './subscriptions'; // Stripe subscription management and webhooks
