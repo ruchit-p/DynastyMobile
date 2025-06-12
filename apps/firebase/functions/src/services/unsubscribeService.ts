@@ -1,15 +1,15 @@
-import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
-import { defineSecret } from 'firebase-functions/params';
-import { createError, ErrorCode } from '../utils/errors';
-import { createLogContext } from '../utils/sanitization';
-import { UnsubscribeToken, EmailPreferences } from '../types/emailCompliance';
-import { getEmailSuppressionService } from './emailSuppressionService';
-import * as crypto from 'crypto';
-import * as jwt from 'jsonwebtoken';
+import {getFirestore, Timestamp, FieldValue} from "firebase-admin/firestore";
+import {logger} from "firebase-functions/v2";
+import {defineSecret} from "firebase-functions/params";
+import {createError, ErrorCode} from "../utils/errors";
+import {createLogContext} from "../utils/sanitization";
+import {UnsubscribeToken, EmailPreferences} from "../types/emailCompliance";
+import {getEmailSuppressionService} from "./emailSuppressionService";
+import * as crypto from "crypto";
+import * as jwt from "jsonwebtoken";
 
 // Define Firebase secret for JWT signing
-export const UNSUBSCRIBE_JWT_SECRET = defineSecret('UNSUBSCRIBE_JWT_SECRET');
+export const UNSUBSCRIBE_JWT_SECRET = defineSecret("UNSUBSCRIBE_JWT_SECRET");
 
 /**
  * Service for managing email unsubscribe functionality
@@ -28,12 +28,12 @@ export class UnsubscribeService {
 
     if (secretValue) {
       this.jwtSecret = secretValue;
-    } else if (envValue && process.env.FUNCTIONS_EMULATOR === 'true') {
+    } else if (envValue && process.env.FUNCTIONS_EMULATOR === "true") {
       // Only allow env var in emulator for local development
       this.jwtSecret = envValue;
     } else {
       throw new Error(
-        'UNSUBSCRIBE_JWT_SECRET is required. Please set this Firebase secret for production deployment.'
+        "UNSUBSCRIBE_JWT_SECRET is required. Please set this Firebase secret for production deployment."
       );
     }
   }
@@ -45,11 +45,11 @@ export class UnsubscribeService {
     email: string,
     userId?: string,
     actionType:
-      | 'unsubscribe-all'
-      | 'manage-preferences'
-      | 'unsubscribe-category' = 'manage-preferences',
+      | "unsubscribe-all"
+      | "manage-preferences"
+      | "unsubscribe-category" = "manage-preferences",
     category?: string,
-    allowedCategories: string[] = ['marketing', 'familyUpdates', 'eventInvitations']
+    allowedCategories: string[] = ["marketing", "familyUpdates", "eventInvitations"]
   ): Promise<string> {
     try {
       const tokenId = crypto.randomUUID();
@@ -68,7 +68,7 @@ export class UnsubscribeService {
         category,
       };
 
-      await this.db.collection('unsubscribeTokens').doc(tokenId).set(tokenDoc);
+      await this.db.collection("unsubscribeTokens").doc(tokenId).set(tokenDoc);
 
       // Create JWT token with limited payload
       const jwtPayload = {
@@ -79,15 +79,15 @@ export class UnsubscribeService {
       };
 
       const token = jwt.sign(jwtPayload, this.jwtSecret, {
-        algorithm: 'HS256',
-        issuer: 'dynasty-email-service',
+        algorithm: "HS256",
+        issuer: "dynasty-email-service",
       });
 
       logger.info(
-        'Generated unsubscribe token',
+        "Generated unsubscribe token",
         createLogContext({
           tokenId,
-          email: email.substring(0, 3) + '***',
+          email: email.substring(0, 3) + "***",
           actionType,
           userId,
         })
@@ -96,13 +96,13 @@ export class UnsubscribeService {
       return token;
     } catch (error) {
       logger.error(
-        'Error generating unsubscribe token',
+        "Error generating unsubscribe token",
         createLogContext({
-          email: email.substring(0, 3) + '***',
+          email: email.substring(0, 3) + "***",
           error: error instanceof Error ? error.message : String(error),
         })
       );
-      throw createError(ErrorCode.INTERNAL, 'Failed to generate unsubscribe token');
+      throw createError(ErrorCode.INTERNAL, "Failed to generate unsubscribe token");
     }
   }
 
@@ -119,19 +119,19 @@ export class UnsubscribeService {
     try {
       // Verify JWT
       const decoded = jwt.verify(token, this.jwtSecret, {
-        issuer: 'dynasty-email-service',
+        issuer: "dynasty-email-service",
       }) as any;
 
       const tokenId = decoded.tokenId;
       const email = decoded.email;
 
       // Fetch token from database
-      const tokenDoc = await this.db.collection('unsubscribeTokens').doc(tokenId).get();
+      const tokenDoc = await this.db.collection("unsubscribeTokens").doc(tokenId).get();
 
       if (!tokenDoc.exists) {
         return {
           isValid: false,
-          error: 'Token not found',
+          error: "Token not found",
         };
       }
 
@@ -141,7 +141,7 @@ export class UnsubscribeService {
       if (tokenData.used) {
         return {
           isValid: false,
-          error: 'Token already used',
+          error: "Token already used",
         };
       }
 
@@ -149,7 +149,7 @@ export class UnsubscribeService {
       if (tokenData.expiresAt.toDate() < new Date()) {
         return {
           isValid: false,
-          error: 'Token expired',
+          error: "Token expired",
         };
       }
 
@@ -157,7 +157,7 @@ export class UnsubscribeService {
       if (tokenData.email !== email) {
         return {
           isValid: false,
-          error: 'Token email mismatch',
+          error: "Token email mismatch",
         };
       }
 
@@ -169,7 +169,7 @@ export class UnsubscribeService {
       };
     } catch (error) {
       logger.error(
-        'Error validating unsubscribe token',
+        "Error validating unsubscribe token",
         createLogContext({
           error: error instanceof Error ? error.message : String(error),
         })
@@ -177,7 +177,7 @@ export class UnsubscribeService {
 
       return {
         isValid: false,
-        error: 'Invalid token format',
+        error: "Invalid token format",
       };
     }
   }
@@ -188,9 +188,9 @@ export class UnsubscribeService {
   async processUnsubscribe(
     token: string,
     requestData: {
-      action: 'unsubscribe-all' | 'unsubscribe-category' | 'update-preferences';
+      action: "unsubscribe-all" | "unsubscribe-category" | "update-preferences";
       categories?: string[];
-      preferences?: Partial<EmailPreferences['categories']>;
+      preferences?: Partial<EmailPreferences["categories"]>;
       ipAddress?: string;
       userAgent?: string;
     }
@@ -203,14 +203,14 @@ export class UnsubscribeService {
       // Validate token
       const validation = await this.validateUnsubscribeToken(token);
       if (!validation.isValid || !validation.tokenData) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, validation.error || 'Invalid token');
+        throw createError(ErrorCode.INVALID_ARGUMENT, validation.error || "Invalid token");
       }
 
-      const { tokenData, email } = validation;
-      const { action, categories, preferences, ipAddress, userAgent } = requestData;
+      const {tokenData, email} = validation;
+      const {action, categories, preferences, ipAddress, userAgent} = requestData;
 
       // Mark token as used
-      await this.db.collection('unsubscribeTokens').doc(tokenData.tokenId).update({
+      await this.db.collection("unsubscribeTokens").doc(tokenData.tokenId).update({
         used: true,
         usedAt: FieldValue.serverTimestamp(),
         usedFromIp: ipAddress,
@@ -219,10 +219,10 @@ export class UnsubscribeService {
       });
 
       logger.info(
-        'Processing unsubscribe request',
+        "Processing unsubscribe request",
         createLogContext({
           tokenId: tokenData.tokenId,
-          email: email!.substring(0, 3) + '***',
+          email: email!.substring(0, 3) + "***",
           action,
           userId: tokenData.userId,
         })
@@ -230,43 +230,43 @@ export class UnsubscribeService {
 
       // Process based on action type
       switch (action) {
-        case 'unsubscribe-all':
-          return await this.processUnsubscribeAll(email!, tokenData.userId, ipAddress);
+      case "unsubscribe-all":
+        return await this.processUnsubscribeAll(email!, tokenData.userId, ipAddress);
 
-        case 'unsubscribe-category':
-          if (!categories || categories.length === 0) {
-            throw createError(
-              ErrorCode.INVALID_ARGUMENT,
-              'Categories required for category unsubscribe'
-            );
-          }
-          return await this.processUnsubscribeCategory(
+      case "unsubscribe-category":
+        if (!categories || categories.length === 0) {
+          throw createError(
+            ErrorCode.INVALID_ARGUMENT,
+            "Categories required for category unsubscribe"
+          );
+        }
+        return await this.processUnsubscribeCategory(
             email!,
             categories,
             tokenData.userId,
             ipAddress
-          );
+        );
 
-        case 'update-preferences':
-          if (!preferences) {
-            throw createError(
-              ErrorCode.INVALID_ARGUMENT,
-              'Preferences required for preference update'
-            );
-          }
-          return await this.processUpdatePreferences(
+      case "update-preferences":
+        if (!preferences) {
+          throw createError(
+            ErrorCode.INVALID_ARGUMENT,
+            "Preferences required for preference update"
+          );
+        }
+        return await this.processUpdatePreferences(
             email!,
             preferences,
             tokenData.userId,
             ipAddress
-          );
+        );
 
-        default:
-          throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid action type');
+      default:
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid action type");
       }
     } catch (error) {
       logger.error(
-        'Error processing unsubscribe',
+        "Error processing unsubscribe",
         createLogContext({
           error: error instanceof Error ? error.message : String(error),
           action: requestData.action,
@@ -275,15 +275,15 @@ export class UnsubscribeService {
 
       if (
         error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        typeof error.code === 'string' &&
-        error.code.startsWith('functions/')
+        typeof error === "object" &&
+        "code" in error &&
+        typeof error.code === "string" &&
+        error.code.startsWith("functions/")
       ) {
         throw error;
       }
 
-      throw createError(ErrorCode.INTERNAL, 'Failed to process unsubscribe request');
+      throw createError(ErrorCode.INTERNAL, "Failed to process unsubscribe request");
     }
   }
 
@@ -299,10 +299,10 @@ export class UnsubscribeService {
     const suppressionService = getEmailSuppressionService();
     await suppressionService.addToSuppressionList(
       email,
-      'unsubscribe',
-      'hard',
+      "unsubscribe",
+      "hard",
       {
-        method: 'unsubscribe-link',
+        method: "unsubscribe-link",
         ipAddress,
         timestamp: new Date().toISOString(),
       },
@@ -321,15 +321,15 @@ export class UnsubscribeService {
           billing: false, // Keep billing enabled even for global opt-out
         },
         ipAddress,
-        'unsubscribe-all',
+        "unsubscribe-all",
         true
       ); // Pass globalOptOut as separate parameter
     }
 
     logger.info(
-      'Processed unsubscribe-all request',
+      "Processed unsubscribe-all request",
       createLogContext({
-        email: email.substring(0, 3) + '***',
+        email: email.substring(0, 3) + "***",
         userId,
       })
     );
@@ -337,7 +337,7 @@ export class UnsubscribeService {
     return {
       success: true,
       message:
-        'You have been unsubscribed from all marketing emails. You may still receive important account and security notifications.',
+        "You have been unsubscribed from all marketing emails. You may still receive important account and security notifications.",
     };
   }
 
@@ -353,8 +353,8 @@ export class UnsubscribeService {
     if (!userId) {
       // For non-users, add to suppression list with category metadata
       const suppressionService = getEmailSuppressionService();
-      await suppressionService.addToSuppressionList(email, 'unsubscribe', 'soft', {
-        method: 'category-unsubscribe',
+      await suppressionService.addToSuppressionList(email, "unsubscribe", "soft", {
+        method: "category-unsubscribe",
         categories,
         ipAddress,
         timestamp: new Date().toISOString(),
@@ -362,26 +362,26 @@ export class UnsubscribeService {
 
       return {
         success: true,
-        message: `You have been unsubscribed from: ${categories.join(', ')}`,
+        message: `You have been unsubscribed from: ${categories.join(", ")}`,
       };
     }
 
     // For users, update preferences
     const updateData = categories.reduce((acc, category) => {
-      acc[category as keyof EmailPreferences['categories']] = false;
+      acc[category as keyof EmailPreferences["categories"]] = false;
       return acc;
-    }, {} as Partial<EmailPreferences['categories']>);
+    }, {} as Partial<EmailPreferences["categories"]>);
 
     const updatedPreferences = await this.updateUserEmailPreferences(
       userId,
       updateData,
       ipAddress,
-      'unsubscribe-category'
+      "unsubscribe-category"
     );
 
     return {
       success: true,
-      message: `You have been unsubscribed from: ${categories.join(', ')}`,
+      message: `You have been unsubscribed from: ${categories.join(", ")}`,
       preferences: updatedPreferences,
     };
   }
@@ -391,24 +391,24 @@ export class UnsubscribeService {
    */
   private async processUpdatePreferences(
     email: string,
-    preferences: Partial<EmailPreferences['categories']>,
+    preferences: Partial<EmailPreferences["categories"]>,
     userId?: string,
     ipAddress?: string
   ): Promise<{ success: boolean; message: string; preferences?: EmailPreferences }> {
     if (!userId) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, 'User account required for preference updates');
+      throw createError(ErrorCode.INVALID_ARGUMENT, "User account required for preference updates");
     }
 
     const updatedPreferences = await this.updateUserEmailPreferences(
       userId,
       preferences,
       ipAddress,
-      'preference-change'
+      "preference-change"
     );
 
     return {
       success: true,
-      message: 'Your email preferences have been updated successfully.',
+      message: "Your email preferences have been updated successfully.",
       preferences: updatedPreferences,
     };
   }
@@ -418,21 +418,21 @@ export class UnsubscribeService {
    */
   private async updateUserEmailPreferences(
     userId: string,
-    updates: Partial<EmailPreferences['categories']>,
+    updates: Partial<EmailPreferences["categories"]>,
     ipAddress?: string,
     consentType:
-      | 'opt-in'
-      | 'opt-out'
-      | 'preference-change'
-      | 'unsubscribe-all'
-      | 'unsubscribe-category' = 'preference-change',
+      | "opt-in"
+      | "opt-out"
+      | "preference-change"
+      | "unsubscribe-all"
+      | "unsubscribe-category" = "preference-change",
     globalOptOut?: boolean
   ): Promise<EmailPreferences> {
-    const userRef = this.db.collection('users').doc(userId);
+    const userRef = this.db.collection("users").doc(userId);
     const userDoc = await userRef.get();
 
     if (!userDoc.exists) {
-      throw createError(ErrorCode.NOT_FOUND, 'User not found');
+      throw createError(ErrorCode.NOT_FOUND, "User not found");
     }
 
     const userData = userDoc.data();
@@ -444,8 +444,8 @@ export class UnsubscribeService {
       categories: Object.keys(updates),
       timestamp: FieldValue.serverTimestamp(),
       ipAddress,
-      method: 'email' as const,
-      policyVersion: '1.0', // Update this when privacy policy changes
+      method: "email" as const,
+      policyVersion: "1.0", // Update this when privacy policy changes
     };
 
     // Update preferences
@@ -478,7 +478,7 @@ export class UnsubscribeService {
     });
 
     logger.info(
-      'Updated user email preferences',
+      "Updated user email preferences",
       createLogContext({
         userId,
         updates: Object.keys(updates),
@@ -494,7 +494,7 @@ export class UnsubscribeService {
    */
   async getUserEmailPreferences(userId: string): Promise<EmailPreferences | null> {
     try {
-      const userDoc = await this.db.collection('users').doc(userId).get();
+      const userDoc = await this.db.collection("users").doc(userId).get();
 
       if (!userDoc.exists) {
         return null;
@@ -504,7 +504,7 @@ export class UnsubscribeService {
       return userData?.emailPreferences || null;
     } catch (error) {
       logger.error(
-        'Error getting user email preferences',
+        "Error getting user email preferences",
         createLogContext({
           userId,
           error: error instanceof Error ? error.message : String(error),
@@ -518,7 +518,7 @@ export class UnsubscribeService {
    * Generate preference center URL
    */
   generatePreferenceCenterUrl(email: string, userId?: string): Promise<string> {
-    return this.generateUnsubscribeUrl(email, userId, 'manage-preferences');
+    return this.generateUnsubscribeUrl(email, userId, "manage-preferences");
   }
 
   /**
@@ -528,9 +528,9 @@ export class UnsubscribeService {
     email: string,
     userId?: string,
     actionType:
-      | 'unsubscribe-all'
-      | 'manage-preferences'
-      | 'unsubscribe-category' = 'unsubscribe-all',
+      | "unsubscribe-all"
+      | "manage-preferences"
+      | "unsubscribe-category" = "unsubscribe-all",
     category?: string
   ): Promise<string> {
     const token = await this.generateUnsubscribeToken(email, userId, actionType, category);
@@ -538,11 +538,11 @@ export class UnsubscribeService {
     // Get base URL from environment
     const baseUrl =
       process.env.FRONTEND_URL ||
-      (process.env.FUNCTIONS_EMULATOR === 'true'
-        ? 'http://localhost:3000'
-        : 'https://mydynastyapp.com');
+      (process.env.FUNCTIONS_EMULATOR === "true" ?
+        "http://localhost:3000" :
+        "https://mydynastyapp.com");
 
-    if (actionType === 'manage-preferences') {
+    if (actionType === "manage-preferences") {
       return `${baseUrl}/email-preferences?token=${token}`;
     } else {
       return `${baseUrl}/unsubscribe?token=${token}`;
@@ -555,8 +555,8 @@ export class UnsubscribeService {
   async cleanupExpiredTokens(): Promise<number> {
     try {
       const expiredQuery = this.db
-        .collection('unsubscribeTokens')
-        .where('expiresAt', '<=', Timestamp.now())
+        .collection("unsubscribeTokens")
+        .where("expiresAt", "<=", Timestamp.now())
         .limit(100); // Process in batches
 
       const snapshot = await expiredQuery.get();
@@ -566,14 +566,14 @@ export class UnsubscribeService {
       }
 
       const batch = this.db.batch();
-      snapshot.docs.forEach(doc => {
+      snapshot.docs.forEach((doc) => {
         batch.delete(doc.ref);
       });
 
       await batch.commit();
 
       logger.info(
-        'Cleaned up expired unsubscribe tokens',
+        "Cleaned up expired unsubscribe tokens",
         createLogContext({
           deletedCount: snapshot.docs.length,
         })
@@ -582,7 +582,7 @@ export class UnsubscribeService {
       return snapshot.docs.length;
     } catch (error) {
       logger.error(
-        'Error cleaning up expired tokens',
+        "Error cleaning up expired tokens",
         createLogContext({
           error: error instanceof Error ? error.message : String(error),
         })

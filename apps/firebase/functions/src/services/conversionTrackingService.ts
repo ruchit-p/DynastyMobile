@@ -1,6 +1,6 @@
-import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
-import { createError, ErrorCode } from '../utils/errors';
+import {getFirestore, Timestamp, FieldValue} from "firebase-admin/firestore";
+import {logger} from "firebase-functions/v2";
+import {createError, ErrorCode} from "../utils/errors";
 
 /**
  * Comprehensive conversion tracking service for Dynasty Stripe integration.
@@ -69,7 +69,7 @@ export interface ConversionEvent {
   // Event context
   deviceInfo: {
     userAgent?: string;
-    deviceType: 'desktop' | 'mobile' | 'tablet';
+    deviceType: "desktop" | "mobile" | "tablet";
     browser?: string;
     os?: string;
     screenResolution?: string;
@@ -104,7 +104,7 @@ export interface ConversionEvent {
   conversionData?: {
     planSelected?: string;
     tierSelected?: string;
-    interval?: 'month' | 'year';
+    interval?: "month" | "year";
     amount?: number;
     currency?: string;
     discountApplied?: string;
@@ -120,44 +120,44 @@ export interface ConversionEvent {
 
 export enum ConversionEventType {
   // Top of funnel
-  PRICING_PAGE_VIEW = 'pricing_page_view',
-  PLAN_HOVER = 'plan_hover',
-  PLAN_CLICK = 'plan_click',
-  FAQ_EXPANSION = 'faq_expansion',
-  FEATURE_COMPARISON = 'feature_comparison',
+  PRICING_PAGE_VIEW = "pricing_page_view",
+  PLAN_HOVER = "plan_hover",
+  PLAN_CLICK = "plan_click",
+  FAQ_EXPANSION = "faq_expansion",
+  FEATURE_COMPARISON = "feature_comparison",
 
   // Checkout initiation
-  CHECKOUT_BUTTON_CLICK = 'checkout_button_click',
-  CHECKOUT_SESSION_START = 'checkout_session_start',
-  CHECKOUT_FORM_VIEW = 'checkout_form_view',
+  CHECKOUT_BUTTON_CLICK = "checkout_button_click",
+  CHECKOUT_SESSION_START = "checkout_session_start",
+  CHECKOUT_FORM_VIEW = "checkout_form_view",
 
   // Checkout process
-  EMAIL_ENTERED = 'email_entered',
-  PAYMENT_METHOD_SELECTION = 'payment_method_selection',
-  BILLING_INFO_ENTERED = 'billing_info_entered',
-  DISCOUNT_CODE_APPLIED = 'discount_code_applied',
-  TERMS_ACCEPTED = 'terms_accepted',
+  EMAIL_ENTERED = "email_entered",
+  PAYMENT_METHOD_SELECTION = "payment_method_selection",
+  BILLING_INFO_ENTERED = "billing_info_entered",
+  DISCOUNT_CODE_APPLIED = "discount_code_applied",
+  TERMS_ACCEPTED = "terms_accepted",
 
   // Checkout completion
-  PAYMENT_SUBMITTED = 'payment_submitted',
-  PAYMENT_PROCESSING = 'payment_processing',
-  PAYMENT_SUCCESS = 'payment_success',
-  PAYMENT_FAILED = 'payment_failed',
+  PAYMENT_SUBMITTED = "payment_submitted",
+  PAYMENT_PROCESSING = "payment_processing",
+  PAYMENT_SUCCESS = "payment_success",
+  PAYMENT_FAILED = "payment_failed",
 
   // Subscription creation
-  SUBSCRIPTION_CREATED = 'subscription_created',
-  WELCOME_EMAIL_SENT = 'welcome_email_sent',
-  ONBOARDING_STARTED = 'onboarding_started',
+  SUBSCRIPTION_CREATED = "subscription_created",
+  WELCOME_EMAIL_SENT = "welcome_email_sent",
+  ONBOARDING_STARTED = "onboarding_started",
 
   // Abandonment points
-  PRICING_PAGE_EXIT = 'pricing_page_exit',
-  CHECKOUT_ABANDONMENT = 'checkout_abandonment',
-  PAYMENT_TIMEOUT = 'payment_timeout',
+  PRICING_PAGE_EXIT = "pricing_page_exit",
+  CHECKOUT_ABANDONMENT = "checkout_abandonment",
+  PAYMENT_TIMEOUT = "payment_timeout",
 
   // Post-conversion
-  FIRST_LOGIN = 'first_login',
-  FEATURE_DISCOVERY = 'feature_discovery',
-  TRIAL_CONVERSION = 'trial_conversion',
+  FIRST_LOGIN = "first_login",
+  FEATURE_DISCOVERY = "feature_discovery",
+  TRIAL_CONVERSION = "trial_conversion",
 }
 
 export interface ConversionFunnel {
@@ -230,9 +230,9 @@ export interface AbandonmentAnalysis {
 
 export class ConversionTrackingService {
   private db = getFirestore();
-  private readonly CONVERSION_EVENTS_COLLECTION = 'conversionEvents';
-  private readonly CONVERSION_SESSIONS_COLLECTION = 'conversionSessions';
-  private readonly CONVERSION_FUNNELS_COLLECTION = 'conversionFunnels';
+  private readonly CONVERSION_EVENTS_COLLECTION = "conversionEvents";
+  private readonly CONVERSION_SESSIONS_COLLECTION = "conversionSessions";
+  private readonly CONVERSION_FUNNELS_COLLECTION = "conversionFunnels";
 
   /**
    * Track a conversion event and update the associated session progress.
@@ -326,14 +326,14 @@ export class ConversionTrackingService {
         await this.markSessionAsAbandoned(event);
       }
 
-      logger.info('Conversion event tracked', {
+      logger.info("Conversion event tracked", {
         sessionId: event.sessionId,
         eventType: event.eventType,
         userId: event.userId,
         deviceType: event.deviceInfo.deviceType,
       });
     } catch (error) {
-      logger.error('Failed to track conversion event', {
+      logger.error("Failed to track conversion event", {
         error,
         sessionId: event.sessionId,
         eventType: event.eventType,
@@ -354,7 +354,7 @@ export class ConversionTrackingService {
         lastActivity: Timestamp.fromDate(initialEvent.timestamp),
         deviceInfo: initialEvent.deviceInfo,
         userContext: initialEvent.userContext,
-        status: 'active' as const,
+        status: "active" as const,
         eventsCount: 1,
         currentStage: this.getStageFromEvent(initialEvent.eventType),
         planInterest: initialEvent.pageContext.planViewed,
@@ -369,13 +369,13 @@ export class ConversionTrackingService {
 
       await this.db.collection(this.CONVERSION_SESSIONS_COLLECTION).doc(sessionId).set(sessionData);
 
-      logger.info('Conversion session created', {
+      logger.info("Conversion session created", {
         sessionId,
         userId: initialEvent.userId,
         stage: sessionData.currentStage,
       });
     } catch (error) {
-      logger.error('Failed to create conversion session', {
+      logger.error("Failed to create conversion session", {
         error,
         sessionId,
       });
@@ -422,11 +422,11 @@ export class ConversionTrackingService {
       converted: true,
       conversionTime: Timestamp.fromDate(event.timestamp),
       conversionData: event.conversionData,
-      status: 'converted',
+      status: "converted",
       updatedAt: Timestamp.now(),
     });
 
-    logger.info('Session marked as converted', {
+    logger.info("Session marked as converted", {
       sessionId: event.sessionId,
       subscriptionId: event.conversionData?.subscriptionId,
     });
@@ -442,11 +442,11 @@ export class ConversionTrackingService {
       abandoned: true,
       abandonmentTime: Timestamp.fromDate(event.timestamp),
       abandonmentStage: this.getStageFromEvent(event.eventType),
-      status: 'abandoned',
+      status: "abandoned",
       updatedAt: Timestamp.now(),
     });
 
-    logger.info('Session marked as abandoned', {
+    logger.info("Session marked as abandoned", {
       sessionId: event.sessionId,
       stage: this.getStageFromEvent(event.eventType),
     });
@@ -512,7 +512,7 @@ export class ConversionTrackingService {
    */
   async calculateConversionFunnel(startDate: Date, endDate: Date): Promise<ConversionFunnel> {
     try {
-      logger.info('Calculating conversion funnel metrics', {
+      logger.info("Calculating conversion funnel metrics", {
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
       });
@@ -520,20 +520,20 @@ export class ConversionTrackingService {
       // Get all conversion events in the period
       const eventsSnapshot = await this.db
         .collection(this.CONVERSION_EVENTS_COLLECTION)
-        .where('timestamp', '>=', Timestamp.fromDate(startDate))
-        .where('timestamp', '<=', Timestamp.fromDate(endDate))
+        .where("timestamp", ">=", Timestamp.fromDate(startDate))
+        .where("timestamp", "<=", Timestamp.fromDate(endDate))
         .get();
 
-      const events = eventsSnapshot.docs.map(doc => doc.data()) as ConversionEvent[];
+      const events = eventsSnapshot.docs.map((doc) => doc.data()) as ConversionEvent[];
 
       // Get all sessions in the period
       const sessionsSnapshot = await this.db
         .collection(this.CONVERSION_SESSIONS_COLLECTION)
-        .where('startTime', '>=', Timestamp.fromDate(startDate))
-        .where('startTime', '<=', Timestamp.fromDate(endDate))
+        .where("startTime", ">=", Timestamp.fromDate(startDate))
+        .where("startTime", "<=", Timestamp.fromDate(endDate))
         .get();
 
-      const sessions = sessionsSnapshot.docs.map(doc => doc.data());
+      const sessions = sessionsSnapshot.docs.map((doc) => doc.data());
 
       // Calculate funnel steps
       const funnelSteps = this.calculateFunnelSteps(events);
@@ -548,10 +548,10 @@ export class ConversionTrackingService {
       const segmentedConversions = this.segmentConversions(events, sessions);
 
       // Analyze timing
-      const timeAnalysis = this.analyzeConversionTiming(sessions.filter(s => s.converted));
+      const timeAnalysis = this.analyzeConversionTiming(sessions.filter((s) => s.converted));
 
       const funnel: ConversionFunnel = {
-        period: { start: startDate, end: endDate },
+        period: {start: startDate, end: endDate},
         totalSessions: sessions.length,
         funnelSteps,
         conversionRates,
@@ -565,8 +565,8 @@ export class ConversionTrackingService {
 
       return funnel;
     } catch (error) {
-      logger.error('Failed to calculate conversion funnel', { error });
-      throw createError(ErrorCode.INTERNAL, 'Failed to calculate conversion funnel');
+      logger.error("Failed to calculate conversion funnel", {error});
+      throw createError(ErrorCode.INTERNAL, "Failed to calculate conversion funnel");
     }
   }
 
@@ -593,31 +593,31 @@ export class ConversionTrackingService {
       onboardingCompleted: new Set<string>(),
     };
 
-    events.forEach(event => {
+    events.forEach((event) => {
       switch (event.eventType) {
-        case ConversionEventType.PRICING_PAGE_VIEW:
-          uniqueSessions.pricingPageViews.add(event.sessionId);
-          break;
-        case ConversionEventType.CHECKOUT_SESSION_START:
-          uniqueSessions.checkoutInitiated.add(event.sessionId);
-          break;
-        case ConversionEventType.PAYMENT_METHOD_SELECTION:
-          uniqueSessions.paymentMethodAdded.add(event.sessionId);
-          break;
-        case ConversionEventType.PAYMENT_SUBMITTED:
-          uniqueSessions.paymentSubmitted.add(event.sessionId);
-          break;
-        case ConversionEventType.SUBSCRIPTION_CREATED:
-          uniqueSessions.subscriptionsCreated.add(event.sessionId);
-          break;
-        case ConversionEventType.ONBOARDING_STARTED:
-          uniqueSessions.onboardingCompleted.add(event.sessionId);
-          break;
+      case ConversionEventType.PRICING_PAGE_VIEW:
+        uniqueSessions.pricingPageViews.add(event.sessionId);
+        break;
+      case ConversionEventType.CHECKOUT_SESSION_START:
+        uniqueSessions.checkoutInitiated.add(event.sessionId);
+        break;
+      case ConversionEventType.PAYMENT_METHOD_SELECTION:
+        uniqueSessions.paymentMethodAdded.add(event.sessionId);
+        break;
+      case ConversionEventType.PAYMENT_SUBMITTED:
+        uniqueSessions.paymentSubmitted.add(event.sessionId);
+        break;
+      case ConversionEventType.SUBSCRIPTION_CREATED:
+        uniqueSessions.subscriptionsCreated.add(event.sessionId);
+        break;
+      case ConversionEventType.ONBOARDING_STARTED:
+        uniqueSessions.onboardingCompleted.add(event.sessionId);
+        break;
       }
     });
 
     // Convert sets to counts
-    Object.keys(stepCounts).forEach(step => {
+    Object.keys(stepCounts).forEach((step) => {
       stepCounts[step as keyof typeof stepCounts] =
         uniqueSessions[step as keyof typeof uniqueSessions].size;
     });
@@ -653,13 +653,13 @@ export class ConversionTrackingService {
    * Analyze drop-off points in the funnel
    */
   private analyzeDropOffPoints(events: ConversionEvent[], sessions: any[]): any[] {
-    const stages = ['pricing', 'checkout', 'payment', 'subscription', 'onboarding'];
+    const stages = ["pricing", "checkout", "payment", "subscription", "onboarding"];
     const dropOffPoints: any[] = [];
 
-    stages.forEach(stage => {
-      const entrances = sessions.filter(s => this.sessionReachedStage(s, stage)).length;
+    stages.forEach((stage) => {
+      const entrances = sessions.filter((s) => this.sessionReachedStage(s, stage)).length;
 
-      const exits = sessions.filter(s => s.abandoned && s.abandonmentStage === stage).length;
+      const exits = sessions.filter((s) => s.abandoned && s.abandonmentStage === stage).length;
 
       dropOffPoints.push({
         step: stage,
@@ -682,68 +682,68 @@ export class ConversionTrackingService {
     const byPlan: Record<string, any> = {};
     const byUserType: Record<string, any> = {};
 
-    sessions.forEach(session => {
+    sessions.forEach((session) => {
       // Device segmentation
-      const device = session.deviceInfo?.deviceType || 'unknown';
+      const device = session.deviceInfo?.deviceType || "unknown";
       if (!byDevice[device]) {
-        byDevice[device] = { sessions: 0, conversions: 0, rate: 0 };
+        byDevice[device] = {sessions: 0, conversions: 0, rate: 0};
       }
       byDevice[device].sessions++;
       if (session.converted) byDevice[device].conversions++;
 
       // Source segmentation
-      const source = session.utmParameters?.source || 'direct';
+      const source = session.utmParameters?.source || "direct";
       if (!bySource[source]) {
-        bySource[source] = { sessions: 0, conversions: 0, rate: 0 };
+        bySource[source] = {sessions: 0, conversions: 0, rate: 0};
       }
       bySource[source].sessions++;
       if (session.converted) bySource[source].conversions++;
 
       // Plan segmentation
-      const plan = session.planInterest || 'unknown';
+      const plan = session.planInterest || "unknown";
       if (!byPlan[plan]) {
-        byPlan[plan] = { views: 0, conversions: 0, rate: 0 };
+        byPlan[plan] = {views: 0, conversions: 0, rate: 0};
       }
       byPlan[plan].views++;
       if (session.converted) byPlan[plan].conversions++;
 
       // User type segmentation
-      const userType = session.userContext?.isReturningUser ? 'returning' : 'new';
+      const userType = session.userContext?.isReturningUser ? "returning" : "new";
       if (!byUserType[userType]) {
-        byUserType[userType] = { sessions: 0, conversions: 0, rate: 0 };
+        byUserType[userType] = {sessions: 0, conversions: 0, rate: 0};
       }
       byUserType[userType].sessions++;
       if (session.converted) byUserType[userType].conversions++;
     });
 
     // Calculate rates
-    Object.keys(byDevice).forEach(device => {
+    Object.keys(byDevice).forEach((device) => {
       byDevice[device].rate =
-        byDevice[device].sessions > 0
-          ? (byDevice[device].conversions / byDevice[device].sessions) * 100
-          : 0;
+        byDevice[device].sessions > 0 ?
+          (byDevice[device].conversions / byDevice[device].sessions) * 100 :
+          0;
     });
 
-    Object.keys(bySource).forEach(source => {
+    Object.keys(bySource).forEach((source) => {
       bySource[source].rate =
-        bySource[source].sessions > 0
-          ? (bySource[source].conversions / bySource[source].sessions) * 100
-          : 0;
+        bySource[source].sessions > 0 ?
+          (bySource[source].conversions / bySource[source].sessions) * 100 :
+          0;
     });
 
-    Object.keys(byPlan).forEach(plan => {
+    Object.keys(byPlan).forEach((plan) => {
       byPlan[plan].rate =
         byPlan[plan].views > 0 ? (byPlan[plan].conversions / byPlan[plan].views) * 100 : 0;
     });
 
-    Object.keys(byUserType).forEach(userType => {
+    Object.keys(byUserType).forEach((userType) => {
       byUserType[userType].rate =
-        byUserType[userType].sessions > 0
-          ? (byUserType[userType].conversions / byUserType[userType].sessions) * 100
-          : 0;
+        byUserType[userType].sessions > 0 ?
+          (byUserType[userType].conversions / byUserType[userType].sessions) * 100 :
+          0;
     });
 
-    return { byDevice, bySource, byPlan, byUserType };
+    return {byDevice, bySource, byPlan, byUserType};
   }
 
   /**
@@ -759,7 +759,7 @@ export class ConversionTrackingService {
     }
 
     // Calculate conversion times
-    const conversionTimes = convertedSessions.map(session => {
+    const conversionTimes = convertedSessions.map((session) => {
       const startTime = session.startTime.toDate();
       const conversionTime = session.conversionTime.toDate();
       return (conversionTime.getTime() - startTime.getTime()) / (1000 * 60); // minutes
@@ -770,20 +770,20 @@ export class ConversionTrackingService {
 
     // Time distribution
     const timeDistribution = [
-      { range: '0-5 min', count: conversionTimes.filter(t => t <= 5).length },
-      { range: '5-15 min', count: conversionTimes.filter(t => t > 5 && t <= 15).length },
-      { range: '15-30 min', count: conversionTimes.filter(t => t > 15 && t <= 30).length },
-      { range: '30-60 min', count: conversionTimes.filter(t => t > 30 && t <= 60).length },
-      { range: '1+ hour', count: conversionTimes.filter(t => t > 60).length },
+      {range: "0-5 min", count: conversionTimes.filter((t) => t <= 5).length},
+      {range: "5-15 min", count: conversionTimes.filter((t) => t > 5 && t <= 15).length},
+      {range: "15-30 min", count: conversionTimes.filter((t) => t > 15 && t <= 30).length},
+      {range: "30-60 min", count: conversionTimes.filter((t) => t > 30 && t <= 60).length},
+      {range: "1+ hour", count: conversionTimes.filter((t) => t > 60).length},
     ];
 
     // Seasonal trends (by hour of day)
     const seasonalTrends: any[] = [];
     for (let hour = 0; hour < 24; hour++) {
       const conversions = convertedSessions.filter(
-        session => session.conversionTime.toDate().getHours() === hour
+        (session) => session.conversionTime.toDate().getHours() === hour
       ).length;
-      seasonalTrends.push({ hour, conversions });
+      seasonalTrends.push({hour, conversions});
     }
 
     return {
@@ -838,7 +838,7 @@ export class ConversionTrackingService {
         ConversionEventType.PLAN_CLICK,
       ].includes(eventType)
     ) {
-      return 'pricing';
+      return "pricing";
     }
     if (
       [
@@ -846,26 +846,26 @@ export class ConversionTrackingService {
         ConversionEventType.CHECKOUT_SESSION_START,
       ].includes(eventType)
     ) {
-      return 'checkout';
+      return "checkout";
     }
     if (
       [ConversionEventType.PAYMENT_SUBMITTED, ConversionEventType.PAYMENT_PROCESSING].includes(
         eventType
       )
     ) {
-      return 'payment';
+      return "payment";
     }
     if ([ConversionEventType.SUBSCRIPTION_CREATED].includes(eventType)) {
-      return 'subscription';
+      return "subscription";
     }
     if ([ConversionEventType.ONBOARDING_STARTED].includes(eventType)) {
-      return 'onboarding';
+      return "onboarding";
     }
-    return 'unknown';
+    return "unknown";
   }
 
   private sessionReachedStage(session: any, stage: string): boolean {
-    const stageOrder = ['pricing', 'checkout', 'payment', 'subscription', 'onboarding'];
+    const stageOrder = ["pricing", "checkout", "payment", "subscription", "onboarding"];
     const sessionStageIndex = stageOrder.indexOf(session.currentStage);
     const targetStageIndex = stageOrder.indexOf(stage);
     return sessionStageIndex >= targetStageIndex;

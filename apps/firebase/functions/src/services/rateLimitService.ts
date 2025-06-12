@@ -1,11 +1,11 @@
-import { Ratelimit } from '@upstash/ratelimit';
-import { Redis } from '@upstash/redis';
-import { defineSecret } from 'firebase-functions/params';
-import { SecurityError } from '../utils/errors';
+import {Ratelimit} from "@upstash/ratelimit";
+import {Redis} from "@upstash/redis";
+import {defineSecret} from "firebase-functions/params";
+import {SecurityError} from "../utils/errors";
 
 // Define secrets for Upstash Redis
-export const UPSTASH_REDIS_REST_URL = defineSecret('UPSTASH_REDIS_REST_URL');
-export const UPSTASH_REDIS_REST_TOKEN = defineSecret('UPSTASH_REDIS_REST_TOKEN');
+export const UPSTASH_REDIS_REST_URL = defineSecret("UPSTASH_REDIS_REST_URL");
+export const UPSTASH_REDIS_REST_TOKEN = defineSecret("UPSTASH_REDIS_REST_TOKEN");
 
 // Lazy initialization of Redis client
 let redis: Redis | null = null;
@@ -14,8 +14,8 @@ let isInitialized = false;
 function getRedisClient(): Redis {
   if (!isInitialized) {
     // Try to get config from environment first (for local development)
-    let redisUrl = process.env.UPSTASH_REDIS_REST_URL || '';
-    let redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || '';
+    let redisUrl = process.env.UPSTASH_REDIS_REST_URL || "";
+    let redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || "";
 
     // In production, use the secret values
     if (UPSTASH_REDIS_REST_URL.value()) {
@@ -27,7 +27,7 @@ function getRedisClient(): Redis {
 
     if (!redisUrl || !redisToken) {
       throw new Error(
-        'Redis configuration is missing. Please set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables or secrets.'
+        "Redis configuration is missing. Please set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables or secrets."
       );
     }
 
@@ -52,169 +52,169 @@ function getRateLimiters() {
       // Auth operations: 5 attempts per 5 minutes (aligned with security-config)
       auth: new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(5, '5 m'),
-        prefix: '@dynasty/auth',
+        limiter: Ratelimit.slidingWindow(5, "5 m"),
+        prefix: "@dynasty/auth",
       }),
 
       // API calls: 60 requests per minute (aligned with security-config)
       api: new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(60, '1 m'),
-        prefix: '@dynasty/api',
+        limiter: Ratelimit.slidingWindow(60, "1 m"),
+        prefix: "@dynasty/api",
       }),
 
       // Media/Upload operations: 10 per 5 minutes (aligned with security-config)
       media: new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(10, '5 m'),
-        prefix: '@dynasty/media',
+        limiter: Ratelimit.slidingWindow(10, "5 m"),
+        prefix: "@dynasty/media",
       }),
 
       // Alias for media (backward compatibility)
       upload: new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(10, '5 m'),
-        prefix: '@dynasty/media',
+        limiter: Ratelimit.slidingWindow(10, "5 m"),
+        prefix: "@dynasty/media",
       }),
 
       // Write operations: 30 per minute (already aligned)
       write: new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(30, '1 m'),
-        prefix: '@dynasty/write',
+        limiter: Ratelimit.slidingWindow(30, "1 m"),
+        prefix: "@dynasty/write",
       }),
 
       // Sensitive operations (password reset, etc): 3 per hour
       sensitive: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(3, '1 h'),
-        prefix: '@dynasty/sensitive',
+        limiter: Ratelimit.fixedWindow(3, "1 h"),
+        prefix: "@dynasty/sensitive",
       }),
 
       // SMS/Phone verification: 3 per hour
       sms: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(3, '1 h'),
-        prefix: '@dynasty/sms',
+        limiter: Ratelimit.fixedWindow(3, "1 h"),
+        prefix: "@dynasty/sms",
       }),
 
       // Support messages: 3 per 6 hours
       support: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(3, '6 h'),
-        prefix: '@dynasty/support',
+        limiter: Ratelimit.fixedWindow(3, "6 h"),
+        prefix: "@dynasty/support",
       }),
 
       // Signal Protocol rate limits
       signalKeyPublish: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(3, '1 h'),
-        prefix: '@dynasty/signal/key-publish',
+        limiter: Ratelimit.fixedWindow(3, "1 h"),
+        prefix: "@dynasty/signal/key-publish",
       }),
 
       signalKeyRetrieve: new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(20, '1 h'),
-        prefix: '@dynasty/signal/key-retrieve',
+        limiter: Ratelimit.slidingWindow(20, "1 h"),
+        prefix: "@dynasty/signal/key-retrieve",
       }),
 
       signalVerification: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(5, '24 h'),
-        prefix: '@dynasty/signal/verification',
+        limiter: Ratelimit.fixedWindow(5, "24 h"),
+        prefix: "@dynasty/signal/verification",
       }),
 
       signalMaintenance: new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(10, '1 m'),
-        prefix: '@dynasty/signal/maintenance',
+        limiter: Ratelimit.slidingWindow(10, "1 m"),
+        prefix: "@dynasty/signal/maintenance",
       }),
 
       // Email verification rate limits
       emailVerificationSend: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(3, '1 h'),
-        prefix: '@dynasty/email/send',
+        limiter: Ratelimit.fixedWindow(3, "1 h"),
+        prefix: "@dynasty/email/send",
       }),
 
       emailVerificationVerify: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(10, '1 h'),
-        prefix: '@dynasty/email/verify',
+        limiter: Ratelimit.fixedWindow(10, "1 h"),
+        prefix: "@dynasty/email/verify",
       }),
 
       emailPreferenceUpdate: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(10, '1 h'), // 10 preference updates per hour
-        prefix: '@dynasty/email/preferences',
+        limiter: Ratelimit.fixedWindow(10, "1 h"), // 10 preference updates per hour
+        prefix: "@dynasty/email/preferences",
       }),
 
       adminEmailManagement: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(100, '1 h'), // 100 admin operations per hour
-        prefix: '@dynasty/email/admin',
+        limiter: Ratelimit.fixedWindow(100, "1 h"), // 100 admin operations per hour
+        prefix: "@dynasty/email/admin",
       }),
 
       // Subscription rate limits
       checkout: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(5, '1 h'), // 5 checkout attempts per hour
-        prefix: '@dynasty/subscription/checkout',
+        limiter: Ratelimit.fixedWindow(5, "1 h"), // 5 checkout attempts per hour
+        prefix: "@dynasty/subscription/checkout",
       }),
 
       subscriptionModify: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(10, '24 h'), // 10 modifications per day
-        prefix: '@dynasty/subscription/modify',
+        limiter: Ratelimit.fixedWindow(10, "24 h"), // 10 modifications per day
+        prefix: "@dynasty/subscription/modify",
       }),
 
       referral: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(20, '24 h'), // 20 referral operations per day
-        prefix: '@dynasty/subscription/referral',
+        limiter: Ratelimit.fixedWindow(20, "24 h"), // 20 referral operations per day
+        prefix: "@dynasty/subscription/referral",
       }),
 
       webhook: new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(100, '1 m'), // 100 webhook events per minute
-        prefix: '@dynasty/stripe/webhook',
+        limiter: Ratelimit.slidingWindow(100, "1 m"), // 100 webhook events per minute
+        prefix: "@dynasty/stripe/webhook",
       }),
 
       // Phase 2: Enhanced Stripe operations
       stripeCheckout: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(10, '1 h'), // 10 enhanced checkout sessions per hour
-        prefix: '@dynasty/stripe/enhanced-checkout',
+        limiter: Ratelimit.fixedWindow(10, "1 h"), // 10 enhanced checkout sessions per hour
+        prefix: "@dynasty/stripe/enhanced-checkout",
       }),
 
       stripeSubscriptionRead: new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(100, '1 h'), // 100 subscription reads per hour
-        prefix: '@dynasty/stripe/subscription-read',
+        limiter: Ratelimit.slidingWindow(100, "1 h"), // 100 subscription reads per hour
+        prefix: "@dynasty/stripe/subscription-read",
       }),
 
       stripeSubscriptionUpdate: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(10, '24 h'), // 10 subscription updates per day
-        prefix: '@dynasty/stripe/subscription-update',
+        limiter: Ratelimit.fixedWindow(10, "24 h"), // 10 subscription updates per day
+        prefix: "@dynasty/stripe/subscription-update",
       }),
 
       stripeFamilyUpdate: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(20, '24 h'), // 20 family member operations per day
-        prefix: '@dynasty/stripe/family-update',
+        limiter: Ratelimit.fixedWindow(20, "24 h"), // 20 family member operations per day
+        prefix: "@dynasty/stripe/family-update",
       }),
 
       stripePortal: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(10, '1 h'), // 10 portal sessions per hour
-        prefix: '@dynasty/stripe/portal',
+        limiter: Ratelimit.fixedWindow(10, "1 h"), // 10 portal sessions per hour
+        prefix: "@dynasty/stripe/portal",
       }),
 
       stripeAddonManage: new Ratelimit({
         redis,
-        limiter: Ratelimit.fixedWindow(20, '24 h'), // 20 addon operations per day
-        prefix: '@dynasty/stripe/addon-manage',
+        limiter: Ratelimit.fixedWindow(20, "24 h"), // 20 addon operations per day
+        prefix: "@dynasty/stripe/addon-manage",
       }),
     };
   }
@@ -223,32 +223,32 @@ function getRateLimiters() {
 }
 
 export type RateLimitType =
-  | 'auth'
-  | 'api'
-  | 'media'
-  | 'upload'
-  | 'write'
-  | 'sensitive'
-  | 'sms'
-  | 'support'
-  | 'signalKeyPublish'
-  | 'signalKeyRetrieve'
-  | 'signalVerification'
-  | 'signalMaintenance'
-  | 'emailVerificationSend'
-  | 'emailVerificationVerify'
-  | 'emailPreferenceUpdate'
-  | 'adminEmailManagement'
-  | 'checkout'
-  | 'subscriptionModify'
-  | 'referral'
-  | 'webhook'
-  | 'stripeCheckout'
-  | 'stripeSubscriptionRead'
-  | 'stripeSubscriptionUpdate'
-  | 'stripeFamilyUpdate'
-  | 'stripePortal'
-  | 'stripeAddonManage';
+  | "auth"
+  | "api"
+  | "media"
+  | "upload"
+  | "write"
+  | "sensitive"
+  | "sms"
+  | "support"
+  | "signalKeyPublish"
+  | "signalKeyRetrieve"
+  | "signalVerification"
+  | "signalMaintenance"
+  | "emailVerificationSend"
+  | "emailVerificationVerify"
+  | "emailPreferenceUpdate"
+  | "adminEmailManagement"
+  | "checkout"
+  | "subscriptionModify"
+  | "referral"
+  | "webhook"
+  | "stripeCheckout"
+  | "stripeSubscriptionRead"
+  | "stripeSubscriptionUpdate"
+  | "stripeFamilyUpdate"
+  | "stripePortal"
+  | "stripeAddonManage";
 
 interface RateLimitOptions {
   type: RateLimitType;
@@ -264,10 +264,10 @@ export async function checkRateLimit(options: RateLimitOptions): Promise<{
   remaining: number;
   reset: number;
 }> {
-  const { type, identifier, skipForAdmin = false } = options;
+  const {type, identifier, skipForAdmin = false} = options;
 
   // Skip rate limiting for admin users if specified
-  if (skipForAdmin && identifier.includes('admin:')) {
+  if (skipForAdmin && identifier.includes("admin:")) {
     return {
       success: true,
       limit: -1,
@@ -287,7 +287,7 @@ export async function checkRateLimit(options: RateLimitOptions): Promise<{
 
     if (!result.success) {
       throw new SecurityError(
-        'RATE_LIMIT_EXCEEDED',
+        "RATE_LIMIT_EXCEEDED",
         `Too many ${type} attempts. Please try again later.`,
         {
           limit: result.limit,
@@ -306,7 +306,7 @@ export async function checkRateLimit(options: RateLimitOptions): Promise<{
     };
   } catch (error) {
     // If Redis is unavailable, allow the request but log the error
-    console.error('Rate limiting error:', error);
+    console.error("Rate limiting error:", error);
 
     // Rethrow SecurityError to maintain rate limit enforcement
     if (error instanceof SecurityError) {
@@ -331,21 +331,21 @@ export function createRateLimitMiddleware(
   return async (req: any, res: any, next: any) => {
     try {
       // Extract identifier (default to IP address)
-      const identifier = identifierExtractor
-        ? identifierExtractor(req)
-        : req.ip || req.connection.remoteAddress || 'unknown';
+      const identifier = identifierExtractor ?
+        identifierExtractor(req) :
+        req.ip || req.connection.remoteAddress || "unknown";
 
       const result = await checkRateLimit({
         type,
         identifier,
-        skipForAdmin: req.user?.role === 'admin',
+        skipForAdmin: req.user?.role === "admin",
       });
 
       // Add rate limit headers
       res.set({
-        'X-RateLimit-Limit': result.limit.toString(),
-        'X-RateLimit-Remaining': result.remaining.toString(),
-        'X-RateLimit-Reset': new Date(result.reset).toISOString(),
+        "X-RateLimit-Limit": result.limit.toString(),
+        "X-RateLimit-Remaining": result.remaining.toString(),
+        "X-RateLimit-Reset": new Date(result.reset).toISOString(),
       });
 
       next();
@@ -358,7 +358,7 @@ export function createRateLimitMiddleware(
         });
       } else {
         // Log error but allow request
-        console.error('Rate limit middleware error:', error);
+        console.error("Rate limit middleware error:", error);
         next();
       }
     }
@@ -369,32 +369,32 @@ export function createRateLimitMiddleware(
 export async function resetRateLimit(type: RateLimitType, identifier: string): Promise<void> {
   // Use a manual prefix mapping since the property is protected
   const prefixMap: Record<RateLimitType, string> = {
-    auth: '@dynasty/auth',
-    api: '@dynasty/api',
-    media: '@dynasty/media',
-    upload: '@dynasty/media', // Same as media
-    write: '@dynasty/write',
-    sensitive: '@dynasty/sensitive',
-    sms: '@dynasty/sms',
-    support: '@dynasty/support',
-    signalKeyPublish: '@dynasty/signal/key-publish',
-    signalKeyRetrieve: '@dynasty/signal/key-retrieve',
-    signalVerification: '@dynasty/signal/verification',
-    signalMaintenance: '@dynasty/signal/maintenance',
-    emailVerificationSend: '@dynasty/email/send',
-    emailVerificationVerify: '@dynasty/email/verify',
-    emailPreferenceUpdate: '@dynasty/email/preferences',
-    adminEmailManagement: '@dynasty/email/admin',
-    checkout: '@dynasty/subscription/checkout',
-    subscriptionModify: '@dynasty/subscription/modify',
-    referral: '@dynasty/subscription/referral',
-    webhook: '@dynasty/stripe/webhook',
-    stripeCheckout: '@dynasty/stripe/enhanced-checkout',
-    stripeSubscriptionRead: '@dynasty/stripe/subscription-read',
-    stripeSubscriptionUpdate: '@dynasty/stripe/subscription-update',
-    stripeFamilyUpdate: '@dynasty/stripe/family-update',
-    stripePortal: '@dynasty/stripe/portal',
-    stripeAddonManage: '@dynasty/stripe/addon-manage',
+    auth: "@dynasty/auth",
+    api: "@dynasty/api",
+    media: "@dynasty/media",
+    upload: "@dynasty/media", // Same as media
+    write: "@dynasty/write",
+    sensitive: "@dynasty/sensitive",
+    sms: "@dynasty/sms",
+    support: "@dynasty/support",
+    signalKeyPublish: "@dynasty/signal/key-publish",
+    signalKeyRetrieve: "@dynasty/signal/key-retrieve",
+    signalVerification: "@dynasty/signal/verification",
+    signalMaintenance: "@dynasty/signal/maintenance",
+    emailVerificationSend: "@dynasty/email/send",
+    emailVerificationVerify: "@dynasty/email/verify",
+    emailPreferenceUpdate: "@dynasty/email/preferences",
+    adminEmailManagement: "@dynasty/email/admin",
+    checkout: "@dynasty/subscription/checkout",
+    subscriptionModify: "@dynasty/subscription/modify",
+    referral: "@dynasty/subscription/referral",
+    webhook: "@dynasty/stripe/webhook",
+    stripeCheckout: "@dynasty/stripe/enhanced-checkout",
+    stripeSubscriptionRead: "@dynasty/stripe/subscription-read",
+    stripeSubscriptionUpdate: "@dynasty/stripe/subscription-update",
+    stripeFamilyUpdate: "@dynasty/stripe/family-update",
+    stripePortal: "@dynasty/stripe/portal",
+    stripeAddonManage: "@dynasty/stripe/addon-manage",
   };
 
   const prefix = prefixMap[type];
@@ -404,8 +404,8 @@ export async function resetRateLimit(type: RateLimitType, identifier: string): P
     const redis = getRedisClient();
     await redis.del(key);
   } catch (error) {
-    console.error('Failed to reset rate limit:', error);
-    throw new Error('Failed to reset rate limit');
+    console.error("Failed to reset rate limit:", error);
+    throw new Error("Failed to reset rate limit");
   }
 }
 
@@ -423,7 +423,7 @@ export async function getRateLimitStatus(
 
   try {
     // Check without consuming
-    const result = await rateLimiter.limit(identifier, { rate: 0 });
+    const result = await rateLimiter.limit(identifier, {rate: 0});
 
     return {
       limit: result.limit,
@@ -431,7 +431,7 @@ export async function getRateLimitStatus(
       reset: result.reset,
     };
   } catch (error) {
-    console.error('Failed to get rate limit status:', error);
+    console.error("Failed to get rate limit status:", error);
     return {
       limit: -1,
       remaining: -1,

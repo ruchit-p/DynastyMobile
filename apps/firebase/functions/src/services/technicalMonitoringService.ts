@@ -1,6 +1,6 @@
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
-import { createError, ErrorCode } from '../utils/errors';
+import {getFirestore, Timestamp} from "firebase-admin/firestore";
+import {logger} from "firebase-functions/v2";
+import {createError, ErrorCode} from "../utils/errors";
 
 /**
  * Comprehensive technical monitoring service for Dynasty Stripe integration.
@@ -52,7 +52,7 @@ import { createError, ErrorCode } from '../utils/errors';
 export interface WebhookPerformanceMetrics {
   webhookType: string;
   processingTimeMs: number;
-  status: 'success' | 'failed' | 'timeout';
+  status: "success" | "failed" | "timeout";
   timestamp: Date;
   errorCode?: string;
   errorMessage?: string;
@@ -78,11 +78,11 @@ export interface APIErrorMetrics {
 
 export interface StorageCalculationMetrics {
   userId: string;
-  calculationType: 'user_storage' | 'family_storage' | 'addon_storage';
+  calculationType: "user_storage" | "family_storage" | "addon_storage";
   executionTimeMs: number;
   totalBytes: number;
   filesProcessed: number;
-  status: 'success' | 'failed' | 'timeout';
+  status: "success" | "failed" | "timeout";
   timestamp: Date;
   errorMessage?: string;
 }
@@ -94,7 +94,7 @@ export interface CheckoutAbandonmentMetrics {
   tier?: string;
   checkoutStarted: Date;
   lastActivity: Date;
-  abandonmentStage: 'pricing' | 'checkout_form' | 'payment_method' | 'confirmation';
+  abandonmentStage: "pricing" | "checkout_form" | "payment_method" | "confirmation";
   deviceType?: string;
   userAgent?: string;
   country?: string;
@@ -168,20 +168,20 @@ export interface TechnicalHealthMetrics {
 
   // System health indicators
   healthIndicators: {
-    overallHealth: 'excellent' | 'good' | 'warning' | 'critical';
+    overallHealth: "excellent" | "good" | "warning" | "critical";
     uptime: number;
     alertsTriggered: number;
-    performanceTrend: 'improving' | 'stable' | 'degrading';
+    performanceTrend: "improving" | "stable" | "degrading";
   };
 }
 
 export class TechnicalMonitoringService {
   private db = getFirestore();
-  private readonly WEBHOOK_METRICS_COLLECTION = 'webhookMetrics';
-  private readonly API_METRICS_COLLECTION = 'apiMetrics';
-  private readonly STORAGE_METRICS_COLLECTION = 'storageMetrics';
-  private readonly CHECKOUT_METRICS_COLLECTION = 'checkoutMetrics';
-  private readonly TECHNICAL_HEALTH_COLLECTION = 'technicalHealth';
+  private readonly WEBHOOK_METRICS_COLLECTION = "webhookMetrics";
+  private readonly API_METRICS_COLLECTION = "apiMetrics";
+  private readonly STORAGE_METRICS_COLLECTION = "storageMetrics";
+  private readonly CHECKOUT_METRICS_COLLECTION = "checkoutMetrics";
+  private readonly TECHNICAL_HEALTH_COLLECTION = "technicalHealth";
 
   // Performance thresholds for alerting
   private readonly PERFORMANCE_THRESHOLDS = {
@@ -239,22 +239,22 @@ export class TechnicalMonitoringService {
 
       // Check for performance alerts
       if (metrics.processingTimeMs > this.PERFORMANCE_THRESHOLDS.webhookProcessingTime) {
-        await this.triggerPerformanceAlert('webhook_slow', {
+        await this.triggerPerformanceAlert("webhook_slow", {
           webhookType: metrics.webhookType,
           processingTime: metrics.processingTimeMs,
           threshold: this.PERFORMANCE_THRESHOLDS.webhookProcessingTime,
         });
       }
 
-      if (metrics.status === 'failed') {
-        await this.triggerPerformanceAlert('webhook_failed', {
+      if (metrics.status === "failed") {
+        await this.triggerPerformanceAlert("webhook_failed", {
           webhookType: metrics.webhookType,
           errorCode: metrics.errorCode,
           errorMessage: metrics.errorMessage,
         });
       }
     } catch (error) {
-      logger.error('Failed to track webhook performance', { error, metrics });
+      logger.error("Failed to track webhook performance", {error, metrics});
     }
   }
 
@@ -271,14 +271,14 @@ export class TechnicalMonitoringService {
       // Check for error rate alerts
       const recentErrorRate = await this.calculateRecentErrorRate(metrics.endpoint);
       if (recentErrorRate > this.PERFORMANCE_THRESHOLDS.errorRateThreshold) {
-        await this.triggerPerformanceAlert('high_error_rate', {
+        await this.triggerPerformanceAlert("high_error_rate", {
           endpoint: metrics.endpoint,
           errorRate: recentErrorRate,
           threshold: this.PERFORMANCE_THRESHOLDS.errorRateThreshold,
         });
       }
     } catch (error) {
-      logger.error('Failed to track API error', { error, metrics });
+      logger.error("Failed to track API error", {error, metrics});
     }
   }
 
@@ -294,7 +294,7 @@ export class TechnicalMonitoringService {
 
       // Check for performance alerts
       if (metrics.executionTimeMs > this.PERFORMANCE_THRESHOLDS.storageCalculationTime) {
-        await this.triggerPerformanceAlert('storage_calculation_slow', {
+        await this.triggerPerformanceAlert("storage_calculation_slow", {
           userId: metrics.userId,
           calculationType: metrics.calculationType,
           executionTime: metrics.executionTimeMs,
@@ -302,7 +302,7 @@ export class TechnicalMonitoringService {
         });
       }
     } catch (error) {
-      logger.error('Failed to track storage calculation', { error, metrics });
+      logger.error("Failed to track storage calculation", {error, metrics});
     }
   }
 
@@ -317,7 +317,7 @@ export class TechnicalMonitoringService {
         lastActivity: Timestamp.fromDate(metrics.lastActivity),
       });
     } catch (error) {
-      logger.error('Failed to track checkout abandonment', { error, metrics });
+      logger.error("Failed to track checkout abandonment", {error, metrics});
     }
   }
 
@@ -369,7 +369,7 @@ export class TechnicalMonitoringService {
     endDate: Date
   ): Promise<TechnicalHealthMetrics> {
     try {
-      logger.info('Generating technical health report', {
+      logger.info("Generating technical health report", {
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
       });
@@ -388,7 +388,7 @@ export class TechnicalMonitoringService {
       );
 
       const report: TechnicalHealthMetrics = {
-        period: { start: startDate, end: endDate },
+        period: {start: startDate, end: endDate},
         webhookMetrics,
         apiMetrics,
         storageMetrics,
@@ -401,8 +401,8 @@ export class TechnicalMonitoringService {
 
       return report;
     } catch (error) {
-      logger.error('Failed to generate technical health report', { error });
-      throw createError(ErrorCode.INTERNAL, 'Failed to generate technical health report');
+      logger.error("Failed to generate technical health report", {error});
+      throw createError(ErrorCode.INTERNAL, "Failed to generate technical health report");
     }
   }
 
@@ -412,11 +412,11 @@ export class TechnicalMonitoringService {
   private async calculateWebhookMetrics(startDate: Date, endDate: Date): Promise<any> {
     const webhookLogs = await this.db
       .collection(this.WEBHOOK_METRICS_COLLECTION)
-      .where('timestamp', '>=', Timestamp.fromDate(startDate))
-      .where('timestamp', '<=', Timestamp.fromDate(endDate))
+      .where("timestamp", ">=", Timestamp.fromDate(startDate))
+      .where("timestamp", "<=", Timestamp.fromDate(endDate))
       .get();
 
-    const logs = webhookLogs.docs.map(doc => doc.data());
+    const logs = webhookLogs.docs.map((doc) => doc.data());
     const totalProcessed = logs.length;
 
     if (totalProcessed === 0) {
@@ -431,9 +431,9 @@ export class TechnicalMonitoringService {
       };
     }
 
-    const successful = logs.filter(log => log.status === 'success').length;
-    const timeouts = logs.filter(log => log.status === 'timeout').length;
-    const retries = logs.filter(log => (log.retryCount || 0) > 0).length;
+    const successful = logs.filter((log) => log.status === "success").length;
+    const timeouts = logs.filter((log) => log.status === "timeout").length;
+    const retries = logs.filter((log) => (log.retryCount || 0) > 0).length;
 
     const avgProcessingTime =
       logs.reduce((sum, log) => sum + log.processingTimeMs, 0) / totalProcessed;
@@ -441,17 +441,17 @@ export class TechnicalMonitoringService {
     // Error breakdown
     const errorBreakdown: Record<string, number> = {};
     logs
-      .filter(log => log.status === 'failed')
-      .forEach(log => {
-        const errorCode = log.errorCode || 'unknown';
+      .filter((log) => log.status === "failed")
+      .forEach((log) => {
+        const errorCode = log.errorCode || "unknown";
         errorBreakdown[errorCode] = (errorBreakdown[errorCode] || 0) + 1;
       });
 
     // Slowest webhooks by type
     const typeMetrics: Record<string, { total: number; time: number; count: number }> = {};
-    logs.forEach(log => {
+    logs.forEach((log) => {
       if (!typeMetrics[log.webhookType]) {
-        typeMetrics[log.webhookType] = { total: 0, time: 0, count: 0 };
+        typeMetrics[log.webhookType] = {total: 0, time: 0, count: 0};
       }
       typeMetrics[log.webhookType].time += log.processingTimeMs;
       typeMetrics[log.webhookType].count++;
@@ -483,11 +483,11 @@ export class TechnicalMonitoringService {
   private async calculateAPIMetrics(startDate: Date, endDate: Date): Promise<any> {
     const apiLogs = await this.db
       .collection(this.API_METRICS_COLLECTION)
-      .where('timestamp', '>=', Timestamp.fromDate(startDate))
-      .where('timestamp', '<=', Timestamp.fromDate(endDate))
+      .where("timestamp", ">=", Timestamp.fromDate(startDate))
+      .where("timestamp", "<=", Timestamp.fromDate(endDate))
       .get();
 
-    const logs = apiLogs.docs.map(doc => doc.data());
+    const logs = apiLogs.docs.map((doc) => doc.data());
     const totalRequests = logs.length;
 
     if (totalRequests === 0) {
@@ -502,8 +502,8 @@ export class TechnicalMonitoringService {
       };
     }
 
-    const errors = logs.filter(log => log.statusCode >= 400).length;
-    const responseTimes = logs.map(log => log.responseTimeMs).sort((a, b) => a - b);
+    const errors = logs.filter((log) => log.statusCode >= 400).length;
+    const responseTimes = logs.map((log) => log.responseTimeMs).sort((a, b) => a - b);
 
     const avgResponseTime = responseTimes.reduce((sum, time) => sum + time, 0) / totalRequests;
     const p95ResponseTime = responseTimes[Math.floor(totalRequests * 0.95)] || 0;
@@ -511,16 +511,16 @@ export class TechnicalMonitoringService {
 
     // Status code breakdown
     const statusCodeBreakdown: Record<string, number> = {};
-    logs.forEach(log => {
+    logs.forEach((log) => {
       const statusRange = `${Math.floor(log.statusCode / 100)}xx`;
       statusCodeBreakdown[statusRange] = (statusCodeBreakdown[statusRange] || 0) + 1;
     });
 
     // Slowest endpoints
     const endpointMetrics: Record<string, { time: number; count: number }> = {};
-    logs.forEach(log => {
+    logs.forEach((log) => {
       if (!endpointMetrics[log.endpoint]) {
-        endpointMetrics[log.endpoint] = { time: 0, count: 0 };
+        endpointMetrics[log.endpoint] = {time: 0, count: 0};
       }
       endpointMetrics[log.endpoint].time += log.responseTimeMs;
       endpointMetrics[log.endpoint].count++;
@@ -552,11 +552,11 @@ export class TechnicalMonitoringService {
   private async calculateStorageMetrics(startDate: Date, endDate: Date): Promise<any> {
     const storageLogs = await this.db
       .collection(this.STORAGE_METRICS_COLLECTION)
-      .where('timestamp', '>=', Timestamp.fromDate(startDate))
-      .where('timestamp', '<=', Timestamp.fromDate(endDate))
+      .where("timestamp", ">=", Timestamp.fromDate(startDate))
+      .where("timestamp", "<=", Timestamp.fromDate(endDate))
       .get();
 
-    const logs = storageLogs.docs.map(doc => doc.data());
+    const logs = storageLogs.docs.map((doc) => doc.data());
     const totalCalculations = logs.length;
 
     if (totalCalculations === 0) {
@@ -568,14 +568,14 @@ export class TechnicalMonitoringService {
       };
     }
 
-    const errors = logs.filter(log => log.status === 'failed').length;
+    const errors = logs.filter((log) => log.status === "failed").length;
     const avgCalculationTime =
       logs.reduce((sum, log) => sum + log.executionTimeMs, 0) / totalCalculations;
 
     const largestCalculations = logs
       .sort((a, b) => b.totalBytes - a.totalBytes)
       .slice(0, 5)
-      .map(log => ({
+      .map((log) => ({
         userId: log.userId,
         bytes: log.totalBytes,
         timeMs: log.executionTimeMs,
@@ -595,11 +595,11 @@ export class TechnicalMonitoringService {
   private async calculateCheckoutMetrics(startDate: Date, endDate: Date): Promise<any> {
     const checkoutLogs = await this.db
       .collection(this.CHECKOUT_METRICS_COLLECTION)
-      .where('checkoutStarted', '>=', Timestamp.fromDate(startDate))
-      .where('checkoutStarted', '<=', Timestamp.fromDate(endDate))
+      .where("checkoutStarted", ">=", Timestamp.fromDate(startDate))
+      .where("checkoutStarted", "<=", Timestamp.fromDate(endDate))
       .get();
 
-    const logs = checkoutLogs.docs.map(doc => doc.data());
+    const logs = checkoutLogs.docs.map((doc) => doc.data());
     const totalSessions = logs.length;
 
     if (totalSessions === 0) {
@@ -616,7 +616,7 @@ export class TechnicalMonitoringService {
     // For this implementation, we'll need to cross-reference with successful subscriptions
     // This is a simplified version
     const abandonmentStageBreakdown: Record<string, number> = {};
-    logs.forEach(log => {
+    logs.forEach((log) => {
       abandonmentStageBreakdown[log.abandonmentStage] =
         (abandonmentStageBreakdown[log.abandonmentStage] || 0) + 1;
     });
@@ -668,17 +668,17 @@ export class TechnicalMonitoringService {
       alertsTriggered++;
     }
 
-    let overallHealth: 'excellent' | 'good' | 'warning' | 'critical';
-    if (healthScore >= 90) overallHealth = 'excellent';
-    else if (healthScore >= 75) overallHealth = 'good';
-    else if (healthScore >= 50) overallHealth = 'warning';
-    else overallHealth = 'critical';
+    let overallHealth: "excellent" | "good" | "warning" | "critical";
+    if (healthScore >= 90) overallHealth = "excellent";
+    else if (healthScore >= 75) overallHealth = "good";
+    else if (healthScore >= 50) overallHealth = "warning";
+    else overallHealth = "critical";
 
     return {
       overallHealth,
       uptime: Math.max(0, healthScore), // Simplified uptime calculation
       alertsTriggered,
-      performanceTrend: 'stable', // Would calculate from historical data
+      performanceTrend: "stable", // Would calculate from historical data
     };
   }
 
@@ -711,14 +711,14 @@ export class TechnicalMonitoringService {
 
     const recentLogs = await this.db
       .collection(this.API_METRICS_COLLECTION)
-      .where('endpoint', '==', endpoint)
-      .where('timestamp', '>=', Timestamp.fromDate(oneHourAgo))
+      .where("endpoint", "==", endpoint)
+      .where("timestamp", ">=", Timestamp.fromDate(oneHourAgo))
       .get();
 
-    const logs = recentLogs.docs.map(doc => doc.data());
+    const logs = recentLogs.docs.map((doc) => doc.data());
     if (logs.length === 0) return 0;
 
-    const errors = logs.filter(log => log.statusCode >= 400).length;
+    const errors = logs.filter((log) => log.statusCode >= 400).length;
     return (errors / logs.length) * 100;
   }
 
@@ -732,7 +732,7 @@ export class TechnicalMonitoringService {
     // (email, Slack, PagerDuty, etc.)
 
     // Store alert for tracking
-    await this.db.collection('performanceAlerts').add({
+    await this.db.collection("performanceAlerts").add({
       alertType,
       data,
       timestamp: Timestamp.now(),

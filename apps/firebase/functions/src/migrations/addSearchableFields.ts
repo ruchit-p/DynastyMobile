@@ -2,13 +2,13 @@
  * Migration script to add searchable fields to existing stories and events
  */
 
-import { getFirestore } from 'firebase-admin/firestore';
-import { onCall } from 'firebase-functions/v2/https';
-import { logger } from 'firebase-functions/v2';
-import { DEFAULT_REGION, FUNCTION_TIMEOUT, DEFAULT_MEMORY } from '../common';
-import { createError, ErrorCode } from '../utils/errors';
-import { generateStorySearchFields, generateEventSearchFields } from '../utils/searchHelpers';
-import { withAuth } from '../middleware';
+import {getFirestore} from "firebase-admin/firestore";
+import {onCall} from "firebase-functions/v2/https";
+import {logger} from "firebase-functions/v2";
+import {DEFAULT_REGION, FUNCTION_TIMEOUT, DEFAULT_MEMORY} from "../common";
+import {createError, ErrorCode} from "../utils/errors";
+import {generateStorySearchFields, generateEventSearchFields} from "../utils/searchHelpers";
+import {withAuth} from "../middleware";
 
 interface MigrationStats {
   storiesProcessed: number;
@@ -38,7 +38,7 @@ async function migrateStories(dryRun: boolean): Promise<MigrationStats> {
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
-      let query = db.collection('stories').orderBy('__name__').limit(batchSize);
+      let query = db.collection("stories").orderBy("__name__").limit(batchSize);
 
       if (lastDoc) {
         query = query.startAfter(lastDoc);
@@ -84,7 +84,7 @@ async function migrateStories(dryRun: boolean): Promise<MigrationStats> {
     }
   } catch (error: any) {
     stats.errors.push(`Story migration error: ${error.message}`);
-    logger.error('Error migrating stories:', error);
+    logger.error("Error migrating stories:", error);
   }
 
   return stats;
@@ -110,7 +110,7 @@ async function migrateEvents(dryRun: boolean): Promise<MigrationStats> {
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
-      let query = db.collection('events').orderBy('__name__').limit(batchSize);
+      let query = db.collection("events").orderBy("__name__").limit(batchSize);
 
       if (lastDoc) {
         query = query.startAfter(lastDoc);
@@ -160,7 +160,7 @@ async function migrateEvents(dryRun: boolean): Promise<MigrationStats> {
     }
   } catch (error: any) {
     stats.errors.push(`Event migration error: ${error.message}`);
-    logger.error('Error migrating events:', error);
+    logger.error("Error migrating events:", error);
   }
 
   return stats;
@@ -176,17 +176,17 @@ export const addSearchableFields = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.LONG,
   },
   withAuth(
-    async request => {
-      const { dryRun = true } = request.data;
+    async (request) => {
+      const {dryRun = true} = request.data;
       const uid = request.auth!.uid;
 
       // Only allow admins to run this migration
       const db = getFirestore();
-      const userDoc = await db.collection('users').doc(uid).get();
+      const userDoc = await db.collection("users").doc(uid).get();
       const userData = userDoc.data();
 
       if (!userData?.isAdmin) {
-        throw createError(ErrorCode.PERMISSION_DENIED, 'Only admins can run this migration');
+        throw createError(ErrorCode.PERMISSION_DENIED, "Only admins can run this migration");
       }
 
       logger.info(`Starting searchable fields migration (dryRun: ${dryRun})`);
@@ -206,18 +206,18 @@ export const addSearchableFields = onCall(
         errors: [...storyStats.errors, ...eventStats.errors],
       };
 
-      logger.info('Migration complete', combinedStats);
+      logger.info("Migration complete", combinedStats);
 
       return {
         success: true,
         dryRun,
         stats: combinedStats,
-        message: dryRun
-          ? 'Dry run complete. Run with dryRun=false to apply changes.'
-          : 'Migration complete. Searchable fields added to documents.',
+        message: dryRun ?
+          "Dry run complete. Run with dryRun=false to apply changes." :
+          "Migration complete. Searchable fields added to documents.",
       };
     },
-    'addSearchableFields',
-    'onboarded'
+    "addSearchableFields",
+    "onboarded"
   )
 );

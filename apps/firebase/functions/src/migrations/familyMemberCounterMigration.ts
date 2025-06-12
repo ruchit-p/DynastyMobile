@@ -1,11 +1,11 @@
-import { onCall } from 'firebase-functions/v2/https';
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
-import { DEFAULT_REGION, FUNCTION_TIMEOUT } from '../common';
-import { createError, withErrorHandling, ErrorCode } from '../utils/errors';
-import { SubscriptionPlan, FamilyPlanMember } from '../types/subscription';
-import { validateRequest } from '../utils/request-validator';
-import { VALIDATION_SCHEMAS } from '../config/validation-schemas';
+import {onCall} from "firebase-functions/v2/https";
+import {getFirestore, Timestamp} from "firebase-admin/firestore";
+import {logger} from "firebase-functions/v2";
+import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "../common";
+import {createError, withErrorHandling, ErrorCode} from "../utils/errors";
+import {SubscriptionPlan, FamilyPlanMember} from "../types/subscription";
+import {validateRequest} from "../utils/request-validator";
+import {VALIDATION_SCHEMAS} from "../config/validation-schemas";
 
 /**
  * Migration function to add activeMemberCount field to existing family subscriptions
@@ -23,27 +23,27 @@ export const migrateFamilyMemberCounters = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.LONG, // Migration may take longer due to batch processing
     maxInstances: 1, // Single instance to avoid race conditions
   },
-  withErrorHandling(async request => {
+  withErrorHandling(async (request) => {
     // Validate request parameters
     const validationResult = validateRequest(
       request.data,
       VALIDATION_SCHEMAS.migrateFamilyMemberCounters || {
         rules: [
-          { field: 'dryRun', type: 'boolean' },
-          { field: 'batchSize', type: 'number' },
+          {field: "dryRun", type: "boolean"},
+          {field: "batchSize", type: "number"},
         ],
         xssCheck: false,
       }
     );
 
     if (!validationResult.isValid) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, validationResult.errors.join(', '));
+      throw createError(ErrorCode.INVALID_ARGUMENT, validationResult.errors.join(", "));
     }
 
-    const { dryRun = false, batchSize = 100 } = request.data;
+    const {dryRun = false, batchSize = 100} = request.data;
     const db = getFirestore();
 
-    logger.info('Starting family member counter migration', {
+    logger.info("Starting family member counter migration", {
       dryRun,
       batchSize,
       timestamp: new Date().toISOString(),
@@ -66,9 +66,9 @@ export const migrateFamilyMemberCounters = onCall(
     while (hasMore) {
       // Query family subscriptions in batches
       let query = db
-        .collection('subscriptions')
-        .where('plan', '==', SubscriptionPlan.FAMILY)
-        .orderBy('createdAt')
+        .collection("subscriptions")
+        .where("plan", "==", SubscriptionPlan.FAMILY)
+        .orderBy("createdAt")
         .limit(batchSize);
 
       if (lastDoc) {
@@ -105,7 +105,7 @@ export const migrateFamilyMemberCounters = onCall(
           // Calculate active member count from familyMembers array
           const familyMembers: FamilyPlanMember[] = data.familyMembers || [];
           const activeMemberCount = familyMembers.filter(
-            member => member.status === 'active'
+            (member) => member.status === "active"
           ).length;
 
           stats.subscriptionsToUpdate++;
@@ -125,13 +125,13 @@ export const migrateFamilyMemberCounters = onCall(
           };
 
           // Validation check: ensure counter accuracy
-          const actualActiveCount = familyMembers.filter(m => m.status === 'active').length;
+          const actualActiveCount = familyMembers.filter((m) => m.status === "active").length;
           if (activeMemberCount !== actualActiveCount) {
             stats.validationWarnings++;
             logger.warn(`Counter validation warning for subscription ${subscriptionId}`, {
               calculated: activeMemberCount,
               actual: actualActiveCount,
-              familyMembers: familyMembers.map(m => ({ userId: m.userId, status: m.status })),
+              familyMembers: familyMembers.map((m) => ({userId: m.userId, status: m.status})),
             });
           }
 
@@ -141,7 +141,7 @@ export const migrateFamilyMemberCounters = onCall(
               subscriptionId,
               originalMemberCount: familyMembers.length,
               activeMemberCount,
-              memberStatuses: familyMembers.map(m => m.status),
+              memberStatuses: familyMembers.map((m) => m.status),
             });
           }
 
@@ -160,7 +160,7 @@ export const migrateFamilyMemberCounters = onCall(
         } catch (error) {
           stats.errors++;
           const errorMsg = `Error processing subscription ${subscriptionId}: ${error}`;
-          logger.error(errorMsg, { error, subscriptionId });
+          logger.error(errorMsg, {error, subscriptionId});
         }
       }
 
@@ -174,7 +174,7 @@ export const migrateFamilyMemberCounters = onCall(
       lastDoc = snapshot.docs[snapshot.docs.length - 1];
 
       // Log progress
-      logger.info('Migration progress', {
+      logger.info("Migration progress", {
         totalProcessed: stats.totalSubscriptions,
         familySubscriptions: stats.familySubscriptions,
         toUpdate: stats.subscriptionsToUpdate,
@@ -196,14 +196,14 @@ export const migrateFamilyMemberCounters = onCall(
         performance: `Optimized ${stats.subscriptionsUpdated} family subscriptions from O(n) to O(1) validation`,
         dataConsistency: `${stats.validationWarnings} subscriptions had counter validation warnings`,
         recommendation:
-          stats.validationWarnings > 0
-            ? 'Review subscriptions with validation warnings before deploying'
-            : 'Migration completed successfully, safe to deploy O(1) optimization',
+          stats.validationWarnings > 0 ?
+            "Review subscriptions with validation warnings before deploying" :
+            "Migration completed successfully, safe to deploy O(1) optimization",
       },
     };
 
-    logger.info('Family member counter migration completed', summary);
+    logger.info("Family member counter migration completed", summary);
 
     return summary;
-  }, 'migrateFamilyMemberCounters')
+  }, "migrateFamilyMemberCounters")
 );

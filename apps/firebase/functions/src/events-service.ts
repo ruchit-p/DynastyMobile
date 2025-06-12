@@ -1,16 +1,16 @@
-import { onCall } from 'firebase-functions/v2/https';
-import * as admin from 'firebase-admin';
-import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
-import { getStorage } from 'firebase-admin/storage';
-import { logger } from 'firebase-functions/v2';
-import { DEFAULT_REGION, FUNCTION_TIMEOUT, DEFAULT_MEMORY } from './common';
-import { createError, withErrorHandling, ErrorCode } from './utils/errors';
-import { withAuth } from './middleware';
-import { SECURITY_CONFIG } from './config/security-config';
-import { validateRequest } from './utils/request-validator';
-import { VALIDATION_SCHEMAS } from './config/validation-schemas';
-import { validateLocation as validateLocationCoords } from './utils/validation-extended';
-import { generateEventSearchFields } from './utils/searchHelpers';
+import {onCall} from "firebase-functions/v2/https";
+import * as admin from "firebase-admin";
+import {getFirestore, Timestamp, FieldValue} from "firebase-admin/firestore";
+import {getStorage} from "firebase-admin/storage";
+import {logger} from "firebase-functions/v2";
+import {DEFAULT_REGION, FUNCTION_TIMEOUT, DEFAULT_MEMORY} from "./common";
+import {createError, withErrorHandling, ErrorCode} from "./utils/errors";
+import {withAuth} from "./middleware";
+import {SECURITY_CONFIG} from "./config/security-config";
+import {validateRequest} from "./utils/request-validator";
+import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
+import {validateLocation as validateLocationCoords} from "./utils/validation-extended";
+import {generateEventSearchFields} from "./utils/searchHelpers";
 
 // Initialize Firebase Admin SDK if not already initialized
 if (admin.apps.length === 0) {
@@ -50,7 +50,7 @@ export interface EventData {
   virtualLink?: string | null;
   coverPhotoStoragePaths?: string[]; // Store relative paths to GCS
   coverPhotoUrls?: string[]; // For client consumption, generated on demand
-  privacy: 'public' | 'family_tree' | 'invite_only'; // More granular privacy
+  privacy: "public" | "family_tree" | "invite_only"; // More granular privacy
   allowGuestPlusOne: boolean;
   showGuestList: boolean;
   requireRsvp: boolean;
@@ -70,7 +70,7 @@ export interface EventInvitation {
   id?: string; // document ID
   eventId: string;
   userId: string; // ID of the invited user
-  status: 'pending' | 'accepted' | 'declined' | 'maybe';
+  status: "pending" | "accepted" | "declined" | "maybe";
   plusOne?: boolean;
   plusOneName?: string | null;
   respondedAt?: Timestamp;
@@ -100,7 +100,7 @@ export interface EnrichedEventData extends EventData {
   hostName?: string;
   hostProfilePicture?: string;
   isHost?: boolean;
-  userRsvpStatus?: EventInvitation['status'];
+  userRsvpStatus?: EventInvitation["status"];
   userHasPlusOne?: boolean;
 }
 
@@ -126,7 +126,7 @@ function validateDateFormat(dateString: string): boolean {
     return false;
   }
   const date = new Date(dateString);
-  return date.toISOString().split('T')[0] === dateString;
+  return date.toISOString().split("T")[0] === dateString;
 }
 
 /**
@@ -142,7 +142,7 @@ function validateTimeFormat(timeString: string): boolean {
  */
 function validateTimezone(timezone: string): boolean {
   try {
-    new Intl.DateTimeFormat(undefined, { timeZone: timezone });
+    new Intl.DateTimeFormat(undefined, {timeZone: timezone});
     return true;
   } catch {
     return false;
@@ -159,8 +159,8 @@ async function enrichEventListOptimized(
   if (events.length === 0) return [];
 
   // Collect all unique host IDs
-  const hostIds = [...new Set(events.map(event => event.hostId))];
-  const eventIds = events.map(event => event.id).filter(Boolean) as string[];
+  const hostIds = [...new Set(events.map((event) => event.hostId))];
+  const eventIds = events.map((event) => event.id).filter(Boolean) as string[];
 
   // Batch fetch host data
   const hostDataMap = new Map<string, any>();
@@ -173,17 +173,17 @@ async function enrichEventListOptimized(
 
     for (const batch of hostBatches) {
       const hostSnapshot = await db
-        .collection('users')
-        .where(admin.firestore.FieldPath.documentId(), 'in', batch)
+        .collection("users")
+        .where(admin.firestore.FieldPath.documentId(), "in", batch)
         .get();
 
-      hostSnapshot.forEach(doc => {
+      hostSnapshot.forEach((doc) => {
         const userData = doc.data();
         hostDataMap.set(doc.id, {
           displayName:
             userData?.displayName ||
             `${userData?.firstName} ${userData?.lastName}`.trim() ||
-            'Unknown Host',
+            "Unknown Host",
           profilePictureUrl: userData?.profilePictureUrl,
         });
       });
@@ -193,12 +193,12 @@ async function enrichEventListOptimized(
   // Batch fetch RSVP data for the user
   const rsvpDataMap = new Map<string, EventInvitation>();
   if (eventIds.length > 0) {
-    const rsvpPromises = eventIds.map(async eventId => {
+    const rsvpPromises = eventIds.map(async (eventId) => {
       try {
         const rsvpDoc = await db
-          .collection('events')
+          .collection("events")
           .doc(eventId)
-          .collection('rsvps')
+          .collection("rsvps")
           .doc(uid)
           .get();
         if (rsvpDoc.exists) {
@@ -215,7 +215,7 @@ async function enrichEventListOptimized(
   const enrichedEvents: EnrichedEventData[] = [];
   for (const event of events) {
     if (!event.id) {
-      logger.warn('enrichEventListOptimized: Skipping event due to missing ID', event);
+      logger.warn("enrichEventListOptimized: Skipping event due to missing ID", event);
       continue;
     }
 
@@ -264,7 +264,7 @@ function organizeCommentsIntoThreads(comments: EventComment[]): ThreadedComment[
   const rootComments: ThreadedComment[] = [];
 
   // First pass: create ThreadedComment objects
-  comments.forEach(comment => {
+  comments.forEach((comment) => {
     const threadedComment: ThreadedComment = {
       ...comment,
       replies: [],
@@ -274,7 +274,7 @@ function organizeCommentsIntoThreads(comments: EventComment[]): ThreadedComment[
   });
 
   // Second pass: organize into threads
-  comments.forEach(comment => {
+  comments.forEach((comment) => {
     const threadedComment = commentMap.get(comment.id!)!;
 
     if (comment.parentId) {
@@ -293,7 +293,7 @@ function organizeCommentsIntoThreads(comments: EventComment[]): ThreadedComment[
 
   // Sort replies by creation time
   const sortReplies = (comments: ThreadedComment[]) => {
-    comments.forEach(comment => {
+    comments.forEach((comment) => {
       if (comment.replies && comment.replies.length > 0) {
         comment.replies.sort((a, b) => {
           const aTime = a.createdAt?.toMillis() || 0;
@@ -325,20 +325,20 @@ async function generateSignedUrlsForPaths(
   const bucket = storage.bucket();
   try {
     const urls = await Promise.all(
-      storagePaths.map(async path => {
+      storagePaths.map(async (path) => {
         const [url] = await bucket.file(path).getSignedUrl({
-          action: 'read',
+          action: "read",
           expires: Date.now() + expiresInMs,
-          version: 'v4',
+          version: "v4",
         });
         return url;
       })
     );
     return urls;
   } catch (error) {
-    logger.error('Error generating signed URLs for event cover photos:', error);
+    logger.error("Error generating signed URLs for event cover photos:", error);
     // Depending on strictness, could throw or return empty/partial
-    return storagePaths.map(() => ''); // Return empty strings on failure for partial success
+    return storagePaths.map(() => ""); // Return empty strings on failure for partial success
   }
 }
 
@@ -349,9 +349,9 @@ async function generateSignedUrlsForPaths(
 async function ensureEventAccess(
   eventId: string,
   userId: string,
-  requiredAccess: 'view' | 'edit' | 'admin' = 'view'
+  requiredAccess: "view" | "edit" | "admin" = "view"
 ): Promise<EventData> {
-  const eventRef = db.collection('events').doc(eventId);
+  const eventRef = db.collection("events").doc(eventId);
   const eventDoc = await eventRef.get();
 
   if (!eventDoc.exists) {
@@ -362,7 +362,7 @@ async function ensureEventAccess(
 
   // TODO: Implement more granular permission logic based on eventData.privacy, eventData.hostId, familyTreeId, invitedMemberIds etc.
   // For now, very basic checks:
-  if (requiredAccess === 'edit' || requiredAccess === 'admin') {
+  if (requiredAccess === "edit" || requiredAccess === "admin") {
     if (eventData.hostId !== userId) {
       // Check if user is a designated admin for the event if that role exists
       throw createError(
@@ -387,7 +387,7 @@ async function commitDeletionsInBatches(
   let numDeleted = 0;
   while (snapshot.size > 0) {
     const batch = db.batch();
-    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
     await batch.commit();
     numDeleted += snapshot.size;
     logger.info(`Deleted batch of ${snapshot.size} items from query path.`);
@@ -429,10 +429,10 @@ async function handleEventCommentCascadeDeletion(
 
     // Find all direct child comments of the parent
     const childCommentsQuery = await db
-      .collection('events')
+      .collection("events")
       .doc(eventId)
-      .collection('comments')
-      .where('parentId', '==', parentCommentId)
+      .collection("comments")
+      .where("parentId", "==", parentCommentId)
       .get();
 
     if (childCommentsQuery.empty) {
@@ -492,53 +492,53 @@ export const createEvent = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
   withAuth(
-    async request => {
-      const uid = request.auth?.uid || '';
+    async (request) => {
+      const uid = request.auth?.uid || "";
 
       // Validate and sanitize input using centralized validator
       const validatedData = validateRequest(request.data, VALIDATION_SCHEMAS.createEvent, uid);
 
       const eventData = validatedData as Omit<
         EventData,
-        'id' | 'createdAt' | 'updatedAt' | 'coverPhotoUrls' | 'hostId'
+        "id" | "createdAt" | "updatedAt" | "coverPhotoUrls" | "hostId"
       >;
 
       // Additional custom validations not covered by the schema
 
       // Validate date format (already validated as string in schema)
       if (!validateDateFormat(eventData.eventDate)) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid event date format. Use YYYY-MM-DD.');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid event date format. Use YYYY-MM-DD.");
       }
 
       // Validate end date if provided
       if (eventData.endDate && !validateDateFormat(eventData.endDate)) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid end date format. Use YYYY-MM-DD.');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid end date format. Use YYYY-MM-DD.");
       }
 
       // Validate date logic
       if (eventData.endDate && eventData.endDate < eventData.eventDate) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'End date cannot be before start date.');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "End date cannot be before start date.");
       }
 
       // Validate time formats
       if (eventData.startTime && !validateTimeFormat(eventData.startTime)) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid start time format. Use HH:mm.');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid start time format. Use HH:mm.");
       }
 
       if (eventData.endTime && !validateTimeFormat(eventData.endTime)) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid end time format. Use HH:mm.');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid end time format. Use HH:mm.");
       }
 
       // Validate timezone
       if (eventData.timezone && !validateTimezone(eventData.timezone)) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid timezone format.');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid timezone format.");
       }
 
       // Validate location using the extended validation
       if (eventData.location) {
         validateLocationCoords(eventData.location);
         if (!eventData.location.address || eventData.location.address.trim().length === 0) {
-          throw createError(ErrorCode.INVALID_ARGUMENT, 'Location address must not be empty.');
+          throw createError(ErrorCode.INVALID_ARGUMENT, "Location address must not be empty.");
         }
       }
 
@@ -546,7 +546,7 @@ export const createEvent = onCall(
       if (eventData.isVirtual && !eventData.virtualLink) {
         throw createError(
           ErrorCode.INVALID_ARGUMENT,
-          'Virtual link is required for virtual events.'
+          "Virtual link is required for virtual events."
         );
       }
 
@@ -558,11 +558,11 @@ export const createEvent = onCall(
           if (deadlineDate > eventDate) {
             throw createError(
               ErrorCode.INVALID_ARGUMENT,
-              'RSVP deadline cannot be after the event date.'
+              "RSVP deadline cannot be after the event date."
             );
           }
         } catch (error) {
-          throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid RSVP deadline format.');
+          throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid RSVP deadline format.");
         }
       }
 
@@ -584,7 +584,7 @@ export const createEvent = onCall(
         }
       }
 
-      const newEventRef = db.collection('events').doc();
+      const newEventRef = db.collection("events").doc();
       const newEventId = newEventRef.id;
 
       const finalEventData: EventData = {
@@ -608,14 +608,14 @@ export const createEvent = onCall(
         ...finalEventData,
         ...searchFields,
       });
-      logger.info(`Event created by ${uid} with ID: ${newEventId}`, { eventId: newEventId });
+      logger.info(`Event created by ${uid} with ID: ${newEventId}`, {eventId: newEventId});
 
       // Optionally, auto-RSVP the host
-      const rsvpRef = db.collection('events').doc(newEventId).collection('rsvps').doc(uid);
+      const rsvpRef = db.collection("events").doc(newEventId).collection("rsvps").doc(uid);
       await rsvpRef.set({
         eventId: newEventId,
         userId: uid,
-        status: 'accepted', // Host is always going
+        status: "accepted", // Host is always going
         plusOne: false,
         respondedAt: Timestamp.now(),
         createdAt: Timestamp.now(),
@@ -625,23 +625,23 @@ export const createEvent = onCall(
       // Send SMS notifications to invited members
       if (eventData.invitedMemberIds && eventData.invitedMemberIds.length > 0) {
         try {
-          const { getTwilioService } = await import('./services/twilioService');
+          const {getTwilioService} = await import("./services/twilioService");
           const twilioService = getTwilioService();
 
           // Get invited users' details
           const invitedUsersSnapshot = await db
-            .collection('users')
-            .where('__name__', 'in', eventData.invitedMemberIds)
+            .collection("users")
+            .where("__name__", "in", eventData.invitedMemberIds)
             .get();
 
           // Get host details
-          const hostDoc = await db.collection('users').doc(uid).get();
+          const hostDoc = await db.collection("users").doc(uid).get();
           const hostData = hostDoc.data();
           const hostName =
-            hostData?.displayName || `${hostData?.firstName} ${hostData?.lastName}` || 'Someone';
+            hostData?.displayName || `${hostData?.firstName} ${hostData?.lastName}` || "Someone";
 
           // Send SMS to each invited user who has SMS enabled
-          const smsPromises = invitedUsersSnapshot.docs.map(async userDoc => {
+          const smsPromises = invitedUsersSnapshot.docs.map(async (userDoc) => {
             const userData = userDoc.data();
             if (
               userData.phoneNumber &&
@@ -650,9 +650,9 @@ export const createEvent = onCall(
             ) {
               try {
                 const eventDate = new Date(eventData.eventDate);
-                const dateString = eventDate.toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
+                const dateString = eventDate.toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
                 });
                 const eventLink = `https://mydynastyapp.com/events/${newEventId}`;
 
@@ -662,7 +662,7 @@ export const createEvent = onCall(
                     body: `${hostName} invited you to "${eventData.title}" on ${dateString}. RSVP here: ${eventLink}`,
                   },
                   uid,
-                  'event_invite',
+                  "event_invite",
                   {
                     eventId: newEventId,
                     inviteeId: userDoc.id,
@@ -678,15 +678,15 @@ export const createEvent = onCall(
           await Promise.allSettled(smsPromises);
         } catch (error) {
           // Log error but don't fail the event creation
-          logger.error('Failed to send event invitation SMS notifications:', error);
+          logger.error("Failed to send event invitation SMS notifications:", error);
         }
       }
 
-      return { eventId: newEventId, eventData: finalEventData };
+      return {eventId: newEventId, eventData: finalEventData};
     },
-    'createEvent',
+    "createEvent",
     {
-      authLevel: 'onboarded',
+      authLevel: "onboarded",
       rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
     }
   )
@@ -698,17 +698,17 @@ export const getEventDetails = onCall(
     memory: DEFAULT_MEMORY.MEDIUM,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async request => {
+  withErrorHandling(async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required.');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
-    const { eventId } = request.data;
-    if (!eventId || typeof eventId !== 'string') {
-      throw createError(ErrorCode.MISSING_PARAMETERS, 'Event ID is required.');
+    const {eventId} = request.data;
+    if (!eventId || typeof eventId !== "string") {
+      throw createError(ErrorCode.MISSING_PARAMETERS, "Event ID is required.");
     }
 
-    const eventData = await ensureEventAccess(eventId, uid, 'view'); // Basic view access check
+    const eventData = await ensureEventAccess(eventId, uid, "view"); // Basic view access check
 
     // Enrich with dynamic coverPhotoUrls
     if (eventData.coverPhotoStoragePaths && eventData.coverPhotoStoragePaths.length > 0) {
@@ -716,10 +716,10 @@ export const getEventDetails = onCall(
     }
 
     // Enrich with host details (example)
-    let hostName = 'Unknown Host';
+    let hostName = "Unknown Host";
     let hostProfilePicture = undefined;
     try {
-      const hostDoc = await db.collection('users').doc(eventData.hostId).get();
+      const hostDoc = await db.collection("users").doc(eventData.hostId).get();
       if (hostDoc.exists) {
         const hostUserData = hostDoc.data();
         hostName =
@@ -733,10 +733,10 @@ export const getEventDetails = onCall(
     }
 
     // Enrich with user's RSVP status
-    let userRsvpStatus: EventInvitation['status'] | undefined = undefined;
+    let userRsvpStatus: EventInvitation["status"] | undefined = undefined;
     let userHasPlusOne: boolean | undefined = undefined;
     try {
-      const rsvpDoc = await db.collection('events').doc(eventId).collection('rsvps').doc(uid).get();
+      const rsvpDoc = await db.collection("events").doc(eventId).collection("rsvps").doc(uid).get();
       if (rsvpDoc.exists) {
         const rsvpData = rsvpDoc.data() as EventInvitation;
         userRsvpStatus = rsvpData.status;
@@ -753,8 +753,8 @@ export const getEventDetails = onCall(
       userRsvpStatus,
       userHasPlusOne,
     };
-    return { event: enrichedData };
-  }, 'getEventDetails')
+    return {event: enrichedData};
+  }, "getEventDetails")
 );
 
 export const updateEvent = onCall(
@@ -764,45 +764,45 @@ export const updateEvent = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
   withAuth(
-    async request => {
-      const uid = request.auth?.uid || '';
+    async (request) => {
+      const uid = request.auth?.uid || "";
 
       // Validate and sanitize input using centralized validator
       const validatedData = validateRequest(request.data, VALIDATION_SCHEMAS.updateEvent, uid);
 
-      const { eventId, ...updates } = validatedData as Partial<EventData> & { eventId: string };
+      const {eventId, ...updates} = validatedData as Partial<EventData> & { eventId: string };
 
-      await ensureEventAccess(eventId, uid, 'edit'); // Ensures user is host
+      await ensureEventAccess(eventId, uid, "edit"); // Ensures user is host
 
       // Additional custom validations for updates
       if (updates.eventDate && !validateDateFormat(updates.eventDate)) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid event date format. Use YYYY-MM-DD.');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid event date format. Use YYYY-MM-DD.");
       }
 
       if (updates.endDate && !validateDateFormat(updates.endDate)) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid end date format. Use YYYY-MM-DD.');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid end date format. Use YYYY-MM-DD.");
       }
 
       if (updates.startTime && !validateTimeFormat(updates.startTime)) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid start time format. Use HH:mm.');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid start time format. Use HH:mm.");
       }
 
       if (updates.endTime && !validateTimeFormat(updates.endTime)) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid end time format. Use HH:mm.');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid end time format. Use HH:mm.");
       }
 
       if (updates.timezone && !validateTimezone(updates.timezone)) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid timezone format.');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid timezone format.");
       }
 
       if (updates.location) {
         validateLocationCoords(updates.location);
         if (!updates.location.address || updates.location.address.trim().length === 0) {
-          throw createError(ErrorCode.INVALID_ARGUMENT, 'Location address must not be empty.');
+          throw createError(ErrorCode.INVALID_ARGUMENT, "Location address must not be empty.");
         }
       }
 
-      const eventRef = db.collection('events').doc(eventId);
+      const eventRef = db.collection("events").doc(eventId);
 
       // Get current event data to compare changes
       const currentEventDoc = await eventRef.get();
@@ -833,48 +833,48 @@ export const updateEvent = onCall(
       }
 
       await eventRef.update(updatePayload);
-      logger.info(`Event ${eventId} updated by ${uid}.`, { updates: Object.keys(updates) });
+      logger.info(`Event ${eventId} updated by ${uid}.`, {updates: Object.keys(updates)});
 
       // Send SMS notifications for significant changes
-      const significantChanges = ['eventDate', 'startTime', 'location', 'isVirtual'];
+      const significantChanges = ["eventDate", "startTime", "location", "isVirtual"];
       const hasSignificantChange = significantChanges.some(
-        field =>
+        (field) =>
           updates[field as keyof EventData] !== undefined &&
           updates[field as keyof EventData] !== currentEventData[field as keyof EventData]
       );
 
       if (hasSignificantChange) {
         try {
-          const { getTwilioService } = await import('./services/twilioService');
+          const {getTwilioService} = await import("./services/twilioService");
           const twilioService = getTwilioService();
 
           // Get all RSVPed users
           const rsvpsSnapshot = await db
-            .collection('events')
+            .collection("events")
             .doc(eventId)
-            .collection('rsvps')
-            .where('status', 'in', ['accepted', 'maybe'])
+            .collection("rsvps")
+            .where("status", "in", ["accepted", "maybe"])
             .get();
 
           if (!rsvpsSnapshot.empty) {
-            const userIds = rsvpsSnapshot.docs.map(doc => doc.data().userId);
+            const userIds = rsvpsSnapshot.docs.map((doc) => doc.data().userId);
 
             // Get users with SMS enabled
             const usersSnapshot = await db
-              .collection('users')
-              .where('__name__', 'in', userIds)
+              .collection("users")
+              .where("__name__", "in", userIds)
               .get();
 
             // Build change summary
-            let changeText = 'Event updated: ';
+            let changeText = "Event updated: ";
             const changes: string[] = [];
 
             if (updates.eventDate && updates.eventDate !== currentEventData.eventDate) {
               const newDate = new Date(updates.eventDate);
               changes.push(
-                `new date ${newDate.toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
+                `new date ${newDate.toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
                 })}`
               );
             }
@@ -886,20 +886,20 @@ export const updateEvent = onCall(
               currentEventData.location &&
               updates.location.address !== currentEventData.location.address
             ) {
-              changes.push('location changed');
+              changes.push("location changed");
             }
             if (
               updates.isVirtual !== undefined &&
               updates.isVirtual !== currentEventData.isVirtual
             ) {
-              changes.push(updates.isVirtual ? 'now virtual' : 'now in-person');
+              changes.push(updates.isVirtual ? "now virtual" : "now in-person");
             }
 
-            changeText += changes.join(', ');
+            changeText += changes.join(", ");
             const eventLink = `https://mydynastyapp.com/events/${eventId}`;
 
             // Send SMS to each user with SMS enabled
-            const smsPromises = usersSnapshot.docs.map(async userDoc => {
+            const smsPromises = usersSnapshot.docs.map(async (userDoc) => {
               const userData = userDoc.data();
               if (
                 userData.phoneNumber &&
@@ -913,7 +913,7 @@ export const updateEvent = onCall(
                       body: `"${currentEventData.title}" - ${changeText}. Details: ${eventLink}`,
                     },
                     uid,
-                    'event_update',
+                    "event_update",
                     {
                       eventId: eventId,
                       recipientId: userDoc.id,
@@ -930,15 +930,15 @@ export const updateEvent = onCall(
           }
         } catch (error) {
           // Log error but don't fail the update
-          logger.error('Failed to send event update SMS notifications:', error);
+          logger.error("Failed to send event update SMS notifications:", error);
         }
       }
 
-      return { success: true, eventId };
+      return {success: true, eventId};
     },
-    'updateEvent',
+    "updateEvent",
     {
-      authLevel: 'onboarded',
+      authLevel: "onboarded",
       rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
     }
   )
@@ -951,30 +951,30 @@ export const deleteEvent = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
   withAuth(
-    async request => {
-      const uid = request.auth?.uid || '';
-      const { eventId } = request.data;
-      if (!eventId || typeof eventId !== 'string') {
-        throw createError(ErrorCode.MISSING_PARAMETERS, 'Event ID is required.');
+    async (request) => {
+      const uid = request.auth?.uid || "";
+      const {eventId} = request.data;
+      if (!eventId || typeof eventId !== "string") {
+        throw createError(ErrorCode.MISSING_PARAMETERS, "Event ID is required.");
       }
 
-      const eventData = await ensureEventAccess(eventId, uid, 'admin'); // Ensures user is host (or admin if role exists)
-      const eventRef = db.collection('events').doc(eventId); // eventRef needed for subcollections
+      const eventData = await ensureEventAccess(eventId, uid, "admin"); // Ensures user is host (or admin if role exists)
+      const eventRef = db.collection("events").doc(eventId); // eventRef needed for subcollections
 
       // 1. Delete RSVPs subcollection
-      const rsvpsQuery = eventRef.collection('rsvps');
+      const rsvpsQuery = eventRef.collection("rsvps");
       const rsvpsDeletedCount = await commitDeletionsInBatches(db, rsvpsQuery);
       logger.info(`Deleted ${rsvpsDeletedCount} RSVPs for event ${eventId}.`);
 
       // 2. Delete Comments subcollection
-      const commentsQuery = eventRef.collection('comments');
+      const commentsQuery = eventRef.collection("comments");
       const commentsDeletedCount = await commitDeletionsInBatches(db, commentsQuery);
       logger.info(`Deleted ${commentsDeletedCount} comments for event ${eventId}.`);
 
       // 3. Delete cover photos from GCS
       if (eventData.coverPhotoStoragePaths && eventData.coverPhotoStoragePaths.length > 0) {
         const bucket = storage.bucket();
-        const gcsDeletePromises = eventData.coverPhotoStoragePaths.map(path =>
+        const gcsDeletePromises = eventData.coverPhotoStoragePaths.map((path) =>
           bucket
             .file(path)
             .delete()
@@ -1000,11 +1000,11 @@ export const deleteEvent = onCall(
       await eventRef.delete();
       logger.info(`Event document ${eventId} successfully deleted by ${uid}.`);
 
-      return { success: true, eventId };
+      return {success: true, eventId};
     },
-    'deleteEvent',
+    "deleteEvent",
     {
-      authLevel: 'onboarded',
+      authLevel: "onboarded",
       rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
     }
   )
@@ -1019,24 +1019,24 @@ export const rsvpToEvent = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(
-    async request => {
-      const uid = request.auth?.uid || '';
+    async (request) => {
+      const uid = request.auth?.uid || "";
 
-      const { eventId, status, plusOne, plusOneName } = request.data as {
+      const {eventId, status, plusOne, plusOneName} = request.data as {
         eventId: string;
-        status: EventInvitation['status'];
+        status: EventInvitation["status"];
         plusOne?: boolean;
         plusOneName?: string;
       };
 
       if (!eventId || !status) {
-        throw createError(ErrorCode.MISSING_PARAMETERS, 'Event ID and RSVP status are required.');
+        throw createError(ErrorCode.MISSING_PARAMETERS, "Event ID and RSVP status are required.");
       }
-      if (!['pending', 'accepted', 'declined', 'maybe'].includes(status)) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid RSVP status provided.');
+      if (!["pending", "accepted", "declined", "maybe"].includes(status)) {
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid RSVP status provided.");
       }
 
-      const eventData = await ensureEventAccess(eventId, uid, 'view'); // Check if user can view/interact
+      const eventData = await ensureEventAccess(eventId, uid, "view"); // Check if user can view/interact
 
       if (!eventData.requireRsvp) {
         logger.info(
@@ -1051,7 +1051,7 @@ export const rsvpToEvent = onCall(
         try {
           const deadlineDate = new Date(eventData.rsvpDeadline);
           if (new Date() > deadlineDate) {
-            throw createError(ErrorCode.ABORTED, 'The RSVP deadline for this event has passed.');
+            throw createError(ErrorCode.ABORTED, "The RSVP deadline for this event has passed.");
           }
         } catch (dateError) {
           logger.error(
@@ -1065,11 +1065,11 @@ export const rsvpToEvent = onCall(
       if (plusOne && !eventData.allowGuestPlusOne) {
         throw createError(
           ErrorCode.PERMISSION_DENIED,
-          'Bringing a plus one is not allowed for this event.'
+          "Bringing a plus one is not allowed for this event."
         );
       }
 
-      const rsvpRef = db.collection('events').doc(eventId).collection('rsvps').doc(uid);
+      const rsvpRef = db.collection("events").doc(eventId).collection("rsvps").doc(uid);
 
       const rsvpData: Partial<EventInvitation> = {
         eventId,
@@ -1087,15 +1087,15 @@ export const rsvpToEvent = onCall(
         rsvpData.createdAt = Timestamp.now();
       }
 
-      await rsvpRef.set(rsvpData, { merge: true });
+      await rsvpRef.set(rsvpData, {merge: true});
       logger.info(
         `User ${uid} RSVPed to event ${eventId} with status: ${status}. Plus one: ${rsvpData.plusOne}`
       );
 
       // Send SMS confirmation if user has SMS enabled
-      if (status === 'accepted' || status === 'declined') {
+      if (status === "accepted" || status === "declined") {
         try {
-          const userDoc = await db.collection('users').doc(uid).get();
+          const userDoc = await db.collection("users").doc(uid).get();
           const userData = userDoc.data();
 
           if (
@@ -1103,25 +1103,25 @@ export const rsvpToEvent = onCall(
             userData?.smsPreferences?.enabled &&
             userData?.smsPreferences?.rsvpConfirmations
           ) {
-            const { getTwilioService } = await import('./services/twilioService');
+            const {getTwilioService} = await import("./services/twilioService");
             const twilioService = getTwilioService();
 
             const eventDate = new Date(eventData.eventDate);
-            const dateString = eventDate.toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
+            const dateString = eventDate.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
             });
 
-            let smsBody = '';
-            if (status === 'accepted') {
+            let smsBody = "";
+            if (status === "accepted") {
               smsBody = `You're confirmed for "${eventData.title}" on ${dateString}`;
               if (eventData.startTime) {
                 smsBody += ` at ${eventData.startTime}`;
               }
               if (plusOne) {
-                smsBody += ' (+1 guest)';
+                smsBody += " (+1 guest)";
               }
-              smsBody += '. See you there!';
+              smsBody += ". See you there!";
             } else {
               smsBody = `You've declined "${eventData.title}" on ${dateString}. We'll miss you!`;
             }
@@ -1132,7 +1132,7 @@ export const rsvpToEvent = onCall(
                 body: smsBody,
               },
               uid,
-              'rsvp_confirmation',
+              "rsvp_confirmation",
               {
                 eventId: eventId,
                 rsvpStatus: status,
@@ -1146,11 +1146,11 @@ export const rsvpToEvent = onCall(
         }
       }
 
-      return { success: true, eventId, rsvpStatus: status, plusOne: rsvpData.plusOne };
+      return {success: true, eventId, rsvpStatus: status, plusOne: rsvpData.plusOne};
     },
-    'rsvpToEvent',
+    "rsvpToEvent",
     {
-      authLevel: 'onboarded',
+      authLevel: "onboarded",
       rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
     }
   )
@@ -1162,51 +1162,51 @@ export const getEventAttendees = onCall(
     memory: DEFAULT_MEMORY.MEDIUM,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async request => {
+  withErrorHandling(async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required.');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
-    const { eventId } = request.data;
-    if (!eventId || typeof eventId !== 'string') {
-      throw createError(ErrorCode.MISSING_PARAMETERS, 'Event ID is required.');
+    const {eventId} = request.data;
+    if (!eventId || typeof eventId !== "string") {
+      throw createError(ErrorCode.MISSING_PARAMETERS, "Event ID is required.");
     }
 
-    const eventData = await ensureEventAccess(eventId, uid, 'view');
+    const eventData = await ensureEventAccess(eventId, uid, "view");
 
     if (!eventData.showGuestList && eventData.hostId !== uid) {
       // If guest list is private and user is not the host, check if they are an admin/have special permission
       // For now, only host can see if showGuestList is false
       throw createError(
         ErrorCode.PERMISSION_DENIED,
-        'You do not have permission to view the guest list for this event.'
+        "You do not have permission to view the guest list for this event."
       );
     }
 
-    const rsvpsSnapshot = await db.collection('events').doc(eventId).collection('rsvps').get();
+    const rsvpsSnapshot = await db.collection("events").doc(eventId).collection("rsvps").get();
     const attendees: Attendee[] = [];
     if (rsvpsSnapshot.empty) {
-      return { attendees };
+      return {attendees};
     }
 
-    const userIds = rsvpsSnapshot.docs.map(doc => (doc.data() as EventInvitation).userId);
+    const userIds = rsvpsSnapshot.docs.map((doc) => (doc.data() as EventInvitation).userId);
     const usersSnapshot = await db
-      .collection('users')
-      .where(admin.firestore.FieldPath.documentId(), 'in', userIds)
+      .collection("users")
+      .where(admin.firestore.FieldPath.documentId(), "in", userIds)
       .get();
     const usersDataMap = new Map<string, { displayName?: string; profilePictureUrl?: string }>();
-    usersSnapshot.forEach(userDoc => {
+    usersSnapshot.forEach((userDoc) => {
       const userData = userDoc.data();
       usersDataMap.set(userDoc.id, {
         displayName:
           userData.displayName ||
           `${userData.firstName} ${userData.lastName}`.trim() ||
-          'Unnamed User',
+          "Unnamed User",
         profilePictureUrl: userData.profilePictureUrl,
       });
     });
 
-    rsvpsSnapshot.forEach(doc => {
+    rsvpsSnapshot.forEach((doc) => {
       const rsvp = doc.data() as EventInvitation;
       const userInfo = usersDataMap.get(rsvp.userId);
       attendees.push({
@@ -1217,8 +1217,8 @@ export const getEventAttendees = onCall(
       });
     });
 
-    return { attendees };
-  }, 'getEventAttendees')
+    return {attendees};
+  }, "getEventAttendees")
 );
 
 // MARK: - Comment Functions
@@ -1230,26 +1230,26 @@ export const addCommentToEvent = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(
-    async request => {
-      const uid = request.auth?.uid || '';
+    async (request) => {
+      const uid = request.auth?.uid || "";
 
-      const { eventId, text, parentId } = request.data as {
+      const {eventId, text, parentId} = request.data as {
         eventId: string;
         text: string;
         parentId?: string;
       };
 
-      if (!eventId || !text || text.trim() === '') {
-        throw createError(ErrorCode.MISSING_PARAMETERS, 'Event ID and comment text are required.');
+      if (!eventId || !text || text.trim() === "") {
+        throw createError(ErrorCode.MISSING_PARAMETERS, "Event ID and comment text are required.");
       }
 
-      await ensureEventAccess(eventId, uid, 'view'); // Ensure user can at least view to comment
+      await ensureEventAccess(eventId, uid, "view"); // Ensure user can at least view to comment
 
-      const commentRef = db.collection('events').doc(eventId).collection('comments').doc();
+      const commentRef = db.collection("events").doc(eventId).collection("comments").doc();
       const commentId = commentRef.id;
 
       // Fetch user details for denormalization
-      const userDoc = await db.collection('users').doc(uid).get();
+      const userDoc = await db.collection("users").doc(uid).get();
       const userData = userDoc.data();
 
       const newComment: EventComment = {
@@ -1259,7 +1259,7 @@ export const addCommentToEvent = onCall(
         userName:
           userData?.displayName ||
           `${userData?.firstName} ${userData?.lastName}`.trim() ||
-          'Anonymous',
+          "Anonymous",
         userProfilePicture: userData?.profilePictureUrl,
         text: text.trim(),
         parentId: parentId || null,
@@ -1272,11 +1272,11 @@ export const addCommentToEvent = onCall(
 
       // Optionally, could update a commentsCount on the event document itself using a transaction or FieldValue.increment(1)
 
-      return { success: true, commentId, comment: newComment };
+      return {success: true, commentId, comment: newComment};
     },
-    'addCommentToEvent',
+    "addCommentToEvent",
     {
-      authLevel: 'onboarded',
+      authLevel: "onboarded",
       rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
     }
   )
@@ -1288,10 +1288,10 @@ export const getEventComments = onCall(
     memory: DEFAULT_MEMORY.MEDIUM,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async request => {
+  withErrorHandling(async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required.');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
 
     const {
@@ -1306,23 +1306,23 @@ export const getEventComments = onCall(
       includeThreads?: boolean;
     };
 
-    if (!eventId || typeof eventId !== 'string') {
-      throw createError(ErrorCode.MISSING_PARAMETERS, 'Event ID is required.');
+    if (!eventId || typeof eventId !== "string") {
+      throw createError(ErrorCode.MISSING_PARAMETERS, "Event ID is required.");
     }
 
-    await ensureEventAccess(eventId, uid, 'view');
+    await ensureEventAccess(eventId, uid, "view");
 
     let query = db
-      .collection('events')
+      .collection("events")
       .doc(eventId)
-      .collection('comments')
-      .orderBy('createdAt', 'asc') as FirebaseFirestore.Query<FirebaseFirestore.DocumentData>;
+      .collection("comments")
+      .orderBy("createdAt", "asc") as FirebaseFirestore.Query<FirebaseFirestore.DocumentData>;
 
     if (lastCommentId) {
       const lastDoc = await db
-        .collection('events')
+        .collection("events")
         .doc(eventId)
-        .collection('comments')
+        .collection("comments")
         .doc(lastCommentId)
         .get();
       if (lastDoc.exists) {
@@ -1333,7 +1333,7 @@ export const getEventComments = onCall(
     query = query.limit(limit);
     const commentsSnapshot = await query.get();
 
-    const comments: EventComment[] = commentsSnapshot.docs.map(doc => {
+    const comments: EventComment[] = commentsSnapshot.docs.map((doc) => {
       const data = doc.data() as EventComment;
       return {
         ...data,
@@ -1341,7 +1341,7 @@ export const getEventComments = onCall(
       };
     });
 
-    let result: any = { comments };
+    let result: any = {comments};
 
     // Organize into threads if requested
     if (includeThreads) {
@@ -1366,7 +1366,7 @@ export const getEventComments = onCall(
       lastCommentId: newLastCommentId,
       totalCount: comments.length,
     };
-  }, 'getEventComments')
+  }, "getEventComments")
 );
 
 /**
@@ -1381,15 +1381,15 @@ export const deleteEventComment = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(
-    async request => {
-      const uid = request.auth?.uid || '';
-      const { eventId, commentId } = request.data;
-      if (!eventId || typeof eventId !== 'string' || !commentId || typeof commentId !== 'string') {
-        throw createError(ErrorCode.MISSING_PARAMETERS, 'Event ID and Comment ID are required.');
+    async (request) => {
+      const uid = request.auth?.uid || "";
+      const {eventId, commentId} = request.data;
+      if (!eventId || typeof eventId !== "string" || !commentId || typeof commentId !== "string") {
+        throw createError(ErrorCode.MISSING_PARAMETERS, "Event ID and Comment ID are required.");
       }
 
-      const eventData = await ensureEventAccess(eventId, uid, 'view');
-      const commentRef = db.collection('events').doc(eventId).collection('comments').doc(commentId);
+      const eventData = await ensureEventAccess(eventId, uid, "view");
+      const commentRef = db.collection("events").doc(eventId).collection("comments").doc(commentId);
       const commentDoc = await commentRef.get();
 
       if (!commentDoc.exists) {
@@ -1405,7 +1405,7 @@ export const deleteEventComment = onCall(
       if (commentData.userId !== uid && eventData.hostId !== uid) {
         throw createError(
           ErrorCode.PERMISSION_DENIED,
-          'You do not have permission to delete this comment.'
+          "You do not have permission to delete this comment."
         );
       }
 
@@ -1429,11 +1429,11 @@ export const deleteEventComment = onCall(
       // Optionally, decrement commentsCount on the event document by total deleted
       // You may want to implement this based on your event comment counting strategy
 
-      return { success: true, eventId, commentId, totalDeleted };
+      return {success: true, eventId, commentId, totalDeleted};
     },
-    'deleteEventComment',
+    "deleteEventComment",
     {
-      authLevel: 'onboarded',
+      authLevel: "onboarded",
       rateLimitConfig: SECURITY_CONFIG.rateLimits.delete,
     }
   )
@@ -1453,9 +1453,9 @@ async function fetchRawEventsPage(
   baseQuery: FirebaseFirestore.Query<FirebaseFirestore.DocumentData>,
   limit: number,
   orderByField: string, // e.g., "eventDate"
-  orderByDirection: 'asc' | 'desc' = 'asc',
-  secondaryOrderByField: string = 'id', // Tie-breaker
-  secondaryOrderByDirection: 'asc' | 'desc' = 'asc',
+  orderByDirection: "asc" | "desc" = "asc",
+  secondaryOrderByField: string = "id", // Tie-breaker
+  secondaryOrderByDirection: "asc" | "desc" = "asc",
   startAfterValues?: [string | Timestamp, string] // [primaryFieldValue, secondaryFieldValue]
 ): Promise<{ docs: FirebaseFirestore.QueryDocumentSnapshot<EventData>[]; rawEvents: EventData[] }> {
   let query = baseQuery
@@ -1469,8 +1469,8 @@ async function fetchRawEventsPage(
 
   const snapshot = await query.get();
   const docs = snapshot.docs as FirebaseFirestore.QueryDocumentSnapshot<EventData>[];
-  const rawEvents = docs.map(doc => ({ id: doc.id, ...doc.data() } as EventData));
-  return { docs, rawEvents };
+  const rawEvents = docs.map((doc) => ({id: doc.id, ...doc.data()} as EventData));
+  return {docs, rawEvents};
 }
 
 export const getUpcomingEventsForUser = onCall(
@@ -1479,10 +1479,10 @@ export const getUpcomingEventsForUser = onCall(
     memory: DEFAULT_MEMORY.MEDIUM,
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
-  withErrorHandling(async request => {
+  withErrorHandling(async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required.');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
 
     const {
@@ -1491,11 +1491,11 @@ export const getUpcomingEventsForUser = onCall(
       lastEventId, // For tie-breaking
     } = request.data as { limit?: number; lastEventDate?: string; lastEventId?: string };
 
-    const userDoc = await db.collection('users').doc(uid).get();
+    const userDoc = await db.collection("users").doc(uid).get();
     const userData = userDoc.data();
     const userFamilyTreeId = userData?.familyTreeId;
 
-    const nowString = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const nowString = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
 
     const queries: FirebaseFirestore.Query<FirebaseFirestore.DocumentData>[] = [];
 
@@ -1508,35 +1508,35 @@ export const getUpcomingEventsForUser = onCall(
     // Query for events hosted by the user
     queries.push(
       db
-        .collection('events')
-        .where('hostId', '==', uid)
-        .where('eventDate', '>=', effectiveStartDate)
+        .collection("events")
+        .where("hostId", "==", uid)
+        .where("eventDate", ">=", effectiveStartDate)
     );
 
     // Query for events user is explicitly invited to
     queries.push(
       db
-        .collection('events')
-        .where('invitedMemberIds', 'array-contains', uid)
-        .where('eventDate', '>=', effectiveStartDate)
+        .collection("events")
+        .where("invitedMemberIds", "array-contains", uid)
+        .where("eventDate", ">=", effectiveStartDate)
     );
 
     // Query for public events
     queries.push(
       db
-        .collection('events')
-        .where('privacy', '==', 'public')
-        .where('eventDate', '>=', effectiveStartDate)
+        .collection("events")
+        .where("privacy", "==", "public")
+        .where("eventDate", ">=", effectiveStartDate)
     );
 
     // Query for family_tree events
     if (userFamilyTreeId) {
       queries.push(
         db
-          .collection('events')
-          .where('privacy', '==', 'family_tree')
-          .where('familyTreeId', '==', userFamilyTreeId)
-          .where('eventDate', '>=', effectiveStartDate)
+          .collection("events")
+          .where("privacy", "==", "family_tree")
+          .where("familyTreeId", "==", userFamilyTreeId)
+          .where("eventDate", ">=", effectiveStartDate)
       );
     }
 
@@ -1547,9 +1547,9 @@ export const getUpcomingEventsForUser = onCall(
 
     for (const baseQuery of queries) {
       const startValues: [string, string] | undefined =
-        lastEventDate && lastEventId && effectiveStartDate === lastEventDate
-          ? [lastEventDate, lastEventId]
-          : undefined;
+        lastEventDate && lastEventId && effectiveStartDate === lastEventDate ?
+          [lastEventDate, lastEventId] :
+          undefined;
 
       // If lastEventDate is in the future compared to effectiveStartDate (now),
       // we need to use that as the primary value for startAfter.
@@ -1559,13 +1559,13 @@ export const getUpcomingEventsForUser = onCall(
       // we don't use startAfter with specific values, relying on the >= effectiveStartDate.
       // The fetchRawEventsPage handles orderBy and startAfter logic internally.
       // The key is that `eventDate` is string "YYYY-MM-DD", `id` is string.
-      const { rawEvents: categoryEvents } = await fetchRawEventsPage(
+      const {rawEvents: categoryEvents} = await fetchRawEventsPage(
         baseQuery,
         fetchLimitPerQuery,
-        'eventDate',
-        'asc',
-        'id', // Use 'id' as the secondary sort key
-        'asc',
+        "eventDate",
+        "asc",
+        "id", // Use 'id' as the secondary sort key
+        "asc",
         startValues
       );
       allRawEvents.push(...categoryEvents);
@@ -1573,7 +1573,7 @@ export const getUpcomingEventsForUser = onCall(
 
     // Deduplicate events by ID
     const uniqueEventsMap = new Map<string, EventData>();
-    allRawEvents.forEach(event => {
+    allRawEvents.forEach((event) => {
       if (event.id && !uniqueEventsMap.has(event.id)) {
         uniqueEventsMap.set(event.id, event);
       }
@@ -1596,7 +1596,7 @@ export const getUpcomingEventsForUser = onCall(
     // If effectiveStartDate was ahead of lastEventDate, this filtering is naturally handled by the query's date range.
     let finalEventsForPage: EventData[];
     if (lastEventDate && lastEventId && lastEventDate === effectiveStartDate) {
-      finalEventsForPage = sortedUniqueEvents.filter(event => {
+      finalEventsForPage = sortedUniqueEvents.filter((event) => {
         if (event.eventDate > lastEventDate) return true;
         if (event.eventDate === lastEventDate) {
           return event.id! > lastEventId; // id should exist
@@ -1631,7 +1631,7 @@ export const getUpcomingEventsForUser = onCall(
       lastEventId: newLastEventId,
       hasMore,
     };
-  }, 'getUpcomingEventsForUser')
+  }, "getUpcomingEventsForUser")
 );
 
 // MARK: - Missing Core Functions
@@ -1642,10 +1642,10 @@ export const getPastEventsForUser = onCall(
     memory: DEFAULT_MEMORY.MEDIUM,
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
-  withErrorHandling(async request => {
+  withErrorHandling(async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required.');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
 
     const {
@@ -1654,11 +1654,11 @@ export const getPastEventsForUser = onCall(
       lastEventId, // For tie-breaking
     } = request.data as { limit?: number; lastEventDate?: string; lastEventId?: string };
 
-    const userDoc = await db.collection('users').doc(uid).get();
+    const userDoc = await db.collection("users").doc(uid).get();
     const userData = userDoc.data();
     const userFamilyTreeId = userData?.familyTreeId;
 
-    const nowString = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const nowString = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
 
     const queries: FirebaseFirestore.Query<FirebaseFirestore.DocumentData>[] = [];
 
@@ -1667,33 +1667,33 @@ export const getPastEventsForUser = onCall(
 
     // Query for events hosted by the user
     queries.push(
-      db.collection('events').where('hostId', '==', uid).where('eventDate', '<', effectiveEndDate)
+      db.collection("events").where("hostId", "==", uid).where("eventDate", "<", effectiveEndDate)
     );
 
     // Query for events user is explicitly invited to
     queries.push(
       db
-        .collection('events')
-        .where('invitedMemberIds', 'array-contains', uid)
-        .where('eventDate', '<', effectiveEndDate)
+        .collection("events")
+        .where("invitedMemberIds", "array-contains", uid)
+        .where("eventDate", "<", effectiveEndDate)
     );
 
     // Query for public events
     queries.push(
       db
-        .collection('events')
-        .where('privacy', '==', 'public')
-        .where('eventDate', '<', effectiveEndDate)
+        .collection("events")
+        .where("privacy", "==", "public")
+        .where("eventDate", "<", effectiveEndDate)
     );
 
     // Query for family_tree events
     if (userFamilyTreeId) {
       queries.push(
         db
-          .collection('events')
-          .where('privacy', '==', 'family_tree')
-          .where('familyTreeId', '==', userFamilyTreeId)
-          .where('eventDate', '<', effectiveEndDate)
+          .collection("events")
+          .where("privacy", "==", "family_tree")
+          .where("familyTreeId", "==", userFamilyTreeId)
+          .where("eventDate", "<", effectiveEndDate)
       );
     }
 
@@ -1702,17 +1702,17 @@ export const getPastEventsForUser = onCall(
 
     for (const baseQuery of queries) {
       const startValues: [string, string] | undefined =
-        lastEventDate && lastEventId && effectiveEndDate === lastEventDate
-          ? [lastEventDate, lastEventId]
-          : undefined;
+        lastEventDate && lastEventId && effectiveEndDate === lastEventDate ?
+          [lastEventDate, lastEventId] :
+          undefined;
 
-      const { rawEvents: categoryEvents } = await fetchRawEventsPage(
+      const {rawEvents: categoryEvents} = await fetchRawEventsPage(
         baseQuery,
         fetchLimitPerQuery,
-        'eventDate',
-        'desc', // Descending for past events (most recent first)
-        'id',
-        'desc',
+        "eventDate",
+        "desc", // Descending for past events (most recent first)
+        "id",
+        "desc",
         startValues
       );
       allRawEvents.push(...categoryEvents);
@@ -1720,7 +1720,7 @@ export const getPastEventsForUser = onCall(
 
     // Deduplicate and sort
     const uniqueEventsMap = new Map<string, EventData>();
-    allRawEvents.forEach(event => {
+    allRawEvents.forEach((event) => {
       if (event.id && !uniqueEventsMap.has(event.id)) {
         uniqueEventsMap.set(event.id, event);
       }
@@ -1738,7 +1738,7 @@ export const getPastEventsForUser = onCall(
     // Apply pagination filtering
     let finalEventsForPage: EventData[];
     if (lastEventDate && lastEventId && lastEventDate === effectiveEndDate) {
-      finalEventsForPage = sortedUniqueEvents.filter(event => {
+      finalEventsForPage = sortedUniqueEvents.filter((event) => {
         if (event.eventDate < lastEventDate) return true;
         if (event.eventDate === lastEventDate) {
           return event.id! < lastEventId;
@@ -1768,7 +1768,7 @@ export const getPastEventsForUser = onCall(
       lastEventId: newLastEventId,
       hasMore,
     };
-  }, 'getPastEventsForUser')
+  }, "getPastEventsForUser")
 );
 
 export const getHostedEvents = onCall(
@@ -1777,10 +1777,10 @@ export const getHostedEvents = onCall(
     memory: DEFAULT_MEMORY.MEDIUM,
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
-  withErrorHandling(async request => {
+  withErrorHandling(async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required.');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
 
     const {
@@ -1798,34 +1798,34 @@ export const getHostedEvents = onCall(
     };
 
     if (!includeUpcoming && !includePast) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, 'Must include either upcoming or past events.');
+      throw createError(ErrorCode.INVALID_ARGUMENT, "Must include either upcoming or past events.");
     }
 
-    const nowString = new Date().toISOString().split('T')[0];
-    let query = db.collection('events').where('hostId', '==', uid);
+    const nowString = new Date().toISOString().split("T")[0];
+    let query = db.collection("events").where("hostId", "==", uid);
 
     // Apply date filtering based on what's requested
     if (includeUpcoming && !includePast) {
       const effectiveStartDate =
         lastEventDate && lastEventDate > nowString ? lastEventDate : nowString;
-      query = query.where('eventDate', '>=', effectiveStartDate);
+      query = query.where("eventDate", ">=", effectiveStartDate);
     } else if (includePast && !includeUpcoming) {
       const effectiveEndDate =
         lastEventDate && lastEventDate < nowString ? lastEventDate : nowString;
-      query = query.where('eventDate', '<', effectiveEndDate);
+      query = query.where("eventDate", "<", effectiveEndDate);
     }
     // If both are true, no date filter (get all events)
 
     const startValues: [string, string] | undefined =
       lastEventDate && lastEventId ? [lastEventDate, lastEventId] : undefined;
 
-    const orderDirection = includePast && !includeUpcoming ? 'desc' : 'asc';
-    const { rawEvents } = await fetchRawEventsPage(
+    const orderDirection = includePast && !includeUpcoming ? "desc" : "asc";
+    const {rawEvents} = await fetchRawEventsPage(
       query,
       limit,
-      'eventDate',
+      "eventDate",
       orderDirection,
-      'id',
+      "id",
       orderDirection,
       startValues
     );
@@ -1848,7 +1848,7 @@ export const getHostedEvents = onCall(
       lastEventId: newLastEventId,
       hasMore,
     };
-  }, 'getHostedEvents')
+  }, "getHostedEvents")
 );
 
 export const searchEvents = onCall(
@@ -1857,10 +1857,10 @@ export const searchEvents = onCall(
     memory: DEFAULT_MEMORY.MEDIUM,
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
-  withErrorHandling(async request => {
+  withErrorHandling(async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required.');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
 
     const {
@@ -1878,41 +1878,41 @@ export const searchEvents = onCall(
       startDate?: string;
       endDate?: string;
       location?: { lat: number; lng: number; radiusKm?: number };
-      privacy?: 'public' | 'family_tree' | 'invite_only';
+      privacy?: "public" | "family_tree" | "invite_only";
       lastEventDate?: string;
       lastEventId?: string;
     };
 
     // Validate inputs
     if (startDate && !validateDateFormat(startDate)) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid start date format. Use YYYY-MM-DD.');
+      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid start date format. Use YYYY-MM-DD.");
     }
     if (endDate && !validateDateFormat(endDate)) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid end date format. Use YYYY-MM-DD.');
+      throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid end date format. Use YYYY-MM-DD.");
     }
 
-    const userDoc = await db.collection('users').doc(uid).get();
+    const userDoc = await db.collection("users").doc(uid).get();
     const userData = userDoc.data();
     const userFamilyTreeId = userData?.familyTreeId;
 
     let baseQuery = db.collection(
-      'events'
+      "events"
     ) as FirebaseFirestore.Query<FirebaseFirestore.DocumentData>;
 
     // Apply privacy filter
     if (privacy) {
-      baseQuery = baseQuery.where('privacy', '==', privacy);
-      if (privacy === 'family_tree' && userFamilyTreeId) {
-        baseQuery = baseQuery.where('familyTreeId', '==', userFamilyTreeId);
+      baseQuery = baseQuery.where("privacy", "==", privacy);
+      if (privacy === "family_tree" && userFamilyTreeId) {
+        baseQuery = baseQuery.where("familyTreeId", "==", userFamilyTreeId);
       }
     }
 
     // Apply date range filters
     if (startDate) {
-      baseQuery = baseQuery.where('eventDate', '>=', startDate);
+      baseQuery = baseQuery.where("eventDate", ">=", startDate);
     }
     if (endDate) {
-      baseQuery = baseQuery.where('eventDate', '<=', endDate);
+      baseQuery = baseQuery.where("eventDate", "<=", endDate);
     }
 
     // If search query is provided, use indexed search fields
@@ -1926,38 +1926,38 @@ export const searchEvents = onCall(
       // Query 1: Search in searchableTitle
       queries.push(
         baseQuery
-          .where('searchableTitle', '>=', normalizedQuery)
-          .where('searchableTitle', '<=', normalizedQuery + '\uf8ff')
+          .where("searchableTitle", ">=", normalizedQuery)
+          .where("searchableTitle", "<=", normalizedQuery + "\uf8ff")
       );
 
       // Query 2: Search in searchableDescription
       queries.push(
         baseQuery
-          .where('searchableDescription', '>=', normalizedQuery)
-          .where('searchableDescription', '<=', normalizedQuery + '\uf8ff')
+          .where("searchableDescription", ">=", normalizedQuery)
+          .where("searchableDescription", "<=", normalizedQuery + "\uf8ff")
       );
 
       // Query 3: Search in searchableLocation
       queries.push(
         baseQuery
-          .where('searchableLocation', '>=', normalizedQuery)
-          .where('searchableLocation', '<=', normalizedQuery + '\uf8ff')
+          .where("searchableLocation", ">=", normalizedQuery)
+          .where("searchableLocation", "<=", normalizedQuery + "\uf8ff")
       );
 
       // Query 4: Search in keywords array
-      queries.push(baseQuery.where('searchKeywords', 'array-contains', normalizedQuery));
+      queries.push(baseQuery.where("searchKeywords", "array-contains", normalizedQuery));
 
       // Execute all search queries in parallel
       const searchResults = await Promise.all(
-        queries.map(query =>
-          query.orderBy('eventDate', 'asc').orderBy('id', 'asc').limit(limit).get()
+        queries.map((query) =>
+          query.orderBy("eventDate", "asc").orderBy("id", "asc").limit(limit).get()
         )
       );
 
       // Combine and deduplicate results
       const eventMap = new Map<string, EventData>();
-      searchResults.forEach(snapshot => {
-        snapshot.docs.forEach(doc => {
+      searchResults.forEach((snapshot) => {
+        snapshot.docs.forEach((doc) => {
           if (!eventMap.has(doc.id)) {
             eventMap.set(doc.id, doc.data() as EventData);
           }
@@ -1970,13 +1970,13 @@ export const searchEvents = onCall(
         const dateCompare = a.eventDate.localeCompare(b.eventDate);
         if (dateCompare !== 0) return dateCompare;
         // Both ids should exist since they came from Firestore documents
-        return (a.id || '').localeCompare(b.id || '');
+        return (a.id || "").localeCompare(b.id || "");
       });
 
       // Apply location filter if provided
       if (location && location.lat && location.lng) {
         const radiusKm = location.radiusKm || 50;
-        allEvents = allEvents.filter(event => {
+        allEvents = allEvents.filter((event) => {
           if (!event.location) return false;
           const distance = calculateDistance(
             location.lat,
@@ -1991,7 +1991,7 @@ export const searchEvents = onCall(
       // Handle pagination for search results
       if (lastEventDate && lastEventId) {
         const lastIndex = allEvents.findIndex(
-          event => event.eventDate === lastEventDate && event.id === lastEventId
+          (event) => event.eventDate === lastEventDate && event.id === lastEventId
         );
         if (lastIndex >= 0) {
           allEvents = allEvents.slice(lastIndex + 1);
@@ -2025,13 +2025,13 @@ export const searchEvents = onCall(
     const startValues: [string, string] | undefined =
       lastEventDate && lastEventId ? [lastEventDate, lastEventId] : undefined;
 
-    const { rawEvents } = await fetchRawEventsPage(
+    const {rawEvents} = await fetchRawEventsPage(
       baseQuery,
       limit,
-      'eventDate',
-      'asc',
-      'id',
-      'asc',
+      "eventDate",
+      "asc",
+      "id",
+      "asc",
       startValues
     );
 
@@ -2039,7 +2039,7 @@ export const searchEvents = onCall(
     let filteredEvents = rawEvents;
     if (location && location.lat && location.lng) {
       const radiusKm = location.radiusKm || 50;
-      filteredEvents = rawEvents.filter(event => {
+      filteredEvents = rawEvents.filter((event) => {
         if (!event.location) return false;
         const distance = calculateDistance(
           location.lat,
@@ -2071,7 +2071,7 @@ export const searchEvents = onCall(
       hasMore,
       totalFound: filteredEvents.length,
     };
-  }, 'searchEvents')
+  }, "searchEvents")
 );
 
 /**
@@ -2100,10 +2100,10 @@ export const sendEventInvitations = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
   withAuth(
-    async request => {
-      const uid = request.auth?.uid || '';
+    async (request) => {
+      const uid = request.auth?.uid || "";
 
-      const { eventId, userIds, message } = request.data as {
+      const {eventId, userIds, message} = request.data as {
         eventId: string;
         userIds: string[];
         message?: string;
@@ -2112,16 +2112,16 @@ export const sendEventInvitations = onCall(
       if (!eventId || !userIds || !Array.isArray(userIds) || userIds.length === 0) {
         throw createError(
           ErrorCode.MISSING_PARAMETERS,
-          'Event ID and user IDs array are required.'
+          "Event ID and user IDs array are required."
         );
       }
 
       if (userIds.length > 50) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Cannot invite more than 50 users at once.');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Cannot invite more than 50 users at once.");
       }
 
       // Ensure user has permission to invite to this event
-      const eventData = await ensureEventAccess(eventId, uid, 'edit');
+      const eventData = await ensureEventAccess(eventId, uid, "edit");
 
       // Validate that all userIds exist
       const userBatches = [];
@@ -2132,27 +2132,27 @@ export const sendEventInvitations = onCall(
       const validUserIds = new Set<string>();
       for (const batch of userBatches) {
         const usersSnapshot = await db
-          .collection('users')
-          .where(admin.firestore.FieldPath.documentId(), 'in', batch)
+          .collection("users")
+          .where(admin.firestore.FieldPath.documentId(), "in", batch)
           .get();
-        usersSnapshot.forEach(doc => validUserIds.add(doc.id));
+        usersSnapshot.forEach((doc) => validUserIds.add(doc.id));
       }
 
-      const invalidUserIds = userIds.filter(id => !validUserIds.has(id));
+      const invalidUserIds = userIds.filter((id) => !validUserIds.has(id));
       if (invalidUserIds.length > 0) {
         throw createError(
           ErrorCode.INVALID_ARGUMENT,
-          `Invalid user IDs: ${invalidUserIds.join(', ')}`
+          `Invalid user IDs: ${invalidUserIds.join(", ")}`
         );
       }
 
       // Check existing invitations to avoid duplicates
       const existingInvitations = new Set<string>();
-      const invitationPromises = userIds.map(async userId => {
+      const invitationPromises = userIds.map(async (userId) => {
         const inviteDoc = await db
-          .collection('events')
+          .collection("events")
           .doc(eventId)
-          .collection('rsvps')
+          .collection("rsvps")
           .doc(userId)
           .get();
         if (inviteDoc.exists) {
@@ -2161,12 +2161,12 @@ export const sendEventInvitations = onCall(
       });
       await Promise.all(invitationPromises);
 
-      const newInvitees = userIds.filter(id => !existingInvitations.has(id));
+      const newInvitees = userIds.filter((id) => !existingInvitations.has(id));
 
       if (newInvitees.length === 0) {
         return {
           success: true,
-          message: 'All users were already invited to this event.',
+          message: "All users were already invited to this event.",
           alreadyInvited: userIds.length,
           newInvitations: 0,
         };
@@ -2176,12 +2176,12 @@ export const sendEventInvitations = onCall(
       const batch = db.batch();
       const now = Timestamp.now();
 
-      newInvitees.forEach(userId => {
-        const inviteRef = db.collection('events').doc(eventId).collection('rsvps').doc(userId);
+      newInvitees.forEach((userId) => {
+        const inviteRef = db.collection("events").doc(eventId).collection("rsvps").doc(userId);
         const inviteData: EventInvitation = {
           eventId,
           userId,
-          status: 'pending',
+          status: "pending",
           plusOne: false,
           createdAt: now,
           updatedAt: now,
@@ -2190,7 +2190,7 @@ export const sendEventInvitations = onCall(
       });
 
       // Update event's invitedMemberIds
-      const eventRef = db.collection('events').doc(eventId);
+      const eventRef = db.collection("events").doc(eventId);
       batch.update(eventRef, {
         invitedMemberIds: FieldValue.arrayUnion(...newInvitees),
         updatedAt: now,
@@ -2211,9 +2211,9 @@ export const sendEventInvitations = onCall(
         message: message || `You've been invited to ${eventData.title}`,
       };
     },
-    'sendEventInvitations',
+    "sendEventInvitations",
     {
-      authLevel: 'onboarded',
+      authLevel: "onboarded",
       rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
     }
   )
@@ -2225,10 +2225,10 @@ export const getEventInvitations = onCall(
     memory: DEFAULT_MEMORY.MEDIUM,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async request => {
+  withErrorHandling(async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required.');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
 
     const {
@@ -2236,27 +2236,27 @@ export const getEventInvitations = onCall(
       limit = PAGINATION_LIMIT,
       lastInvitationId,
     } = request.data as {
-      status?: 'pending' | 'accepted' | 'declined' | 'maybe';
+      status?: "pending" | "accepted" | "declined" | "maybe";
       limit?: number;
       lastInvitationId?: string;
     };
 
     // Get all events where user is invited
     let query = db
-      .collectionGroup('rsvps')
-      .where('userId', '==', uid) as FirebaseFirestore.Query<FirebaseFirestore.DocumentData>;
+      .collectionGroup("rsvps")
+      .where("userId", "==", uid) as FirebaseFirestore.Query<FirebaseFirestore.DocumentData>;
 
     if (status) {
-      query = query.where('status', '==', status);
+      query = query.where("status", "==", status);
     }
 
-    query = query.orderBy('createdAt', 'desc').limit(limit);
+    query = query.orderBy("createdAt", "desc").limit(limit);
 
     if (lastInvitationId) {
       // For collection group queries, we need to find the document differently
       const lastDocSnapshot = await query.limit(1).get();
       if (!lastDocSnapshot.empty) {
-        const lastDoc = lastDocSnapshot.docs.find(doc => doc.id === lastInvitationId);
+        const lastDoc = lastDocSnapshot.docs.find((doc) => doc.id === lastInvitationId);
         if (lastDoc) {
           query = query.startAfter(lastDoc);
         }
@@ -2267,11 +2267,11 @@ export const getEventInvitations = onCall(
     const invitations: EventInvitationWithUser[] = [];
 
     if (invitationsSnapshot.empty) {
-      return { invitations, hasMore: false };
+      return {invitations, hasMore: false};
     }
 
     // Get event details for each invitation
-    const eventIds = [...new Set(invitationsSnapshot.docs.map(doc => doc.data().eventId))];
+    const eventIds = [...new Set(invitationsSnapshot.docs.map((doc) => doc.data().eventId))];
     const eventDataMap = new Map<string, EventData>();
 
     const eventBatches = [];
@@ -2281,16 +2281,16 @@ export const getEventInvitations = onCall(
 
     for (const batch of eventBatches) {
       const eventsSnapshot = await db
-        .collection('events')
-        .where(admin.firestore.FieldPath.documentId(), 'in', batch)
+        .collection("events")
+        .where(admin.firestore.FieldPath.documentId(), "in", batch)
         .get();
-      eventsSnapshot.forEach(doc => {
-        eventDataMap.set(doc.id, { id: doc.id, ...doc.data() } as EventData);
+      eventsSnapshot.forEach((doc) => {
+        eventDataMap.set(doc.id, {id: doc.id, ...doc.data()} as EventData);
       });
     }
 
     // Get host details
-    const hostIds = [...new Set(Array.from(eventDataMap.values()).map(event => event.hostId))];
+    const hostIds = [...new Set(Array.from(eventDataMap.values()).map((event) => event.hostId))];
     const hostDataMap = new Map<string, any>();
 
     const hostBatches = [];
@@ -2300,16 +2300,16 @@ export const getEventInvitations = onCall(
 
     for (const batch of hostBatches) {
       const hostsSnapshot = await db
-        .collection('users')
-        .where(admin.firestore.FieldPath.documentId(), 'in', batch)
+        .collection("users")
+        .where(admin.firestore.FieldPath.documentId(), "in", batch)
         .get();
-      hostsSnapshot.forEach(doc => {
+      hostsSnapshot.forEach((doc) => {
         const userData = doc.data();
         hostDataMap.set(doc.id, {
           displayName:
             userData?.displayName ||
             `${userData?.firstName} ${userData?.lastName}`.trim() ||
-            'Unknown Host',
+            "Unknown Host",
           profilePictureUrl: userData?.profilePictureUrl,
           email: userData?.email,
         });
@@ -2317,10 +2317,10 @@ export const getEventInvitations = onCall(
     }
 
     // Enrich invitations with event and host data
-    invitationsSnapshot.forEach(doc => {
+    invitationsSnapshot.forEach((doc) => {
       const inviteData = doc.data() as EventInvitation;
       const eventData = eventDataMap.get(inviteData.eventId);
-      const hostData = hostDataMap.get(eventData?.hostId || '');
+      const hostData = hostDataMap.get(eventData?.hostId || "");
 
       const enrichedInvitation: EventInvitationWithUser = {
         ...inviteData,
@@ -2350,7 +2350,7 @@ export const getEventInvitations = onCall(
       hasMore,
       lastInvitationId: newLastInvitationId,
     };
-  }, 'getEventInvitations')
+  }, "getEventInvitations")
 );
 
 export const respondToInvitation = onCall(
@@ -2360,40 +2360,40 @@ export const respondToInvitation = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(
-    async request => {
-      const uid = request.auth?.uid || '';
+    async (request) => {
+      const uid = request.auth?.uid || "";
 
-      const { eventId, status, plusOne, plusOneName } = request.data as {
+      const {eventId, status, plusOne, plusOneName} = request.data as {
         eventId: string;
-        status: 'accepted' | 'declined' | 'maybe';
+        status: "accepted" | "declined" | "maybe";
         plusOne?: boolean;
         plusOneName?: string;
       };
 
       if (!eventId || !status) {
-        throw createError(ErrorCode.MISSING_PARAMETERS, 'Event ID and status are required.');
+        throw createError(ErrorCode.MISSING_PARAMETERS, "Event ID and status are required.");
       }
 
-      if (!['accepted', 'declined', 'maybe'].includes(status)) {
+      if (!["accepted", "declined", "maybe"].includes(status)) {
         throw createError(
           ErrorCode.INVALID_ARGUMENT,
-          'Invalid status. Must be accepted, declined, or maybe.'
+          "Invalid status. Must be accepted, declined, or maybe."
         );
       }
 
       // Check if invitation exists
-      const inviteRef = db.collection('events').doc(eventId).collection('rsvps').doc(uid);
+      const inviteRef = db.collection("events").doc(eventId).collection("rsvps").doc(uid);
       const inviteDoc = await inviteRef.get();
 
       if (!inviteDoc.exists) {
-        throw createError(ErrorCode.NOT_FOUND, 'Invitation not found for this event.');
+        throw createError(ErrorCode.NOT_FOUND, "Invitation not found for this event.");
       }
 
-      const eventData = await ensureEventAccess(eventId, uid, 'view');
+      const eventData = await ensureEventAccess(eventId, uid, "view");
 
       // Validate plus one if provided
       if (plusOne && !eventData.allowGuestPlusOne) {
-        throw createError(ErrorCode.PERMISSION_DENIED, 'Plus ones are not allowed for this event.');
+        throw createError(ErrorCode.PERMISSION_DENIED, "Plus ones are not allowed for this event.");
       }
 
       // Check RSVP deadline
@@ -2401,7 +2401,7 @@ export const respondToInvitation = onCall(
         try {
           const deadlineDate = new Date(eventData.rsvpDeadline);
           if (new Date() > deadlineDate) {
-            throw createError(ErrorCode.ABORTED, 'The RSVP deadline for this event has passed.');
+            throw createError(ErrorCode.ABORTED, "The RSVP deadline for this event has passed.");
           }
         } catch (dateError) {
           logger.warn(
@@ -2432,9 +2432,9 @@ export const respondToInvitation = onCall(
         plusOneName: updateData.plusOneName,
       };
     },
-    'respondToInvitation',
+    "respondToInvitation",
     {
-      authLevel: 'onboarded',
+      authLevel: "onboarded",
       rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
     }
   )
@@ -2452,15 +2452,15 @@ export const getEventsApi = onCall(
     memory: DEFAULT_MEMORY.MEDIUM,
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
-  withErrorHandling(async request => {
+  withErrorHandling(async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required.');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
 
-    const { limit = 100 } = request.data as { limit?: number };
+    const {limit = 100} = request.data as { limit?: number };
 
-    const userDoc = await db.collection('users').doc(uid).get();
+    const userDoc = await db.collection("users").doc(uid).get();
     const userData = userDoc.data();
     const userFamilyTreeId = userData?.familyTreeId;
 
@@ -2468,21 +2468,21 @@ export const getEventsApi = onCall(
     const queries: FirebaseFirestore.Query<FirebaseFirestore.DocumentData>[] = [];
 
     // Query for events hosted by the user
-    queries.push(db.collection('events').where('hostId', '==', uid));
+    queries.push(db.collection("events").where("hostId", "==", uid));
 
     // Query for events user is explicitly invited to
-    queries.push(db.collection('events').where('invitedMemberIds', 'array-contains', uid));
+    queries.push(db.collection("events").where("invitedMemberIds", "array-contains", uid));
 
     // Query for public events
-    queries.push(db.collection('events').where('privacy', '==', 'public'));
+    queries.push(db.collection("events").where("privacy", "==", "public"));
 
     // Query for family_tree events
     if (userFamilyTreeId) {
       queries.push(
         db
-          .collection('events')
-          .where('privacy', '==', 'family_tree')
-          .where('familyTreeId', '==', userFamilyTreeId)
+          .collection("events")
+          .where("privacy", "==", "family_tree")
+          .where("familyTreeId", "==", userFamilyTreeId)
       );
     }
 
@@ -2493,7 +2493,7 @@ export const getEventsApi = onCall(
       try {
         const snapshot = await baseQuery.limit(limit).get();
         const events = snapshot.docs.map(
-          doc =>
+          (doc) =>
             ({
               id: doc.id,
               ...doc.data(),
@@ -2501,14 +2501,14 @@ export const getEventsApi = onCall(
         );
         allRawEvents.push(...events);
       } catch (queryError) {
-        logger.warn('Error executing events query:', queryError);
+        logger.warn("Error executing events query:", queryError);
         // Continue with other queries even if one fails
       }
     }
 
     // Deduplicate events by ID
     const uniqueEventsMap = new Map<string, EventData>();
-    allRawEvents.forEach(event => {
+    allRawEvents.forEach((event) => {
       if (event.id && !uniqueEventsMap.has(event.id)) {
         uniqueEventsMap.set(event.id, event);
       }
@@ -2528,8 +2528,8 @@ export const getEventsApi = onCall(
 
     logger.info(`Returning ${enrichedEvents.length} events for user ${uid}`);
 
-    return { events: enrichedEvents };
-  }, 'getEventsApi')
+    return {events: enrichedEvents};
+  }, "getEventsApi")
 );
 
 /**
@@ -2549,23 +2549,23 @@ export const updateEventRsvpApi = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(
-    async request => {
-      const uid = request.auth?.uid || '';
+    async (request) => {
+      const uid = request.auth?.uid || "";
 
-      const { eventId, status } = request.data as {
+      const {eventId, status} = request.data as {
         eventId: string;
-        status: 'yes' | 'maybe' | 'no';
+        status: "yes" | "maybe" | "no";
       };
 
       if (!eventId || !status) {
-        throw createError(ErrorCode.MISSING_PARAMETERS, 'Event ID and status are required.');
+        throw createError(ErrorCode.MISSING_PARAMETERS, "Event ID and status are required.");
       }
 
       // Map web status to internal status
-      const mappedStatus = status === 'yes' ? 'accepted' : status === 'no' ? 'declined' : 'maybe';
+      const mappedStatus = status === "yes" ? "accepted" : status === "no" ? "declined" : "maybe";
 
       // Reuse the logic from rsvpToEvent
-      const eventData = await ensureEventAccess(eventId, uid, 'view');
+      const eventData = await ensureEventAccess(eventId, uid, "view");
 
       if (!eventData.requireRsvp) {
         logger.info(
@@ -2578,7 +2578,7 @@ export const updateEventRsvpApi = onCall(
         try {
           const deadlineDate = new Date(eventData.rsvpDeadline);
           if (new Date() > deadlineDate) {
-            throw createError(ErrorCode.ABORTED, 'The RSVP deadline for this event has passed.');
+            throw createError(ErrorCode.ABORTED, "The RSVP deadline for this event has passed.");
           }
         } catch (dateError) {
           logger.error(
@@ -2588,12 +2588,12 @@ export const updateEventRsvpApi = onCall(
         }
       }
 
-      const rsvpRef = db.collection('events').doc(eventId).collection('rsvps').doc(uid);
+      const rsvpRef = db.collection("events").doc(eventId).collection("rsvps").doc(uid);
 
       const rsvpData: Partial<EventInvitation> = {
         eventId,
         userId: uid,
-        status: mappedStatus as EventInvitation['status'],
+        status: mappedStatus as EventInvitation["status"],
         plusOne: false,
         plusOneName: null,
         respondedAt: Timestamp.now(),
@@ -2606,14 +2606,14 @@ export const updateEventRsvpApi = onCall(
         rsvpData.createdAt = Timestamp.now();
       }
 
-      await rsvpRef.set(rsvpData, { merge: true });
+      await rsvpRef.set(rsvpData, {merge: true});
       logger.info(`User ${uid} RSVPed to event ${eventId} with status: ${mappedStatus}`);
 
-      return { success: true };
+      return {success: true};
     },
-    'updateEventRsvpApi',
+    "updateEventRsvpApi",
     {
-      authLevel: 'onboarded',
+      authLevel: "onboarded",
       rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
     }
   )
@@ -2635,42 +2635,42 @@ export const getEventsForFeedApi = onCall(
     memory: DEFAULT_MEMORY.MEDIUM,
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
-  withErrorHandling(async request => {
+  withErrorHandling(async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required.');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
 
-    const { userId, familyTreeId } = request.data as { userId: string; familyTreeId: string };
+    const {userId, familyTreeId} = request.data as { userId: string; familyTreeId: string };
 
     if (!userId || !familyTreeId) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, 'User ID and family tree ID are required.');
+      throw createError(ErrorCode.MISSING_PARAMETERS, "User ID and family tree ID are required.");
     }
 
-    const nowString = new Date().toISOString().split('T')[0];
+    const nowString = new Date().toISOString().split("T")[0];
     const queries: FirebaseFirestore.Query<FirebaseFirestore.DocumentData>[] = [];
 
     // Get upcoming events only for the feed
     // Query for events in the family tree
     queries.push(
       db
-        .collection('events')
-        .where('privacy', '==', 'family_tree')
-        .where('familyTreeId', '==', familyTreeId)
-        .where('eventDate', '>=', nowString)
+        .collection("events")
+        .where("privacy", "==", "family_tree")
+        .where("familyTreeId", "==", familyTreeId)
+        .where("eventDate", ">=", nowString)
     );
 
     // Query for public events
     queries.push(
-      db.collection('events').where('privacy', '==', 'public').where('eventDate', '>=', nowString)
+      db.collection("events").where("privacy", "==", "public").where("eventDate", ">=", nowString)
     );
 
     // Query for events user is explicitly invited to
     queries.push(
       db
-        .collection('events')
-        .where('invitedMemberIds', 'array-contains', userId)
-        .where('eventDate', '>=', nowString)
+        .collection("events")
+        .where("invitedMemberIds", "array-contains", userId)
+        .where("eventDate", ">=", nowString)
     );
 
     const allRawEvents: EventData[] = [];
@@ -2680,7 +2680,7 @@ export const getEventsForFeedApi = onCall(
       try {
         const snapshot = await baseQuery.limit(fetchLimit).get();
         const events = snapshot.docs.map(
-          doc =>
+          (doc) =>
             ({
               id: doc.id,
               ...doc.data(),
@@ -2688,13 +2688,13 @@ export const getEventsForFeedApi = onCall(
         );
         allRawEvents.push(...events);
       } catch (queryError) {
-        logger.warn('Error executing feed events query:', queryError);
+        logger.warn("Error executing feed events query:", queryError);
       }
     }
 
     // Deduplicate events by ID
     const uniqueEventsMap = new Map<string, EventData>();
-    allRawEvents.forEach(event => {
+    allRawEvents.forEach((event) => {
       if (event.id && !uniqueEventsMap.has(event.id)) {
         uniqueEventsMap.set(event.id, event);
       }
@@ -2717,8 +2717,8 @@ export const getEventsForFeedApi = onCall(
 
     logger.info(`Returning ${enrichedEvents.length} events for feed`);
 
-    return { events: enrichedEvents };
-  }, 'getEventsForFeedApi')
+    return {events: enrichedEvents};
+  }, "getEventsForFeedApi")
 );
 
 // MARK: - Cover Photo Management
@@ -2729,13 +2729,13 @@ export const getEventCoverPhotoUploadUrl = onCall(
     memory: DEFAULT_MEMORY.SHORT,
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async request => {
+  withErrorHandling(async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required.');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
 
-    const { eventId, fileName, mimeType } = request.data as {
+    const {eventId, fileName, mimeType} = request.data as {
       eventId: string;
       fileName: string;
       mimeType: string;
@@ -2744,29 +2744,29 @@ export const getEventCoverPhotoUploadUrl = onCall(
     if (!eventId || !fileName || !mimeType) {
       throw createError(
         ErrorCode.MISSING_PARAMETERS,
-        'eventId, fileName, and mimeType are required.'
+        "eventId, fileName, and mimeType are required."
       );
     }
 
     // Ensure user has permission to edit the event to add photos
-    await ensureEventAccess(eventId, uid, 'edit');
+    await ensureEventAccess(eventId, uid, "edit");
 
     // Sanitize fileName if necessary (e.g., remove special characters, ensure unique enough)
-    const sanitizedFileName = `${Date.now()}_${fileName.replace(/[^a-zA-Z0-9._-]/g, '')}`;
+    const sanitizedFileName = `${Date.now()}_${fileName.replace(/[^a-zA-Z0-9._-]/g, "")}`;
     const storagePath = `events/${eventId}/covers/${sanitizedFileName}`;
 
     const fiveMinutesInSeconds = 5 * 60;
     const expires = Date.now() + fiveMinutesInSeconds * 1000;
 
     const [signedUrl] = await storage.bucket().file(storagePath).getSignedUrl({
-      version: 'v4',
-      action: 'write',
+      version: "v4",
+      action: "write",
       expires,
       contentType: mimeType,
     });
 
-    return { signedUrl, storagePath };
-  }, 'getEventCoverPhotoUploadUrl')
+    return {signedUrl, storagePath};
+  }, "getEventCoverPhotoUploadUrl")
 );
 
 export const completeEventCoverPhotoUpload = onCall(
@@ -2776,21 +2776,21 @@ export const completeEventCoverPhotoUpload = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(
-    async request => {
-      const uid = request.auth?.uid || '';
+    async (request) => {
+      const uid = request.auth?.uid || "";
 
-      const { eventId, storagePath } = request.data as {
+      const {eventId, storagePath} = request.data as {
         eventId: string;
         storagePath: string;
       };
 
       if (!eventId || !storagePath) {
-        throw createError(ErrorCode.MISSING_PARAMETERS, 'eventId and storagePath are required.');
+        throw createError(ErrorCode.MISSING_PARAMETERS, "eventId and storagePath are required.");
       }
 
       // Ensure user has permission to edit the event
-      await ensureEventAccess(eventId, uid, 'edit');
-      const eventRef = db.collection('events').doc(eventId);
+      await ensureEventAccess(eventId, uid, "edit");
+      const eventRef = db.collection("events").doc(eventId);
 
       // Add the new storagePath to the array
       await eventRef.update({
@@ -2799,11 +2799,11 @@ export const completeEventCoverPhotoUpload = onCall(
       });
 
       logger.info(`Cover photo ${storagePath} added to event ${eventId} by user ${uid}.`);
-      return { success: true, eventId, storagePath };
+      return {success: true, eventId, storagePath};
     },
-    'completeEventCoverPhotoUpload',
+    "completeEventCoverPhotoUpload",
     {
-      authLevel: 'onboarded',
+      authLevel: "onboarded",
       rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
     }
   )

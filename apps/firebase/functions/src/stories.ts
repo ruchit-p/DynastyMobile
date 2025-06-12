@@ -1,14 +1,14 @@
-import { onCall } from 'firebase-functions/v2/https';
-import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
-import * as admin from 'firebase-admin';
-import { logger } from 'firebase-functions/v2';
-import { DEFAULT_REGION, FUNCTION_TIMEOUT } from './common';
-import { ErrorCode, createError, withErrorHandling } from './utils/errors';
-import { withAuth, withResourceAccess, PermissionLevel, RateLimitType } from './middleware';
-import { sanitizeUserInput } from './utils/xssSanitization';
-import { validateRequest } from './utils/request-validator';
-import { VALIDATION_SCHEMAS } from './config/validation-schemas';
-import { generateStorySearchFields } from './utils/searchHelpers';
+import {onCall} from "firebase-functions/v2/https";
+import {getFirestore, Timestamp, FieldValue} from "firebase-admin/firestore";
+import * as admin from "firebase-admin";
+import {logger} from "firebase-functions/v2";
+import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
+import {ErrorCode, createError, withErrorHandling} from "./utils/errors";
+import {withAuth, withResourceAccess, PermissionLevel, RateLimitType} from "./middleware";
+import {sanitizeUserInput} from "./utils/xssSanitization";
+import {validateRequest} from "./utils/request-validator";
+import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
+import {generateStorySearchFields} from "./utils/searchHelpers";
 
 // MARK: - Types
 
@@ -19,7 +19,7 @@ interface Location {
 }
 
 interface StorageBlock {
-  type: 'text' | 'image' | 'video' | 'audio';
+  type: "text" | "image" | "video" | "audio";
   data: string | string[];
   localId: string;
 }
@@ -32,7 +32,7 @@ interface Story {
   createdAt: Timestamp;
   eventDate?: Timestamp;
   location?: Location;
-  privacy: 'family' | 'privateAccess' | 'custom';
+  privacy: "family" | "privateAccess" | "custom";
   customAccessMembers?: string[];
   blocks: StorageBlock[];
   familyTreeId: string;
@@ -55,12 +55,12 @@ interface UserInfo {
  */
 async function getUserInfo(db: FirebaseFirestore.Firestore, userId: string): Promise<UserInfo> {
   try {
-    const userDoc = await db.collection('users').doc(userId).get();
+    const userDoc = await db.collection("users").doc(userId).get();
 
     if (!userDoc.exists) {
       return {
         id: userId,
-        displayName: 'Unknown User',
+        displayName: "Unknown User",
       };
     }
 
@@ -70,16 +70,16 @@ async function getUserInfo(db: FirebaseFirestore.Firestore, userId: string): Pro
       id: userId,
       displayName:
         userData?.displayName ||
-        `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() ||
-        'Anonymous',
+        `${userData?.firstName || ""} ${userData?.lastName || ""}`.trim() ||
+        "Anonymous",
       profilePicture: userData?.profilePictureUrl || userData?.profilePicture || undefined,
     };
   } catch (error) {
-    logger.error('Error getting user info:', error);
+    logger.error("Error getting user info:", error);
     // This helper returning a default is acceptable, errors logged internally.
     return {
       id: userId,
-      displayName: 'Unknown User',
+      displayName: "Unknown User",
     };
   }
 }
@@ -95,7 +95,7 @@ async function batchGetUserInfo(
   const userInfoMap = new Map<string, UserInfo>();
 
   // Remove duplicates and filter out empty strings
-  const uniqueUserIds = Array.from(new Set(userIds.filter(id => id && id.trim())));
+  const uniqueUserIds = Array.from(new Set(userIds.filter((id) => id && id.trim())));
 
   if (uniqueUserIds.length === 0) {
     return userInfoMap;
@@ -108,45 +108,45 @@ async function batchGetUserInfo(
       const batch = uniqueUserIds.slice(i, i + BATCH_SIZE);
 
       const batchQuery = await db
-        .collection('users')
-        .where(admin.firestore.FieldPath.documentId(), 'in', batch)
+        .collection("users")
+        .where(admin.firestore.FieldPath.documentId(), "in", batch)
         .get();
 
       // Create map for quick lookup of fetched user data
       const batchResults = new Map<string, any>();
-      batchQuery.docs.forEach(doc => {
+      batchQuery.docs.forEach((doc) => {
         batchResults.set(doc.id, doc.data());
       });
 
       // Process each user in batch, handling missing users
-      batch.forEach(userId => {
+      batch.forEach((userId) => {
         const userData = batchResults.get(userId);
         if (userData) {
           userInfoMap.set(userId, {
             id: userId,
             displayName:
               userData.displayName ||
-              `${userData.firstName || ''} ${userData.lastName || ''}`.trim() ||
-              'Anonymous',
+              `${userData.firstName || ""} ${userData.lastName || ""}`.trim() ||
+              "Anonymous",
             profilePicture: userData.profilePictureUrl || userData.profilePicture || undefined,
           });
         } else {
           // Handle missing user with default values
           userInfoMap.set(userId, {
             id: userId,
-            displayName: 'Unknown User',
+            displayName: "Unknown User",
           });
         }
       });
     }
   } catch (error) {
-    logger.error('Error batch getting user info:', error);
+    logger.error("Error batch getting user info:", error);
     // For missing users, provide defaults
-    uniqueUserIds.forEach(userId => {
+    uniqueUserIds.forEach((userId) => {
       if (!userInfoMap.has(userId)) {
         userInfoMap.set(userId, {
           id: userId,
-          displayName: 'Unknown User',
+          displayName: "Unknown User",
         });
       }
     });
@@ -165,7 +165,7 @@ async function commitDeletionsInBatches(
   let numDeleted = 0;
   while (snapshot.size > 0) {
     const batch = db.batch();
-    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
     await batch.commit();
     numDeleted += snapshot.size;
     logger.info(`Deleted batch of ${snapshot.size} items from query path.`);
@@ -193,19 +193,19 @@ async function enrichStoryWithUserInfo(db: FirebaseFirestore.Firestore, story: S
     const author = userInfoMap.get(story.authorID);
 
     // Get tagged people info
-    const taggedPeople = story.peopleInvolved?.map(personId => userInfoMap.get(personId)) || [];
+    const taggedPeople = story.peopleInvolved?.map((personId) => userInfoMap.get(personId)) || [];
 
     return {
       ...story,
       author,
-      taggedPeople: taggedPeople.filter(person => person !== undefined),
+      taggedPeople: taggedPeople.filter((person) => person !== undefined),
     };
   } catch (error) {
     logger.error(`Error enriching story ${story.id} with user info:`, error);
     // This helper returning a default is acceptable, errors logged internally.
     return {
       ...story,
-      author: { id: story.authorID, displayName: 'Unknown User' },
+      author: {id: story.authorID, displayName: "Unknown User"},
       taggedPeople: [],
     };
   }
@@ -223,21 +223,21 @@ async function batchEnrichStoriesWithUserInfo(db: FirebaseFirestore.Firestore, s
 
     // Collect all unique user IDs across all stories
     const allUserIds = new Set<string>();
-    stories.forEach(story => {
+    stories.forEach((story) => {
       allUserIds.add(story.authorID);
-      (story.peopleInvolved || []).forEach(userId => allUserIds.add(userId));
+      (story.peopleInvolved || []).forEach((userId) => allUserIds.add(userId));
     });
 
     // Single batch fetch for all users across all stories
     const userInfoMap = await batchGetUserInfo(db, Array.from(allUserIds));
 
     // Enrich all stories using O(1) lookups
-    return stories.map(story => {
+    return stories.map((story) => {
       try {
         const author = userInfoMap.get(story.authorID);
         const taggedPeople = (story.peopleInvolved || [])
-          .map(personId => userInfoMap.get(personId))
-          .filter(person => person !== undefined);
+          .map((personId) => userInfoMap.get(personId))
+          .filter((person) => person !== undefined);
 
         return {
           ...story,
@@ -248,15 +248,15 @@ async function batchEnrichStoriesWithUserInfo(db: FirebaseFirestore.Firestore, s
         logger.error(`Error enriching story ${story.id} in batch:`, error);
         return {
           ...story,
-          author: { id: story.authorID, displayName: 'Unknown User' },
+          author: {id: story.authorID, displayName: "Unknown User"},
           taggedPeople: [],
         };
       }
     });
   } catch (error) {
-    logger.error('Error in batch enriching stories:', error);
+    logger.error("Error in batch enriching stories:", error);
     // Fallback to individual enrichment
-    return Promise.all(stories.map(story => enrichStoryWithUserInfo(db, story)));
+    return Promise.all(stories.map((story) => enrichStoryWithUserInfo(db, story)));
   }
 }
 
@@ -290,9 +290,9 @@ async function handleCascadeCommentDeletion(
 
     // Find all direct child comments of the parent
     const childCommentsQuery = await db
-      .collection('comments')
-      .where('parentCommentId', '==', parentCommentId)
-      .where('isDeleted', '==', false) // Only process non-deleted children
+      .collection("comments")
+      .where("parentCommentId", "==", parentCommentId)
+      .where("isDeleted", "==", false) // Only process non-deleted children
       .get();
 
     if (childCommentsQuery.empty) {
@@ -325,12 +325,12 @@ async function handleCascadeCommentDeletion(
       // Mark this child comment as deleted
       batch.update(childDoc.ref, {
         isDeleted: true,
-        text: '[deleted]',
+        text: "[deleted]",
         updatedAt: Timestamp.now(),
       });
 
       // Decrement the story's comment count for each deleted child
-      const storyRef = db.collection('stories').doc(storyId);
+      const storyRef = db.collection("stories").doc(storyId);
       batch.update(storyRef, {
         commentsCount: FieldValue.increment(-1),
       });
@@ -363,43 +363,43 @@ async function handleCascadeCommentDeletion(
 export const getAccessibleStories = onCall(
   {
     region: DEFAULT_REGION,
-    memory: '256MiB',
+    memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async request => {
-    const { userId, familyTreeId } = request.data;
+  withErrorHandling(async (request) => {
+    const {userId, familyTreeId} = request.data;
     const callerUid = request.auth?.uid;
     if (!callerUid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
     }
 
     if (!userId) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, 'User ID is required');
+      throw createError(ErrorCode.MISSING_PARAMETERS, "User ID is required");
     }
     // Ensure the user is requesting with their own ID
     if (userId !== callerUid) {
       throw createError(
         ErrorCode.PERMISSION_DENIED,
-        'You can only access stories with your own user ID'
+        "You can only access stories with your own user ID"
       );
     }
     if (!familyTreeId) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, 'Family tree ID is required');
+      throw createError(ErrorCode.MISSING_PARAMETERS, "Family tree ID is required");
     }
 
     const db = getFirestore();
-    const storiesRef = db.collection('stories');
+    const storiesRef = db.collection("stories");
 
     // Get all non-deleted stories from the user's family tree
     const familyStoriesQuery = await storiesRef
-      .where('familyTreeId', '==', familyTreeId)
-      .where('isDeleted', '==', false)
-      .orderBy('createdAt', 'desc')
+      .where("familyTreeId", "==", familyTreeId)
+      .where("isDeleted", "==", false)
+      .orderBy("createdAt", "desc")
       .get();
 
     // Filter stories based on privacy settings
     const filteredStories = familyStoriesQuery.docs
-      .map(doc => {
+      .map((doc) => {
         const data = doc.data();
         // Validate required fields
         if (!data.title || !data.authorID || !data.createdAt || !data.privacy) {
@@ -418,15 +418,15 @@ export const getAccessibleStories = onCall(
         if (story.authorID === userId) return true;
 
         // For family-wide stories
-        if (story.privacy === 'family') return true;
+        if (story.privacy === "family") return true;
 
         // For private stories
-        if (story.privacy === 'privateAccess') {
+        if (story.privacy === "privateAccess") {
           return story.authorID === userId;
         }
 
         // For custom access stories
-        if (story.privacy === 'custom') {
+        if (story.privacy === "custom") {
           return story.customAccessMembers?.includes(userId) || false;
         }
 
@@ -437,8 +437,8 @@ export const getAccessibleStories = onCall(
     // This reduces database reads from O(n×m) to O(⌈U/10⌉) where U = unique users
     const accessibleStories = await batchEnrichStoriesWithUserInfo(db, filteredStories);
 
-    return { stories: accessibleStories };
-  }, 'getAccessibleStories')
+    return {stories: accessibleStories};
+  }, "getAccessibleStories")
 );
 
 /**
@@ -447,15 +447,15 @@ export const getAccessibleStories = onCall(
 export const getUserStories = onCall(
   {
     region: DEFAULT_REGION,
-    memory: '256MiB',
+    memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async request => {
-    const { userId } = request.data; // userId is the ID of the user whose stories are being requested
+  withErrorHandling(async (request) => {
+    const {userId} = request.data; // userId is the ID of the user whose stories are being requested
     const callerUid = request.auth?.uid;
 
     if (!callerUid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
     }
 
     // If userId is provided, it means we are fetching stories for a specific profile (could be self or other)
@@ -471,17 +471,17 @@ export const getUserStories = onCall(
     // }
 
     const db = getFirestore();
-    const storiesRef = db.collection('stories');
+    const storiesRef = db.collection("stories");
     const userStoriesQuery = await storiesRef
-      .where('authorID', '==', targetUserId)
-      .where('isDeleted', '==', false)
-      .orderBy('createdAt', 'desc')
+      .where("authorID", "==", targetUserId)
+      .where("isDeleted", "==", false)
+      .orderBy("createdAt", "desc")
       .get();
 
     logger.debug(`Found ${userStoriesQuery.docs.length} stories for user ${targetUserId}`);
 
     // Get story data from documents
-    const storiesData = userStoriesQuery.docs.map(doc => {
+    const storiesData = userStoriesQuery.docs.map((doc) => {
       return {
         id: doc.id,
         ...doc.data(),
@@ -492,8 +492,8 @@ export const getUserStories = onCall(
     // Reduces database reads from O(n×m) to O(⌈U/10⌉) where U = unique users
     const enrichedStories = await batchEnrichStoriesWithUserInfo(db, storiesData);
 
-    return { stories: enrichedStories };
-  }, 'getUserStories')
+    return {stories: enrichedStories};
+  }, "getUserStories")
 );
 
 /**
@@ -502,36 +502,36 @@ export const getUserStories = onCall(
 export const getStoryById = onCall(
   {
     region: DEFAULT_REGION,
-    memory: '256MiB',
+    memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withResourceAccess(
     async (request, story) => {
       // Privacy Check for deleted stories
       if (story.isDeleted) {
-        throw createError(ErrorCode.NOT_FOUND, 'Story not found or has been deleted.');
+        throw createError(ErrorCode.NOT_FOUND, "Story not found or has been deleted.");
       }
 
       const db = getFirestore();
-      const storyToEnrich = { ...story };
+      const storyToEnrich = {...story};
       storyToEnrich.id = request.data.storyId; // Set the id from request data
       const enrichedStory = await enrichStoryWithUserInfo(db, storyToEnrich);
 
-      return { story: enrichedStory };
+      return {story: enrichedStory};
     },
-    'getStoryById',
+    "getStoryById",
     {
-      resourceType: 'story',
-      resourceIdField: 'storyId',
+      resourceType: "story",
+      resourceIdField: "storyId",
       requiredLevel: [PermissionLevel.ADMIN, PermissionLevel.FAMILY_MEMBER],
       additionalPermissionCheck: async (resource, uid) => {
         // Check for custom access members if privacy is set to "custom"
-        if (resource.privacy === 'custom') {
+        if (resource.privacy === "custom") {
           return resource.customAccessMembers?.includes(uid) || false;
         }
         // For family privacy, family membership check is handled by FAMILY_MEMBER level
         // For private stories, only author can access (handled by ADMIN level)
-        return resource.privacy === 'family';
+        return resource.privacy === "family";
       },
     }
   )
@@ -543,14 +543,14 @@ export const getStoryById = onCall(
 export const createStory = onCall(
   {
     region: DEFAULT_REGION,
-    memory: '512MiB', // Increased memory for potential large block data
+    memory: "512MiB", // Increased memory for potential large block data
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
   withAuth(
-    async request => {
+    async (request) => {
       try {
         if (!request.auth?.uid) {
-          throw new Error('User not authenticated');
+          throw new Error("User not authenticated");
         }
         const callerUid = request.auth.uid;
 
@@ -566,13 +566,13 @@ export const createStory = onCall(
         // Additional sanitization for blocks as they may contain HTML
         if (storyData.blocks && Array.isArray(storyData.blocks)) {
           storyData.blocks = storyData.blocks.map((block: StorageBlock) => {
-            if (block.type === 'text' && typeof block.data === 'string') {
+            if (block.type === "text" && typeof block.data === "string") {
               // Allow basic HTML formatting for text blocks
               return {
                 ...block,
                 data: sanitizeUserInput(block.data, {
                   allowHtml: true,
-                  allowedTags: ['b', 'i', 'u', 'strong', 'em', 'p', 'br', 'blockquote'],
+                  allowedTags: ["b", "i", "u", "strong", "em", "p", "br", "blockquote"],
                   maxLength: 50000, // Allow longer content for story blocks
                 }),
               };
@@ -604,24 +604,24 @@ export const createStory = onCall(
         if (!title || !authorID || !privacy || !blocks || !familyTreeId) {
           throw createError(
             ErrorCode.MISSING_PARAMETERS,
-            'Missing required story fields: title, authorID, privacy, blocks, or familyTreeId.'
+            "Missing required story fields: title, authorID, privacy, blocks, or familyTreeId."
           );
         }
 
         if (authorID !== callerUid) {
           throw createError(
             ErrorCode.PERMISSION_DENIED,
-            'You can only create stories as yourself.'
+            "You can only create stories as yourself."
           );
         }
 
-        if (privacy === 'custom' && (!customAccessMembers || customAccessMembers.length === 0)) {
+        if (privacy === "custom" && (!customAccessMembers || customAccessMembers.length === 0)) {
           throw createError(
             ErrorCode.MISSING_PARAMETERS,
             "Custom access members are required for 'custom' privacy setting."
           );
         }
-        if (privacy !== 'custom' && customAccessMembers && customAccessMembers.length > 0) {
+        if (privacy !== "custom" && customAccessMembers && customAccessMembers.length > 0) {
           logger.warn(
             "customAccessMembers provided but privacy is not 'custom'. These will be ignored."
           );
@@ -629,7 +629,7 @@ export const createStory = onCall(
 
         // Validate block structure
         if (!Array.isArray(blocks) || blocks.length === 0) {
-          throw createError(ErrorCode.INVALID_ARGUMENT, 'Blocks must be a non-empty array');
+          throw createError(ErrorCode.INVALID_ARGUMENT, "Blocks must be a non-empty array");
         }
 
         for (let i = 0; i < blocks.length; i++) {
@@ -641,7 +641,7 @@ export const createStory = onCall(
             );
           }
 
-          const validTypes = ['text', 'image', 'video', 'audio'];
+          const validTypes = ["text", "image", "video", "audio"];
           if (!validTypes.includes(block.type)) {
             throw createError(
               ErrorCode.INVALID_ARGUMENT,
@@ -656,7 +656,7 @@ export const createStory = onCall(
         }
 
         const db = getFirestore();
-        const newStoryRef = db.collection('stories').doc();
+        const newStoryRef = db.collection("stories").doc();
 
         // Safe timestamp conversion
         let eventTimestamp: Timestamp | undefined = undefined;
@@ -672,13 +672,13 @@ export const createStory = onCall(
         const newStory: Story = {
           id: newStoryRef.id,
           title,
-          subtitle: subtitle || '',
+          subtitle: subtitle || "",
           authorID,
           createdAt: Timestamp.now(),
           eventDate: eventTimestamp,
           location: location || undefined,
           privacy,
-          customAccessMembers: privacy === 'custom' ? customAccessMembers : [],
+          customAccessMembers: privacy === "custom" ? customAccessMembers : [],
           blocks,
           familyTreeId,
           peopleInvolved: peopleInvolved || [],
@@ -698,9 +698,9 @@ export const createStory = onCall(
 
           // Potentially, enrich and return the created story
           const enrichedStory = await enrichStoryWithUserInfo(db, newStory);
-          return { story: enrichedStory };
+          return {story: enrichedStory};
         } catch (error: any) {
-          logger.error('Error setting story document:', {
+          logger.error("Error setting story document:", {
             error: error?.message || error,
             stack: error?.stack,
             storyId: newStoryRef.id,
@@ -713,7 +713,7 @@ export const createStory = onCall(
           );
         }
       } catch (error: any) {
-        logger.error('Unexpected error in createStory:', {
+        logger.error("Unexpected error in createStory:", {
           error: error?.message || error,
           stack: error?.stack,
           requestData: JSON.stringify(request.data, null, 2),
@@ -731,9 +731,9 @@ export const createStory = onCall(
         }
       }
     },
-    'createStory',
+    "createStory",
     {
-      authLevel: 'verified', // Require verified user for story creation
+      authLevel: "verified", // Require verified user for story creation
       rateLimitConfig: {
         type: RateLimitType.WRITE,
         maxRequests: 10, // 10 stories per hour
@@ -749,26 +749,26 @@ export const createStory = onCall(
 export const updateStory = onCall(
   {
     region: DEFAULT_REGION,
-    memory: '512MiB',
+    memory: "512MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
   withResourceAccess(
     async (request, story) => {
-      const { storyId, updates } = request.data;
+      const {storyId, updates} = request.data;
 
       if (!updates || Object.keys(updates).length === 0) {
-        throw createError(ErrorCode.MISSING_PARAMETERS, 'No updates provided for the story.');
+        throw createError(ErrorCode.MISSING_PARAMETERS, "No updates provided for the story.");
       }
 
       if (story.isDeleted) {
-        throw createError(ErrorCode.ABORTED, 'Cannot update a deleted story. Restore it first.');
+        throw createError(ErrorCode.ABORTED, "Cannot update a deleted story. Restore it first.");
       }
 
       const db = getFirestore();
-      const storyRef = db.collection('stories').doc(storyId);
+      const storyRef = db.collection("stories").doc(storyId);
 
       // Validate updates: prevent changing authorID, id, createdAt, familyTreeId directly
-      const forbiddenUpdates = ['authorID', 'id', 'createdAt', 'familyTreeId', 'isDeleted'];
+      const forbiddenUpdates = ["authorID", "id", "createdAt", "familyTreeId", "isDeleted"];
       for (const key of forbiddenUpdates) {
         if (updates[key] !== undefined) {
           throw createError(ErrorCode.INVALID_ARGUMENT, `Cannot update protected field: ${key}.`);
@@ -780,7 +780,7 @@ export const updateStory = onCall(
       const newCustomAccessMembers = updates.customAccessMembers || story.customAccessMembers;
 
       if (
-        newPrivacy === 'custom' &&
+        newPrivacy === "custom" &&
         (!newCustomAccessMembers || newCustomAccessMembers.length === 0)
       ) {
         throw createError(
@@ -788,7 +788,7 @@ export const updateStory = onCall(
           "Custom access members are required if privacy is set to 'custom'."
         );
       }
-      if (newPrivacy !== 'custom' && newCustomAccessMembers && newCustomAccessMembers.length > 0) {
+      if (newPrivacy !== "custom" && newCustomAccessMembers && newCustomAccessMembers.length > 0) {
         // If privacy is changing away from 'custom', ensure customAccessMembers is cleared.
         updates.customAccessMembers = [];
       }
@@ -812,16 +812,16 @@ export const updateStory = onCall(
       logger.info(`Story ${storyId} updated by user ${request.auth?.uid}.`);
 
       const updatedStoryDoc = await storyRef.get();
-      const updatedStoryData = { id: updatedStoryDoc.id, ...updatedStoryDoc.data() } as Story;
+      const updatedStoryData = {id: updatedStoryDoc.id, ...updatedStoryDoc.data()} as Story;
       const enrichedStory = await enrichStoryWithUserInfo(db, updatedStoryData);
 
-      return { story: enrichedStory };
+      return {story: enrichedStory};
     },
-    'updateStory',
+    "updateStory",
     {
       resourceConfig: {
-        resourceType: 'story',
-        resourceIdField: 'storyId',
+        resourceType: "story",
+        resourceIdField: "storyId",
         requiredLevel: PermissionLevel.ADMIN, // Only story author can update
       },
     }
@@ -834,35 +834,35 @@ export const updateStory = onCall(
 export const deleteStory = onCall(
   {
     region: DEFAULT_REGION,
-    memory: '128MiB',
+    memory: "128MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withResourceAccess(
     async (request, story) => {
-      const { storyId } = request.data;
+      const {storyId} = request.data;
 
       if (story.isDeleted) {
-        throw createError(ErrorCode.ABORTED, 'Story is already deleted.');
+        throw createError(ErrorCode.ABORTED, "Story is already deleted.");
       }
 
       const db = getFirestore();
-      const storyRef = db.collection('stories').doc(storyId);
+      const storyRef = db.collection("stories").doc(storyId);
 
-      await storyRef.update({ isDeleted: true });
+      await storyRef.update({isDeleted: true});
       logger.info(`Story ${storyId} soft deleted by user ${request.auth?.uid}.`);
 
       // Also delete associated likes and comments
       // Note: This should ideally be a batched write or a separate cleanup process for very active stories.
       // For now, direct deletion for simplicity.
 
-      const likesRef = db.collection('likes').where('storyId', '==', storyId);
+      const likesRef = db.collection("likes").where("storyId", "==", storyId);
       // const likesSnapshot = await likesRef.get();
       // const batch = db.batch();
       // likesSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
       const likesDeletedCount = await commitDeletionsInBatches(db, likesRef);
       logger.info(`Deleted ${likesDeletedCount} likes for story ${storyId}.`);
 
-      const commentsRef = db.collection('comments').where('storyId', '==', storyId);
+      const commentsRef = db.collection("comments").where("storyId", "==", storyId);
       // const commentsSnapshot = await commentsRef.get();
       // commentsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
       const commentsDeletedCount = await commitDeletionsInBatches(db, commentsRef);
@@ -876,11 +876,11 @@ export const deleteStory = onCall(
         message: `Story ${storyId} and its associations deleted successfully.`,
       };
     },
-    'deleteStory',
+    "deleteStory",
     {
       resourceConfig: {
-        resourceType: 'story',
-        resourceIdField: 'storyId',
+        resourceType: "story",
+        resourceIdField: "storyId",
         requiredLevel: [PermissionLevel.ADMIN, PermissionLevel.TREE_OWNER], // Story author or tree owner can delete
       },
     }
@@ -895,25 +895,25 @@ export const deleteStory = onCall(
 export const likeStory = onCall(
   {
     region: DEFAULT_REGION,
-    memory: '128MiB',
+    memory: "128MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withResourceAccess(
     async (request, story) => {
-      const { storyId } = request.data;
+      const {storyId} = request.data;
       const userId = request.auth?.uid; // User who is liking the story
 
       if (story.isDeleted) {
-        throw createError(ErrorCode.NOT_FOUND, 'Story not found or has been deleted.');
+        throw createError(ErrorCode.NOT_FOUND, "Story not found or has been deleted.");
       }
 
       const db = getFirestore();
-      const storyRef = db.collection('stories').doc(storyId);
-      const likeRef = db.collection('likes').doc(`${storyId}_${userId}`); // Composite ID for likes
+      const storyRef = db.collection("stories").doc(storyId);
+      const likeRef = db.collection("likes").doc(`${storyId}_${userId}`); // Composite ID for likes
 
       const likeDoc = await likeRef.get();
       if (likeDoc.exists) {
-        throw createError(ErrorCode.ALREADY_EXISTS, 'User has already liked this story.');
+        throw createError(ErrorCode.ALREADY_EXISTS, "User has already liked this story.");
       }
 
       await likeRef.set({
@@ -928,20 +928,20 @@ export const likeStory = onCall(
       });
 
       logger.info(`User ${userId} liked story ${storyId}.`);
-      return { success: true, message: 'Story liked successfully.' };
+      return {success: true, message: "Story liked successfully."};
     },
-    'likeStory',
+    "likeStory",
     {
       resourceConfig: {
-        resourceType: 'story',
-        resourceIdField: 'storyId',
+        resourceType: "story",
+        resourceIdField: "storyId",
         requiredLevel: [PermissionLevel.ADMIN, PermissionLevel.FAMILY_MEMBER],
         additionalPermissionCheck: async (resource, uid) => {
           // Same access check as getStoryById - if you can view it, you can like it
-          if (resource.privacy === 'custom') {
+          if (resource.privacy === "custom") {
             return resource.customAccessMembers?.includes(uid) || false;
           }
-          return resource.privacy === 'family';
+          return resource.privacy === "family";
         },
       },
     }
@@ -954,30 +954,30 @@ export const likeStory = onCall(
 export const unlikeStory = onCall(
   {
     region: DEFAULT_REGION,
-    memory: '128MiB',
+    memory: "128MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(
-    async request => {
-      const { storyId } = request.data;
+    async (request) => {
+      const {storyId} = request.data;
       const userId = request.auth?.uid;
 
       if (!userId) {
-        throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required to unlike a story.');
+        throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required to unlike a story.");
       }
       if (!storyId) {
-        throw createError(ErrorCode.MISSING_PARAMETERS, 'Story ID is required to unlike a story.');
+        throw createError(ErrorCode.MISSING_PARAMETERS, "Story ID is required to unlike a story.");
       }
 
       const db = getFirestore();
-      const storyRef = db.collection('stories').doc(storyId);
-      const likeRef = db.collection('likes').doc(`${storyId}_${userId}`);
+      const storyRef = db.collection("stories").doc(storyId);
+      const likeRef = db.collection("likes").doc(`${storyId}_${userId}`);
 
       const likeDoc = await likeRef.get();
       if (!likeDoc.exists) {
         throw createError(
           ErrorCode.NOT_FOUND,
-          'Like not found. User might have already unliked or never liked the story.'
+          "Like not found. User might have already unliked or never liked the story."
         );
       }
 
@@ -990,11 +990,11 @@ export const unlikeStory = onCall(
       });
 
       logger.info(`User ${userId} unliked story ${storyId}.`);
-      return { success: true, message: 'Story unliked successfully.' };
+      return {success: true, message: "Story unliked successfully."};
     },
-    'unlikeStory',
+    "unlikeStory",
     {
-      authLevel: 'auth',
+      authLevel: "auth",
     }
   )
 );
@@ -1005,33 +1005,33 @@ export const unlikeStory = onCall(
 export const getStoryLikes = onCall(
   {
     region: DEFAULT_REGION,
-    memory: '256MiB',
+    memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async request => {
-    const { storyId, limit = 20, offset = 0 } = request.data; // Add limit and offset for pagination
+  withErrorHandling(async (request) => {
+    const {storyId, limit = 20, offset = 0} = request.data; // Add limit and offset for pagination
     const callerUid = request.auth?.uid;
 
     if (!callerUid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required.');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
     if (!storyId) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, 'Story ID is required.');
+      throw createError(ErrorCode.MISSING_PARAMETERS, "Story ID is required.");
     }
 
     const db = getFirestore();
     // First, verify story exists and caller can view it (important for privacy)
-    const storyDoc = await db.collection('stories').doc(storyId).get();
+    const storyDoc = await db.collection("stories").doc(storyId).get();
     if (!storyDoc.exists || storyDoc.data()?.isDeleted) {
-      throw createError(ErrorCode.NOT_FOUND, 'Story not found or has been deleted.');
+      throw createError(ErrorCode.NOT_FOUND, "Story not found or has been deleted.");
     }
     // Simplified privacy check: if they request likes, they should be able to view the story.
     // A full check like in getStoryById could be implemented here for stricter privacy.
 
     const likesQuery = db
-      .collection('likes')
-      .where('storyId', '==', storyId)
-      .orderBy('createdAt', 'desc')
+      .collection("likes")
+      .where("storyId", "==", storyId)
+      .orderBy("createdAt", "desc")
       .limit(Number(limit))
       .offset(Number(offset));
 
@@ -1039,10 +1039,10 @@ export const getStoryLikes = onCall(
 
     // OPTIMIZED: Batch fetch user info for all likes
     // Reduces database reads from O(n) to O(⌈n/10⌉) where n = number of likes
-    const likeUserIds = likesSnapshot.docs.map(doc => doc.data().userId);
+    const likeUserIds = likesSnapshot.docs.map((doc) => doc.data().userId);
     const userInfoMap = await batchGetUserInfo(db, likeUserIds);
 
-    const likes = likesSnapshot.docs.map(doc => {
+    const likes = likesSnapshot.docs.map((doc) => {
       const likeData = doc.data();
       const userInfo = userInfoMap.get(likeData.userId)!;
       return {
@@ -1055,7 +1055,7 @@ export const getStoryLikes = onCall(
     });
 
     // For pagination, also get total count
-    const totalLikesQuery = db.collection('likes').where('storyId', '==', storyId);
+    const totalLikesQuery = db.collection("likes").where("storyId", "==", storyId);
     const totalLikesSnapshot = await totalLikesQuery.count().get();
     const totalLikes = totalLikesSnapshot.data().count;
 
@@ -1066,7 +1066,7 @@ export const getStoryLikes = onCall(
       offset: Number(offset),
       hasMore: Number(offset) + likes.length < totalLikes,
     };
-  }, 'getStoryLikes')
+  }, "getStoryLikes")
 );
 
 // MARK: - Comments
@@ -1091,35 +1091,35 @@ interface Comment {
 export const addCommentToStory = onCall(
   {
     region: DEFAULT_REGION,
-    memory: '256MiB',
+    memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withResourceAccess(
     async (request, story) => {
-      const { storyId, text, parentCommentId } = request.data;
+      const {storyId, text, parentCommentId} = request.data;
       const authorID = request.auth?.uid;
 
       if (!text) {
-        throw createError(ErrorCode.MISSING_PARAMETERS, 'Comment text is required.');
+        throw createError(ErrorCode.MISSING_PARAMETERS, "Comment text is required.");
       }
       if (text.trim().length === 0) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Comment text cannot be empty.');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Comment text cannot be empty.");
       }
       if (text.length > 1000) {
         // Example limit
         throw createError(
           ErrorCode.INVALID_ARGUMENT,
-          'Comment text exceeds maximum length of 1000 characters.'
+          "Comment text exceeds maximum length of 1000 characters."
         );
       }
 
       if (story.isDeleted) {
-        throw createError(ErrorCode.NOT_FOUND, 'Story not found or has been deleted.');
+        throw createError(ErrorCode.NOT_FOUND, "Story not found or has been deleted.");
       }
 
       const db = getFirestore();
-      const storyRef = db.collection('stories').doc(storyId);
-      const commentRef = db.collection('comments').doc();
+      const storyRef = db.collection("stories").doc(storyId);
+      const commentRef = db.collection("comments").doc();
 
       const newComment: Comment = {
         id: commentRef.id,
@@ -1143,7 +1143,7 @@ export const addCommentToStory = onCall(
 
       // If it's a reply, increment repliesCount on parent comment
       if (parentCommentId) {
-        const parentRef = db.collection('comments').doc(parentCommentId);
+        const parentRef = db.collection("comments").doc(parentCommentId);
         await parentRef.update({
           repliesCount: FieldValue.increment(1),
         });
@@ -1159,19 +1159,19 @@ export const addCommentToStory = onCall(
         author: authorInfo,
       };
 
-      return { comment: enrichedComment };
+      return {comment: enrichedComment};
     },
-    'addCommentToStory',
+    "addCommentToStory",
     {
-      resourceType: 'story',
-      resourceIdField: 'storyId',
+      resourceType: "story",
+      resourceIdField: "storyId",
       requiredLevel: [PermissionLevel.ADMIN, PermissionLevel.FAMILY_MEMBER],
       additionalPermissionCheck: async (resource, uid) => {
         // Same access check as getStoryById - if you can view it, you can comment
-        if (resource.privacy === 'custom') {
+        if (resource.privacy === "custom") {
           return resource.customAccessMembers?.includes(uid) || false;
         }
-        return resource.privacy === 'family';
+        return resource.privacy === "family";
       },
     }
   )
@@ -1183,29 +1183,29 @@ export const addCommentToStory = onCall(
 export const updateComment = onCall(
   {
     region: DEFAULT_REGION,
-    memory: '128MiB',
+    memory: "128MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withResourceAccess(
     async (request, comment) => {
-      const { commentId, text } = request.data;
+      const {commentId, text} = request.data;
 
       if (!text) {
-        throw createError(ErrorCode.MISSING_PARAMETERS, 'New text is required.');
+        throw createError(ErrorCode.MISSING_PARAMETERS, "New text is required.");
       }
       if (text.trim().length === 0) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Comment text cannot be empty.');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Comment text cannot be empty.");
       }
       if (text.length > 1000) {
-        throw createError(ErrorCode.INVALID_ARGUMENT, 'Comment text exceeds maximum length.');
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Comment text exceeds maximum length.");
       }
 
       if (comment.isDeleted) {
-        throw createError(ErrorCode.ABORTED, 'Cannot edit a deleted comment.');
+        throw createError(ErrorCode.ABORTED, "Cannot edit a deleted comment.");
       }
 
       const db = getFirestore();
-      const commentRef = db.collection('comments').doc(commentId);
+      const commentRef = db.collection("comments").doc(commentId);
 
       await commentRef.update({
         text: text,
@@ -1232,10 +1232,10 @@ export const updateComment = onCall(
         },
       };
     },
-    'updateComment',
+    "updateComment",
     {
-      resourceType: 'comment',
-      resourceIdField: 'commentId',
+      resourceType: "comment",
+      resourceIdField: "commentId",
       requiredLevel: PermissionLevel.ADMIN, // Only comment author can update
     }
   )
@@ -1249,30 +1249,30 @@ export const updateComment = onCall(
 export const deleteComment = onCall(
   {
     region: DEFAULT_REGION,
-    memory: '128MiB',
+    memory: "128MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withResourceAccess(
     async (request, comment) => {
-      const { commentId } = request.data;
+      const {commentId} = request.data;
 
       if (comment.isDeleted) {
-        throw createError(ErrorCode.ABORTED, 'Comment is already deleted.');
+        throw createError(ErrorCode.ABORTED, "Comment is already deleted.");
       }
 
       const db = getFirestore();
-      const commentRef = db.collection('comments').doc(commentId);
+      const commentRef = db.collection("comments").doc(commentId);
 
       const batch = db.batch();
-      batch.update(commentRef, { isDeleted: true, text: '[deleted]' }); // Clear text for deleted comments
+      batch.update(commentRef, {isDeleted: true, text: "[deleted]"}); // Clear text for deleted comments
 
       // Decrement counts
-      const storyRef = db.collection('stories').doc(comment.storyId);
-      batch.update(storyRef, { commentsCount: FieldValue.increment(-1) });
+      const storyRef = db.collection("stories").doc(comment.storyId);
+      batch.update(storyRef, {commentsCount: FieldValue.increment(-1)});
 
       if (comment.parentCommentId) {
-        const parentCommentRef = db.collection('comments').doc(comment.parentCommentId);
-        batch.update(parentCommentRef, { repliesCount: FieldValue.increment(-1) });
+        const parentCommentRef = db.collection("comments").doc(comment.parentCommentId);
+        batch.update(parentCommentRef, {repliesCount: FieldValue.increment(-1)});
       }
 
       // Handle cascade deletion of child comments
@@ -1302,17 +1302,17 @@ export const deleteComment = onCall(
 
       await batch.commit();
       logger.info(`User ${request.auth?.uid} deleted comment ${commentId}.`);
-      return { success: true, message: 'Comment deleted successfully.' };
+      return {success: true, message: "Comment deleted successfully."};
     },
-    'deleteComment',
+    "deleteComment",
     {
-      resourceType: 'comment',
-      resourceIdField: 'commentId',
+      resourceType: "comment",
+      resourceIdField: "commentId",
       requiredLevel: [PermissionLevel.ADMIN, PermissionLevel.TREE_OWNER], // Comment author or tree owner can delete
       additionalPermissionCheck: async (resource, uid) => {
         // Also allow story authors to delete comments on their stories
         const db = getFirestore();
-        const storyDoc = await db.collection('stories').doc(resource.storyId).get();
+        const storyDoc = await db.collection("stories").doc(resource.storyId).get();
         if (storyDoc.exists) {
           const storyData = storyDoc.data();
           return storyData?.authorID === uid;
@@ -1329,38 +1329,38 @@ export const deleteComment = onCall(
 export const getStoryComments = onCall(
   {
     region: DEFAULT_REGION,
-    memory: '256MiB',
+    memory: "256MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
-  withErrorHandling(async request => {
-    const { storyId, parentCommentId = null, limit = 10, offset = 0 } = request.data;
+  withErrorHandling(async (request) => {
+    const {storyId, parentCommentId = null, limit = 10, offset = 0} = request.data;
     const callerUid = request.auth?.uid;
 
     if (!callerUid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required.');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
     if (!storyId) {
-      throw createError(ErrorCode.MISSING_PARAMETERS, 'Story ID is required.');
+      throw createError(ErrorCode.MISSING_PARAMETERS, "Story ID is required.");
     }
 
     const db = getFirestore();
     // Verify story exists and is accessible (simplified check)
-    const storyDoc = await db.collection('stories').doc(storyId).get();
+    const storyDoc = await db.collection("stories").doc(storyId).get();
     if (!storyDoc.exists || storyDoc.data()?.isDeleted) {
-      throw createError(ErrorCode.NOT_FOUND, 'Story not found or has been deleted.');
+      throw createError(ErrorCode.NOT_FOUND, "Story not found or has been deleted.");
     }
 
     let commentsQuery = db
-      .collection('comments')
-      .where('storyId', '==', storyId)
-      .where('isDeleted', '==', false) // Don't fetch soft-deleted comments directly
-      .orderBy('createdAt', 'asc'); // Replies usually shown oldest to newest, or by likes
+      .collection("comments")
+      .where("storyId", "==", storyId)
+      .where("isDeleted", "==", false) // Don't fetch soft-deleted comments directly
+      .orderBy("createdAt", "asc"); // Replies usually shown oldest to newest, or by likes
 
     if (parentCommentId) {
-      commentsQuery = commentsQuery.where('parentCommentId', '==', parentCommentId);
+      commentsQuery = commentsQuery.where("parentCommentId", "==", parentCommentId);
     } else {
       // Fetch only top-level comments if no parentCommentId is provided
-      commentsQuery = commentsQuery.where('parentCommentId', '==', null);
+      commentsQuery = commentsQuery.where("parentCommentId", "==", null);
     }
 
     // Count total before pagination for metadata
@@ -1374,10 +1374,10 @@ export const getStoryComments = onCall(
 
     // OPTIMIZED: Batch fetch author info for all comments
     // Reduces database reads from O(n) to O(⌈n/10⌉) where n = number of comments
-    const commentAuthorIds = commentsSnapshot.docs.map(doc => (doc.data() as Comment).authorID);
+    const commentAuthorIds = commentsSnapshot.docs.map((doc) => (doc.data() as Comment).authorID);
     const authorInfoMap = await batchGetUserInfo(db, commentAuthorIds);
 
-    const comments = commentsSnapshot.docs.map(doc => {
+    const comments = commentsSnapshot.docs.map((doc) => {
       const commentData = doc.data() as Comment;
       const authorInfo = authorInfoMap.get(commentData.authorID)!;
       // TODO: Add user's like status for each comment if implementing comment likes
@@ -1398,7 +1398,7 @@ export const getStoryComments = onCall(
       hasMore: Number(offset) + comments.length < totalComments,
       parentCommentId,
     };
-  }, 'getStoryComments')
+  }, "getStoryComments")
 );
 
 // MARK: - Search and Discovery (Example - could be expanded)
@@ -1411,26 +1411,26 @@ export const getStoryComments = onCall(
 export const searchStories = onCall(
   {
     region: DEFAULT_REGION,
-    memory: '512MiB',
+    memory: "512MiB",
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
-  withErrorHandling(async request => {
-    const { query, familyTreeId } = request.data;
+  withErrorHandling(async (request) => {
+    const {query, familyTreeId} = request.data;
     const callerUid = request.auth?.uid;
 
     if (!callerUid) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Authentication required.');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
     }
-    if (!query || typeof query !== 'string' || query.trim() === '') {
+    if (!query || typeof query !== "string" || query.trim() === "") {
       throw createError(
         ErrorCode.MISSING_PARAMETERS,
-        'Search query is required and must be a non-empty string.'
+        "Search query is required and must be a non-empty string."
       );
     }
     if (!familyTreeId) {
       throw createError(
         ErrorCode.MISSING_PARAMETERS,
-        'FamilyTree ID is required for search context.'
+        "FamilyTree ID is required for search context."
       );
     }
 
@@ -1440,29 +1440,29 @@ export const searchStories = onCall(
     const normalizedQuery = query.toLowerCase().trim();
 
     // Create queries for different searchable fields
-    const storiesRef = db.collection('stories');
+    const storiesRef = db.collection("stories");
 
     // Query 1: Search in searchableTitle (optimized with Firestore index)
     const titleQuery = storiesRef
-      .where('familyTreeId', '==', familyTreeId)
-      .where('isDeleted', '==', false)
-      .where('searchableTitle', '>=', normalizedQuery)
-      .where('searchableTitle', '<=', normalizedQuery + '\uf8ff')
+      .where("familyTreeId", "==", familyTreeId)
+      .where("isDeleted", "==", false)
+      .where("searchableTitle", ">=", normalizedQuery)
+      .where("searchableTitle", "<=", normalizedQuery + "\uf8ff")
       .limit(50); // Limit results for performance
 
     // Query 2: Search in searchableContent (optimized with Firestore index)
     const contentQuery = storiesRef
-      .where('familyTreeId', '==', familyTreeId)
-      .where('isDeleted', '==', false)
-      .where('searchableContent', '>=', normalizedQuery)
-      .where('searchableContent', '<=', normalizedQuery + '\uf8ff')
+      .where("familyTreeId", "==", familyTreeId)
+      .where("isDeleted", "==", false)
+      .where("searchableContent", ">=", normalizedQuery)
+      .where("searchableContent", "<=", normalizedQuery + "\uf8ff")
       .limit(50);
 
     // Query 3: Search in keywords array (optimized with array-contains)
     const keywordQuery = storiesRef
-      .where('familyTreeId', '==', familyTreeId)
-      .where('isDeleted', '==', false)
-      .where('searchKeywords', 'array-contains', normalizedQuery)
+      .where("familyTreeId", "==", familyTreeId)
+      .where("isDeleted", "==", false)
+      .where("searchKeywords", "array-contains", normalizedQuery)
       .limit(50);
 
     // Execute all queries in parallel for better performance
@@ -1477,13 +1477,13 @@ export const searchStories = onCall(
 
     // Helper function to add story if it passes privacy checks
     const addStoryIfAllowed = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
-      const story = { id: doc.id, ...doc.data() } as Story;
+      const story = {id: doc.id, ...doc.data()} as Story;
 
       // Privacy filter - only add if user has access
       if (
         story.authorID === callerUid ||
-        story.privacy === 'family' ||
-        (story.privacy === 'custom' && story.customAccessMembers?.includes(callerUid))
+        story.privacy === "family" ||
+        (story.privacy === "custom" && story.customAccessMembers?.includes(callerUid))
       ) {
         matchedStoriesMap.set(doc.id, story);
       }
@@ -1502,6 +1502,6 @@ export const searchStories = onCall(
     // Sort results (e.g., by relevance if a scoring mechanism was used, or by date)
     enrichedResults.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
 
-    return { stories: enrichedResults };
-  }, 'searchStories')
+    return {stories: enrichedResults};
+  }, "searchStories")
 );

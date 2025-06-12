@@ -1,28 +1,28 @@
-import { onRequest, onCall } from 'firebase-functions/v2/https';
-import { logger } from 'firebase-functions/v2';
-import { defineSecret } from 'firebase-functions/params';
-import { DEFAULT_REGION, FUNCTION_TIMEOUT } from './common';
-import { createError, ErrorCode, withErrorHandling } from './utils/errors';
-import { createLogContext } from './utils/sanitization';
-import { getUnsubscribeService } from './services/unsubscribeService';
-import { getEmailSuppressionService } from './services/emailSuppressionService';
-import { withAuth, RateLimitType, checkRateLimitByIP } from './middleware';
+import {onRequest, onCall} from "firebase-functions/v2/https";
+import {logger} from "firebase-functions/v2";
+import {defineSecret} from "firebase-functions/params";
+import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
+import {createError, ErrorCode, withErrorHandling} from "./utils/errors";
+import {createLogContext} from "./utils/sanitization";
+import {getUnsubscribeService} from "./services/unsubscribeService";
+import {getEmailSuppressionService} from "./services/emailSuppressionService";
+import {withAuth, RateLimitType, checkRateLimitByIP} from "./middleware";
 
 // Define Firebase secret for cleanup authentication
-export const CLEANUP_SECRET = defineSecret('CLEANUP_SECRET');
+export const CLEANUP_SECRET = defineSecret("CLEANUP_SECRET");
 
 /**
  * HTML escaping utility to prevent XSS attacks
  */
 function escapeHtml(text: string): string {
   const htmlEscapes: { [key: string]: string } = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
   };
-  return text.replace(/[&<>"']/g, match => htmlEscapes[match] || match);
+  return text.replace(/[&<>"']/g, (match) => htmlEscapes[match] || match);
 }
 
 /**
@@ -30,9 +30,9 @@ function escapeHtml(text: string): string {
  */
 function escapeJs(text: string): string {
   return text
-    .replace(/[\\'"]/g, '\\$&')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r');
+    .replace(/[\\'"]/g, "\\$&")
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r");
 }
 
 /**
@@ -56,13 +56,13 @@ export const handleUnsubscribe = onRequest(
     const unsubscribeService = getUnsubscribeService();
 
     // Handle OPTIONS for CORS
-    if (request.method === 'OPTIONS') {
+    if (request.method === "OPTIONS") {
       response.status(200).send();
       return;
     }
 
     // GET request - Show preference center
-    if (request.method === 'GET') {
+    if (request.method === "GET") {
       const token = request.query.token as string;
 
       if (!token) {
@@ -88,7 +88,7 @@ export const handleUnsubscribe = onRequest(
               <head><title>Invalid Token</title></head>
               <body>
                 <h1>Invalid or Expired Link</h1>
-                <p>${validation.error || 'The unsubscribe link is invalid or has expired.'}</p>
+                <p>${validation.error || "The unsubscribe link is invalid or has expired."}</p>
                 <p>Please use the most recent unsubscribe link from your email.</p>
               </body>
             </html>
@@ -98,21 +98,21 @@ export const handleUnsubscribe = onRequest(
 
       // Render preference center
       const preferenceCenterHtml = generatePreferenceCenterHtml(token, validation.email!);
-      response.setHeader('Content-Type', 'text/html');
+      response.setHeader("Content-Type", "text/html");
       response.status(200).send(preferenceCenterHtml);
       return;
     }
 
     // POST request - Process unsubscribe action
-    if (request.method === 'POST') {
-      const { token, action, categories, preferences } = request.body;
-      const ipAddress = request.ip || (request.headers['x-forwarded-for'] as string) || 'unknown';
-      const userAgent = request.headers['user-agent'] || 'unknown';
+    if (request.method === "POST") {
+      const {token, action, categories, preferences} = request.body;
+      const ipAddress = request.ip || (request.headers["x-forwarded-for"] as string) || "unknown";
+      const userAgent = request.headers["user-agent"] || "unknown";
 
       if (!token || !action) {
         response.status(400).json({
-          error: 'Missing required parameters',
-          code: 'INVALID_REQUEST',
+          error: "Missing required parameters",
+          code: "INVALID_REQUEST",
         });
         return;
       }
@@ -132,10 +132,10 @@ export const handleUnsubscribe = onRequest(
 
     // Unsupported method
     response.status(405).json({
-      error: 'Method not allowed',
-      code: 'METHOD_NOT_ALLOWED',
+      error: "Method not allowed",
+      code: "METHOD_NOT_ALLOWED",
     });
-  }, 'handleUnsubscribe')
+  }, "handleUnsubscribe")
 );
 
 /**
@@ -157,8 +157,8 @@ export const oneClickUnsubscribe = onRequest(
     });
 
     // Only accept POST requests
-    if (request.method !== 'POST') {
-      response.status(405).send('Method Not Allowed');
+    if (request.method !== "POST") {
+      response.status(405).send("Method Not Allowed");
       return;
     }
 
@@ -167,14 +167,14 @@ export const oneClickUnsubscribe = onRequest(
     const token = request.query.token as string;
 
     if (!email || !token) {
-      response.status(400).send('Bad Request: Missing email or token');
+      response.status(400).send("Bad Request: Missing email or token");
       return;
     }
 
     logger.info(
-      'Processing one-click unsubscribe',
+      "Processing one-click unsubscribe",
       createLogContext({
-        email: email.substring(0, 3) + '***',
+        email: email.substring(0, 3) + "***",
       })
     );
 
@@ -183,20 +183,20 @@ export const oneClickUnsubscribe = onRequest(
     const validation = await unsubscribeService.validateUnsubscribeToken(token);
 
     if (!validation.isValid || validation.email !== email.toLowerCase()) {
-      response.status(400).send('Bad Request: Invalid token');
+      response.status(400).send("Bad Request: Invalid token");
       return;
     }
 
     // Process immediate unsubscribe
-    const ipAddress = request.ip || 'unknown';
+    const ipAddress = request.ip || "unknown";
     await unsubscribeService.processUnsubscribe(token, {
-      action: 'unsubscribe-all',
+      action: "unsubscribe-all",
       ipAddress,
     });
 
     // Return success response (as per RFC 8058)
-    response.status(200).send('Unsubscribed successfully');
-  }, 'oneClickUnsubscribe')
+    response.status(200).send("Unsubscribed successfully");
+  }, "oneClickUnsubscribe")
 );
 
 /**
@@ -208,53 +208,53 @@ export const manageEmailPreferences = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withAuth(
-    async request => {
-      const { action, preferences } = request.data;
+    async (request) => {
+      const {action, preferences} = request.data;
       const userId = request.auth!.uid;
 
       const unsubscribeService = getUnsubscribeService();
 
       switch (action) {
-        case 'get': {
-          const currentPreferences = await unsubscribeService.getUserEmailPreferences(userId);
-          return { success: true, preferences: currentPreferences };
+      case "get": {
+        const currentPreferences = await unsubscribeService.getUserEmailPreferences(userId);
+        return {success: true, preferences: currentPreferences};
+      }
+
+      case "update": {
+        if (!preferences) {
+          throw createError(ErrorCode.INVALID_ARGUMENT, "Preferences required for update");
         }
 
-        case 'update': {
-          if (!preferences) {
-            throw createError(ErrorCode.INVALID_ARGUMENT, 'Preferences required for update');
-          }
+        // Get user email for token generation - we'll need to fetch from user document
+        const userEmail = request.auth?.token?.email || null;
 
-          // Get user email for token generation - we'll need to fetch from user document
-          const userEmail = request.auth?.token?.email || null;
-
-          if (!userEmail) {
-            throw createError(ErrorCode.INVALID_ARGUMENT, 'User email not found');
-          }
-
-          // Generate temporary token for preference update
-          const token = await unsubscribeService.generateUnsubscribeToken(
-            userEmail,
-            userId,
-            'manage-preferences'
-          );
-
-          const result = await unsubscribeService.processUnsubscribe(token, {
-            action: 'update-preferences',
-            preferences,
-            ipAddress: (request.rawRequest?.headers?.['x-forwarded-for'] as string) || 'unknown',
-          });
-
-          return result;
+        if (!userEmail) {
+          throw createError(ErrorCode.INVALID_ARGUMENT, "User email not found");
         }
 
-        default:
-          throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid action');
+        // Generate temporary token for preference update
+        const token = await unsubscribeService.generateUnsubscribeToken(
+          userEmail,
+          userId,
+          "manage-preferences"
+        );
+
+        const result = await unsubscribeService.processUnsubscribe(token, {
+          action: "update-preferences",
+          preferences,
+          ipAddress: (request.rawRequest?.headers?.["x-forwarded-for"] as string) || "unknown",
+        });
+
+        return result;
+      }
+
+      default:
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid action");
       }
     },
-    'manageEmailPreferences',
+    "manageEmailPreferences",
     {
-      authLevel: 'auth',
+      authLevel: "auth",
       rateLimitConfig: {
         type: RateLimitType.EMAIL_PREFERENCE_UPDATE,
         maxRequests: 10,
@@ -273,8 +273,8 @@ export const manageEmailSuppression = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
   },
   withAuth(
-    async request => {
-      const { action, email, reason, type, metadata } = request.data;
+    async (request) => {
+      const {action, email, reason, type, metadata} = request.data;
 
       // TODO: Add admin role check
       // if (!request.auth?.admin) {
@@ -284,52 +284,52 @@ export const manageEmailSuppression = onCall(
       const suppressionService = getEmailSuppressionService();
 
       switch (action) {
-        case 'check': {
-          if (!email) {
-            throw createError(ErrorCode.INVALID_ARGUMENT, 'Email required');
-          }
-          const suppressionStatus = await suppressionService.isEmailSuppressed(email);
-          return { success: true, suppression: suppressionStatus };
+      case "check": {
+        if (!email) {
+          throw createError(ErrorCode.INVALID_ARGUMENT, "Email required");
         }
+        const suppressionStatus = await suppressionService.isEmailSuppressed(email);
+        return {success: true, suppression: suppressionStatus};
+      }
 
-        case 'add': {
-          if (!email || !reason || !type) {
-            throw createError(ErrorCode.INVALID_ARGUMENT, 'Email, reason, and type required');
-          }
-          await suppressionService.addToSuppressionList(email, reason, type, metadata || {});
-          return { success: true, message: 'Email added to suppression list' };
+      case "add": {
+        if (!email || !reason || !type) {
+          throw createError(ErrorCode.INVALID_ARGUMENT, "Email, reason, and type required");
         }
+        await suppressionService.addToSuppressionList(email, reason, type, metadata || {});
+        return {success: true, message: "Email added to suppression list"};
+      }
 
-        case 'remove': {
-          if (!email) {
-            throw createError(ErrorCode.INVALID_ARGUMENT, 'Email required');
-          }
-          await suppressionService.removeFromSuppressionList(email);
-          return { success: true, message: 'Email removed from suppression list' };
+      case "remove": {
+        if (!email) {
+          throw createError(ErrorCode.INVALID_ARGUMENT, "Email required");
         }
+        await suppressionService.removeFromSuppressionList(email);
+        return {success: true, message: "Email removed from suppression list"};
+      }
 
-        case 'stats': {
-          const stats = await suppressionService.getSuppressionStats();
-          return { success: true, stats };
-        }
+      case "stats": {
+        const stats = await suppressionService.getSuppressionStats();
+        return {success: true, stats};
+      }
 
-        case 'export': {
-          const { startDate, endDate, suppressionReason } = request.data;
-          const exportData = await suppressionService.exportSuppressionList(
-            suppressionReason,
-            startDate ? new Date(startDate) : undefined,
-            endDate ? new Date(endDate) : undefined
-          );
-          return { success: true, data: exportData };
-        }
+      case "export": {
+        const {startDate, endDate, suppressionReason} = request.data;
+        const exportData = await suppressionService.exportSuppressionList(
+          suppressionReason,
+          startDate ? new Date(startDate) : undefined,
+          endDate ? new Date(endDate) : undefined
+        );
+        return {success: true, data: exportData};
+      }
 
-        default:
-          throw createError(ErrorCode.INVALID_ARGUMENT, 'Invalid action');
+      default:
+        throw createError(ErrorCode.INVALID_ARGUMENT, "Invalid action");
       }
     },
-    'manageEmailSuppression',
+    "manageEmailSuppression",
     {
-      authLevel: 'verified', // Require verified admin user
+      authLevel: "verified", // Require verified admin user
       rateLimitConfig: {
         type: RateLimitType.ADMIN_EMAIL_MANAGEMENT,
         maxRequests: 100,
@@ -357,19 +357,19 @@ export const emailComplianceCleanup = onRequest(
     let expectedSecret: string;
     if (secretValue) {
       expectedSecret = secretValue;
-    } else if (envValue && process.env.FUNCTIONS_EMULATOR === 'true') {
+    } else if (envValue && process.env.FUNCTIONS_EMULATOR === "true") {
       // Only allow env var in emulator for local development
       expectedSecret = envValue;
     } else {
-      throw createError(ErrorCode.INTERNAL, 'CLEANUP_SECRET is not configured');
+      throw createError(ErrorCode.INTERNAL, "CLEANUP_SECRET is not configured");
     }
 
     const expectedAuth = `Bearer ${expectedSecret}`;
     if (authHeader !== expectedAuth) {
-      throw createError(ErrorCode.UNAUTHENTICATED, 'Invalid cleanup authentication');
+      throw createError(ErrorCode.UNAUTHENTICATED, "Invalid cleanup authentication");
     }
 
-    logger.info('Starting email compliance cleanup');
+    logger.info("Starting email compliance cleanup");
 
     const unsubscribeService = getUnsubscribeService();
     const suppressionService = getEmailSuppressionService();
@@ -386,20 +386,20 @@ export const emailComplianceCleanup = onRequest(
       timestamp: new Date().toISOString(),
     };
 
-    logger.info('Email compliance cleanup completed', createLogContext(results));
+    logger.info("Email compliance cleanup completed", createLogContext(results));
 
     response.status(200).json({
       success: true,
       results,
     });
-  }, 'emailComplianceCleanup')
+  }, "emailComplianceCleanup")
 );
 
 /**
  * Generate HTML for the preference center
  */
 function generatePreferenceCenterHtml(token: string, email: string): string {
-  const maskedEmail = email.substring(0, 3) + '***@' + email.split('@')[1];
+  const maskedEmail = email.substring(0, 3) + "***@" + email.split("@")[1];
 
   return `
 <!DOCTYPE html>

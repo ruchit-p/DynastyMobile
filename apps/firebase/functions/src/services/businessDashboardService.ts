@@ -1,9 +1,9 @@
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions/v2';
-import { createError, ErrorCode } from '../utils/errors';
-import { subscriptionAnalyticsService } from './subscriptionAnalyticsService';
-import { technicalMonitoringService } from './technicalMonitoringService';
-import { conversionTrackingService } from './conversionTrackingService';
+import {getFirestore, Timestamp} from "firebase-admin/firestore";
+import {logger} from "firebase-functions/v2";
+import {createError, ErrorCode} from "../utils/errors";
+import {subscriptionAnalyticsService} from "./subscriptionAnalyticsService";
+import {technicalMonitoringService} from "./technicalMonitoringService";
+import {conversionTrackingService} from "./conversionTrackingService";
 
 /**
  * Comprehensive business dashboard service for Dynasty
@@ -13,15 +13,15 @@ import { conversionTrackingService } from './conversionTrackingService';
 export interface DashboardWidget {
   id: string;
   title: string;
-  type: 'metric' | 'chart' | 'table' | 'alert' | 'trend';
-  category: 'revenue' | 'growth' | 'technical' | 'conversion' | 'alerts';
-  priority: 'high' | 'medium' | 'low';
+  type: "metric" | "chart" | "table" | "alert" | "trend";
+  category: "revenue" | "growth" | "technical" | "conversion" | "alerts";
+  priority: "high" | "medium" | "low";
 
   // Widget configuration
   config: {
-    size: 'small' | 'medium' | 'large' | 'full-width';
+    size: "small" | "medium" | "large" | "full-width";
     refreshInterval: number; // minutes
-    timeRange: '1h' | '24h' | '7d' | '30d' | '90d' | '1y';
+    timeRange: "1h" | "24h" | "7d" | "30d" | "90d" | "1y";
     showTrend: boolean;
     alertThreshold?: number;
   };
@@ -35,16 +35,16 @@ export interface DashboardWidget {
 
   // Display options
   display: {
-    format: 'number' | 'currency' | 'percentage' | 'duration' | 'count';
+    format: "number" | "currency" | "percentage" | "duration" | "count";
     precision?: number;
     prefix?: string;
     suffix?: string;
-    color?: 'green' | 'red' | 'yellow' | 'blue' | 'gray';
+    color?: "green" | "red" | "yellow" | "blue" | "gray";
     icon?: string;
   };
 
   // Access control
-  accessLevel: 'admin' | 'manager' | 'viewer';
+  accessLevel: "admin" | "manager" | "viewer";
   visibleToRoles: string[];
 
   // Metadata
@@ -57,7 +57,7 @@ export interface Dashboard {
   id: string;
   name: string;
   description?: string;
-  category: 'executive' | 'operations' | 'technical' | 'custom';
+  category: "executive" | "operations" | "technical" | "custom";
 
   // Layout configuration
   layout: {
@@ -70,12 +70,12 @@ export interface Dashboard {
   };
 
   // Access control
-  accessLevel: 'admin' | 'manager' | 'viewer';
+  accessLevel: "admin" | "manager" | "viewer";
   sharedWith: string[];
   isPublic: boolean;
 
   // Customization
-  theme: 'light' | 'dark' | 'auto';
+  theme: "light" | "dark" | "auto";
   autoRefresh: boolean;
   refreshInterval: number; // minutes
 
@@ -92,7 +92,7 @@ export interface DashboardData {
   widgets: Array<{
     widgetId: string;
     data: any;
-    status: 'success' | 'loading' | 'error';
+    status: "success" | "loading" | "error";
     error?: string;
     lastUpdated: Date;
   }>;
@@ -134,7 +134,7 @@ export interface SubscriptionOverviewData {
 
   // Recent activity
   recentActivity: Array<{
-    type: 'new_subscription' | 'cancellation' | 'upgrade' | 'downgrade';
+    type: "new_subscription" | "cancellation" | "upgrade" | "downgrade";
     timestamp: Date;
     details: any;
   }>;
@@ -142,7 +142,7 @@ export interface SubscriptionOverviewData {
 
 export interface TechnicalHealthData {
   // System status
-  overallHealth: 'excellent' | 'good' | 'warning' | 'critical';
+  overallHealth: "excellent" | "good" | "warning" | "critical";
   uptime: number;
 
   // Performance metrics
@@ -224,9 +224,9 @@ export interface ConversionFunnelData {
 
 export class BusinessDashboardService {
   private db = getFirestore();
-  private readonly DASHBOARDS_COLLECTION = 'dashboards';
-  private readonly DASHBOARD_WIDGETS_COLLECTION = 'dashboardWidgets';
-  private readonly DASHBOARD_DATA_COLLECTION = 'dashboardData';
+  private readonly DASHBOARDS_COLLECTION = "dashboards";
+  private readonly DASHBOARD_WIDGETS_COLLECTION = "dashboardWidgets";
+  private readonly DASHBOARD_DATA_COLLECTION = "dashboardData";
 
   // Cache configuration
   private readonly CACHE_DURATION = {
@@ -241,7 +241,7 @@ export class BusinessDashboardService {
    */
   async initializeDefaultDashboards(adminUserId: string): Promise<void> {
     try {
-      logger.info('Initializing default dashboards');
+      logger.info("Initializing default dashboards");
 
       // Create default widgets
       await this.createDefaultWidgets();
@@ -251,9 +251,9 @@ export class BusinessDashboardService {
       await this.createOperationsDashboard(adminUserId);
       await this.createTechnicalDashboard(adminUserId);
 
-      logger.info('Default dashboards initialized successfully');
+      logger.info("Default dashboards initialized successfully");
     } catch (error) {
-      logger.error('Failed to initialize default dashboards', { error });
+      logger.error("Failed to initialize default dashboards", {error});
       throw error;
     }
   }
@@ -265,239 +265,239 @@ export class BusinessDashboardService {
     const defaultWidgets: Partial<DashboardWidget>[] = [
       // Revenue metrics
       {
-        id: 'widget_mrr',
-        title: 'Monthly Recurring Revenue',
-        type: 'metric',
-        category: 'revenue',
-        priority: 'high',
+        id: "widget_mrr",
+        title: "Monthly Recurring Revenue",
+        type: "metric",
+        category: "revenue",
+        priority: "high",
         config: {
-          size: 'medium',
+          size: "medium",
           refreshInterval: this.CACHE_DURATION.frequent,
-          timeRange: '30d',
+          timeRange: "30d",
           showTrend: true,
           alertThreshold: -10, // Alert if MRR drops by 10%
         },
         dataSource: {
-          service: 'subscriptionAnalytics',
-          method: 'calculateSubscriptionMetrics',
+          service: "subscriptionAnalytics",
+          method: "calculateSubscriptionMetrics",
         },
         display: {
-          format: 'currency',
+          format: "currency",
           precision: 0,
-          color: 'green',
-          icon: 'dollar-sign',
+          color: "green",
+          icon: "dollar-sign",
         },
-        accessLevel: 'manager',
-        visibleToRoles: ['admin', 'manager'],
+        accessLevel: "manager",
+        visibleToRoles: ["admin", "manager"],
       },
 
       {
-        id: 'widget_active_subs',
-        title: 'Active Subscriptions',
-        type: 'metric',
-        category: 'growth',
-        priority: 'high',
+        id: "widget_active_subs",
+        title: "Active Subscriptions",
+        type: "metric",
+        category: "growth",
+        priority: "high",
         config: {
-          size: 'small',
+          size: "small",
           refreshInterval: this.CACHE_DURATION.frequent,
-          timeRange: '30d',
+          timeRange: "30d",
           showTrend: true,
         },
         dataSource: {
-          service: 'subscriptionAnalytics',
-          method: 'getActiveSubscriptionCount',
+          service: "subscriptionAnalytics",
+          method: "getActiveSubscriptionCount",
         },
         display: {
-          format: 'count',
-          color: 'blue',
-          icon: 'users',
+          format: "count",
+          color: "blue",
+          icon: "users",
         },
-        accessLevel: 'viewer',
-        visibleToRoles: ['admin', 'manager', 'viewer'],
+        accessLevel: "viewer",
+        visibleToRoles: ["admin", "manager", "viewer"],
       },
 
       {
-        id: 'widget_churn_rate',
-        title: 'Churn Rate',
-        type: 'metric',
-        category: 'growth',
-        priority: 'high',
+        id: "widget_churn_rate",
+        title: "Churn Rate",
+        type: "metric",
+        category: "growth",
+        priority: "high",
         config: {
-          size: 'small',
+          size: "small",
           refreshInterval: this.CACHE_DURATION.standard,
-          timeRange: '30d',
+          timeRange: "30d",
           showTrend: true,
           alertThreshold: 5, // Alert if churn > 5%
         },
         dataSource: {
-          service: 'subscriptionAnalytics',
-          method: 'calculateChurnRate',
+          service: "subscriptionAnalytics",
+          method: "calculateChurnRate",
         },
         display: {
-          format: 'percentage',
+          format: "percentage",
           precision: 1,
-          color: 'red',
-          icon: 'trending-down',
+          color: "red",
+          icon: "trending-down",
         },
-        accessLevel: 'manager',
-        visibleToRoles: ['admin', 'manager'],
+        accessLevel: "manager",
+        visibleToRoles: ["admin", "manager"],
       },
 
       // Technical metrics
       {
-        id: 'widget_api_health',
-        title: 'API Health',
-        type: 'metric',
-        category: 'technical',
-        priority: 'high',
+        id: "widget_api_health",
+        title: "API Health",
+        type: "metric",
+        category: "technical",
+        priority: "high",
         config: {
-          size: 'small',
+          size: "small",
           refreshInterval: this.CACHE_DURATION.realtime,
-          timeRange: '1h',
+          timeRange: "1h",
           showTrend: true,
           alertThreshold: 95, // Alert if health < 95%
         },
         dataSource: {
-          service: 'technicalMonitoring',
-          method: 'calculateHealthScore',
+          service: "technicalMonitoring",
+          method: "calculateHealthScore",
         },
         display: {
-          format: 'percentage',
+          format: "percentage",
           precision: 1,
-          color: 'green',
-          icon: 'server',
+          color: "green",
+          icon: "server",
         },
-        accessLevel: 'viewer',
-        visibleToRoles: ['admin', 'manager', 'viewer'],
+        accessLevel: "viewer",
+        visibleToRoles: ["admin", "manager", "viewer"],
       },
 
       {
-        id: 'widget_response_time',
-        title: 'API Response Time',
-        type: 'metric',
-        category: 'technical',
-        priority: 'medium',
+        id: "widget_response_time",
+        title: "API Response Time",
+        type: "metric",
+        category: "technical",
+        priority: "medium",
         config: {
-          size: 'small',
+          size: "small",
           refreshInterval: this.CACHE_DURATION.frequent,
-          timeRange: '1h',
+          timeRange: "1h",
           showTrend: true,
           alertThreshold: 2000, // Alert if > 2 seconds
         },
         dataSource: {
-          service: 'technicalMonitoring',
-          method: 'getAverageResponseTime',
+          service: "technicalMonitoring",
+          method: "getAverageResponseTime",
         },
         display: {
-          format: 'duration',
-          suffix: 'ms',
-          color: 'blue',
-          icon: 'clock',
+          format: "duration",
+          suffix: "ms",
+          color: "blue",
+          icon: "clock",
         },
-        accessLevel: 'viewer',
-        visibleToRoles: ['admin', 'manager', 'viewer'],
+        accessLevel: "viewer",
+        visibleToRoles: ["admin", "manager", "viewer"],
       },
 
       // Conversion metrics
       {
-        id: 'widget_conversion_rate',
-        title: 'Overall Conversion Rate',
-        type: 'metric',
-        category: 'conversion',
-        priority: 'high',
+        id: "widget_conversion_rate",
+        title: "Overall Conversion Rate",
+        type: "metric",
+        category: "conversion",
+        priority: "high",
         config: {
-          size: 'small',
+          size: "small",
           refreshInterval: this.CACHE_DURATION.standard,
-          timeRange: '7d',
+          timeRange: "7d",
           showTrend: true,
           alertThreshold: 2, // Alert if < 2%
         },
         dataSource: {
-          service: 'conversionTracking',
-          method: 'getOverallConversionRate',
+          service: "conversionTracking",
+          method: "getOverallConversionRate",
         },
         display: {
-          format: 'percentage',
+          format: "percentage",
           precision: 1,
-          color: 'green',
-          icon: 'trending-up',
+          color: "green",
+          icon: "trending-up",
         },
-        accessLevel: 'manager',
-        visibleToRoles: ['admin', 'manager'],
+        accessLevel: "manager",
+        visibleToRoles: ["admin", "manager"],
       },
 
       // Charts and tables
       {
-        id: 'widget_revenue_chart',
-        title: 'Revenue Trend',
-        type: 'chart',
-        category: 'revenue',
-        priority: 'high',
+        id: "widget_revenue_chart",
+        title: "Revenue Trend",
+        type: "chart",
+        category: "revenue",
+        priority: "high",
         config: {
-          size: 'large',
+          size: "large",
           refreshInterval: this.CACHE_DURATION.standard,
-          timeRange: '30d',
+          timeRange: "30d",
           showTrend: false,
         },
         dataSource: {
-          service: 'subscriptionAnalytics',
-          method: 'getRevenueTrend',
+          service: "subscriptionAnalytics",
+          method: "getRevenueTrend",
         },
         display: {
-          format: 'currency',
-          color: 'green',
+          format: "currency",
+          color: "green",
         },
-        accessLevel: 'manager',
-        visibleToRoles: ['admin', 'manager'],
+        accessLevel: "manager",
+        visibleToRoles: ["admin", "manager"],
       },
 
       {
-        id: 'widget_conversion_funnel',
-        title: 'Conversion Funnel',
-        type: 'chart',
-        category: 'conversion',
-        priority: 'medium',
+        id: "widget_conversion_funnel",
+        title: "Conversion Funnel",
+        type: "chart",
+        category: "conversion",
+        priority: "medium",
         config: {
-          size: 'large',
+          size: "large",
           refreshInterval: this.CACHE_DURATION.standard,
-          timeRange: '7d',
+          timeRange: "7d",
           showTrend: false,
         },
         dataSource: {
-          service: 'conversionTracking',
-          method: 'getFunnelChart',
+          service: "conversionTracking",
+          method: "getFunnelChart",
         },
         display: {
-          format: 'percentage',
-          color: 'blue',
+          format: "percentage",
+          color: "blue",
         },
-        accessLevel: 'manager',
-        visibleToRoles: ['admin', 'manager'],
+        accessLevel: "manager",
+        visibleToRoles: ["admin", "manager"],
       },
 
       {
-        id: 'widget_active_alerts',
-        title: 'Active Alerts',
-        type: 'table',
-        category: 'alerts',
-        priority: 'high',
+        id: "widget_active_alerts",
+        title: "Active Alerts",
+        type: "table",
+        category: "alerts",
+        priority: "high",
         config: {
-          size: 'medium',
+          size: "medium",
           refreshInterval: this.CACHE_DURATION.realtime,
-          timeRange: '24h',
+          timeRange: "24h",
           showTrend: false,
         },
         dataSource: {
-          service: 'alerting',
-          method: 'getActiveAlerts',
+          service: "alerting",
+          method: "getActiveAlerts",
         },
         display: {
-          format: 'count',
-          color: 'red',
-          icon: 'alert-triangle',
+          format: "count",
+          color: "red",
+          icon: "alert-triangle",
         },
-        accessLevel: 'viewer',
-        visibleToRoles: ['admin', 'manager', 'viewer'],
+        accessLevel: "viewer",
+        visibleToRoles: ["admin", "manager", "viewer"],
       },
     ];
 
@@ -518,39 +518,39 @@ export class BusinessDashboardService {
    */
   private async createExecutiveDashboard(adminUserId: string): Promise<void> {
     const dashboard: Dashboard = {
-      id: 'dashboard_executive',
-      name: 'Executive Dashboard',
-      description: 'High-level business metrics and KPIs',
-      category: 'executive',
+      id: "dashboard_executive",
+      name: "Executive Dashboard",
+      description: "High-level business metrics and KPIs",
+      category: "executive",
       layout: {
         rows: 3,
         columns: 4,
         widgets: [
-          { widgetId: 'widget_mrr', position: { row: 0, col: 0, rowSpan: 1, colSpan: 1 } },
-          { widgetId: 'widget_active_subs', position: { row: 0, col: 1, rowSpan: 1, colSpan: 1 } },
-          { widgetId: 'widget_churn_rate', position: { row: 0, col: 2, rowSpan: 1, colSpan: 1 } },
+          {widgetId: "widget_mrr", position: {row: 0, col: 0, rowSpan: 1, colSpan: 1}},
+          {widgetId: "widget_active_subs", position: {row: 0, col: 1, rowSpan: 1, colSpan: 1}},
+          {widgetId: "widget_churn_rate", position: {row: 0, col: 2, rowSpan: 1, colSpan: 1}},
           {
-            widgetId: 'widget_conversion_rate',
-            position: { row: 0, col: 3, rowSpan: 1, colSpan: 1 },
+            widgetId: "widget_conversion_rate",
+            position: {row: 0, col: 3, rowSpan: 1, colSpan: 1},
           },
           {
-            widgetId: 'widget_revenue_chart',
-            position: { row: 1, col: 0, rowSpan: 1, colSpan: 2 },
+            widgetId: "widget_revenue_chart",
+            position: {row: 1, col: 0, rowSpan: 1, colSpan: 2},
           },
           {
-            widgetId: 'widget_conversion_funnel',
-            position: { row: 1, col: 2, rowSpan: 1, colSpan: 2 },
+            widgetId: "widget_conversion_funnel",
+            position: {row: 1, col: 2, rowSpan: 1, colSpan: 2},
           },
           {
-            widgetId: 'widget_active_alerts',
-            position: { row: 2, col: 0, rowSpan: 1, colSpan: 4 },
+            widgetId: "widget_active_alerts",
+            position: {row: 2, col: 0, rowSpan: 1, colSpan: 4},
           },
         ],
       },
-      accessLevel: 'manager',
+      accessLevel: "manager",
       sharedWith: [],
       isPublic: false,
-      theme: 'light',
+      theme: "light",
       autoRefresh: true,
       refreshInterval: 5,
       createdBy: adminUserId,
@@ -567,42 +567,42 @@ export class BusinessDashboardService {
    */
   private async createOperationsDashboard(adminUserId: string): Promise<void> {
     const dashboard: Dashboard = {
-      id: 'dashboard_operations',
-      name: 'Operations Dashboard',
-      description: 'Operational metrics and system health',
-      category: 'operations',
+      id: "dashboard_operations",
+      name: "Operations Dashboard",
+      description: "Operational metrics and system health",
+      category: "operations",
       layout: {
         rows: 3,
         columns: 4,
         widgets: [
-          { widgetId: 'widget_active_subs', position: { row: 0, col: 0, rowSpan: 1, colSpan: 1 } },
-          { widgetId: 'widget_api_health', position: { row: 0, col: 1, rowSpan: 1, colSpan: 1 } },
+          {widgetId: "widget_active_subs", position: {row: 0, col: 0, rowSpan: 1, colSpan: 1}},
+          {widgetId: "widget_api_health", position: {row: 0, col: 1, rowSpan: 1, colSpan: 1}},
           {
-            widgetId: 'widget_response_time',
-            position: { row: 0, col: 2, rowSpan: 1, colSpan: 1 },
+            widgetId: "widget_response_time",
+            position: {row: 0, col: 2, rowSpan: 1, colSpan: 1},
           },
           {
-            widgetId: 'widget_conversion_rate',
-            position: { row: 0, col: 3, rowSpan: 1, colSpan: 1 },
+            widgetId: "widget_conversion_rate",
+            position: {row: 0, col: 3, rowSpan: 1, colSpan: 1},
           },
           {
-            widgetId: 'widget_conversion_funnel',
-            position: { row: 1, col: 0, rowSpan: 1, colSpan: 2 },
+            widgetId: "widget_conversion_funnel",
+            position: {row: 1, col: 0, rowSpan: 1, colSpan: 2},
           },
           {
-            widgetId: 'widget_revenue_chart',
-            position: { row: 1, col: 2, rowSpan: 1, colSpan: 2 },
+            widgetId: "widget_revenue_chart",
+            position: {row: 1, col: 2, rowSpan: 1, colSpan: 2},
           },
           {
-            widgetId: 'widget_active_alerts',
-            position: { row: 2, col: 0, rowSpan: 1, colSpan: 4 },
+            widgetId: "widget_active_alerts",
+            position: {row: 2, col: 0, rowSpan: 1, colSpan: 4},
           },
         ],
       },
-      accessLevel: 'viewer',
+      accessLevel: "viewer",
       sharedWith: [],
       isPublic: true,
-      theme: 'light',
+      theme: "light",
       autoRefresh: true,
       refreshInterval: 2,
       createdBy: adminUserId,
@@ -619,29 +619,29 @@ export class BusinessDashboardService {
    */
   private async createTechnicalDashboard(adminUserId: string): Promise<void> {
     const dashboard: Dashboard = {
-      id: 'dashboard_technical',
-      name: 'Technical Dashboard',
-      description: 'System performance and technical metrics',
-      category: 'technical',
+      id: "dashboard_technical",
+      name: "Technical Dashboard",
+      description: "System performance and technical metrics",
+      category: "technical",
       layout: {
         rows: 2,
         columns: 4,
         widgets: [
-          { widgetId: 'widget_api_health', position: { row: 0, col: 0, rowSpan: 1, colSpan: 1 } },
+          {widgetId: "widget_api_health", position: {row: 0, col: 0, rowSpan: 1, colSpan: 1}},
           {
-            widgetId: 'widget_response_time',
-            position: { row: 0, col: 1, rowSpan: 1, colSpan: 1 },
+            widgetId: "widget_response_time",
+            position: {row: 0, col: 1, rowSpan: 1, colSpan: 1},
           },
           {
-            widgetId: 'widget_active_alerts',
-            position: { row: 1, col: 0, rowSpan: 1, colSpan: 4 },
+            widgetId: "widget_active_alerts",
+            position: {row: 1, col: 0, rowSpan: 1, colSpan: 4},
           },
         ],
       },
-      accessLevel: 'viewer',
+      accessLevel: "viewer",
       sharedWith: [],
       isPublic: true,
-      theme: 'dark',
+      theme: "dark",
       autoRefresh: true,
       refreshInterval: 1,
       createdBy: adminUserId,
@@ -697,12 +697,12 @@ export class BusinessDashboardService {
       // Get dashboard configuration
       const dashboard = await this.getDashboard(dashboardId);
       if (!dashboard) {
-        throw createError(ErrorCode.NOT_FOUND, 'Dashboard not found');
+        throw createError(ErrorCode.NOT_FOUND, "Dashboard not found");
       }
 
       // Check access permissions
       if (!this.hasAccess(dashboard, userId)) {
-        throw createError(ErrorCode.PERMISSION_DENIED, 'Access denied to dashboard');
+        throw createError(ErrorCode.PERMISSION_DENIED, "Access denied to dashboard");
       }
 
       // Get widget data
@@ -723,7 +723,7 @@ export class BusinessDashboardService {
 
       return dashboardData;
     } catch (error) {
-      logger.error('Failed to get dashboard data', { error, dashboardId, userId });
+      logger.error("Failed to get dashboard data", {error, dashboardId, userId});
       throw error;
     }
   }
@@ -732,15 +732,15 @@ export class BusinessDashboardService {
    * Load data for all widgets in a dashboard
    */
   private async loadWidgetData(dashboard: Dashboard): Promise<any[]> {
-    const widgetPromises = dashboard.layout.widgets.map(async layoutWidget => {
+    const widgetPromises = dashboard.layout.widgets.map(async (layoutWidget) => {
       try {
         const widget = await this.getWidget(layoutWidget.widgetId);
         if (!widget) {
           return {
             widgetId: layoutWidget.widgetId,
             data: null,
-            status: 'error',
-            error: 'Widget not found',
+            status: "error",
+            error: "Widget not found",
             lastUpdated: new Date(),
           };
         }
@@ -749,12 +749,12 @@ export class BusinessDashboardService {
         return {
           widgetId: layoutWidget.widgetId,
           data,
-          status: 'success',
+          status: "success",
           error: undefined,
           lastUpdated: new Date(),
         };
       } catch (error) {
-        logger.error('Failed to load widget data', {
+        logger.error("Failed to load widget data", {
           error,
           widgetId: layoutWidget.widgetId,
         });
@@ -762,7 +762,7 @@ export class BusinessDashboardService {
         return {
           widgetId: layoutWidget.widgetId,
           data: null,
-          status: 'error',
+          status: "error",
           error: error instanceof Error ? error.message : String(error),
           lastUpdated: new Date(),
         };
@@ -776,24 +776,24 @@ export class BusinessDashboardService {
    * Load data for a single widget
    */
   private async loadSingleWidgetData(widget: DashboardWidget): Promise<any> {
-    const { service, method } = widget.dataSource;
+    const {service, method} = widget.dataSource;
     const timeRange = this.parseTimeRange(widget.config.timeRange);
 
     switch (service) {
-      case 'subscriptionAnalytics':
-        return await this.loadSubscriptionAnalyticsData(method, timeRange);
+    case "subscriptionAnalytics":
+      return await this.loadSubscriptionAnalyticsData(method, timeRange);
 
-      case 'technicalMonitoring':
-        return await this.loadTechnicalMonitoringData(method, timeRange);
+    case "technicalMonitoring":
+      return await this.loadTechnicalMonitoringData(method, timeRange);
 
-      case 'conversionTracking':
-        return await this.loadConversionTrackingData(method, timeRange);
+    case "conversionTracking":
+      return await this.loadConversionTrackingData(method, timeRange);
 
-      case 'alerting':
-        return await this.loadAlertingData(method);
+    case "alerting":
+      return await this.loadAlertingData(method);
 
-      default:
-        throw new Error(`Unknown data service: ${service}`);
+    default:
+      throw new Error(`Unknown data service: ${service}`);
     }
   }
 
@@ -805,14 +805,14 @@ export class BusinessDashboardService {
     timeRange: { start: Date; end: Date }
   ): Promise<any> {
     switch (method) {
-      case 'calculateSubscriptionMetrics':
-        return await subscriptionAnalyticsService.calculateSubscriptionMetrics(
-          timeRange.start,
-          timeRange.end
-        );
+    case "calculateSubscriptionMetrics":
+      return await subscriptionAnalyticsService.calculateSubscriptionMetrics(
+        timeRange.start,
+        timeRange.end
+      );
 
-      default:
-        throw new Error(`Unknown subscription analytics method: ${method}`);
+    default:
+      throw new Error(`Unknown subscription analytics method: ${method}`);
     }
   }
 
@@ -824,14 +824,14 @@ export class BusinessDashboardService {
     timeRange: { start: Date; end: Date }
   ): Promise<any> {
     switch (method) {
-      case 'generateTechnicalHealthReport':
-        return await technicalMonitoringService.generateTechnicalHealthReport(
-          timeRange.start,
-          timeRange.end
-        );
+    case "generateTechnicalHealthReport":
+      return await technicalMonitoringService.generateTechnicalHealthReport(
+        timeRange.start,
+        timeRange.end
+      );
 
-      default:
-        throw new Error(`Unknown technical monitoring method: ${method}`);
+    default:
+      throw new Error(`Unknown technical monitoring method: ${method}`);
     }
   }
 
@@ -843,14 +843,14 @@ export class BusinessDashboardService {
     timeRange: { start: Date; end: Date }
   ): Promise<any> {
     switch (method) {
-      case 'calculateConversionFunnel':
-        return await conversionTrackingService.calculateConversionFunnel(
-          timeRange.start,
-          timeRange.end
-        );
+    case "calculateConversionFunnel":
+      return await conversionTrackingService.calculateConversionFunnel(
+        timeRange.start,
+        timeRange.end
+      );
 
-      default:
-        throw new Error(`Unknown conversion tracking method: ${method}`);
+    default:
+      throw new Error(`Unknown conversion tracking method: ${method}`);
     }
   }
 
@@ -859,12 +859,12 @@ export class BusinessDashboardService {
    */
   private async loadAlertingData(method: string): Promise<any> {
     switch (method) {
-      case 'getActiveAlerts':
-        // This would be implemented in the alerting service
-        return [];
+    case "getActiveAlerts":
+      // This would be implemented in the alerting service
+      return [];
 
-      default:
-        throw new Error(`Unknown alerting method: ${method}`);
+    default:
+      throw new Error(`Unknown alerting method: ${method}`);
     }
   }
 
@@ -874,29 +874,29 @@ export class BusinessDashboardService {
     let start: Date;
 
     switch (range) {
-      case '1h':
-        start = new Date(end.getTime() - 60 * 60 * 1000);
-        break;
-      case '24h':
-        start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
-        break;
-      case '7d':
-        start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case '30d':
-        start = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
-        break;
-      case '90d':
-        start = new Date(end.getTime() - 90 * 24 * 60 * 60 * 1000);
-        break;
-      case '1y':
-        start = new Date(end.getTime() - 365 * 24 * 60 * 60 * 1000);
-        break;
-      default:
-        start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+    case "1h":
+      start = new Date(end.getTime() - 60 * 60 * 1000);
+      break;
+    case "24h":
+      start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+      break;
+    case "7d":
+      start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
+      break;
+    case "30d":
+      start = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
+      break;
+    case "90d":
+      start = new Date(end.getTime() - 90 * 24 * 60 * 60 * 1000);
+      break;
+    case "1y":
+      start = new Date(end.getTime() - 365 * 24 * 60 * 60 * 1000);
+      break;
+    default:
+      start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
     }
 
-    return { start, end };
+    return {start, end};
   }
 
   private async getDashboard(dashboardId: string): Promise<Dashboard | null> {
@@ -949,7 +949,7 @@ export class BusinessDashboardService {
         ...data,
         generatedAt: Timestamp.fromDate(data.generatedAt),
         cacheUntil: Timestamp.fromDate(data.cacheUntil),
-        widgets: data.widgets.map(w => ({
+        widgets: data.widgets.map((w) => ({
           ...w,
           lastUpdated: Timestamp.fromDate(w.lastUpdated),
         })),
