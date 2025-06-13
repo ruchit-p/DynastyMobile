@@ -32,4 +32,6 @@ declare module 'react-virtualized-auto-sizer' {
 declare module 'crypto-js' {
   const CryptoJS: any;
   export default CryptoJS;
-} 
+}
+
+declare const jest: any; 
