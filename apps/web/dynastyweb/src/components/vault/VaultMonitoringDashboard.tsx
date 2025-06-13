@@ -541,7 +541,7 @@ export default function VaultMonitoringDashboard({ isAdmin = false }: { isAdmin?
                     <Tooltip 
                       formatter={(value: number | string, name: string) => {
                         if (name === 'Size') {
-                          return formatBytes(value);
+                          return formatBytes(Number(value));
                         }
                         return value;
                       }}

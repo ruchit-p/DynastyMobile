@@ -15,7 +15,7 @@ import { VaultSetup } from './VaultSetup';
 import { VaultUnlock } from './VaultUnlock';
 
 export function VaultUploadExample() {
-  const { user } = useAuth();
+  const { currentUser } = useAuth();
   const { toast } = useToast();
   const [files, setFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
@@ -31,19 +31,19 @@ export function VaultUploadExample() {
     getCurrentKeyId,
     checkVaultStatus,
     progress: encryptionProgress
-  } = useWebVaultEncryption(user?.uid || '');
+  } = useWebVaultEncryption(currentUser?.uid || '');
 
   // Set user ID in vault service
   useEffect(() => {
-    if (user?.uid) {
-      vaultService.setUserId(user.uid);
+    if (currentUser?.uid) {
+      vaultService.setUserId(currentUser.uid);
     }
-  }, [user?.uid]);
+  }, [currentUser?.uid]);
 
   // Check vault status on mount
   useEffect(() => {
     const checkStatus = async () => {
-      if (user?.uid) {
+      if (currentUser?.uid) {
         const status = await checkVaultStatus();
         if (!status.hasVault) {
           setShowSetup(true);
@@ -53,7 +53,7 @@ export function VaultUploadExample() {
       }
     };
     checkStatus();
-  }, [user?.uid, checkVaultStatus]);
+  }, [currentUser?.uid, checkVaultStatus]);
 
   // Handle file selection
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -151,7 +151,7 @@ export function VaultUploadExample() {
   if (showSetup) {
     return (
       <VaultSetup
-        userId={user?.uid || ''}
+        userId={currentUser?.uid || ''}
         onComplete={() => {
           setShowSetup(false);
           loadVaultItems();
@@ -164,7 +164,7 @@ export function VaultUploadExample() {
   if (showUnlock) {
     return (
       <VaultUnlock
-        userId={user?.uid || ''}
+        userId={currentUser?.uid || ''}
         onUnlock={() => {
           setShowUnlock(false);
           loadVaultItems();

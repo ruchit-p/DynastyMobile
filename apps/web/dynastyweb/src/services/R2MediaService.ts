@@ -4,7 +4,7 @@
 import { FirebaseFunctionsClient, createFirebaseClient } from '@/lib/functions-client';
 import { errorHandler, ErrorSeverity } from './ErrorHandlingService';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { storage } from '@/lib/firebase';
+import { storage, functions } from '@/lib/firebase';
 
 export interface UploadProgressCallback {
   onProgress?: (progress: number) => void;
@@ -24,7 +24,7 @@ class R2MediaService {
   private uploadTasks = new Map<string, XMLHttpRequest | ReturnType<typeof uploadBytesResumable>>();
 
   private constructor() {
-    this.functionsClient = createFirebaseClient();
+    this.functionsClient = createFirebaseClient(functions);
   }
 
   static getInstance(): R2MediaService {

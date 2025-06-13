@@ -782,9 +782,7 @@ export class AuditLogService {
     // Mock analysis for testing
     const events = await this.queryEvents({ userId, limit: 100 });
     const failedLogins = events.filter(
-      e =>
-        e.eventType === 'login-failed' ||
-        (e.eventType === 'authentication' && e.description?.includes('failed'))
+      e => e.eventType === 'authentication' && e.description?.includes('failed')
     ).length;
 
     const suspiciousActivity = failedLogins >= 5;

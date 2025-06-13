@@ -693,7 +693,7 @@ export default function VaultPage() {
           ) : (
             <div className="h-96" onClick={handleContainerClick}>
               <AutoSizer>
-                {({ height, width }) => (
+                {({ height, width }: { height: number; width: number }) => (
                   <VirtualizedList
                     height={height}
                     width={width}
