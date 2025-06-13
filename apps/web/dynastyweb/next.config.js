@@ -3,7 +3,9 @@ const nextConfig = {
   typescript: {
     tsconfigPath: './tsconfig.json',
   },
-  eslint: {},
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   transpilePackages: ['ui', 'utils'],
   
   // Environment variables

@@ -2,11 +2,11 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 
 interface UnsubscribePageProps {
-  searchParams: { token?: string };
+  searchParams: Promise<{ token?: string }>;
 }
 
-export default function UnsubscribePage({ searchParams }: UnsubscribePageProps) {
-  const { token } = searchParams;
+export default async function UnsubscribePage({ searchParams }: UnsubscribePageProps) {
+  const { token } = await searchParams;
 
   if (!token) {
     notFound();
