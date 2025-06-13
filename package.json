@@ -4,7 +4,8 @@
   "workspaces": [
     "apps/web",
     "apps/mobile",
-    "packages/*"
+    "packages/*",
+    "packages/vault-sdk"
   ],
   "scripts": {
     "build": "turbo run build --filter=dynastyweb",
