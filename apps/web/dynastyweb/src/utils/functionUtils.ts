@@ -89,9 +89,7 @@ export const createStory = async (storyData: {
 }) => {
   // Create function reference for story creation
   
-  try {
-    // Send story data to Firebase function
-    
+  try {    
     const result = await getFunctionsClient().callFunction('createStory', storyData);
     return result.data as { id: string };
   } catch (error) {
