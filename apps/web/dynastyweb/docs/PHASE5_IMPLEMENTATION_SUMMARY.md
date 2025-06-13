@@ -135,7 +135,7 @@ UPSTASH_REDIS_REST_TOKEN=...
 
 1. **Environment Configuration**
    - Add Stripe publishable key to .env.local
-   - Configure Upstash Redis credentials
+   - Configure Redis credentials (Vercel KV auto-provisions or set manually)
    - Set up Stripe webhook endpoints
 
 2. **Backend Integration**

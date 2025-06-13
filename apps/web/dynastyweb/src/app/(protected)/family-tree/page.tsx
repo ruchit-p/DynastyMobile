@@ -166,10 +166,92 @@ export default function FamilyTreePage() {
   const searchParams = useSearchParams();
   const isNewUser = searchParams.get('newUser') === 'true';
   const newUserCheckedRef = useRef(false);
+  // Add refs for RAF-based position updates
+  const rafRef = useRef<number>();
+  const pendingPositionRef = useRef<{x: number, y: number} | null>(null);
+  const currentPositionRef = useRef(position);
+
+  // Keep position ref in sync
+  useEffect(() => {
+    currentPositionRef.current = position;
+  }, [position]);
+
+  // RAF-based position updater for smooth performance
+  const updatePosition = useCallback((newPositionOrFunction: {x: number, y: number} | ((prev: {x: number, y: number}) => {x: number, y: number})) => {
+    const newPosition = typeof newPositionOrFunction === 'function' 
+      ? newPositionOrFunction(currentPositionRef.current)
+      : newPositionOrFunction;
+    
+    pendingPositionRef.current = newPosition;
+    currentPositionRef.current = newPosition; // Update ref immediately to prevent stale reads
+    
+    if (rafRef.current) return;
+    
+    rafRef.current = requestAnimationFrame(() => {
+      if (pendingPositionRef.current) {
+        setPosition(pendingPositionRef.current);
+        pendingPositionRef.current = null;
+      }
+      rafRef.current = undefined;
+    });
+  }, []);
+
   const treeLayout = useMemo(
     () => calcTree(treeData, { rootId: rootNode, placeholders: false }),
     [treeData, rootNode]
   );
+
+  // Track window dimensions for viewport calculations
+  const [windowDimensions, setWindowDimensions] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return { width: window.innerWidth, height: window.innerHeight };
+    }
+    return { width: 1200, height: 800 }; // Default fallback for SSR
+  });
+
+  // Handle window resize for viewport calculations
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleResize = () => {
+      setWindowDimensions({ width: window.innerWidth, height: window.innerHeight });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Calculate visible nodes for viewport virtualization
+  const visibleNodes = useMemo(() => {
+    if (treeLayout.nodes.length === 0) return [];
+    
+    // Performance safeguard: if tree is extremely large, increase buffer to reduce filtering frequency
+    const buffer = treeLayout.nodes.length > 5000 ? 400 : 200;
+    
+    // Prevent division by zero or extremely small scale values
+    const safeScale = Math.max(scale, 0.001);
+    
+    // Calculate viewport bounds in tree coordinates
+    const viewport = {
+      left: (-position.x / safeScale) - buffer,
+      top: (-position.y / safeScale) - buffer,
+      right: (windowDimensions.width - position.x) / safeScale + buffer,
+      bottom: (windowDimensions.height - position.y) / safeScale + buffer
+    };
+    
+    // Filter nodes that intersect with the viewport
+    return treeLayout.nodes.filter(node => {
+      const nodeLeft = node.left * WIDTH;
+      const nodeRight = nodeLeft + WIDTH;
+      const nodeTop = node.top * HEIGHT;
+      const nodeBottom = nodeTop + HEIGHT;
+      
+      return nodeRight >= viewport.left && 
+             nodeLeft <= viewport.right &&
+             nodeBottom >= viewport.top && 
+             nodeTop <= viewport.bottom;
+    });
+  }, [treeLayout.nodes, position.x, position.y, scale, windowDimensions.width, windowDimensions.height]);
 
   // Check if we're on a mobile device
   useEffect(() => {
@@ -717,8 +799,8 @@ export default function FamilyTreePage() {
     const newX = currentX - e.deltaX;
     const newY = currentY - e.deltaY;
 
-    // Update position
-    setPosition({ x: newX, y: newY });
+    // Update position using RAF for smooth performance
+    updatePosition({ x: newX, y: newY });
   };
 
   // Update the handleTouchStart function to better handle touch events
@@ -760,8 +842,8 @@ export default function FamilyTreePage() {
       const deltaX = touch.clientX - lastTouchRef.current.x;
       const deltaY = touch.clientY - lastTouchRef.current.y;
       
-      // Update position based on the touch movement
-      setPosition(prev => ({
+      // Update position based on the touch movement using RAF
+      updatePosition(prev => ({
         x: prev.x + deltaX,
         y: prev.y + deltaY
       }));
@@ -846,8 +928,8 @@ export default function FamilyTreePage() {
     const deltaX = e.clientX - lastMouseRef.current.x;
     const deltaY = e.clientY - lastMouseRef.current.y;
     
-    // Update position based on the mouse movement
-    setPosition(prev => ({
+    // Update position based on the mouse movement using RAF
+    updatePosition(prev => ({
       x: prev.x + deltaX,
       y: prev.y + deltaY
     }));
@@ -875,6 +957,15 @@ export default function FamilyTreePage() {
     
     window.addEventListener('mouseup', handleGlobalMouseUp);
     return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+  }, []);
+
+  // Cleanup RAF on component unmount
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
   }, []);
 
   // Function to handle viewing a family member
@@ -1892,50 +1983,42 @@ export default function FamilyTreePage() {
               }}
             >
               {/* Render connectors first so they appear behind nodes */}
-              {treeLayout.connectors.map((connector: Connector, index: number) => {
-                const [x1, y1, x2, y2] = connector;
-                const key = `connector-${index}`;
+              {treeLayout.connectors.length > 0 && (
+                <svg
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: treeLayout.canvas.width * WIDTH,
+                    height: treeLayout.canvas.height * HEIGHT,
+                    overflow: 'visible',
+                    pointerEvents: 'none',
+                  }}
+                >
+                  {treeLayout.connectors.map((connector: Connector, index: number) => {
+                    const [x1, y1, x2, y2] = connector;
 
-                // Calculate centered coordinates
-                const startX = x1 * WIDTH - (WIDTH / 2);
-                const startY = y1 * HEIGHT - (HEIGHT / 2.5);
-                const endX = x2 * WIDTH - (WIDTH / 2);
-                const endY = y2 * HEIGHT - (HEIGHT / 2.5);
+                    // Calculate centered coordinates
+                    const startX = x1 * WIDTH - (WIDTH / 2);
+                    const startY = y1 * HEIGHT - (HEIGHT / 2.5);
+                    const endX = x2 * WIDTH - (WIDTH / 2);
+                    const endY = y2 * HEIGHT - (HEIGHT / 2.5);
 
-                return (
-                  <div
-                    key={key}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: '100%',
-                      overflow: 'visible',
-                    }}
-                  >
-                    <svg
-                      style={{
-                        position: 'absolute',
-                        width: '100%',
-                        height: '100%',
-                        overflow: 'visible',
-                        pointerEvents: 'none',
-                      }}
-                    >
+                    return (
                       <path
+                        key={`connector-${index}`}
                         d={`M ${startX} ${startY} L ${endX} ${endY}`}
                         stroke="#94a3b8"
                         strokeWidth="1"
                         fill="none"
                       />
-                    </svg>
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </svg>
+              )}
 
               {/* Render nodes on top of connectors */}
-              {treeLayout.nodes.map((node: ExtNode) => (
+              {visibleNodes.map((node: ExtNode) => (
                 <div
                   key={node.id}
                   onMouseDown={(e) => {

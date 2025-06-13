@@ -1,13 +1,22 @@
-# Redis Rate Limiting with Upstash
+# Redis Rate Limiting with Vercel KV (powered by Upstash)
 
 ## Overview
 
-This document describes the Redis-based rate limiting implementation using Upstash for the Dynasty platform. Rate limiting is implemented across both Firebase Functions and the Next.js web application to protect against abuse and ensure fair usage.
+This document describes the Redis-based rate limiting implementation using Vercel KV (powered by Upstash) for the Dynasty platform. Rate limiting is implemented across both Firebase Functions and the Next.js web application to protect against abuse and ensure fair usage.
+
+> **Note**: As of January 2025, the Dynasty web app uses Vercel KV integration which automatically provisions the KV_REST_API_URL and KV_REST_API_TOKEN environment variables. The legacy UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN variables are still supported for backward compatibility.
 
 ## Setup Instructions
 
-### 1. Create Upstash Redis Database
+### 1. Create Redis Database
 
+#### Option A: Using Vercel KV (Recommended for Vercel deployments)
+1. In your Vercel dashboard, go to the Storage tab
+2. Create a new KV database
+3. Connect it to your project
+4. Vercel automatically provisions `KV_REST_API_URL` and `KV_REST_API_TOKEN`
+
+#### Option B: Using Upstash directly
 1. Sign up for an Upstash account at https://upstash.com
 2. Create a new Redis database
 3. Choose a region close to your primary user base
@@ -18,18 +27,38 @@ This document describes the Redis-based rate limiting implementation using Upsta
 #### Firebase Functions
 ```bash
 # In apps/firebase/functions/.env
+# Using Vercel KV (if available)
+KV_REST_API_URL=your_kv_rest_api_url
+KV_REST_API_TOKEN=your_kv_rest_api_token
+
+# Or using Upstash directly (backward compatible)
 UPSTASH_REDIS_REST_URL=your_upstash_redis_rest_url
 UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_rest_token
 ```
 
 For Firebase Functions in production:
 ```bash
+# Using Vercel KV variables
+firebase functions:config:set kv.rest_api_url="your_url" kv.rest_api_token="your_token"
+
+# Or using Upstash variables (backward compatible)
 firebase functions:config:set upstash.redis_url="your_url" upstash.redis_token="your_token"
 ```
 
 #### Next.js Web App
 ```bash
 # In apps/web/dynastyweb/.env.local
+
+# When using Vercel KV integration:
+# These are automatically provided by Vercel when you connect KV to your project:
+# KV_REST_API_URL=<automatically provided>
+# KV_REST_API_TOKEN=<automatically provided>
+
+# Or manually set (backward compatible):
+KV_REST_API_URL=your_kv_rest_api_url
+KV_REST_API_TOKEN=your_kv_rest_api_token
+
+# Legacy variables (still supported):
 UPSTASH_REDIS_REST_URL=your_upstash_redis_rest_url
 UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_rest_token
 ```
@@ -102,8 +131,16 @@ When rate limit is exceeded:
 }
 ```
 
-### Monitoring in Upstash Console
+### Monitoring in Dashboard
 
+#### For Vercel KV:
+1. Access your Vercel dashboard
+2. Navigate to the Storage tab
+3. Select your KV database
+4. Use the Data Browser to inspect rate limit keys
+5. Monitor usage metrics and patterns
+
+#### For Upstash Direct:
 1. Access your Upstash dashboard
 2. Navigate to your Redis database
 3. Check the "Data Browser" to see rate limit keys
@@ -168,9 +205,10 @@ When rate limit is exceeded:
    - Consider increasing limits for specific operations
 
 3. **Performance issues**
-   - Upstash Redis is designed for edge performance
+   - Vercel KV/Upstash Redis is designed for edge performance
    - Consider using multiple Redis instances in different regions
    - Implement caching for frequently accessed data
+   - Vercel KV automatically uses edge locations for optimal performance
 
 ## Future Enhancements
 

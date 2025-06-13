@@ -7,8 +7,12 @@
 - [ ] **STRIPE_WEBHOOK_SECRET** set in Firebase secrets
 - [ ] **STRIPE_PRICE_IDS** configured in Firebase config
 - [ ] **NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY** set in web app
-- [ ] **UPSTASH_REDIS_REST_URL** set for rate limiting
-- [ ] **UPSTASH_REDIS_REST_TOKEN** set for rate limiting
+- [ ] **KV_REST_API_URL** set for rate limiting (auto-provisioned by Vercel KV)
+- [ ] **KV_REST_API_TOKEN** set for rate limiting (auto-provisioned by Vercel KV)
+- [ ] **UPSTASH_REDIS_REST_URL** (optional - legacy support)
+- [ ] **UPSTASH_REDIS_REST_TOKEN** (optional - legacy support)
+
+> **Note**: When using Vercel deployment with KV integration, the `KV_REST_API_URL` and `KV_REST_API_TOKEN` are automatically provisioned. The legacy `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` variables are still supported for backward compatibility.
 
 ### 2. Stripe Dashboard Configuration
 - [ ] Products created (Free, Individual Basic/Premium, Family)
@@ -184,6 +188,8 @@ await service.rollbackUserMigration("user_id", snapshotId);
    Metric: stripe_webhook_success_rate
    Alert: < 95% over 5 minutes
    ```
+
+   > **Rate Limiting Metrics**: Monitor rate limit hits in Vercel KV dashboard (Storage > KV > Metrics) or Upstash dashboard if using direct integration.
 
 2. **Checkout Conversion Rate**
    ```

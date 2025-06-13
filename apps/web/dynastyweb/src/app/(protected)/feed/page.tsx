@@ -1,19 +1,20 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect } from "react"
 import Link from "next/link"
 import { useAuth } from "@/context/AuthContext"
 import { type Story } from "@/utils/storyUtils"
 import { Button } from "@/components/ui/button"
-import { PenSquare, BookOpen, Calendar } from "lucide-react"
+import { PenSquare, BookOpen, Calendar, RefreshCw } from "lucide-react"
 import { StoryCard } from "@/components/Story"
-import { getAccessibleStories } from "@/utils/functionUtils"
 import { Spinner } from "@/components/ui/spinner"
-import { getEventsForFeed } from "@/utils/functionUtils"
 import { EventData } from "@/utils/eventUtils"
 import { EventFeedCard } from "@/components/EventFeedCard"
+import { useFeedData, type FeedItem } from "@/hooks/useFeedData"
+// @ts-ignore - Will be installed separately due to permission issues
+import { useInView } from 'react-intersection-observer'
 
-// Define the enriched story type
+// Define the enriched story type (using the same type as the hook)
 type EnrichedStory = Story & {
   author: {
     id: string;
@@ -26,125 +27,32 @@ type EnrichedStory = Story & {
   }>;
 };
 
-// Interface for feed items which can be either stories or events
-interface FeedItem {
-  id: string;
-  type: 'story' | 'event';
-  timestamp: string; // ISO date string
-  data: EnrichedStory | EventData;
-}
-
 export default function FeedPage() {
   const { currentUser, firestoreUser } = useAuth()
-  const [feedItems, setFeedItems] = useState<FeedItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
+  
+  // Use the new feed data hook with caching and pagination
+  const {
+    feedItems,
+    loading,
+    loadingMore,
+    hasMore,
+    loadMoreContent,
+    refresh,
+    error
+  } = useFeedData(currentUser?.uid || '', firestoreUser?.familyTreeId || '')
+  
+  // Intersection observer for infinite scroll
+  const { ref, inView } = useInView({
+    threshold: 0,
+    rootMargin: '100px', // Start loading 100px before reaching the bottom
+  })
+  
+  // Trigger loading more when scrolling near bottom
   useEffect(() => {
-    let mounted = true;
-
-    const loadFeedContent = async () => {
-      
-      try {
-        setLoading(true);
-        setError(null);
-
-        if (!currentUser?.uid || !firestoreUser?.familyTreeId) {
-          setError('Unable to load feed. Please try logging out and back in.');
-          return;
-        }
-
-        
-        // Load stories and events in parallel
-        const [storiesResult, eventsResult] = await Promise.all([
-          getAccessibleStories(currentUser.uid, firestoreUser.familyTreeId),
-          getEventsForFeed(currentUser.uid, firestoreUser.familyTreeId)
-        ]);
-        
-        if (!mounted) {
-          return;
-        }
-        
-        // Process stories
-        let allFeedItems: FeedItem[] = [];
-        
-        if (storiesResult && Array.isArray(storiesResult.stories)) {
-          const storyItems: FeedItem[] = storiesResult.stories.map(story => {
-            let timestampStr: string;
-            
-            // Convert different timestamp types to ISO string
-            if (story.createdAt) {
-              if (typeof story.createdAt === 'string') {
-                timestampStr = story.createdAt;
-              } else if (typeof story.createdAt === 'object' && 'toDate' in story.createdAt && typeof story.createdAt.toDate === 'function') {
-                // Handle Firebase timestamp-like objects
-                timestampStr = story.createdAt.toDate().toISOString();
-              } else if (story.createdAt instanceof Date) {
-                timestampStr = story.createdAt.toISOString();
-              } else {
-                // Fallback
-                timestampStr = new Date().toISOString();
-              }
-            } else {
-              timestampStr = new Date().toISOString();
-            }
-            
-            return {
-              id: story.id,
-              type: 'story',
-              timestamp: timestampStr,
-              data: story as EnrichedStory
-            }
-          });
-          
-          allFeedItems = [...allFeedItems, ...storyItems];
-        }
-        
-        // Process events
-        if (eventsResult && Array.isArray(eventsResult.events)) {
-          const eventItems: FeedItem[] = eventsResult.events.map((event: unknown) => {
-            const eventData = event as EventData;
-            return {
-              id: eventData.id,
-              type: 'event' as const,
-              timestamp: eventData.eventDate,
-              data: eventData
-            };
-          });
-          
-          allFeedItems = [...allFeedItems, ...eventItems];
-        }
-        
-        // Sort by timestamp, newest first
-        allFeedItems.sort((a, b) => 
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        );
-        
-        // Items have been processed; update state
-        
-        // Add more detailed logging for events
-        const eventItems = allFeedItems.filter(item => item.type === 'event');
-
-        setFeedItems(allFeedItems);
-      } catch (error) {
-        console.error('[Feed] Error loading feed content:', error);
-        if (!mounted) return;
-        setError(error instanceof Error ? error.message : 'Failed to load feed content');
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    if (currentUser && firestoreUser?.familyTreeId) {
-      loadFeedContent();
+    if (inView && hasMore && !loadingMore) {
+      loadMoreContent()
     }
-
-    return () => {
-      mounted = false;
-    };
-  }, [currentUser, firestoreUser]);
+  }, [inView, hasMore, loadingMore, loadMoreContent])
 
   if (loading) {
     return (
@@ -176,7 +84,18 @@ export default function FeedPage() {
     <div className="min-h-screen bg-[#F9FAFB]">
       <main className="container py-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 mt-6 gap-4 sm:gap-0">
-          <h1 className="text-2xl font-bold text-[#000000]">Family Feed</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-[#000000]">Family Feed</h1>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={refresh}
+              disabled={loading}
+              className="text-[#0A5C36] hover:bg-green-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
           <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
             <Link href="/create-story" className="w-full sm:w-auto">
               <Button 
@@ -241,6 +160,18 @@ export default function FeedPage() {
                 )}
               </div>
             ))}
+            
+            {/* Infinite scroll trigger */}
+            {hasMore && (
+              <div ref={ref} className="py-8 text-center">
+                {loadingMore && (
+                  <>
+                    <Spinner size="lg" variant="primary" className="mb-4" />
+                    <p className="text-[#0A5C36] font-medium">Loading more content...</p>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow-sm p-6 text-center">

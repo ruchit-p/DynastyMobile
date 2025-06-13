@@ -48,8 +48,8 @@ requiredFiles.forEach(file => {
 console.log('\n🔐 Testing environment variables...')
 const requiredEnvVars = [
   'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
-  'UPSTASH_REDIS_REST_URL',
-  'UPSTASH_REDIS_REST_TOKEN'
+  'KV_REST_API_URL',
+  'KV_REST_API_TOKEN'
 ]
 
 requiredEnvVars.forEach(envVar => {

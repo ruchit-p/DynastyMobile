@@ -4526,3 +4526,10 @@ export const getMediaUploadUrl = onCall(
     }
   )
 );
+
+// ============================================================================
+// V2 API EXPORTS - New handlers using SDK schemas and extracted architecture
+// ============================================================================
+
+// Export V2 handlers that use the vault-sdk schemas
+export * from './vault/v2';

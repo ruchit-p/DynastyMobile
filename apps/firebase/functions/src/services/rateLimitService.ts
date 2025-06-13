@@ -1,39 +1,65 @@
 import {Ratelimit} from "@upstash/ratelimit";
 import {Redis} from "@upstash/redis";
 import {defineSecret} from "firebase-functions/params";
+import {logger} from "firebase-functions/v2";
 import {SecurityError} from "../utils/errors";
 
-// Define secrets for Upstash Redis
-export const UPSTASH_REDIS_REST_URL = defineSecret("UPSTASH_REDIS_REST_URL");
-export const UPSTASH_REDIS_REST_TOKEN = defineSecret("UPSTASH_REDIS_REST_TOKEN");
+// Define secrets for Vercel KV (Upstash Redis)
+export const KV_REST_API_URL = defineSecret("KV_REST_API_URL");
+export const KV_REST_API_TOKEN = defineSecret("KV_REST_API_TOKEN");
 
 // Lazy initialization of Redis client
 let redis: Redis | null = null;
 let isInitialized = false;
 
+/**
+ * Get Redis configuration from secrets or environment variables
+ * Following the pattern from getStripeConfig() and getSESConfig()
+ */
+function getRedisConfig(): { url: string; token: string } {
+  // For local development with emulator
+  if (process.env.FUNCTIONS_EMULATOR === "true") {
+    // Try environment variables first for local development
+    // Support both new Vercel KV variables and legacy Upstash variables
+    const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || "";
+    const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || "";
+    
+    if (url && token) {
+      logger.info("Using Redis config from environment variables");
+      return { url, token };
+    }
+    
+    throw new Error(
+      "Redis configuration is missing. Please set KV_REST_API_URL and KV_REST_API_TOKEN environment variables (or legacy UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN)."
+    );
+  }
+
+  // In production/staging, use secrets
+  try {
+    const url = KV_REST_API_URL.value();
+    const token = KV_REST_API_TOKEN.value();
+    
+    if (!url || !token) {
+      throw new Error("Redis secrets are not properly configured");
+    }
+    
+    logger.info("Using Redis config from Secret Manager");
+    return { url, token };
+  } catch (error) {
+    logger.error("Failed to load Redis configuration from secrets", error);
+    throw new Error(
+      "Redis configuration is missing. Please set KV_REST_API_URL and KV_REST_API_TOKEN secrets in Firebase."
+    );
+  }
+}
+
 function getRedisClient(): Redis {
   if (!isInitialized) {
-    // Try to get config from environment first (for local development)
-    let redisUrl = process.env.UPSTASH_REDIS_REST_URL || "";
-    let redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || "";
-
-    // In production, use the secret values
-    if (UPSTASH_REDIS_REST_URL.value()) {
-      redisUrl = UPSTASH_REDIS_REST_URL.value();
-    }
-    if (UPSTASH_REDIS_REST_TOKEN.value()) {
-      redisToken = UPSTASH_REDIS_REST_TOKEN.value();
-    }
-
-    if (!redisUrl || !redisToken) {
-      throw new Error(
-        "Redis configuration is missing. Please set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables or secrets."
-      );
-    }
-
+    const config = getRedisConfig();
+    
     redis = new Redis({
-      url: redisUrl,
-      token: redisToken,
+      url: config.url,
+      token: config.token,
     });
     isInitialized = true;
   }

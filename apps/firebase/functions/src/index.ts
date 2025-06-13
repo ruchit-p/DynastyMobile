@@ -16,7 +16,7 @@ if (process.env.FUNCTIONS_EMULATOR === "true") {
 import {initializeApp} from "firebase-admin/app";
 import {setGlobalOptions} from "firebase-functions/v2";
 import {DEFAULT_REGION} from "./common";
-import {UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN} from "./services/rateLimitService";
+import {KV_REST_API_URL, KV_REST_API_TOKEN} from "./services/rateLimitService";
 import {
   STRIPE_SECRET_KEY,
   STRIPE_WEBHOOK_SECRET,
@@ -28,8 +28,8 @@ import {
 setGlobalOptions({
   region: DEFAULT_REGION,
   secrets: [
-    UPSTASH_REDIS_REST_URL,
-    UPSTASH_REDIS_REST_TOKEN,
+    KV_REST_API_URL,
+    KV_REST_API_TOKEN,
     // Stripe secrets
     STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET,

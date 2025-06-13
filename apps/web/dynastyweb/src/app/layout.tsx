@@ -4,6 +4,7 @@ import { AuthProvider } from '@/context/AuthContext'
 import { EmulatorProvider } from '@/context/EmulatorContext'
 import { NotificationProvider } from '@/context/NotificationContext'
 import { OfflineProvider } from '@/context/OfflineContext'
+import { CookieConsentProvider } from '@/context/CookieConsentContext'
 import { Toaster } from '@/components/ui/toaster'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import { AnalyticsWrapper } from '@/components/AnalyticsWrapper'
@@ -32,9 +33,11 @@ export default function RootLayout({
             <AuthProvider>
               <OfflineProvider>
                 <NotificationProvider>
-                  {children}
-                  <Toaster />
-                  <AnalyticsWrapper />
+                  <CookieConsentProvider>
+                    {children}
+                    <Toaster />
+                    <AnalyticsWrapper />
+                  </CookieConsentProvider>
                 </NotificationProvider>
               </OfflineProvider>
             </AuthProvider>
