@@ -46,7 +46,7 @@
     "@react-navigation/stack": "^7.3.1",
     "@sentry/react-native": "^6.14.0",
     "@shopify/flash-list": "1.7.6",
-    "@signalapp/libsignal-client": "^0.73.1",
+    "@signalapp/libsignal-client": "^0.74.1",
     "date-fns": "^4.1.0",
     "expo": "~53.0.7",
     "expo-apple-authentication": "^7.2.4",
