@@ -31,7 +31,11 @@ import { Spinner } from '@/components/ui/spinner';
 import { Progress } from '@/components/ui/progress';
 import { useOffline } from '@/context/OfflineContext';
 import Image from 'next/image';
-import FilePreview from '@/components/FilePreview';
+import dynamic from 'next/dynamic';
+import { FixedSizeList as VirtualizedList, ListChildComponentProps } from 'react-window';
+import AutoSizer from 'react-virtualized-auto-sizer';
+
+const FilePreview = dynamic(() => import('@/components/FilePreview'), { ssr: false });
 
 interface BreadcrumbItem {
   id: string | null;
@@ -338,6 +342,107 @@ export default function VaultPage() {
     folder.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const listData = [
+    ...filteredFolders.map((folder) => ({ type: 'folder' as const, folder })),
+    ...filteredItems.map((item) => ({ type: 'file' as const, item })),
+  ];
+
+  const Row = ({ index, style }: ListChildComponentProps<{ index: number }>) => {
+    const entry = listData[index];
+    if (entry.type === 'folder') {
+      const folder = entry.folder;
+      return (
+        <div style={style}>
+          <Card
+            className={`cursor-pointer p-4 transition-all hover:bg-gray-50 ${
+              selectedItems.has(folder.id) ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+            }`}
+            onClick={(e) => handleItemClick(folder.id, e)}
+            onDoubleClick={() => handleFolderDoubleClick(folder)}
+            onContextMenu={(e) => handleContextMenu(e, folder, 'folder')}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Folder className="h-8 w-8 text-blue-500" />
+                <div>
+                  <p className="font-medium">{folder.name}</p>
+                  <p className="text-sm text-gray-500">
+                    {folder.itemCount} items • {formatFileSize(folder.totalSize)}
+                  </p>
+                </div>
+              </div>
+              <span className="text-sm text-gray-500">
+                {formatVaultDate(folder.updatedAt, 'MMM d, yyyy')}
+              </span>
+            </div>
+          </Card>
+        </div>
+      );
+    }
+    const item = entry.item as VaultItem;
+    return (
+      <div style={style}>
+        <Card
+          className={`p-4 cursor-pointer transition-all hover:bg-gray-50 ${
+            selectedItems.has(item.id) ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+          }`}
+          onClick={(e) => handleItemClick(item.id, e)}
+          onDoubleClick={() => handleItemDoubleClick(item)}
+          onContextMenu={(e) => handleContextMenu(e, item, 'file')}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 relative flex-shrink-0">
+                {canShowThumbnail(item) ? (
+                  item.url || item.thumbnailUrl ? (
+                    <Image
+                      src={item.thumbnailUrl || item.url || ''}
+                      alt={item.name}
+                      fill
+                      className="object-cover rounded"
+                      sizes="48px"
+                      unoptimized={true}
+                      onError={(e) => {
+                        const imgElement = e.target as HTMLImageElement;
+                        if (imgElement) {
+                          imgElement.style.display = 'none';
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="h-full w-full bg-gray-100 rounded flex items-center justify-center cursor-pointer"
+                      onMouseEnter={() => loadThumbnailUrl(item)}
+                    >
+                      {loadingThumbnails.has(item.id) ? (
+                        <Spinner className="h-4 w-4" />
+                      ) : (
+                        <FileImage className="h-6 w-6 text-gray-400" />
+                      )}
+                    </div>
+                  )
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    {getFileIconComponent(item.mimeType)}
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="font-medium">{item.name}</p>
+                <p className="text-sm text-gray-500">
+                  {formatFileSize(item.size || 0)}
+                </p>
+              </div>
+            </div>
+            <span className="text-sm text-gray-500">
+              {formatVaultDate(item.updatedAt, 'MMM d, yyyy')}
+            </span>
+          </div>
+        </Card>
+      </div>
+    );
+  };
+
   // Helper function to get file icon component
   const getFileIconComponent = (mimeType?: string) => {
     if (!mimeType) return <File className="h-12 w-12 text-gray-400" />;
@@ -554,9 +659,9 @@ export default function VaultPage() {
                               className="object-contain rounded"
                               sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
                               unoptimized={true}
-                              onError={() => {
+                              onError={(e) => {
                                 // Fall back to icon if image fails to load
-                                const imgElement = event?.target as HTMLImageElement;
+                                const imgElement = e.target as HTMLImageElement;
                                 if (imgElement) {
                                   imgElement.style.display = 'none';
                                 }
@@ -586,97 +691,19 @@ export default function VaultPage() {
               ))}
             </div>
           ) : (
-            <div className="space-y-2" onClick={handleContainerClick}>
-              {/* List view folders */}
-              {filteredFolders.map((folder) => (
-                <Card
-                  key={folder.id}
-                  className={`cursor-pointer p-4 transition-all hover:bg-gray-50 ${
-                    selectedItems.has(folder.id) ? 'ring-2 ring-blue-500 bg-blue-50' : ''
-                  }`}
-                  onClick={(e) => handleItemClick(folder.id, e)}
-                  onDoubleClick={() => handleFolderDoubleClick(folder)}
-                  onContextMenu={(e) => handleContextMenu(e, folder, 'folder')}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Folder className="h-8 w-8 text-blue-500" />
-                      <div>
-                        <p className="font-medium">{folder.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {folder.itemCount} items • {formatFileSize(folder.totalSize)}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-sm text-gray-500">
-                      {formatVaultDate(folder.updatedAt, 'MMM d, yyyy')}
-                    </span>
-                  </div>
-                </Card>
-              ))}
-
-              {/* List view files */}
-              {filteredItems.map((item) => (
-                <Card 
-                  key={item.id} 
-                  className={`p-4 cursor-pointer transition-all hover:bg-gray-50 ${
-                    selectedItems.has(item.id) ? 'ring-2 ring-blue-500 bg-blue-50' : ''
-                  }`}
-                  onClick={(e) => handleItemClick(item.id, e)}
-                  onDoubleClick={() => handleItemDoubleClick(item)}
-                  onContextMenu={(e) => handleContextMenu(e, item, 'file')}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 relative flex-shrink-0">
-                        {canShowThumbnail(item) ? (
-                          item.url || item.thumbnailUrl ? (
-                            <Image
-                              src={item.thumbnailUrl || item.url || ''}
-                              alt={item.name}
-                              fill
-                              className="object-cover rounded"
-                              sizes="48px"
-                              unoptimized={true}
-                              onError={() => {
-                                // Fall back to icon if image fails to load
-                                const imgElement = event?.target as HTMLImageElement;
-                                if (imgElement) {
-                                  imgElement.style.display = 'none';
-                                }
-                              }}
-                            />
-                          ) : (
-                            <div 
-                              className="h-full w-full bg-gray-100 rounded flex items-center justify-center cursor-pointer"
-                              onMouseEnter={() => loadThumbnailUrl(item)}
-                            >
-                              {loadingThumbnails.has(item.id) ? (
-                                <Spinner className="h-4 w-4" />
-                              ) : (
-                                <FileImage className="h-6 w-6 text-gray-400" />
-                              )}
-                            </div>
-                          )
-                        ) : (
-                          <div className="flex items-center justify-center h-full">
-                            {getFileIconComponent(item.mimeType)}
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-medium">{item.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {formatFileSize(item.size || 0)}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-sm text-gray-500">
-                      {formatVaultDate(item.updatedAt, 'MMM d, yyyy')}
-                    </span>
-                  </div>
-                </Card>
-              ))}
+            <div className="h-96" onClick={handleContainerClick}>
+              <AutoSizer>
+                {({ height, width }) => (
+                  <VirtualizedList
+                    height={height}
+                    width={width}
+                    itemCount={listData.length}
+                    itemSize={80}
+                  >
+                    {Row}
+                  </VirtualizedList>
+                )}
+              </AutoSizer>
             </div>
           )}
         </div>
