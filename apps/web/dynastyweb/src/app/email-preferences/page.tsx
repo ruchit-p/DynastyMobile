@@ -2,11 +2,11 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 
 interface EmailPreferencesPageProps {
-  searchParams: { token?: string };
+  searchParams: Promise<{ token?: string }>;
 }
 
-export default function EmailPreferencesPage({ searchParams }: EmailPreferencesPageProps) {
-  const { token } = searchParams;
+export default async function EmailPreferencesPage({ searchParams }: EmailPreferencesPageProps) {
+  const { token } = await searchParams;
 
   if (!token) {
     notFound();

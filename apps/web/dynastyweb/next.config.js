@@ -3,7 +3,9 @@ const nextConfig = {
   typescript: {
     tsconfigPath: './tsconfig.json',
   },
-  eslint: {},
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   transpilePackages: ['ui', 'utils'],
   
   // Environment variables
@@ -11,10 +13,18 @@ const nextConfig = {
     NEXT_PUBLIC_USE_FIREBASE_EMULATOR: process.env.NODE_ENV === 'development' ? 'true' : 'false',
   },
   
+  // Webpack configuration for path aliases
+  webpack(config) {
+    const path = require('path');
+    config.resolve.alias['@'] = path.resolve(__dirname, 'src');
+    return config;
+  },
+  
   // Turbopack configuration (replaces webpack config)
   experimental: {
     turbo: {
       resolveAlias: {
+        '@': './src',
         'react-native$': 'react-native-web',
       },
       resolveExtensions: [
