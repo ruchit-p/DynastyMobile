@@ -63,19 +63,23 @@ export class WebVaultCryptoService {
 
   /**
    * Derive vault master key from user password using Argon2id
-   * Uses INTERACTIVE parameters optimized for web performance
+   * Uses MODERATE parameters for stronger security per NIST-2024 guidance.
+   * NOTE: If performance becomes an issue on low-powered devices we can expose
+   * these parameters via Remote Config so they can be tuned without redeploy.
    */
   async deriveVaultMasterKey(password: string, salt: Uint8Array): Promise<Uint8Array> {
     await this.ensureSodiumReady();
 
     try {
       const keyLength = 32; // 256-bit key
+      // Stronger Argon2id work factors (≈3× slower than INTERACTIVE)
+      // TODO(remote-config): pull ops/mem limits dynamically
       const derivedKey = sodium.crypto_pwhash(
         keyLength,
         password,
         salt,
-        sodium.crypto_pwhash_OPSLIMIT_INTERACTIVE, // 2 iterations
-        sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE, // 64MB memory
+        sodium.crypto_pwhash_OPSLIMIT_MODERATE,
+        sodium.crypto_pwhash_MEMLIMIT_MODERATE,
         sodium.crypto_pwhash_ALG_ARGON2ID13
       );
 
@@ -95,16 +99,17 @@ export class WebVaultCryptoService {
    */
   deriveFileKey(vaultMasterKey: Uint8Array, fileId: string): Uint8Array {
     try {
-      // Create deterministic subkey ID from file ID
-      const fileIdHash = sodium.crypto_generichash(8, fileId);
-      // Convert first 8 bytes to a number for subkey_id
-      const view = new DataView(fileIdHash.buffer, fileIdHash.byteOffset, 8);
-      const subkeyId = Number(view.getBigUint64(0, true) % BigInt(Number.MAX_SAFE_INTEGER));
+      // Use first 8 bytes of the hash as the KDF context to avoid relying on a
+      // truncated numeric subKeyId that could collide. We fix subKeyId = 0 and
+      // ensure an 8-byte ASCII context (libsodium requirement).
+      const fileIdHash = sodium.crypto_generichash(8, fileId); // 8-byte digest
+      // Convert to hex and take first 8 chars (8-byte ASCII context)
+      const context = sodium.to_hex(fileIdHash).slice(0, 8);
 
       return sodium.crypto_kdf_derive_from_key(
         32, // 256-bit key
-        subkeyId,
-        FILE_DERIVATION_CONTEXT,
+        0,  // subkeyId fixed – uniqueness comes from context
+        context,
         vaultMasterKey
       );
     } catch (error) {

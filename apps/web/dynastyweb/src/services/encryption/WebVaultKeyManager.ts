@@ -63,9 +63,21 @@ export class WebVaultKeyManager {
   private static instance: WebVaultKeyManager;
   private cryptoService: WebVaultCryptoService;
   private db: IDBDatabase | null = null;
+  private autoClearTimeoutHandle?: number;
 
   private constructor() {
     this.cryptoService = WebVaultCryptoService.getInstance();
+
+    // Clear any session-stored keys when the tab/window is hidden to reduce
+    // the window an XSS attacker could access in-memory keys. This is a best-
+    // effort mitigation; keys are also cleared on explicit idle timer below.
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+          this.clearAllSessionKeys();
+        }
+      });
+    }
   }
 
   static getInstance(): WebVaultKeyManager {
@@ -464,11 +476,22 @@ export class WebVaultKeyManager {
    */
   private storeKeyInSession(userId: string, key: Uint8Array): void {
     try {
-      const keyBase64 = this.cryptoService.toBase64(key);
-      sessionStorage.setItem(`${SESSION_STORAGE_PREFIX}${userId}`, keyBase64);
-    } catch (error) {
-      // Session storage might be full or disabled, that's ok
-      console.warn('Failed to store key in session storage:', error);
+      const storageKey = `${SESSION_STORAGE_PREFIX}${userId}`;
+      sessionStorage.setItem(storageKey, this.cryptoService.toBase64(key));
+
+      // Schedule automatic removal after the configured auto-lock timeout
+      const DEFAULT_AUTO_LOCK_MINUTES = 15;
+      const timeoutMs = DEFAULT_AUTO_LOCK_MINUTES * 60 * 1000;
+
+      if (this.autoClearTimeoutHandle) {
+        clearTimeout(this.autoClearTimeoutHandle);
+      }
+
+      this.autoClearTimeoutHandle = window.setTimeout(() => {
+        this.clearSessionKey(userId);
+      }, timeoutMs);
+    } catch {
+      // Silent failure – sessionStorage might be unavailable (Safari private mode)
     }
   }
 

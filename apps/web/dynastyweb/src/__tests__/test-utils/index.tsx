@@ -372,7 +372,7 @@ export const generateTestEvent = (overrides = {}) => ({
   id: 'test-event-123',
   name: 'Test Event',
   description: 'Test event description',
-  date: new Date('2024-06-01'),
+  date: '2024-06-01T14:00:00.000Z',
   time: '14:00',
   location: 'Test Location',
   address: '123 Test St',
@@ -387,7 +387,7 @@ export const generateTestEvent = (overrides = {}) => ({
   allowGuestPlusOne: true,
   showGuestList: true,
   requireRsvp: true,
-  rsvpDeadline: new Date('2024-05-31'),
+  rsvpDeadline: '2024-05-31T23:59:59.000Z',
   tags: ['family', 'celebration'],
   attendees: [
     { id: 'test-user-123', name: 'Test User', status: 'attending' },

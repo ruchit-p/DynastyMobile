@@ -51,10 +51,10 @@ export function VaultSetup({ userId, onComplete }: VaultSetupProps) {
       return;
     }
     
-    if (password.length < 8) {
+    if (password.length < 12) {
       toast({
         title: "Password too short",
-        description: "Password must be at least 8 characters long",
+        description: "Password must be at least 12 characters long",
         variant: "destructive"
       });
       return;
