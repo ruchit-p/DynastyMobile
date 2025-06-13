@@ -497,8 +497,6 @@ export default function FamilyTreePage() {
     };
   }, [treeLayout, position.x, position.y, scale]);
 
-
-
   const handleNodeClick = (node: ExtNode, isClick: boolean) => {
     if (!isClick) return;
 
