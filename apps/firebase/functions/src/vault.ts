@@ -11,6 +11,7 @@ import {getStorageAdapter} from "./services/storageAdapter";
 import {validateUploadRequest, checkUserStorageCapacity} from "./config/r2Security";
 import {R2_CONFIG} from "./config/r2Secrets";
 import {R2Service} from "./services/r2Service";
+import {B2Service} from "./services/b2Service";
 import {SubscriptionValidationService} from "./services/subscriptionValidationService";
 import {createLogContext, formatErrorForLogging} from "./utils/sanitization";
 import {validateRequest} from "./utils/request-validator";
@@ -56,10 +57,14 @@ interface VaultItem {
   };
   // Access level for the current user (added during queries)
   accessLevel?: "owner" | "read" | "write";
-  // R2 Storage fields (when using R2)
-  storageProvider?: "firebase" | "r2";
+  // Cloud storage (R2/B2) fields
+  storageProvider?: "firebase" | "r2" | "b2";
+  // R2 fields (legacy)
   r2Bucket?: string;
   r2Key?: string;
+  // B2 fields (new)
+  b2Bucket?: string;
+  b2Key?: string;
   // Cached URLs with expiration
   cachedUploadUrl?: string;
   cachedUploadUrlExpiry?: Timestamp;
@@ -442,16 +447,46 @@ export const getVaultUploadSignedUrl = onCall(
 
       // Initialize storage adapter
       const storageAdapter = getStorageAdapter();
-      // Default to R2, fallback to Firebase only for local emulator without R2
-      const storageProvider = process.env.STORAGE_PROVIDER === "firebase" ? "firebase" : "r2";
+      // Default to B2, fallback to Firebase only when explicitly set
+      const storageProvider = process.env.STORAGE_PROVIDER === "firebase" ? "firebase" : "b2";
 
       let signedUrl: string;
       let storagePath: string;
+      // R2
       let r2Bucket: string | undefined;
       let r2Key: string | undefined;
+      // B2
+      let b2Bucket: string | undefined;
+      let b2Key: string | undefined;
 
-      if (storageProvider === "r2") {
-        // Use R2 storage
+      if (storageProvider === "b2") {
+        // Use Backblaze B2 storage
+        b2Bucket = B2Service.getBucketName();
+        b2Key = B2Service.generateStorageKey(
+          "vault",
+          uid,
+          sanitizedFileName,
+          parentId || undefined
+        );
+
+        const result = await storageAdapter.generateUploadUrl({
+          path: b2Key,
+          contentType: sanitizedMimeType,
+          expiresIn: 300, // 5 minutes
+          metadata: {
+            uploadedBy: uid,
+            originalName: sanitizedFileName,
+            parentId: parentId || "root",
+            isEncrypted: isEncrypted.toString(),
+          },
+          bucket: b2Bucket,
+          provider: "b2",
+        });
+
+        signedUrl = result.signedUrl;
+        storagePath = b2Key; // For B2, storagePath is the key
+      } else if (storageProvider === "r2") {
+        // Use R2 storage (legacy)
         r2Bucket = R2Service.getBucketName();
         r2Key = R2Service.generateStorageKey(
           "vault",
@@ -511,6 +546,8 @@ export const getVaultUploadSignedUrl = onCall(
         storagePath,
         ...(r2Bucket && {r2Bucket}),
         ...(r2Key && {r2Key}),
+        ...(b2Bucket && {b2Bucket}),
+        ...(b2Key && {b2Key}),
         cachedUploadUrl: signedUrl,
         cachedUploadUrlExpiry: Timestamp.fromMillis(Date.now() + 300000), // 5 minutes
       };
@@ -527,6 +564,8 @@ export const getVaultUploadSignedUrl = onCall(
         storageProvider,
         ...(r2Bucket && {r2Bucket}),
         ...(r2Key && {r2Key}),
+        ...(b2Bucket && {b2Bucket}),
+        ...(b2Key && {b2Key}),
       };
     },
     "getVaultUploadSignedUrl",
@@ -893,9 +932,9 @@ export const addVaultFile = onCall(
 
         // Generate download URL based on storage provider
         let finalDownloadURL = "";
-        if (existingItem.storageProvider === "r2" && existingItem.r2Bucket && existingItem.r2Key) {
-          // For R2, we'll generate download URLs on demand in getVaultDownloadUrl
-          finalDownloadURL = ""; // R2 doesn't have permanent public URLs
+        if (existingItem.storageProvider !== "firebase") {
+          // For R2 or B2 we generate signed URLs on demand via getVaultDownloadUrl
+          finalDownloadURL = "";
         } else {
           // Firebase Storage download URL
           const bucket = getStorage().bucket();
@@ -1228,9 +1267,11 @@ export const deleteVaultItem = onCall(
         type: "file" | "folder";
         path: string;
         storagePath?: string;
-        storageProvider?: "firebase" | "r2";
+        storageProvider?: "firebase" | "r2" | "b2";
         r2Bucket?: string;
         r2Key?: string;
+        b2Bucket?: string;
+        b2Key?: string;
       }> = [];
 
       if (item.type === "folder") {
@@ -1255,6 +1296,8 @@ export const deleteVaultItem = onCall(
             storageProvider: childData.storageProvider,
             r2Bucket: childData.r2Bucket,
             r2Key: childData.r2Key,
+            b2Bucket: childData.b2Bucket,
+            b2Key: childData.b2Key,
           });
         });
       } else {
@@ -1268,6 +1311,8 @@ export const deleteVaultItem = onCall(
           storageProvider: item.storageProvider,
           r2Bucket: item.r2Bucket,
           r2Key: item.r2Key,
+          b2Bucket: item.b2Bucket,
+          b2Key: item.b2Key,
         });
       }
 
@@ -2136,7 +2181,7 @@ export const getVaultDownloadUrl = onCall(
       }
       vaultItem = accessResult.item;
 
-      if (!vaultItem?.storagePath && !vaultItem?.r2Key) {
+      if (!vaultItem?.storagePath && !vaultItem?.r2Key && !vaultItem?.b2Key) {
         throw createError(
           ErrorCode.INVALID_REQUEST,
           "Vault item does not have an associated storage path"
@@ -2196,6 +2241,14 @@ export const getVaultDownloadUrl = onCall(
           3600 // 1 hour
         );
         signedUrl = result.signedUrl;
+      } else if (vaultItem?.storageProvider === "b2" && vaultItem?.b2Bucket && vaultItem?.b2Key) {
+        // Use B2 for download
+        const storageAdapter = getStorageAdapter();
+        const result = await storageAdapter.generateDownloadUrl(
+          vaultItem.b2Key,
+          3600 // 1 hour
+        );
+        signedUrl = result.signedUrl;
       } else {
         // Use Firebase Storage
         const finalStoragePath = vaultItem?.storagePath || storagePath;
@@ -2221,7 +2274,7 @@ export const getVaultDownloadUrl = onCall(
       // Create detailed audit log for file access
       await db.collection("vaultAuditLogs").add({
         itemId: vaultItem?.id,
-        storagePath: vaultItem?.storagePath || vaultItem?.r2Key,
+        storagePath: vaultItem?.storagePath || vaultItem?.r2Key || vaultItem?.b2Key,
         userId: uid,
         action: "download",
         timestamp: FieldValue.serverTimestamp(),
@@ -3850,6 +3903,7 @@ export const getSystemVaultStats = onCall(
           storage: {
             firebase: {count: 0, size: 0},
             r2: {count: 0, size: 0},
+            b2: {count: 0, size: 0},
           },
         };
 
@@ -3920,6 +3974,9 @@ export const getSystemVaultStats = onCall(
             if (item.storageProvider === "r2") {
               stats.storage.r2.count++;
               stats.storage.r2.size += item.size || 0;
+            } else if (item.storageProvider === "b2") {
+              stats.storage.b2.count++;
+              stats.storage.b2.size += item.size || 0;
             } else {
               stats.storage.firebase.count++;
               stats.storage.firebase.size += item.size || 0;
@@ -3971,6 +4028,10 @@ export const getSystemVaultStats = onCall(
           r2MigrationProgress:
             stats.items.total > 0 ?
               ((stats.storage.r2.count / stats.items.total) * 100).toFixed(2) + "%" :
+              "0%",
+          b2MigrationProgress:
+            stats.items.total > 0 ?
+              ((stats.storage.b2.count / stats.items.total) * 100).toFixed(2) + "%" :
               "0%",
         };
 

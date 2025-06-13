@@ -1,4 +1,4 @@
-import { r2MediaService } from '@/services/R2MediaService';
+import { b2MediaService } from '@/services/B2MediaService';
 
 /**
  * Compresses an image by:
@@ -190,7 +190,7 @@ interface UploadProgressCallback {
 }
 
 /**
- * Uploads a media file to R2/Firebase Storage with compression and progress tracking
+ * Uploads a media file to B2/Firebase Storage with compression and progress tracking
  */
 export const uploadMedia = async (
   file: File,
@@ -199,8 +199,8 @@ export const uploadMedia = async (
   callbacks?: UploadProgressCallback
 ): Promise<string> => {
   try {
-    // Use R2MediaService for uploads
-    return await r2MediaService.uploadStoryMedia(file, storyId, type, callbacks);
+    // Use B2MediaService for uploads
+    return await b2MediaService.uploadStoryMedia(file, storyId, type, callbacks);
   } catch (error) {
     const finalError = error as Error;
     callbacks?.onError?.(finalError);
@@ -209,7 +209,7 @@ export const uploadMedia = async (
 };
 
 /**
- * Uploads a profile picture blob to R2/Firebase Storage with progress tracking
+ * Uploads a profile picture blob to B2/Firebase Storage with progress tracking
  * This function is designed to work with Blob objects from image cropping
  */
 export const uploadProfilePicture = async (
@@ -218,8 +218,8 @@ export const uploadProfilePicture = async (
   callbacks?: UploadProgressCallback
 ): Promise<string> => {
   try {
-    // Use R2MediaService for uploads
-    return await r2MediaService.uploadProfilePicture(imageBlob, userId, callbacks);
+    // Use B2MediaService for uploads
+    return await b2MediaService.uploadProfilePicture(imageBlob, userId, callbacks);
   } catch (error) {
     const finalError = error as Error;
     callbacks?.onError?.(finalError);
@@ -258,7 +258,7 @@ export const ensureAccessibleStorageUrl = (url: string): string => {
 };
 
 /**
- * Uploads event cover photos to R2/Firebase Storage
+ * Uploads event cover photos to B2/Firebase Storage
  * Uses the same path pattern as the backend: events/{eventId}/covers/{filename}
  * This is for temporary uploads before event creation - backend API requires existing eventId
  */
@@ -268,8 +268,8 @@ export const uploadEventCoverPhoto = async (
   callbacks?: UploadProgressCallback
 ): Promise<string> => {
   try {
-    // Use R2MediaService for uploads
-    return await r2MediaService.uploadEventCoverPhoto(file, eventId, callbacks);
+    // Use B2MediaService for uploads
+    return await b2MediaService.uploadEventCoverPhoto(file, eventId, callbacks);
   } catch (error) {
     const finalError = error as Error;
     callbacks?.onError?.(finalError);
