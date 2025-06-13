@@ -99,6 +99,7 @@ export const initiatePasswordReset = onCall({
           username: displayName,
           resetLink: resetLink,
         },
+        userId: userRecord.uid,
       });
       logger.info("Password reset email sent successfully", createLogContext({email}));
 
