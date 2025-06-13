@@ -41,9 +41,17 @@ export function getEmailProvider(): EmailProvider {
  */
 export async function sendEmailUniversal(options: {
   to: string;
-  templateType: "verification" | "passwordReset" | "invite" | "mfa" | "paymentFailed" | "paymentRetry" | "subscriptionSuspended";
+  templateType:
+    | "verification"
+    | "passwordReset"
+    | "invite"
+    | "mfa"
+    | "paymentFailed"
+    | "paymentRetry"
+    | "subscriptionSuspended";
   dynamicTemplateData: Record<string, any>;
   fromName?: string;
+  userId?: string;
 }): Promise<void> {
   const provider = getEmailProvider();
 
