@@ -325,6 +325,7 @@ export const handleSignUp = onCall({
           username: signupData.email.split("@")[0], // Use email username as fallback since we don't have names yet
           verificationLink: verificationLink,
         },
+        userId,
       });
 
       logger.info("Successfully completed simplified signup process", createLogContext({

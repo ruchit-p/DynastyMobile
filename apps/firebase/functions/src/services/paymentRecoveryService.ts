@@ -567,6 +567,7 @@ export class PaymentRecoveryService {
           subject,
           urgency,
         },
+        userId: subscription.userId,
       });
 
       logger.info("Dunning email sent", {
@@ -603,6 +604,7 @@ export class PaymentRecoveryService {
           subject: "Payment Successful - Your Subscription is Active",
           emailType: "payment_success",
         },
+        userId: subscription.userId,
       });
     } catch (error) {
       logger.error("Failed to send payment success email", {
@@ -632,6 +634,7 @@ export class PaymentRecoveryService {
           reactivateUrl: `${process.env.FRONTEND_URL || "https://mydynastyapp.com"}/account/billing/reactivate`,
           subject: "Subscription Suspended - Payment Required",
         },
+        userId: subscription.userId,
       });
     } catch (error) {
       logger.error("Failed to send suspension email", {
@@ -661,6 +664,7 @@ export class PaymentRecoveryService {
           subject: "Subscription Reactivated - Welcome Back!",
           emailType: "subscription_reactivated",
         },
+        userId: subscription.userId,
       });
     } catch (error) {
       logger.error("Failed to send reactivation email", {

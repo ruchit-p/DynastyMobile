@@ -80,6 +80,7 @@ export const sendVerificationEmail = onCall(
             userName: displayName || userData.firstName || "User",
             verificationUrl: verificationLink, // Note: changed from verificationLink to verificationUrl for template consistency
           },
+          userId: request.auth?.uid,
         });
 
         logger.info(`Verification email sent successfully to ${email} for user ${request.auth?.uid}`);
