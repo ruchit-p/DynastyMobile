@@ -104,6 +104,7 @@ export const sendFamilyTreeInvitation = onCall({
         acceptLink: invitationLink,
         year: new Date().getFullYear(),
       },
+      userId: invitationData.inviteeId,
     });
     logger.info(`Successfully sent invitation email to ${invitationData.inviteeEmail}`);
 

@@ -734,6 +734,7 @@ describe("Password Management Functions", () => {
       mockAuth.generatePasswordResetLink.mockResolvedValue("https://reset-link");
       mockAuth.getUserByEmail.mockResolvedValue({
         displayName: "Test User",
+        uid: "uid123",
       });
 
       const emailModule = jest.requireMock("../auth/config/emailConfig");
@@ -750,6 +751,7 @@ describe("Password Management Functions", () => {
           username: "Test User",
           resetLink: "https://reset-link",
         },
+        userId: "uid123",
       });
     });
   });
