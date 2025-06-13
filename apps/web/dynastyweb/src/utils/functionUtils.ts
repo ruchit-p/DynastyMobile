@@ -87,21 +87,10 @@ export const createStory = async (storyData: {
   peopleInvolved: string[];
   coverPhoto?: string;
 }) => {
-  console.log("📞 Creating function reference for createStory");
+  // Create function reference for story creation
   
-  try {
-    console.log("📤 Sending story data to Firebase function", { 
-      title: storyData.title,
-      blocksCount: storyData.blocks.length,
-      hasCoverPhoto: !!storyData.coverPhoto,
-      familyTreeId: storyData.familyTreeId
-    });
-    
-    // Add debugger for browser inspection
-    debugger;
-    
+  try {    
     const result = await getFunctionsClient().callFunction('createStory', storyData);
-    console.log("📥 Received response from createStory function", result.data);
     return result.data as { id: string };
   } catch (error) {
     console.error("❌ Error in createStory function call:", error);
@@ -241,7 +230,6 @@ export const getFamilyManagementData = async () => {
  */
 export async function getEventsForFeed(userId: string, familyTreeId: string) {
   try {
-    console.log('Fetching events for feed with userId:', userId, 'familyTreeId:', familyTreeId);
     
     const result = await getFunctionsClient().callFunction<
       { userId: string; familyTreeId: string },
