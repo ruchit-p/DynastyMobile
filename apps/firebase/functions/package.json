@@ -42,7 +42,7 @@
     "jsonwebtoken": "^9.0.2",
     "libsodium-wrappers": "^0.7.15",
     "stripe": "^18.2.1",
-    "twilio": "^5.6.1",
+    "twilio": "^5.7.1",
     "winston": "^3.16.0",
     "zod": "^3.25.63"
   },
