@@ -24,6 +24,13 @@ export enum SubscriptionPlan {
 }
 
 export enum SubscriptionTier {
+  // Updated to match server-side tiers
+  PLUS = 'plus',
+  FAMILY_2_5TB = 'family_2_5tb',
+  FAMILY_7_5TB = 'family_7_5tb',
+  FAMILY_12TB = 'family_12tb',
+
+  // Legacy – kept for backward compatibility of deep links
   BASIC = 'basic',
   PREMIUM = 'premium',
   LEGACY = 'legacy'
@@ -177,16 +184,18 @@ export function getPricingInfo(): PricingInfo[] {
         "Mobile app access"
       ]
     },
+    // Individual Plus (1TB)
     {
       plan: SubscriptionPlan.INDIVIDUAL,
-      tier: SubscriptionTier.BASIC,
-      monthlyPrice: 9.99,
-      yearlyPrice: 99,
-      storageGB: 50,
+      tier: SubscriptionTier.PLUS,
+      monthlyPrice: 8,
+      yearlyPrice: 80, // 20% discount
+      storageGB: 1000,
+      recommended: true,
       features: [
-        "50GB storage",
+        "1TB secure storage",
         "Unlimited family members",
-        "HD photo & video sharing",
+        "4K photo & video support",
         "Advanced family tree features",
         "Private stories & journals",
         "Collaborative albums",
@@ -194,40 +203,54 @@ export function getPricingInfo(): PricingInfo[] {
         "No ads"
       ]
     },
-    {
-      plan: SubscriptionPlan.INDIVIDUAL,
-      tier: SubscriptionTier.PREMIUM,
-      monthlyPrice: 19.99,
-      yearlyPrice: 199,
-      storageGB: 200,
-      recommended: true,
-      features: [
-        "200GB storage",
-        "Everything in Basic",
-        "4K video support",
-        "AI-powered photo organization",
-        "Advanced privacy controls",
-        "Family history reports",
-        "Professional printing discounts",
-        "Early access to new features"
-      ]
-    },
+    // Family 2.5TB (base tier)
     {
       plan: SubscriptionPlan.FAMILY,
-      monthlyPrice: 29.99,
-      yearlyPrice: 299,
-      storageGB: 500,
-      familyMembers: 6,
+      tier: SubscriptionTier.FAMILY_2_5TB,
+      monthlyPrice: 25,
+      yearlyPrice: 250,
+      storageGB: 2500,
+      familyMembers: 5,
       features: [
-        "500GB shared storage",
-        "Up to 6 premium accounts",
-        "Everything in Premium",
+        "2.5TB shared storage",
+        "Up to 5 premium accounts",
+        "Everything in Plus",
         "Family vault for documents",
         "Shared family calendar",
         "Family group chat",
-        "Admin controls",
-        "Bulk export tools",
-        "Dedicated account manager"
+        "Admin controls"
+      ]
+    },
+    // Family 7.5TB (high tier)
+    {
+      plan: SubscriptionPlan.FAMILY,
+      tier: SubscriptionTier.FAMILY_7_5TB,
+      monthlyPrice: 60,
+      yearlyPrice: 600,
+      storageGB: 7500,
+      familyMembers: 5,
+      features: [
+        "7.5TB shared storage",
+        "Everything in 2.5TB plus",
+        "Priority support",
+        "Extended video length",
+        "Early access to new features"
+      ]
+    },
+    // Family 12TB (enterprise tier)
+    {
+      plan: SubscriptionPlan.FAMILY,
+      tier: SubscriptionTier.FAMILY_12TB,
+      monthlyPrice: 100,
+      yearlyPrice: 1000,
+      storageGB: 12000,
+      familyMembers: 5,
+      features: [
+        "12TB shared storage",
+        "Dedicated account manager",
+        "Priority support",
+        "Unlimited video length",
+        "All enterprise features"
       ]
     }
   ];

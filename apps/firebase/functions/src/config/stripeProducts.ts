@@ -16,8 +16,8 @@ import {StripePriceMapping} from "../types/stripe";
 // Storage allocations per plan (in GB - converted from TB in pricing matrix)
 export const STORAGE_ALLOCATIONS = {
   [SubscriptionPlan.FREE]: {
-    baseStorageGB: 0, // 0 TB from pricing matrix
-    maxReferralBonusGB: 5,
+    baseStorageGB: 5, // 0 TB from pricing matrix
+    maxReferralBonusGB: 15,
   },
   [SubscriptionPlan.INDIVIDUAL]: {
     [SubscriptionTier.PLUS]: {

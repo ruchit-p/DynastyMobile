@@ -33,7 +33,7 @@ describe('EventCard - Production Component Tests', () => {
     id: 'event123',
     name: 'Family Reunion 2024',
     description: 'Annual family gathering',
-    date: new Date('2024-07-04'),
+    date: '2024-07-04T18:00:00.000Z',
     time: '14:00',
     location: 'Central Park',
     address: '123 Park Ave, New York, NY',
@@ -173,7 +173,7 @@ describe('EventCard - Production Component Tests', () => {
     it('should disable RSVP when event is in the past', () => {
       const pastEvent = {
         ...defaultEvent,
-        date: new Date('2020-01-01'),
+        date: '2020-01-01T00:00:00.000Z',
       };
 
       render(<EventCard event={pastEvent} />);

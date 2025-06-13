@@ -27,6 +27,7 @@ import {
   validateShareId,
 } from "./utils/vault-sanitization";
 import {fileSecurityService} from "./services/fileSecurityService";
+import {checkRateLimitByIP, RateLimitType} from "./middleware/auth";
 
 // MARK: - Types
 interface VaultItem {
@@ -2219,7 +2220,7 @@ export const getVaultDownloadUrl = onCall(
         logger.info(
           "Using cached download URL",
           createLogContext({
-            fileName: vaultItem.name,
+            fileName: sanitizeFileName(vaultItem.name),
             userId: uid,
           })
         );
@@ -2291,7 +2292,7 @@ export const getVaultDownloadUrl = onCall(
       logger.info(
         "Generated download URL",
         createLogContext({
-          fileName: vaultItem?.name || "unknown",
+          fileName: sanitizeFileName(vaultItem?.name || "unknown"),
           userId: uid,
           storageProvider: vaultItem?.storageProvider || "firebase",
         })
@@ -2299,7 +2300,7 @@ export const getVaultDownloadUrl = onCall(
       return {downloadUrl: signedUrl};
     } catch (error) {
       const {message, context} = formatErrorForLogging(error, {
-        fileName: vaultItem?.name,
+        fileName: vaultItem?.name ? sanitizeFileName(vaultItem.name) : undefined,
         userId: uid,
         storageProvider: vaultItem?.storageProvider,
       });
@@ -2426,6 +2427,13 @@ export const accessVaultShareLink = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
   },
   withErrorHandling(async (request) => {
+    // Basic IP-based rate limiting to mitigate brute-force attempts
+    await checkRateLimitByIP(request, {
+      type: RateLimitType.SENSITIVE,
+      maxRequests: 20, // 20 attempts per minute per IP
+      windowSeconds: 60,
+    });
+
     const {shareId, password} = request.data;
 
     if (!shareId) {
@@ -2465,8 +2473,18 @@ export const accessVaultShareLink = onCall(
       const crypto = await import("crypto");
       // Verify password
       const [salt, storedHash] = shareData.passwordHash.split(":");
-      const hash = crypto.pbkdf2Sync(sanitizedPassword, salt, 100000, 64, "sha512").toString("hex");
-      const isValid = hash === storedHash;
+      const computedHash = crypto
+        .pbkdf2Sync(sanitizedPassword, salt, 100000, 64, "sha512")
+        .toString("hex");
+
+      // Timing-safe comparison to mitigate side-channel attacks
+      const isValid = (() => {
+        try {
+          return crypto.timingSafeEqual(Buffer.from(computedHash, "hex"), Buffer.from(storedHash, "hex"));
+        } catch {
+          return false; // lengths differ or other error
+        }
+      })();
 
       if (!isValid) {
         throw createError(ErrorCode.PERMISSION_DENIED, "Invalid password");

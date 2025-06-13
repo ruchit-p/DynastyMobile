@@ -1025,3 +1025,15 @@ if (isIntegrationTest) {
 } else {
   console.log('🧪 Enhanced Jest setup complete - all mocks and utilities loaded!');
 }
+
+// =============================================================================
+// ADDITIONAL THIRD-PARTY LIBRARY MOCKS
+// =============================================================================
+
+// Mock libsodium to resolve immediately in tests
+jest.mock('libsodium-wrappers-sumo', () => ({
+  __esModule: true,
+  ready: Promise.resolve(),
+  crypto_generichash: () => new Uint8Array(32),
+  crypto_scalarmult: () => new Uint8Array(32),
+}));
