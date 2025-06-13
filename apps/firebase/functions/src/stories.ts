@@ -442,6 +442,117 @@ export const getAccessibleStories = onCall(
 );
 
 /**
+ * Fetches stories accessible to a user with pagination
+ */
+export const getAccessibleStoriesPaginated = onCall(
+  {
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withErrorHandling(async (request) => {
+    const {userId, familyTreeId, lastDocId, limit = 20} = request.data;
+    const callerUid = request.auth?.uid;
+    if (!callerUid) {
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
+    }
+
+    if (!userId) {
+      throw createError(ErrorCode.MISSING_PARAMETERS, "User ID is required");
+    }
+    // Ensure the user is requesting with their own ID
+    if (userId !== callerUid) {
+      throw createError(
+        ErrorCode.PERMISSION_DENIED,
+        "You can only access stories with your own user ID"
+      );
+    }
+    if (!familyTreeId) {
+      throw createError(ErrorCode.MISSING_PARAMETERS, "Family tree ID is required");
+    }
+
+    const db = getFirestore();
+    const storiesRef = db.collection("stories");
+
+    // Build query with pagination
+    let query = storiesRef
+      .where("familyTreeId", "==", familyTreeId)
+      .where("isDeleted", "==", false)
+      .orderBy("createdAt", "desc")
+      .limit(Number(limit));
+
+    // Add pagination cursor if provided
+    if (lastDocId) {
+      try {
+        const lastDoc = await storiesRef.doc(lastDocId).get();
+        if (lastDoc.exists) {
+          query = query.startAfter(lastDoc);
+        } else {
+          logger.warn(`Last document ${lastDocId} not found, starting from beginning`);
+        }
+      } catch (error) {
+        logger.error(`Error getting last document ${lastDocId}:`, error);
+        // Continue without pagination if there's an error
+      }
+    }
+
+    const familyStoriesQuery = await query.get();
+
+    // Filter stories based on privacy settings (same logic as original)
+    const filteredStories = familyStoriesQuery.docs
+      .map((doc) => {
+        const data = doc.data();
+        // Validate required fields
+        if (!data.title || !data.authorID || !data.createdAt || !data.privacy) {
+          logger.warn(`Story ${doc.id} is missing required fields:`, data);
+          return null;
+        }
+        return {
+          id: doc.id,
+          ...data,
+        } as Story;
+      })
+      .filter((story): story is Story => {
+        if (!story) return false;
+
+        // User can always see their own stories
+        if (story.authorID === userId) return true;
+
+        // For family-wide stories
+        if (story.privacy === "family") return true;
+
+        // For private stories
+        if (story.privacy === "privateAccess") {
+          return story.authorID === userId;
+        }
+
+        // For custom access stories
+        if (story.privacy === "custom") {
+          return story.customAccessMembers?.includes(userId) || false;
+        }
+
+        return false;
+      });
+
+    // OPTIMIZED: Batch enrich all stories with user data in a single operation
+    // This reduces database reads from O(n×m) to O(⌈U/10⌉) where U = unique users
+    const accessibleStories = await batchEnrichStoriesWithUserInfo(db, filteredStories);
+
+    // Determine if there are more stories
+    const hasMore = familyStoriesQuery.docs.length === Number(limit);
+    const newLastDocId = familyStoriesQuery.docs.length > 0 
+      ? familyStoriesQuery.docs[familyStoriesQuery.docs.length - 1].id 
+      : undefined;
+
+    return {
+      stories: accessibleStories,
+      hasMore,
+      lastDocId: newLastDocId
+    };
+  }, "getAccessibleStoriesPaginated")
+);
+
+/**
  * Fetches stories created by a specific user
  */
 export const getUserStories = onCall(

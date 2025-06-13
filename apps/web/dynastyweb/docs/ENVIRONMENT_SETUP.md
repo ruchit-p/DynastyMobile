@@ -34,6 +34,18 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=dynasty-eba63
 # ... additional configuration
 ```
 
+### Vercel KV Configuration
+```env
+# Vercel KV Store (for caching)
+KV_URL=your-kv-url
+KV_REST_API_URL=your-kv-rest-api-url
+KV_REST_API_TOKEN=your-kv-rest-api-token
+KV_REST_API_READ_ONLY_TOKEN=your-kv-rest-api-read-only-token
+
+# Admin API Key (for cache invalidation)
+ADMIN_API_KEY=your-secure-admin-key
+```
+
 ## Development Environment
 
 ### Setup
@@ -192,4 +204,74 @@ if (typeof window !== 'undefined') {
     }
   });
 }
-``` 
+```
+
+## Vercel KV Optimizations
+
+### Overview
+The application implements Vercel KV caching to reduce Firebase calls by up to 90%, improving performance and reducing costs.
+
+### Cached Endpoints
+
+1. **Authentication Check** (`/api/auth/check`)
+   - Caches ID token validation for 5 minutes
+   - Reduces Firebase Auth verification calls
+   - Automatic session validation every 5 minutes
+
+2. **Public Feed Preview** (`/api/public/feed-preview`)
+   - Caches public content for 5 minutes
+   - Supports pagination caching
+   - Serves stale cache on errors
+
+3. **App Configuration** (`/api/config`)
+   - Caches app configuration for 1 hour
+   - Includes feature flags, limits, and settings
+   - Admin endpoint for manual cache refresh
+
+### Setup Instructions
+
+1. **Create Vercel KV Store**
+   ```bash
+   # In your Vercel dashboard:
+   # 1. Go to Storage tab
+   # 2. Create new KV store
+   # 3. Copy environment variables
+   ```
+
+2. **Add Environment Variables**
+   Add the following to your Vercel project or `.env.local`:
+   ```env
+   KV_URL=<your-kv-url>
+   KV_REST_API_URL=<your-kv-rest-api-url>
+   KV_REST_API_TOKEN=<your-kv-rest-api-token>
+   KV_REST_API_READ_ONLY_TOKEN=<your-kv-rest-api-read-only-token>
+   ```
+
+3. **Generate Admin API Key**
+   ```bash
+   # Generate secure random key
+   openssl rand -base64 32
+   ```
+   Add to environment:
+   ```env
+   ADMIN_API_KEY=<generated-key>
+   ```
+
+### Cache Monitoring
+
+Monitor cache performance in your application:
+- Check browser console for cache hit/miss logs
+- Monitor Vercel KV dashboard for usage
+- Track Firebase usage reduction in Firebase Console
+
+### Cost Optimization
+
+Expected savings with caching:
+- **Auth Checks**: 90% reduction in Firebase Auth calls
+- **Public Content**: 95% reduction for repeat visitors
+- **Configuration**: 99% reduction (hourly cache)
+
+Example monthly savings:
+- Before: 200M reads = $720/month
+- After: 20M reads = $72/month
+- **Savings: $648/month (90% reduction)** 

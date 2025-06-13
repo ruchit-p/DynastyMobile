@@ -3,9 +3,19 @@ import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 
 // Initialize Redis client
+// Use Vercel KV environment variables (with fallback to legacy Upstash variables)
+const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL
+const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN
+
+if (!redisUrl || !redisToken) {
+  throw new Error(
+    'Redis configuration is missing. Please set KV_REST_API_URL and KV_REST_API_TOKEN environment variables (or legacy UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN).'
+  )
+}
+
 const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+  url: redisUrl,
+  token: redisToken,
 })
 
 // Create rate limiters for different subscription operations

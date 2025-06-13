@@ -251,6 +251,64 @@ export async function getEventsForFeed(userId: string, familyTreeId: string) {
 }
 
 /**
+ * Get accessible stories with pagination
+ */
+export const getAccessibleStoriesPaginated = async (
+  userId: string, 
+  familyTreeId: string,
+  lastDocId?: string,
+  limit: number = 20
+) => {
+  const result = await getFunctionsClient().callFunction('getAccessibleStoriesPaginated', {
+    userId,
+    familyTreeId,
+    lastDocId,
+    limit
+  });
+  return result.data as { 
+    stories: EnrichedStory[], 
+    hasMore: boolean, 
+    lastDocId?: string 
+  };
+};
+
+/**
+ * Get events for feed with pagination
+ */
+export const getEventsForFeedPaginated = async (
+  userId: string,
+  familyTreeId: string,
+  lastEventDate?: string,
+  limit: number = 10
+) => {
+  try {
+    const result = await getFunctionsClient().callFunction<
+      { userId: string; familyTreeId: string; lastEventDate?: string; limit?: number },
+      { events: unknown[], hasMore: boolean, lastEventDate?: string }
+    >('getEventsForFeedPaginated', {
+      userId,
+      familyTreeId,
+      lastEventDate,
+      limit
+    });
+    
+    if (!result.data || !Array.isArray(result.data.events)) {
+      console.error('Invalid paginated events data structure:', result.data);
+      return { events: [], hasMore: false, lastEventDate: undefined };
+    }
+    
+    return {
+      events: result.data.events,
+      hasMore: result.data.hasMore,
+      lastEventDate: result.data.lastEventDate
+    };
+  } catch (error) {
+    console.error('Error fetching paginated events for feed:', error);
+    return { events: [], hasMore: false, lastEventDate: undefined };
+  }
+};
+
+/**
  * Update user profile information
  */
 export async function updateUserProfile(data: {

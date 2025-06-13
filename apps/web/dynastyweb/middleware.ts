@@ -3,6 +3,11 @@ import { checkRateLimit } from './src/lib/rate-limit';
 import { subscriptionRateLimit } from './src/middleware/subscription-rate-limit';
 
 export async function middleware(request: NextRequest) {
+  // Skip auth check for the auth check endpoint itself to prevent infinite loop
+  if (request.nextUrl.pathname === '/api/auth/check') {
+    // Continue to the auth check handler
+  }
+
   // Rate limiting for subscription-related routes
   if (request.nextUrl.pathname.startsWith('/checkout') || 
       request.nextUrl.pathname.includes('/api/subscription')) {

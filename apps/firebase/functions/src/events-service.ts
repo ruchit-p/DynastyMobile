@@ -2721,6 +2721,126 @@ export const getEventsForFeedApi = onCall(
   }, "getEventsForFeedApi")
 );
 
+/**
+ * Returns upcoming events for the user's family tree with pagination
+ */
+export const getEventsForFeedPaginated = onCall(
+  {
+    region: DEFAULT_REGION,
+    memory: DEFAULT_MEMORY.MEDIUM,
+    timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
+  },
+  withErrorHandling(async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required.");
+    }
+
+    const {userId, familyTreeId, lastEventDate, limit = 10} = request.data as { 
+      userId: string; 
+      familyTreeId: string;
+      lastEventDate?: string;
+      limit?: number;
+    };
+
+    if (!userId || !familyTreeId) {
+      throw createError(ErrorCode.MISSING_PARAMETERS, "User ID and family tree ID are required.");
+    }
+
+    // Use lastEventDate for pagination, or current date for initial load
+    const nowString = new Date().toISOString().split("T")[0];
+    const startDate = lastEventDate || nowString;
+    
+    const queries: FirebaseFirestore.Query<FirebaseFirestore.DocumentData>[] = [];
+
+    // Get upcoming events only for the feed with pagination
+    // Query for events in the family tree
+    queries.push(
+      db
+        .collection("events")
+        .where("privacy", "==", "family_tree")
+        .where("familyTreeId", "==", familyTreeId)
+        .where("eventDate", ">=", startDate)
+        .orderBy("eventDate", "asc")
+        .limit(Number(limit))
+    );
+
+    // Query for public events
+    queries.push(
+      db.collection("events")
+        .where("privacy", "==", "public")
+        .where("eventDate", ">=", startDate)
+        .orderBy("eventDate", "asc")
+        .limit(Number(limit))
+    );
+
+    // Query for events user is explicitly invited to
+    queries.push(
+      db
+        .collection("events")
+        .where("invitedMemberIds", "array-contains", userId)
+        .where("eventDate", ">=", startDate)
+        .orderBy("eventDate", "asc")
+        .limit(Number(limit))
+    );
+
+    const allRawEvents: EventData[] = [];
+
+    for (const baseQuery of queries) {
+      try {
+        const snapshot = await baseQuery.get();
+        const events = snapshot.docs.map(
+          (doc) =>
+            ({
+              id: doc.id,
+              ...doc.data(),
+            } as EventData)
+        );
+        allRawEvents.push(...events);
+      } catch (queryError) {
+        logger.warn("Error executing paginated feed events query:", queryError);
+      }
+    }
+
+    // Deduplicate events by ID
+    const uniqueEventsMap = new Map<string, EventData>();
+    allRawEvents.forEach((event) => {
+      if (event.id && !uniqueEventsMap.has(event.id)) {
+        uniqueEventsMap.set(event.id, event);
+      }
+    });
+
+    const uniqueEvents = Array.from(uniqueEventsMap.values());
+
+    // Sort by event date (soonest first)
+    uniqueEvents.sort((a, b) => {
+      const dateA = new Date(a.eventDate).getTime();
+      const dateB = new Date(b.eventDate).getTime();
+      return dateA - dateB; // Soonest first for feed
+    });
+
+    // Take the requested limit
+    const feedEvents = uniqueEvents.slice(0, Number(limit));
+
+    // Enrich events with host details and RSVP status
+    const enrichedEvents = await enrichEventListOptimized(feedEvents, userId);
+
+    // Determine if there are more events
+    const hasMore = uniqueEvents.length === Number(limit);
+    const newLastEventDate = feedEvents.length > 0 
+      ? feedEvents[feedEvents.length - 1].eventDate 
+      : undefined;
+
+    logger.info(`Returning ${enrichedEvents.length} paginated events for feed`);
+
+    return {
+      events: enrichedEvents,
+      hasMore,
+      lastEventDate: newLastEventDate
+    };
+  }, "getEventsForFeedPaginated")
+);
+
 // MARK: - Cover Photo Management
 
 export const getEventCoverPhotoUploadUrl = onCall(

@@ -23,6 +23,7 @@ import { auth, functions, db } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { doc, getDoc } from 'firebase/firestore';
 import type { InvitedSignupFormData } from "@/lib/validation";
+import { useSessionValidation } from '@/hooks/useSessionValidation';
 
 // Add global type declarations for window properties
 declare global {
@@ -101,6 +102,7 @@ interface AuthContextType {
   refreshFirestoreUser: () => Promise<void>;
   updateUserProfile: (displayName: string) => Promise<void>;
   getUserProviders: () => string[];
+  validateSession: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -129,6 +131,7 @@ const AuthContext = createContext<AuthContextType>({
   }),
   refreshFirestoreUser: async () => {},
   getUserProviders: () => [],
+  validateSession: async () => false,
 });
 
 // MARK: - Helper Functions
@@ -180,6 +183,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [firestoreUser, setFirestoreUser] = useState<FirestoreUser | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Session validation with caching
+  const { validateSession } = useSessionValidation(user, {
+    interval: 5 * 60 * 1000, // Validate every 5 minutes
+    onInvalidSession: async () => {
+      // Force sign out if session is invalid
+      await firebaseSignOut(auth);
+    },
+  });
 
   const refreshFirestoreUser = async () => {
     if (user?.uid) {
@@ -622,6 +634,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     verifyInvitation,
     refreshFirestoreUser,
     getUserProviders,
+    validateSession,
    };
 
   return (

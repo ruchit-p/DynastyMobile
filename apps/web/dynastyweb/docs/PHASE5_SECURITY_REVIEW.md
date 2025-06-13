@@ -83,9 +83,17 @@ The initial implementation used incorrect Firebase function names that didn't ma
 1. **Environment Variables** (Critical):
    ```env
    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
+   
+   # Rate limiting - Vercel KV (automatically provided when using Vercel KV integration)
+   KV_REST_API_URL=https://...
+   KV_REST_API_TOKEN=...
+   
+   # Legacy variables (still supported for backward compatibility)
    UPSTASH_REDIS_REST_URL=https://...
    UPSTASH_REDIS_REST_TOKEN=...
    ```
+   
+   > **Note**: When deploying to Vercel with KV integration, the `KV_REST_API_URL` and `KV_REST_API_TOKEN` are automatically provisioned. The legacy Upstash variables remain supported for backward compatibility.
 
 2. **Stripe Elements Integration**:
    - Currently using placeholder in checkout page
@@ -139,7 +147,7 @@ The code quality is excellent, security measures are properly implemented, and t
 
 ## Post-Deployment Monitoring
 
-1. Monitor rate limit hits in Upstash Redis
+1. Monitor rate limit hits in Vercel KV dashboard (or Upstash if using direct integration)
 2. Track Stripe webhook success rates
 3. Monitor error rates in Sentry
 4. Track conversion funnel analytics
