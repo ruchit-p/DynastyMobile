@@ -34,4 +34,10 @@ declare module 'crypto-js' {
   export default CryptoJS;
 }
 
-declare const jest: any; 
+declare const jest: any;
+
+declare module 'libsodium-wrappers-sumo' {
+  import sodium from 'libsodium-wrappers';
+  export * from 'libsodium-wrappers';
+  export default sodium;
+} 
