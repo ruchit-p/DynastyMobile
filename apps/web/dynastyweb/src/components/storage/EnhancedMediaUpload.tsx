@@ -17,7 +17,6 @@ import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { b2MediaService } from '@/services/B2MediaService';
-import { r2MediaService } from '@/services/R2MediaService';
 import StorageUtils, { StorageProvider, StorageConfig } from '@/utils/storageUtils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -181,11 +180,7 @@ export function EnhancedMediaUpload({
 
           case 'profile':
             if (!userId) throw new Error('User ID required for profile uploads');
-            if (provider === 'b2') {
-              url = await b2MediaService.uploadProfilePicture(file, userId, callbacks);
-            } else {
-              url = await r2MediaService.uploadProfilePicture(file, userId, callbacks);
-            }
+            url = await b2MediaService.uploadProfilePicture(file, userId, callbacks);
             break;
 
           case 'story':
@@ -196,36 +191,23 @@ export function EnhancedMediaUpload({
               ? 'video'
               : 'audio';
 
-            if (provider === 'b2') {
-              url = await b2MediaService.uploadStoryMedia(file, storyId, storyType, callbacks);
-            } else {
-              url = await r2MediaService.uploadStoryMedia(file, storyId, storyType, callbacks);
-            }
+            url = await b2MediaService.uploadStoryMedia(file, storyId, storyType, callbacks);
             break;
 
           case 'event':
             if (!eventId) throw new Error('Event ID required for event uploads');
-            if (provider === 'b2') {
-              url = await b2MediaService.uploadEventCoverPhoto(file, eventId, callbacks);
-            } else {
-              url = await r2MediaService.uploadEventCoverPhoto(file, eventId, callbacks);
-            }
+            url = await b2MediaService.uploadEventCoverPhoto(file, eventId, callbacks);
             break;
 
           default:
             // Generic upload
             const path = `uploads/${userId || 'anonymous'}/${Date.now()}_${file.name}`;
-            if (provider === 'b2') {
-              url = await b2MediaService.uploadGenericFile(
-                file,
-                path,
-                { compress: true },
-                callbacks
-              );
-            } else {
-              // Use R2 as fallback
-              url = await r2MediaService.uploadStoryMedia(file, 'generic', 'image', callbacks);
-            }
+            url = await b2MediaService.uploadGenericFile(
+              file,
+              path,
+              { compress: true },
+              callbacks
+            );
         }
 
         // Update status to completed

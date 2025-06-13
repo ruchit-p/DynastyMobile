@@ -1,4 +1,4 @@
-import { r2MediaService } from '@/services/R2MediaService';
+import { b2MediaService } from '@/services/B2MediaService';
 import { errorHandler, ErrorSeverity } from '@/services/ErrorHandlingService';
 
 interface OptimizedImage {
@@ -20,7 +20,7 @@ interface ImageOptimizationOptions {
 
 /**
  * Service for optimizing landing page images
- * Integrates with existing R2MediaService for cloud storage
+ * Integrates with existing B2MediaService for cloud storage
  */
 class LandingImageOptimizer {
   private static instance: LandingImageOptimizer;
@@ -71,7 +71,7 @@ class LandingImageOptimizer {
 
         for (const size of sizes) {
           try {
-            const compressed = await r2MediaService.compressImage(file, {
+            const compressed = await b2MediaService.compressImage(file, {
               maxWidth: size.width,
               maxHeight: size.width, // Maintain aspect ratio
               quality,
@@ -179,9 +179,9 @@ class LandingImageOptimizer {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         // Note: This is a simplified version. The actual implementation
-        // would need to properly integrate with R2MediaService's internal methods
+        // would need to properly integrate with B2MediaService's internal methods
         return await (
-          r2MediaService as unknown as {
+          b2MediaService as unknown as {
             uploadToStorage: (
               blob: Blob,
               path: string,
