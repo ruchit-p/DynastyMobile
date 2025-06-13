@@ -234,16 +234,14 @@ export default function FamilyTreePage() {
   useEffect(() => {
     // Only force onboarding check for new Google users once
     if (isNewUser && !newUserCheckedRef.current) {
-      console.log("New Google user detected, ensuring onboarding is checked");
       newUserCheckedRef.current = true;
-      
+
       // This will force a delay to ensure the onboarding context is fully initialized
       const timer = setTimeout(() => {
         // The OnboardingContext should automatically detect the onboarding status
         // and show the onboarding form if needed
-        console.log("Delayed check for onboarding completed");
       }, 1000);
-      
+
       return () => clearTimeout(timer);
     }
   }, [isNewUser]);
@@ -251,27 +249,22 @@ export default function FamilyTreePage() {
   const fetchFamilyTreeData = useCallback(async () => {
     if (!currentUser) return;
     
-    console.log("🌳 fetchFamilyTreeData called", { 
-      userId: currentUser.uid, 
-      hasCompletedOnboarding
-    });
+
     
     // Don't try to fetch family tree data if onboarding isn't completed
     if (!hasCompletedOnboarding) {
-      console.log("⏸️ Skipping family tree data fetch - onboarding not completed");
       setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
-      console.log("📡 Calling getFamilyTreeData for user:", currentUser.uid);
       const { treeNodes } = await getFamilyTreeData(currentUser.uid);
-      console.log("✅ Received tree nodes:", { count: treeNodes?.length || 0, nodes: treeNodes });
+
       setTreeData([...treeNodes]); // Convert readonly array to mutable array
-      
+
       if (treeNodes?.length === 0) {
-        console.warn("⚠️ No tree nodes returned - this might indicate a data issue");
+        // No tree nodes returned - this might indicate a data issue
       }
     } catch (error) {
       console.error("❌ Failed to load family tree:", error);
@@ -280,7 +273,6 @@ export default function FamilyTreePage() {
         console.error("Error details:", error.message);
         // If it's a permission or not found error, show a helpful message
         if (error.message.includes('not found') || error.message.includes('permission')) {
-          console.log("🔄 Attempting to refresh onboarding status and retry...");
           // Force a check of onboarding status
           setTimeout(() => {
             window.location.reload();
@@ -331,7 +323,7 @@ export default function FamilyTreePage() {
     } catch {
       // Toast removed as requested
       if (!hasCompletedOnboarding) {
-        console.log("Family management data not available during onboarding - suppressing error");
+        // Family management data not available during onboarding - suppressing error
       } else {
         console.error('Error fetching family management data');
       }
@@ -341,25 +333,16 @@ export default function FamilyTreePage() {
   }, [currentUser, hasCompletedOnboarding]);
 
   useEffect(() => {
-    console.log("🔄 Family tree useEffect triggered", { 
-      hasCompletedOnboarding, 
-      currentUser: !!currentUser,
-      userId: currentUser?.uid,
-      isOnboardingLoading
-    });
     
     // Don't fetch data if we're still loading onboarding status
     if (isOnboardingLoading) {
-      console.log("⏳ Onboarding status loading, waiting...");
       return;
     }
     
     // Only fetch family tree data if onboarding is completed
     if (hasCompletedOnboarding && currentUser) {
-      console.log("✅ Onboarding completed, fetching family tree data");
       void fetchFamilyTreeData();
     } else if (!hasCompletedOnboarding && currentUser) {
-      console.log("⏳ Onboarding not completed yet, showing onboarding form...");
       // The OnboardingContext will handle showing the onboarding form
       // No need to reload the page - just wait for onboarding to complete
     }
@@ -414,24 +397,7 @@ export default function FamilyTreePage() {
       const x = (viewportWidth - treeWidth * optimalScale) / 2;
       const y = (viewportHeight - treeHeight * optimalScale) / 2;
 
-      if (DEBUG_MODE) {
-        console.log('Initial centering debug:', {
-          viewport: { width: viewportWidth, height: viewportHeight },
-          tree: { 
-            width: treeWidth, 
-            height: treeHeight,
-            scaledWidth: treeWidth * optimalScale,
-            scaledHeight: treeHeight * optimalScale,
-            scale: optimalScale
-          },
-          position: { x, y },
-          layout: {
-            canvasWidth: layout.canvas.width,
-            canvasHeight: layout.canvas.height,
-            nodeCount: layout.nodes.length
-          }
-        });
-      }
+
 
       setPosition({ x, y });
     }
@@ -520,32 +486,7 @@ export default function FamilyTreePage() {
     const x = viewportCenterX - (nodeX * scale);
     const y = viewportCenterY - (nodeY * scale);
 
-    if (DEBUG_MODE) {
-      console.log('Node centering debug:', {
-        node: {
-          id: rootNode,
-          left: targetNode.left,
-          top: targetNode.top,
-          absoluteX: nodeX,
-          absoluteY: nodeY,
-          screenX: nodeX * scale + x,
-          screenY: nodeY * scale + y
-        },
-        viewport: {
-          width: viewportWidth,
-          height: viewportHeight,
-          centerX: viewportCenterX,
-          centerY: viewportCenterY
-        },
-        scale,
-        position: { x, y },
-        layout: {
-          canvasWidth: layout.canvas.width,
-          canvasHeight: layout.canvas.height,
-          nodeCount: layout.nodes.length
-        }
-      });
-    }
+
 
     setPosition({ x, y });
   }, [rootNode, treeData, scale, DEBUG_MODE]);
@@ -571,15 +512,7 @@ export default function FamilyTreePage() {
     };
   }, [treeData, rootNode, position.x, position.y, scale]);
 
-  // Log wrapper debug info whenever position or scale changes
-  useEffect(() => {
-    if (DEBUG_MODE) {
-      const debugInfo = getTreeWrapperDebugInfo();
-      if (debugInfo) {
-        console.log('Tree wrapper debug:', debugInfo);
-      }
-    }
-  }, [DEBUG_MODE, getTreeWrapperDebugInfo]);
+
 
   const handleNodeClick = (node: ExtNode, isClick: boolean) => {
     if (!isClick) return;
@@ -589,16 +522,7 @@ export default function FamilyTreePage() {
       return;
     }
     
-    if (DEBUG_MODE) {
-      console.log('Node click debug:', {
-        clickedNode: {
-          id: node.id,
-          position: node.left && node.top ? { left: node.left * WIDTH, top: node.top * HEIGHT } : null
-        },
-        currentScale: scale,
-        currentPosition: position
-      });
-    }
+
     
     setSelectedNode(node);
     setRootNode(node.id);
@@ -1913,9 +1837,8 @@ export default function FamilyTreePage() {
             
             {hasCompletedOnboarding && !isOnboardingLoading && (
               <div className="flex flex-col items-center gap-4 mt-4">
-                <Button 
+                <Button
                   onClick={() => {
-                    console.log("🔄 Manual refresh triggered by user");
                     setLoading(true);
                     fetchFamilyTreeData();
                   }}
