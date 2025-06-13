@@ -44,14 +44,12 @@ export default function FeedPage() {
     let mounted = true;
 
     const loadFeedContent = async () => {
-      console.log('[Feed] Starting to load feed content');
       
       try {
         setLoading(true);
         setError(null);
 
         if (!currentUser?.uid || !firestoreUser?.familyTreeId) {
-          console.log('[Feed] Missing required IDs, skipping feed fetch');
           setError('Unable to load feed. Please try logging out and back in.');
           return;
         }
@@ -64,7 +62,6 @@ export default function FeedPage() {
         ]);
         
         if (!mounted) {
-          console.log('[Feed] Component unmounted, skipping state update');
           return;
         }
         
@@ -123,22 +120,10 @@ export default function FeedPage() {
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         );
         
-        console.log('[Feed] Processed feed items:', {
-          count: allFeedItems.length,
-          types: {
-            stories: allFeedItems.filter(item => item.type === 'story').length,
-            events: allFeedItems.filter(item => item.type === 'event').length
-          }
-        });
+        // Items have been processed; update state
         
         // Add more detailed logging for events
         const eventItems = allFeedItems.filter(item => item.type === 'event');
-        if (eventItems.length > 0) {
-          console.log('[Feed] Found event items:', eventItems.length);
-          console.log('[Feed] Sample event item:', JSON.stringify(eventItems[0], null, 2));
-        } else {
-          console.log('[Feed] No events found in feed. Events result:', JSON.stringify(eventsResult, null, 2));
-        }
 
         setFeedItems(allFeedItems);
       } catch (error) {
