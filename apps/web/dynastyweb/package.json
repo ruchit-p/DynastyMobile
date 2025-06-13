@@ -66,7 +66,7 @@
     "libsodium-wrappers-sumo": "^0.7.15",
     "lightgallery": "^2.8.3",
     "lucide-react": "^0.475.0",
-    "next": "^15.2.0",
+    "next": "^15.3.3",
     "react": "^19.1.0",
     "react-circle-flags": "^0.0.23",
     "react-day-picker": "^9.0.0",
