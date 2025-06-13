@@ -24,7 +24,7 @@ interface EncryptionStats {
   keyRotation: {
     lastRotation: Date | null;
     rotationCount: number;
-    history: Array<{ timestamp: Date; keyId: string; }>;
+    history: Array<{ rotatedAt: Date; oldKeyId: string; newKeyId: string; itemsUpdated: number; }>;
   };
   shareLinks: {
     active: number;
