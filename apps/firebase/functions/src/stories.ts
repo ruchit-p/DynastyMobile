@@ -471,6 +471,9 @@ export const getAccessibleStoriesPaginated = onCall(
       throw createError(ErrorCode.MISSING_PARAMETERS, "Family tree ID is required");
     }
 
+    // Validate pagination parameters
+    const validatedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100); // Between 1 and 100
+
     const db = getFirestore();
     const storiesRef = db.collection("stories");
 
@@ -479,7 +482,7 @@ export const getAccessibleStoriesPaginated = onCall(
       .where("familyTreeId", "==", familyTreeId)
       .where("isDeleted", "==", false)
       .orderBy("createdAt", "desc")
-      .limit(Number(limit));
+      .limit(validatedLimit);
 
     // Add pagination cursor if provided
     if (lastDocId) {
@@ -539,7 +542,7 @@ export const getAccessibleStoriesPaginated = onCall(
     const accessibleStories = await batchEnrichStoriesWithUserInfo(db, filteredStories);
 
     // Determine if there are more stories
-    const hasMore = familyStoriesQuery.docs.length === Number(limit);
+    const hasMore = familyStoriesQuery.docs.length === validatedLimit;
     const newLastDocId = familyStoriesQuery.docs.length > 0 
       ? familyStoriesQuery.docs[familyStoriesQuery.docs.length - 1].id 
       : undefined;

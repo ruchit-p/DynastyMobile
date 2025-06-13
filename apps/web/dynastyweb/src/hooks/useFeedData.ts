@@ -3,6 +3,7 @@ import { cacheService, cacheKeys } from '@/services/CacheService';
 import { getAccessibleStoriesPaginated, getEventsForFeedPaginated } from '@/utils/functionUtils';
 import type { Story } from '@/utils/storyUtils';
 import type { EventData } from '@/utils/eventUtils';
+import { errorHandler, ErrorSeverity } from '@/services/ErrorHandlingService';
 
 // Define the enriched story type
 type EnrichedStory = Story & {
@@ -104,7 +105,10 @@ export function useFeedData(userId: string, familyTreeId: string): UseFeedDataRe
       
       await loadFreshData();
     } catch (error) {
-      console.error('[Feed] Error loading initial data:', error);
+      errorHandler.handleError(error, ErrorSeverity.MEDIUM, {
+        action: 'load-initial-feed-data',
+        context: { userId, familyTreeId }
+      });
       setError(error instanceof Error ? error.message : 'Failed to load feed content');
     } finally {
       setLoading(false);
@@ -140,7 +144,10 @@ export function useFeedData(userId: string, familyTreeId: string): UseFeedDataRe
       setLastStoryId(storiesResult.lastDocId);
       setLastEventDate(eventsResult.lastEventDate);
     } catch (error) {
-      console.error('[Feed] Error loading fresh data:', error);
+      errorHandler.handleError(error, ErrorSeverity.LOW, {
+        action: 'load-fresh-feed-data',
+        context: { userId, familyTreeId }
+      });
       if (!stories.length && !events.length) {
         // Only set error if we have no cached data to show
         setError(error instanceof Error ? error.message : 'Failed to load feed content');
@@ -193,7 +200,10 @@ export function useFeedData(userId: string, familyTreeId: string): UseFeedDataRe
         }
       });
     } catch (error) {
-      console.error('[Feed] Error loading more content:', error);
+      errorHandler.handleError(error, ErrorSeverity.LOW, {
+        action: 'load-more-feed-content',
+        context: { userId, familyTreeId, lastStoryId, lastEventDate }
+      });
       setError(error instanceof Error ? error.message : 'Failed to load more content');
     } finally {
       setLoadingMore(false);
