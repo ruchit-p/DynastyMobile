@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useCallback} from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { useOnboarding } from '@/context/OnboardingContext';
@@ -166,6 +166,10 @@ export default function FamilyTreePage() {
   const searchParams = useSearchParams();
   const isNewUser = searchParams.get('newUser') === 'true';
   const newUserCheckedRef = useRef(false);
+  const treeLayout = useMemo(
+    () => calcTree(treeData, { rootId: rootNode, placeholders: false }),
+    [treeData, rootNode]
+  );
 
   // Check if we're on a mobile device
   useEffect(() => {
@@ -367,20 +371,15 @@ export default function FamilyTreePage() {
 
   // Calculate optimal zoom level to fit the entire tree
   const calculateOptimalZoom = useCallback(() => {
-    if (treeData.length === 0) return 1;
+    if (treeLayout.nodes.length === 0) return 1;
 
     const headerHeight = 80;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight - headerHeight;
 
-    const layout = calcTree(treeData, {
-      rootId: rootNode,
-      placeholders: false
-    });
-
     // Calculate the total tree dimensions
-    const treeWidth = layout.canvas.width * WIDTH;
-    const treeHeight = layout.canvas.height * HEIGHT;
+    const treeWidth = treeLayout.canvas.width * WIDTH;
+    const treeHeight = treeLayout.canvas.height * HEIGHT;
 
     // Calculate scale needed for both width and height
     const scaleX = (viewportWidth * 0.9) / treeWidth; // 90% of viewport width
@@ -391,11 +390,11 @@ export default function FamilyTreePage() {
 
     // Clamp the scale between 0.1 and 1
     return Math.min(Math.max(optimalScale, 0.1), 1);
-  }, [treeData, rootNode]);
+  }, [treeLayout]);
 
   // Effect to set initial zoom and center tree when data is loaded
   useEffect(() => {
-    if (treeData.length > 0) {
+    if (treeLayout.nodes.length > 0) {
       const optimalScale = calculateOptimalZoom();
       setScale(optimalScale);
 
@@ -403,22 +402,17 @@ export default function FamilyTreePage() {
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight - headerHeight;
 
-      const layout = calcTree(treeData, {
-        rootId: rootNode,
-        placeholders: false
-      });
-
-      const treeWidth = layout.canvas.width * WIDTH;
-      const treeHeight = layout.canvas.height * HEIGHT;
-
+      const treeWidth = treeLayout.canvas.width * WIDTH;
+      const treeHeight = treeLayout.canvas.height * HEIGHT;
+      
       const x = (viewportWidth - treeWidth * optimalScale) / 2;
       const y = (viewportHeight - treeHeight * optimalScale) / 2;
 
       if (DEBUG_MODE) {
         console.log('Initial centering debug:', {
           viewport: { width: viewportWidth, height: viewportHeight },
-          tree: { 
-            width: treeWidth, 
+          tree: {
+            width: treeWidth,
             height: treeHeight,
             scaledWidth: treeWidth * optimalScale,
             scaledHeight: treeHeight * optimalScale,
@@ -426,16 +420,16 @@ export default function FamilyTreePage() {
           },
           position: { x, y },
           layout: {
-            canvasWidth: layout.canvas.width,
-            canvasHeight: layout.canvas.height,
-            nodeCount: layout.nodes.length
+            canvasWidth: treeLayout.canvas.width,
+            canvasHeight: treeLayout.canvas.height,
+            nodeCount: treeLayout.nodes.length
           }
         });
       }
 
       setPosition({ x, y });
     }
-  }, [treeData, calculateOptimalZoom, rootNode, DEBUG_MODE]);
+  }, [treeLayout, calculateOptimalZoom, DEBUG_MODE]);
 
   // Function to center the tree or a specific node
   const centerTree = useCallback((nodeId?: string) => {
@@ -446,10 +440,9 @@ export default function FamilyTreePage() {
     const viewportHeight = window.innerHeight - headerHeight;
     const minTopMargin = 100; // Minimum distance from top of viewport
 
-    const layout = calcTree(treeData, {
-      rootId: nodeId || rootNode,
-      placeholders: false
-    });
+    const layout = nodeId
+      ? calcTree(treeData, { rootId: nodeId, placeholders: false })
+      : treeLayout;
 
     if (nodeId) {
       // Find the specific node to center
@@ -489,7 +482,7 @@ export default function FamilyTreePage() {
 
       setPosition({ x, y });
     }
-  }, [treeData, rootNode, scale]);
+  }, [treeLayout, treeData, scale]);
 
   // Effect to center tree on initial load and when tree data changes
   useEffect(() => {
@@ -498,12 +491,9 @@ export default function FamilyTreePage() {
 
   // Effect to handle centering when root node changes
   useEffect(() => {
-    if (!rootNode || treeData.length === 0) return;
+    if (!rootNode || treeLayout.nodes.length === 0) return;
 
-    const layout = calcTree(treeData, {
-      rootId: rootNode,
-      placeholders: false
-    });
+    const layout = treeLayout;
 
     const targetNode = layout.nodes.find(n => n.id === rootNode);
     if (!targetNode) return;
@@ -548,16 +538,13 @@ export default function FamilyTreePage() {
     }
 
     setPosition({ x, y });
-  }, [rootNode, treeData, scale, DEBUG_MODE]);
+  }, [rootNode, treeLayout, scale, DEBUG_MODE]);
 
   // Add debug info for tree wrapper dimensions
   const getTreeWrapperDebugInfo = useCallback(() => {
-    if (!treeData.length) return null;
+    if (!treeLayout.nodes.length) return null;
 
-    const layout = calcTree(treeData, {
-      rootId: rootNode,
-      placeholders: false
-    });
+    const layout = treeLayout;
 
     return {
       wrapperWidth: Math.max(layout.canvas.width * WIDTH, window.innerWidth),
@@ -569,7 +556,7 @@ export default function FamilyTreePage() {
         nodeCount: layout.nodes.length
       }
     };
-  }, [treeData, rootNode, position.x, position.y, scale]);
+  }, [treeLayout, position.x, position.y, scale]);
 
   // Log wrapper debug info whenever position or scale changes
   useEffect(() => {
@@ -1976,14 +1963,8 @@ export default function FamilyTreePage() {
             <div 
               className="tree-wrapper absolute"
               style={{
-                width: `${calcTree(treeData, {
-                  rootId: rootNode,
-                  placeholders: false
-                }).canvas.width * WIDTH}px`,
-                height: `${calcTree(treeData, {
-                  rootId: rootNode,
-                  placeholders: false
-                }).canvas.height * HEIGHT}px`,
+                width: treeLayout.canvas.width * WIDTH,
+                height: treeLayout.canvas.height * HEIGHT,
                 transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
                 transition: 'transform 0.2s ease-out',
                 transformOrigin: '0 0',
@@ -1992,10 +1973,7 @@ export default function FamilyTreePage() {
               }}
             >
               {/* Render connectors first so they appear behind nodes */}
-              {calcTree(treeData, {
-                rootId: rootNode,
-                placeholders: false
-              }).connectors.map((connector: Connector, index: number) => {
+              {treeLayout.connectors.map((connector: Connector, index: number) => {
                 const [x1, y1, x2, y2] = connector;
                 const key = `connector-${index}`;
 
@@ -2038,10 +2016,7 @@ export default function FamilyTreePage() {
               })}
 
               {/* Render nodes on top of connectors */}
-              {calcTree(treeData, {
-                rootId: rootNode,
-                placeholders: false
-              }).nodes.map((node: ExtNode) => (
+              {treeLayout.nodes.map((node: ExtNode) => (
                 <div
                   key={node.id}
                   onMouseDown={(e) => {
