@@ -117,7 +117,6 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           return
         }
 
-        console.log("[EditEvent] Loaded event data:", event);
         
         // Set form data from event
         setTitle(event.title)
@@ -147,7 +146,6 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         
         // Initialize day-specific times if available
         if (event.daySpecificTimes && Object.keys(event.daySpecificTimes).length > 0) {
-          console.log("[EditEvent] Initializing day-specific times:", event.daySpecificTimes);
           setDaySpecificTimes(event.daySpecificTimes);
           
           // Ensure we're in multi-day mode if there are day-specific times
@@ -271,9 +269,8 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
 
   // Handle timezone change specifically
   const handleTimezoneChange = (newTimezone: string) => {
-    console.log(`Changing timezone from ${timezone} to ${newTimezone}`)
     setTimezone(newTimezone)
-    // We update the timezone value to be used in submission
+    // Update timezone value for submission
   }
 
   // Handle form submission
@@ -335,7 +332,6 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
 
       // Wait for all photos to upload and get their URLs
       const newPhotoUrls = await Promise.all(photoUploadPromises)
-      console.log(`Successfully uploaded ${newPhotoUrls.length} new photos for event`)
       
       // Combine existing and new photo URLs
       const allPhotos = [...existingPhotos, ...newPhotoUrls]
@@ -358,14 +354,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       // Ensure timezone is correctly set
       const eventTimezone = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
 
-      // Log event data before submission for debugging
-      console.log("[EditEvent] Pre-submit state check:", {
-        isMultiDay,
-        daySpecificTimes,
-        startTime,
-        endTime,
-        timezone
-      });
+      // Prepare event data before submission
       
       // Ensure we're properly handling day-specific times for multi-day events
       const eventData: Partial<EventData> = {
@@ -391,15 +380,8 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         coverPhotoUrls: allPhotos,
       }
 
-      // Log event data before submission for debugging
-      console.log("[EditEvent] Event data being updated:", {
-        ...eventData,
-        daySpecificTimes: JSON.stringify(daySpecificTimes)
-      });
-      
       // Update the event
       const result = await updateEvent(eventId, eventData);
-      console.log("[EditEvent] Update result:", result);
       
       toast({
         title: "Success",
@@ -848,14 +830,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
               type="submit" 
               disabled={saving}
               onClick={() => {
-                // Debug output right before submission
-                console.log("[EditEvent] Pre-submit state check:", {
-                  isMultiDay,
-                  daySpecificTimes,
-                  startTime,
-                  endTime,
-                  timezone
-                });
+                // Trigger form submission
               }}
               className="bg-[#0A5C36] hover:bg-[#0A5C36]/90 text-white"
             >
