@@ -2747,6 +2747,9 @@ export const getEventsForFeedPaginated = onCall(
       throw createError(ErrorCode.MISSING_PARAMETERS, "User ID and family tree ID are required.");
     }
 
+    // Validate pagination parameters
+    const validatedLimit = Math.min(Math.max(Number(limit) || 10, 1), 50); // Between 1 and 50 for events
+
     // Use lastEventDate for pagination, or current date for initial load
     const nowString = new Date().toISOString().split("T")[0];
     const startDate = lastEventDate || nowString;
@@ -2762,7 +2765,7 @@ export const getEventsForFeedPaginated = onCall(
         .where("familyTreeId", "==", familyTreeId)
         .where("eventDate", ">=", startDate)
         .orderBy("eventDate", "asc")
-        .limit(Number(limit))
+        .limit(validatedLimit)
     );
 
     // Query for public events
@@ -2771,7 +2774,7 @@ export const getEventsForFeedPaginated = onCall(
         .where("privacy", "==", "public")
         .where("eventDate", ">=", startDate)
         .orderBy("eventDate", "asc")
-        .limit(Number(limit))
+        .limit(validatedLimit)
     );
 
     // Query for events user is explicitly invited to
@@ -2781,7 +2784,7 @@ export const getEventsForFeedPaginated = onCall(
         .where("invitedMemberIds", "array-contains", userId)
         .where("eventDate", ">=", startDate)
         .orderBy("eventDate", "asc")
-        .limit(Number(limit))
+        .limit(validatedLimit)
     );
 
     const allRawEvents: EventData[] = [];
@@ -2820,13 +2823,13 @@ export const getEventsForFeedPaginated = onCall(
     });
 
     // Take the requested limit
-    const feedEvents = uniqueEvents.slice(0, Number(limit));
+    const feedEvents = uniqueEvents.slice(0, validatedLimit);
 
     // Enrich events with host details and RSVP status
     const enrichedEvents = await enrichEventListOptimized(feedEvents, userId);
 
     // Determine if there are more events
-    const hasMore = uniqueEvents.length === Number(limit);
+    const hasMore = uniqueEvents.length === validatedLimit;
     const newLastEventDate = feedEvents.length > 0 
       ? feedEvents[feedEvents.length - 1].eventDate 
       : undefined;
