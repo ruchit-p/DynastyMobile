@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Image from "next/image"
 import { Carousel } from "react-responsive-carousel"
 import "react-responsive-carousel/lib/styles/carousel.min.css"
@@ -68,19 +68,14 @@ const getMediaType = (item: MediaItem, providedType?: MediaType): MediaType => {
   
   // For string URLs, check extensions
   if (typeof item === 'string') {
-    // Add logging for debugging
-    console.log(`[DynastyCarousel] Determining media type for URL: ${item.substring(0, 50)}...`);
     
     if (item.startsWith('data:image') || item.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-      console.log(`[DynastyCarousel] Detected as image`);
       return 'image'
     }
     if (item.match(/\.(mp4|webm|mov|avi)$/i)) {
-      console.log(`[DynastyCarousel] Detected as video`);
       return 'video'
     }
     if (item.match(/\.(mp3|wav|m4a|aac)$/i)) {
-      console.log(`[DynastyCarousel] Detected as audio`);
       return 'audio'
     }
     
@@ -89,13 +84,11 @@ const getMediaType = (item: MediaItem, providedType?: MediaType): MediaType => {
         item.includes('storage.googleapis.com') || 
         item.includes('dynasty-eba63.firebasestorage.app')) {
       // For Firebase storage URLs, check for image extensions in the full path
-      if (item.match(/\.(jpg|jpeg|png|gif|webp)/i)) {
-        console.log(`[DynastyCarousel] Firebase URL detected as image`);
-        return 'image'
+        if (item.match(/\.(jpg|jpeg|png|gif|webp)/i)) {
+          return 'image'
+        }
       }
-    }
-    
-    console.log(`[DynastyCarousel] Could not determine media type, defaulting to unknown`);
+
     return 'unknown'
   }
   
@@ -155,15 +148,6 @@ export default function DynastyCarousel({
   // If no items or all items are filtered out, don't render anything
   const filteredItems = filterItem ? items.filter(filterItem) : items
 
-  // Add logging to help debug image issues
-  useEffect(() => {
-    console.log("[DynastyCarousel] Rendering carousel with items:", 
-      filteredItems.length > 0 
-        ? filteredItems.map((item, i) => typeof item === 'string' 
-            ? `Item ${i}: ${item.substring(0, 50)}...` 
-            : `Item ${i}: ${item instanceof File ? 'File' : 'Object'}`)
-        : 'No items');
-  }, [filteredItems]);
   
   if (!filteredItems.length) return null
   

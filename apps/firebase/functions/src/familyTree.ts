@@ -708,6 +708,7 @@ export const createFamilyMember = onCall(
               signUpLink: invitationLink,
               year: new Date().getFullYear(),
             },
+            userId: invitationData.inviteeId,
           });
           logger.info(
             `Sent invitation email to ${userData.email} for family tree ${userData.familyTreeId}`
@@ -1200,6 +1201,7 @@ export const updateFamilyMember = onCall(
               signUpLink: invitationLink,
               year: new Date().getFullYear(),
             },
+            userId: invitationData.inviteeId,
           });
           logger.info(`Sent invitation email to ${updates.email} for family tree ${familyTreeId}`);
         } catch (emailError) {

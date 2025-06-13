@@ -78,18 +78,23 @@ export class SESService {
     // Ensure 'to' is an array
     const toAddresses = Array.isArray(to) ? to : [to];
 
-    // Check suppression list for all recipients
+    // Check suppression list for all recipients concurrently
     const suppressionService = getEmailSuppressionService();
     const validRecipients: string[] = [];
     const suppressedRecipients: string[] = [];
 
-    for (const email of toAddresses) {
-      const validation = await suppressionService.validateEmailForSending(
+    const validationPromises = toAddresses.map((email) =>
+      suppressionService.validateEmailForSending(
         email,
         emailType,
         allowSuppressionOverride
-      );
+      )
+    );
 
+    const validations = await Promise.all(validationPromises);
+
+    validations.forEach((validation, index) => {
+      const email = toAddresses[index];
       if (validation.canSend) {
         validRecipients.push(email);
       } else {
@@ -103,7 +108,7 @@ export class SESService {
           })
         );
       }
-    }
+    });
 
     // If no valid recipients, don't send
     if (validRecipients.length === 0) {
