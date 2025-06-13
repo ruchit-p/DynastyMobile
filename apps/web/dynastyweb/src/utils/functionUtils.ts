@@ -98,7 +98,6 @@ export const createStory = async (storyData: {
     });
     
     // Add debugger for browser inspection
-    debugger;
     
     const result = await getFunctionsClient().callFunction('createStory', storyData);
     console.log("📥 Received response from createStory function", result.data);
