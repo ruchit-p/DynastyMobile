@@ -301,11 +301,6 @@ export async function updateEvent(eventId: string, eventData: Partial<EventData>
       }
     }
     
-    console.log("[eventUtils] Updating event with data:", { 
-      eventId, 
-      daySpecificTimes: eventData.daySpecificTimes,
-      hasCoverPhotos: eventData.coverPhotoUrls ? eventData.coverPhotoUrls.length : 0
-    });
     
     // Create a copy of the data to ensure it's not modified by reference
     const dataToSend = {
@@ -319,7 +314,7 @@ export async function updateEvent(eventId: string, eventData: Partial<EventData>
       }
     };
     
-    // Log data being sent, but truncate large values like base64 images
+    // Truncate large base64 images before sending
     const logData = JSON.parse(JSON.stringify(dataToSend));
     if (logData.eventData.coverPhotoUrls) {
       logData.eventData.coverPhotoUrls = logData.eventData.coverPhotoUrls.map((url: string) => {
@@ -329,7 +324,6 @@ export async function updateEvent(eventId: string, eventData: Partial<EventData>
         return url;
       });
     }
-    console.log("[eventUtils] Final data being sent to Firebase:", logData);
     
     const result = await getFunctionsClient().callFunction('updateEvent', dataToSend);
     
