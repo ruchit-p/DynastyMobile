@@ -598,7 +598,7 @@ export class OfflineService {
       await this.initializeDatabase();
     }
     return this.queueAction({
-      type: operation.type as 'create' | 'update' | 'delete',
+      type: operation.type as OfflineAction['type'],
       data: operation.data as Record<string, unknown>,
       priority: 'medium',
       maxRetries: 3,

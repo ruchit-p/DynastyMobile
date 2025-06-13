@@ -301,7 +301,7 @@ class SyncQueueService {
       retryCount: 0,
       userId: 'test-user',
     };
-    await this.queueOperation(syncOp);
+    await this.enqueueOperation(syncOp);
   }
 
   async getAll(): Promise<SyncOperation[]> {
