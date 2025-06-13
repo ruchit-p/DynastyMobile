@@ -80,7 +80,7 @@
     "recharts": "^2.15.3",
     "relatives-tree": "^3.2.1",
     "swiper": "^11.2.8",
-    "tailwind-merge": "^3.0.1",
+    "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5",
     "workbox-window": "^7.3.0",
