@@ -27,4 +27,9 @@ declare module 'react-virtualized-auto-sizer' {
     disableWidth?: boolean;
   }
   export default class AutoSizer extends React.Component<AutoSizerProps> {}
+}
+
+declare module 'crypto-js' {
+  const CryptoJS: any;
+  export default CryptoJS;
 } 
