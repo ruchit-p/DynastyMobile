@@ -63,7 +63,6 @@ const Footer = () => {
             <ul className="space-y-3">
               <FooterLink href="#features">Features</FooterLink>
               <FooterLink href="#security">Security</FooterLink>
-              <FooterLink href="/login">Sign In</FooterLink>
               <FooterLink href="/signup">Create Account</FooterLink>
             </ul>
           </div>
@@ -72,7 +71,6 @@ const Footer = () => {
             <h4 className="font-medium text-white mb-4">Company</h4>
             <ul className="space-y-3">
               <FooterLink href="#">About Us</FooterLink>
-              <FooterLink href="#">Contact</FooterLink>
               <FooterLink href="#">Privacy Policy</FooterLink>
               <FooterLink href="#">Terms of Service</FooterLink>
             </ul>
@@ -82,9 +80,8 @@ const Footer = () => {
             <h4 className="font-medium text-white mb-4">Resources</h4>
             <ul className="space-y-3">
               <FooterLink href="#">Help Center</FooterLink>
-              <FooterLink href="#">Family History Tips</FooterLink>
-              <FooterLink href="#">Genealogy Resources</FooterLink>
-              <FooterLink href="#">Community</FooterLink>
+              <FooterLink href="/login">Sign In</FooterLink>
+              <FooterLink href="#">Contact</FooterLink>
             </ul>
           </div>
         </div>
