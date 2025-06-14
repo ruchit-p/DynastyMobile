@@ -296,32 +296,33 @@ export class FileSecurityService {
   }
 
   /**
-   * Perform external virus scan using API
-   * This is a placeholder - integrate with actual virus scanning service
+   * Perform external virus scan using Cloudmersive API
    */
   private async performVirusScan(buffer: Buffer, fileName: string): Promise<ScanResult> {
     try {
-      // Example integration with VirusTotal or similar service
-      // const apiKey = process.env.VIRUS_SCAN_API_KEY;
-      // const response = await axios.post(...);
-
-      // For now, return safe (implement actual integration)
+      // Import Cloudmersive service dynamically to avoid circular dependencies
+      const {cloudmersiveService} = await import("./cloudmersiveService");
+      
+      const fileHash = this.calculateFileHash(buffer);
+      const scanResult = await cloudmersiveService.scanFile(buffer, fileName, fileHash, "system");
+      
+      // Convert Cloudmersive result to internal ScanResult format
       return {
-        safe: true,
-        threats: [],
-        scannedAt: new Date(),
-        fileHash: this.calculateFileHash(buffer),
-        scanProvider: "external",
+        safe: scanResult.safe,
+        threats: scanResult.threats,
+        scannedAt: scanResult.scannedAt,
+        fileHash: scanResult.fileHash,
+        scanProvider: scanResult.scanProvider,
       };
     } catch (error) {
       logger.error("External virus scan failed", {error, fileName});
-      // On external scan failure, we could either fail open or closed
-      // For safety, we'll consider it a threat
+      // On external scan failure, fail closed for security
       return {
         safe: false,
-        threats: ["External virus scan failed"],
+        threats: ["External virus scan failed - file rejected for safety"],
         scannedAt: new Date(),
         fileHash: this.calculateFileHash(buffer),
+        scanProvider: "cloudmersive_error",
       };
     }
   }

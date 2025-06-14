@@ -8,6 +8,12 @@ export * from './types';
 // Export API client
 export * from './api';
 
+// Export React hooks
+export * from './hooks';
+
+// Export platform adapters
+export * from './platform';
+
 // Export utility functions
 export * from './utils';
 

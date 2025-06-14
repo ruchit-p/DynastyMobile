@@ -24,6 +24,7 @@ import {
   STRIPE_API_VERSION,
 } from "./config/stripeSecrets";
 import {B2_CONFIG} from "./config/b2Secrets";
+import {WORKER_SCAN_HOOK_SECRET, CLOUDMERSIVE_API_KEY} from "./config/vaultScanSecrets";
 
 // Set global options for ALL Firebase Functions
 setGlobalOptions({
@@ -38,6 +39,9 @@ setGlobalOptions({
     STRIPE_API_VERSION,
     // B2 secrets
     B2_CONFIG,
+    // Vault scanning secrets
+    WORKER_SCAN_HOOK_SECRET,
+    CLOUDMERSIVE_API_KEY,
   ],
 });
 
@@ -68,6 +72,7 @@ export * from "./events-service"; // Consolidated event management functions
 export * from "./notifications"; // Notification functions
 export * from "./vault";
 export * from "./vault-scan-hooks"; // Vault malware scanning webhooks
+export * from "./vault-scanning"; // Vault scanning processing functions
 export * from "./placesApi";
 export * from "./encryption"; // End-to-end encryption functions
 export * from "./support"; // Support and contact functions
@@ -78,10 +83,11 @@ export * from "./migrations/userDocumentConsistency"; // User document consisten
 export * from "./migrations/userSubscriptionFieldsMigration"; // User subscription fields migration
 export * from "./migrations/addSearchableFields"; // Add searchable fields for optimized search
 export * from "./signal"; // Signal Protocol key management and verification
-export * from "./sms"; // Twilio SMS functions for invitations and notifications
+export * from "./sms"; // AWS End User Messaging SMS functions for invitations and notifications
 export * from "./subscriptions"; // Stripe subscription management and webhooks
 export * from "./emailCompliance"; // Email compliance management (unsubscribe, preferences, suppression)
 export * from "./webhooks/ses/sesEventHandler"; // SES webhook handlers for bounces and complaints
+export * from "./webhooks/awsSmsWebhook"; // AWS SMS webhook handler for delivery status
 
 // R2 Migration functions (only when enabled)
 if (process.env.ENABLE_R2_MIGRATION === "true") {

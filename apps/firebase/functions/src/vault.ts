@@ -26,6 +26,7 @@ import {
   validateShareId,
 } from "./utils/vault-sanitization";
 import {fileSecurityService} from "./services/fileSecurityService";
+import {getVaultScanConfig} from "./config/vaultScanSecrets";
 import {checkRateLimitByIP, RateLimitType} from "./middleware/auth";
 
 // MARK: - Types
@@ -482,17 +483,20 @@ export const getVaultUploadSignedUrl = onCall(
       const docRef = await db.collection("vaultItems").add(vaultItemData);
       const itemId = docRef.id;
 
-      // Since we're forcing provider to be "r2", we only handle R2 storage
-      const r2Bucket = R2Service.getBucketName();
-      const r2Key = R2Service.generateStorageKey(
-        "vault",
-        uid,
-        sanitizedFileName,
-        parentId || undefined
-      );
+      // Use R2 staging bucket for initial upload (quarantine bucket pattern)
+      const scanConfig = getVaultScanConfig();
+      const r2StagingBucket = scanConfig.stagingBucket;
+      const r2StagingKey = `staging/${uid}/${Date.now()}_${sanitizedFileName}`;
+      
+      logger.info("Generating upload URL for staging bucket", createLogContext({
+        stagingBucket: r2StagingBucket,
+        stagingKey: r2StagingKey,
+        fileName: sanitizedFileName,
+        userId: uid,
+      }));
 
       const result = await storageAdapter.generateUploadUrl({
-        path: r2Key,
+        path: r2StagingKey,
         contentType: sanitizedMimeType,
         expiresIn: 300, // 5 minutes
         metadata: {
@@ -501,19 +505,22 @@ export const getVaultUploadSignedUrl = onCall(
           "parentid": parentId || "root", // lowercase key
           "isencrypted": isEncrypted.toString(), // lowercase key
           "cf-item-id": itemId, // Add cf-item-id with the document ID
+          "scan-status": "pending", // Track scan status
+          "staging-upload": "true", // Mark as staging upload
         },
-        bucket: r2Bucket,
+        bucket: r2StagingBucket,
         provider: "r2",
       });
 
       const signedUrl = result.signedUrl;
-      const storagePath = r2Key; // For R2, storagePath is the key
+      const storagePath = r2StagingKey; // For staging, storagePath is the staging key
 
-      // Update the vault item with storage details and cached upload URL
+      // Update the vault item with staging details and cached upload URL
       await docRef.update({
         storagePath,
-        r2Bucket,
-        r2Key,
+        r2StagingBucket,
+        r2StagingKey,
+        storageProvider: "r2_staging", // Mark as staging
         cachedUploadUrl: signedUrl,
         cachedUploadUrlExpiry: Timestamp.fromMillis(Date.now() + 300000), // 5 minutes
       });
@@ -716,21 +723,44 @@ export const addVaultFile = onCall(
 
         await itemRef.update(updateData);
 
-        // Perform security scan on the uploaded file
-        try {
+        // For quarantine bucket system, files are scanned asynchronously
+        if (existingItem.storageProvider === "r2_staging") {
+          // File is in staging bucket - will be scanned by the scanning function
           logger.info(
-            "Starting security scan for file",
+            "File uploaded to staging bucket, queued for scanning",
             createLogContext({
               fileName: existingItem.name,
               fileSize: size || existingItem.size || 0,
+              stagingKey: existingItem.r2StagingKey,
               userId: uid,
             })
           );
 
-          let fileBuffer: Buffer;
+          // Mark scan as pending (should already be pending from getVaultUploadSignedUrl)
+          await itemRef.update({
+            scanStatus: "pending",
+            uploadCompletedAt: FieldValue.serverTimestamp(),
+          });
 
-          if (existingItem.storageProvider === "r2" && existingItem.r2Key) {
-            // Download from R2
+          // Return success - scanning will happen asynchronously
+          return {
+            success: true,
+            itemId,
+            scanStatus: "pending",
+            message: "File uploaded successfully. Virus scanning in progress.",
+          };
+        } else if (existingItem.storageProvider === "r2" && existingItem.r2Key) {
+          // Legacy R2 upload - perform immediate scan for backward compatibility
+          try {
+            logger.info(
+              "Starting immediate security scan for legacy upload",
+              createLogContext({
+                fileName: existingItem.name,
+                fileSize: size || existingItem.size || 0,
+                userId: uid,
+              })
+            );
+
             const storageAdapter = getStorageAdapter();
             const downloadUrl = await storageAdapter.generateDownloadUrl({
               path: existingItem.r2Key,
@@ -745,13 +775,97 @@ export const addVaultFile = onCall(
               throw new Error(`Failed to download file from R2: ${response.statusText}`);
             }
             const arrayBuffer = await response.arrayBuffer();
-            fileBuffer = Buffer.from(arrayBuffer);
-          } else {
-            // Download from Firebase Storage
+            const fileBuffer = Buffer.from(arrayBuffer);
+
+            // Perform immediate scan for legacy uploads
+            const scanResult = await fileSecurityService.scanFile(
+              fileBuffer,
+              existingItem.name,
+              existingItem.mimeType || "application/octet-stream",
+              size || existingItem.size || 0,
+              uid
+            );
+
+            if (!scanResult.safe) {
+              // File is not safe - delete it and the vault item
+              logger.warn(
+                "File failed security scan",
+                createLogContext({
+                  fileName: existingItem.name,
+                  threats: scanResult.threats,
+                  userId: uid,
+                })
+              );
+
+              // Delete the file from storage
+              await storageAdapter.deleteFile({
+                path: existingItem.r2Key,
+                bucket: existingItem.r2Bucket,
+                provider: "r2",
+              });
+
+              // Delete the vault item
+              await itemRef.delete();
+
+              throw createError(
+                ErrorCode.INVALID_REQUEST,
+                `File failed security scan: ${scanResult.threats.join(", ")}`
+              );
+            }
+
+            // Update item with scan results
+            await itemRef.update({
+              lastScannedAt: FieldValue.serverTimestamp(),
+              scanResult: "safe",
+              scanStatus: "clean",
+            });
+
+            logger.info(
+              "File passed security scan",
+              createLogContext({
+                fileName: existingItem.name,
+                userId: uid,
+              })
+            );
+          } catch (scanError) {
+            const {message, context} = formatErrorForLogging(scanError, {
+              fileName: existingItem.name,
+              userId: uid,
+            });
+            logger.error("Error during file security scan", {message, ...context});
+
+            // On scan error, fail closed (reject the file)
+            const storageAdapter = getStorageAdapter();
+            await storageAdapter.deleteFile({
+              path: existingItem.r2Key,
+              bucket: existingItem.r2Bucket,
+              provider: "r2",
+            });
+
+            await itemRef.delete();
+
+            throw createError(
+              ErrorCode.INVALID_REQUEST,
+              "File failed security scan due to processing error"
+            );
+          }
+        } else {
+          // Legacy Firebase Storage upload - perform immediate scan
+          try {
+            logger.info(
+              "Starting immediate security scan for Firebase Storage upload",
+              createLogContext({
+                fileName: existingItem.name,
+                fileSize: size || existingItem.size || 0,
+                userId: uid,
+              })
+            );
+
             const storagePath = existingItem.storagePath || "";
             if (!storagePath) {
               throw new Error("Storage path is missing");
             }
+            
             const file = getStorage().bucket().file(storagePath);
             const [exists] = await file.exists();
 
@@ -760,200 +874,212 @@ export const addVaultFile = onCall(
             }
 
             const [buffer] = await file.download();
-            fileBuffer = buffer;
-          }
+            
+            // Perform immediate scan for Firebase Storage uploads
+            const scanResult = await fileSecurityService.scanFile(
+              buffer,
+              existingItem.name,
+              existingItem.mimeType || "application/octet-stream",
+              size || existingItem.size || 0,
+              uid
+            );
 
-          // Scan the file
-          const scanResult = await fileSecurityService.scanFile(
-            fileBuffer,
-            existingItem.name,
-            existingItem.mimeType || "application/octet-stream",
-            size || existingItem.size || 0,
-            uid
-          );
+            if (!scanResult.safe) {
+              // File is not safe - delete it and the vault item
+              logger.warn(
+                "File failed security scan",
+                createLogContext({
+                  fileName: existingItem.name,
+                  threats: scanResult.threats,
+                  userId: uid,
+                })
+              );
 
-          if (!scanResult.safe) {
-            // File is not safe - delete it and the vault item
-            logger.warn(
-              "File failed security scan",
+              // Delete the file from Firebase Storage
+              await file.delete();
+
+              // Delete the vault item
+              await itemRef.delete();
+
+              throw createError(
+                ErrorCode.INVALID_REQUEST,
+                `File failed security scan: ${scanResult.threats.join(", ")}`
+              );
+            }
+
+            // Update item with scan results
+            await itemRef.update({
+              lastScannedAt: FieldValue.serverTimestamp(),
+              scanResult: "safe",
+              scanStatus: "clean",
+            });
+
+            logger.info(
+              "File passed security scan",
               createLogContext({
                 fileName: existingItem.name,
-                threats: scanResult.threats,
                 userId: uid,
               })
             );
+          } catch (scanError) {
+            const {message, context} = formatErrorForLogging(scanError, {
+              fileName: existingItem.name,
+              userId: uid,
+            });
+            logger.error("Error during Firebase Storage file security scan", {message, ...context});
 
-            // Delete the file from storage
-            if (existingItem.storageProvider === "r2" && existingItem.r2Key) {
-              try {
-                const storageAdapter = getStorageAdapter();
-                await storageAdapter.deleteFile({
-                  path: existingItem.r2Key,
-                  bucket: existingItem.r2Bucket,
-                  provider: "r2",
-                });
-                logger.info(
-                  "Deleted R2 file after failed scan",
-                  createLogContext({
-                    bucket: existingItem.r2Bucket,
-                    key: existingItem.r2Key,
-                    userId: uid,
-                  })
-                );
-              } catch (deleteError) {
-                const {message, context} = formatErrorForLogging(deleteError, {
-                  bucket: existingItem.r2Bucket,
-                  key: existingItem.r2Key,
-                });
-                logger.warn("Failed to delete R2 file", {message, ...context});
-              }
-            } else if (existingItem.storagePath) {
-              await getStorage().bucket().file(existingItem.storagePath).delete();
+            // On scan error, fail closed (reject the file)
+            const storagePath = existingItem.storagePath || "";
+            if (storagePath) {
+              await getStorage().bucket().file(storagePath).delete();
             }
 
-            // Delete the vault item
             await itemRef.delete();
 
             throw createError(
               ErrorCode.INVALID_REQUEST,
-              `File failed security scan: ${scanResult.threats.join(", ")}`
+              "File failed security scan due to processing error"
             );
           }
-
-          // Update item with scan results
-          await itemRef.update({
-            lastScannedAt: FieldValue.serverTimestamp(),
-            scanResult: "safe",
-          });
-
-          logger.info(
-            "File passed security scan",
-            createLogContext({
-              fileName: existingItem.name,
-              userId: uid,
-            })
-          );
-        } catch (scanError) {
-          const {message, context} = formatErrorForLogging(scanError, {
-            fileName: existingItem.name,
-            userId: uid,
-          });
-          logger.error("Error during file security scan", {message, ...context});
-
-          // On scan error, we can either fail open or closed
-          // For security, we'll fail closed (reject the file)
-          if (existingItem.storageProvider === "r2" && existingItem.r2Key) {
-            try {
-              const storageAdapter = getStorageAdapter();
-              await storageAdapter.deleteFile({
-                path: existingItem.r2Key,
-                bucket: existingItem.r2Bucket,
-                provider: "r2",
-              });
-              logger.info(
-                "Deleted R2 file after scan error",
-                createLogContext({
-                  bucket: existingItem.r2Bucket,
-                  key: existingItem.r2Key,
-                  userId: uid,
-                })
-              );
-            } catch (deleteError) {
-              const {message, context} = formatErrorForLogging(deleteError, {
-                bucket: existingItem.r2Bucket,
-                key: existingItem.r2Key,
-              });
-              logger.warn("Failed to delete R2 file", {message, ...context});
-            }
-          } else if (existingItem.storagePath) {
-            await getStorage()
-              .bucket()
-              .file(existingItem.storagePath)
-              .delete()
-              .catch(() => {});
-          }
-
-          await itemRef.delete();
-
-          throw createError(
-            ErrorCode.INTERNAL,
-            "File security scan failed. File has been rejected for safety."
-          );
         }
 
-        // Security scan completed successfully
-
-        logger.info(
-          "File upload completed with security scan",
-          createLogContext({
-            fileName: existingItem.name,
-            userId: uid,
-          })
-        );
-
-        // Generate download URL based on storage provider
-        let finalDownloadURL = "";
-        if (existingItem.storageProvider !== "firebase") {
-          // For R2 or B2 we generate signed URLs on demand via getVaultDownloadUrl
-          finalDownloadURL = "";
-        } else {
-          // Firebase Storage download URL
-          const bucket = getStorage().bucket();
-          const defaultBucketName = bucket.name;
-          const encodedStoragePath = encodeURIComponent(existingItem.storagePath || storagePath);
-          finalDownloadURL = `https://firebasestorage.googleapis.com/v0/b/${defaultBucketName}/o/${encodedStoragePath}?alt=media`;
-
-          if (process.env.FUNCTIONS_EMULATOR === "true") {
-            const projectId = process.env.GCLOUD_PROJECT;
-            if (projectId) {
-              const emulatorHost = "127.0.0.1:9199";
-              finalDownloadURL = `http://${emulatorHost}/v0/b/${projectId}.appspot.com/o/${encodedStoragePath}?alt=media`;
-            }
-          }
-        }
-
-        return {id: itemId, downloadURL: finalDownloadURL, isEncrypted};
-      }
-
-      // Legacy flow: create new item (for backward compatibility)
-      if (!name || !storagePath) {
-        throw createError(ErrorCode.MISSING_PARAMETERS, "Missing file name or storagePath");
-      }
-
-      // Validate file size (100MB limit)
-      const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
-      if (size && size > MAX_FILE_SIZE) {
+        // Return success for legacy uploads
+        return {
+          success: true,
+          itemId,
+          scanStatus: "clean",
+          message: "File uploaded and scanned successfully.",
+        };
+      } else {
+        // Legacy flow: not supported in quarantine bucket system
         throw createError(
           ErrorCode.INVALID_REQUEST,
-          `File size exceeds maximum allowed size of ${MAX_FILE_SIZE / (1024 * 1024)}MB`
+          "Legacy upload flow not supported. Please use getVaultUploadSignedUrl first."
         );
       }
+    },
+    "addVaultFile",
+    {
+      authLevel: "onboarded",
+      rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+    }
+  )
+);
 
-      // Build vault item path (logical path, not storage path)
-      let vaultPath = `/${name}`;
-      if (parentId) {
-        const parentDoc = await db.collection("vaultItems").doc(parentId).get();
-        if (!parentDoc.exists) {
-          throw createError(
-            ErrorCode.NOT_FOUND,
-            "Parent folder not found for vault item path construction."
-          );
-        }
-        const parentData = parentDoc.data() as VaultItem;
-        vaultPath = `${parentData.path}/${name}`;
+/**
+ * Rename an existing vault item
+ */
+export const renameVaultItem = onCall(
+  {
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(
+    async (request) => {
+      const uid = requireAuth(request);
+
+      // Validate and sanitize input using centralized validator
+      const validatedData = validateRequest(request.data, VALIDATION_SCHEMAS.renameVaultItem, uid);
+
+      const {itemId, newName} = validatedData;
+      const sanitizedName = sanitizeFileName(newName);
+
+      const db = getFirestore();
+      const docRef = db.collection("vaultItems").doc(itemId);
+      const doc = await docRef.get();
+      if (!doc.exists) {
+        throw createError(ErrorCode.NOT_FOUND, "Item not found");
+      }
+      const data = doc.data() as VaultItem;
+      if (data.userId !== uid) {
+        throw createError(ErrorCode.PERMISSION_DENIED, "Permission denied");
       }
 
-      // Generate the downloadURL for Firebase Storage
-      const bucket = getStorage().bucket();
-      const defaultBucketName = bucket.name;
-      const encodedStoragePath = encodeURIComponent(storagePath);
-      let finalDownloadURL = `https://firebasestorage.googleapis.com/v0/b/${defaultBucketName}/o/${encodedStoragePath}?alt=media`;
+      // Build new path with sanitized name
+      const parentPath = data.parentId ?
+        (await db.collection("vaultItems").doc(data.parentId).get()).data()!.path :
+        "";
+      const newPath = parentPath ? `${parentPath}/${sanitizedName}` : `/${sanitizedName}`;
+      
+      // Update this item
+      await docRef.update({
+        name: sanitizedName,
+        path: newPath,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      
+      // If folder, update descendants
+      if (data.type === "folder") {
+        await updateDescendantPathsRecursive(db, itemId, newPath);
+      }
+      
+      return {success: true};
+    },
+    "renameVaultItem",
+    {
+      authLevel: "onboarded",
+      rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+    }
+  )
+);
 
-      if (process.env.FUNCTIONS_EMULATOR === "true") {
-        const projectId = process.env.GCLOUD_PROJECT;
-        if (projectId) {
-          const emulatorHost = "127.0.0.1:9199";
-          finalDownloadURL = `http://${emulatorHost}/v0/b/${projectId}.appspot.com/o/${encodedStoragePath}?alt=media`;
+/**
+ * Move a vault item to a new parent folder
+ */
+export const moveVaultItem = onCall(
+  {
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(
+    async (request) => {
+      const uid = requireAuth(request);
+
+      // Validate and sanitize input using centralized validator
+      const validatedData = validateRequest(request.data, VALIDATION_SCHEMAS.moveVaultItem, uid);
+
+      const {itemId, newParentId} = validatedData;
+
+      const db = getFirestore();
+      const docRef = db.collection("vaultItems").doc(itemId);
+      const doc = await docRef.get();
+      if (!doc.exists) {
+        throw createError(ErrorCode.NOT_FOUND, "Item not found");
+      }
+      const data = doc.data() as VaultItem;
+      if (data.userId !== uid) {
+        throw createError(ErrorCode.PERMISSION_DENIED, "Permission denied");
+      }
+
+      // Build new path
+      const parentPath = newParentId ?
+        (await db.collection("vaultItems").doc(newParentId).get()).data()!.path :
+        "";
+      const newPath = parentPath ? `${parentPath}/${data.name}` : `/${data.name}`;
+      
+      // Update this item
+      await docRef.update({
+        parentId: newParentId,
+        path: newPath,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      
+      // If folder, update descendants
+      if (data.type === "folder") {
+        await updateDescendantPathsRecursive(db, itemId, newPath);
+      }
+      
+      return {success: true};
+    },
+    "moveVaultItem",
+    {
+      authLevel: "onboarded",
+      rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
+    }
+  )
+);
           logger.info(
             "Generated emulator download URL",
             createLogContext({
