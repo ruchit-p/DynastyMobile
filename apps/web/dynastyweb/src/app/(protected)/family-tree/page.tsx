@@ -167,7 +167,7 @@ export default function FamilyTreePage() {
   const isNewUser = searchParams.get('newUser') === 'true';
   const newUserCheckedRef = useRef(false);
   // Add refs for RAF-based position updates
-  const rafRef = useRef<number>();
+  const rafRef = useRef<number | undefined>(undefined);
   const pendingPositionRef = useRef<{x: number, y: number} | null>(null);
   const currentPositionRef = useRef(position);
 

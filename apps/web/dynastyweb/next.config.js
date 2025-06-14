@@ -254,47 +254,49 @@ const nextConfig = {
 // Injected content via Sentry wizard below
 const { withSentryConfig } = require("@sentry/nextjs");
 
-// Only apply Sentry configuration if auth token is available
-// This prevents build failures when SENTRY_AUTH_TOKEN is not set
-const shouldUseSentry = !!process.env.SENTRY_AUTH_TOKEN && process.env.NODE_ENV === 'production';
+// Determine if we're in a production environment (Vercel deployment or explicit production build)
+const isProductionBuild = process.env.VERCEL === '1' || process.env.CI === 'true' || process.env.SENTRY_AUTH_TOKEN;
 
-if (!shouldUseSentry && process.env.NODE_ENV === 'development') {
+// For local development, we always use the base config without Sentry
+if (!isProductionBuild) {
   console.log('🚫 Sentry disabled for local development');
+  module.exports = nextConfig;
+} else {
+  // For production builds, apply Sentry configuration
+  const finalConfig = withSentryConfig(
+    nextConfig,
+    {
+      // For all available options, see:
+      // https://www.npmjs.com/package/@sentry/webpack-plugin#options
+
+      org: process.env.SENTRY_ORG || "dynasty-platforms",
+      project: process.env.SENTRY_PROJECT || "dynastytest",
+
+      // Only print logs for uploading source maps in CI
+      silent: !process.env.CI,
+
+      // Disable Sentry's internal telemetry
+      telemetry: false,
+
+      // For all available options, see:
+      // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
+
+      // Upload a larger set of source maps for prettier stack traces (increases build time)
+      widenClientFileUpload: true,
+
+      // Route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers
+      tunnelRoute: "/monitoring",
+
+      // Automatically tree-shake Sentry logger statements to reduce bundle size
+      disableLogger: true,
+
+      // Enables automatic instrumentation of Vercel Cron Monitors. (Does not yet work with App Router route handlers.)
+      // See the following for more information:
+      // https://docs.sentry.io/product/crons/
+      // https://vercel.com/docs/cron-jobs
+      automaticVercelMonitors: true,
+    }
+  );
+  
+  module.exports = finalConfig;
 }
-
-const finalConfig = shouldUseSentry ? withSentryConfig(
-  nextConfig,
-  {
-    // For all available options, see:
-    // https://www.npmjs.com/package/@sentry/webpack-plugin#options
-
-    org: process.env.SENTRY_ORG || "dynasty-platforms",
-    project: process.env.SENTRY_PROJECT || "dynastytest",
-
-    // Only print logs for uploading source maps in CI
-    silent: !process.env.CI,
-
-    // Disable Sentry's internal telemetry
-    telemetry: false,
-
-    // For all available options, see:
-    // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
-
-    // Upload a larger set of source maps for prettier stack traces (increases build time)
-    widenClientFileUpload: true,
-
-    // Route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers
-    tunnelRoute: "/monitoring",
-
-    // Automatically tree-shake Sentry logger statements to reduce bundle size
-    disableLogger: true,
-
-    // Enables automatic instrumentation of Vercel Cron Monitors. (Does not yet work with App Router route handlers.)
-    // See the following for more information:
-    // https://docs.sentry.io/product/crons/
-    // https://vercel.com/docs/cron-jobs
-    automaticVercelMonitors: true,
-  }
-) : nextConfig;
-
-module.exports = finalConfig;
