@@ -3,6 +3,7 @@ import {logger} from "firebase-functions/v2";
 import Stripe from "stripe";
 import {StripeService} from "../services/stripeService";
 import {SubscriptionService} from "../services/subscriptionService";
+import {SubscriptionEmailService} from "../services/subscriptionEmailService";
 import {
   SubscriptionPlan,
   SubscriptionTier,
@@ -40,10 +41,12 @@ export class CheckoutService {
   private db = getFirestore();
   private stripeService: StripeService;
   private subscriptionService: SubscriptionService;
+  private emailService: SubscriptionEmailService;
 
   constructor() {
     this.stripeService = new StripeService();
     this.subscriptionService = new SubscriptionService();
+    this.emailService = new SubscriptionEmailService();
   }
 
   /**
@@ -429,12 +432,21 @@ export class CheckoutService {
         checkoutUrl: session.url,
       });
 
-      // TODO: Implement email sending logic using your email service
-      // await emailService.sendCheckoutConfirmation({
-      //   to: userEmail,
-      //   sessionId: session.id,
-      //   checkoutUrl: session.url,
-      // });
+      // Send checkout confirmation email
+      await this.emailService.sendCheckoutConfirmation({
+        to: userEmail,
+        sessionId: session.id,
+        checkoutUrl: session.url!,
+        planName: this.getPlanDisplayName(
+          session.metadata?.plan as SubscriptionPlan,
+          session.metadata?.tier as SubscriptionTier
+        ),
+        interval: session.metadata?.interval || "month",
+        price: this.formatPrice(
+          session.amount_total || 0,
+          session.metadata?.interval || "month"
+        ),
+      });
     } catch (error) {
       logger.error("Failed to send checkout confirmation email", {
         userEmail,
@@ -511,5 +523,25 @@ export class CheckoutService {
       logger.error("Failed to handle checkout expiration", {sessionId, error});
       // Don't throw - this is non-critical
     }
+  }
+
+  /**
+   * Get plan display name for emails
+   */
+  private getPlanDisplayName(plan: SubscriptionPlan, tier?: SubscriptionTier): string {
+    if (plan === SubscriptionPlan.INDIVIDUAL) {
+      return tier === SubscriptionTier.PREMIUM ? "Individual Premium" : "Individual Basic";
+    } else if (plan === SubscriptionPlan.FAMILY) {
+      return tier === SubscriptionTier.PREMIUM ? "Family Premium" : "Family Basic";
+    }
+    return "Free";
+  }
+
+  /**
+   * Format price for display in emails
+   */
+  private formatPrice(amountInCents: number, interval: string): string {
+    const price = (amountInCents / 100).toFixed(2);
+    return `$${price}/${interval === "year" ? "year" : "month"}`;
   }
 }

@@ -4,7 +4,7 @@ import {onRequest} from "firebase-functions/v2/https";
 import {logger} from "firebase-functions/v2";
 import {createError, ErrorCode, handleError, withErrorHandling} from "../utils/errors";
 import {getAWSSmsService} from "../services/awsSmsService";
-import {validateSNSMessage, SNSMessage, SNSNotification} from "./ses/snsValidator";
+import {validateSNSSignature, SNSMessage} from "./ses/snsValidator";
 import {AWS_WEBHOOK_CONFIG} from "../config/awsConfig";
 import {validateRequest} from "../utils/request-validator";
 import {VALIDATION_SCHEMAS} from "../config/validation-schemas";
@@ -134,7 +134,7 @@ export const awsSmsWebhook = onRequest(
       const snsMessage = req.body as SNSMessage;
       
       // Always validate SNS message signature for security
-      const isValid = await validateSNSMessage(snsMessage);
+      const isValid = await validateSNSSignature(snsMessage);
       if (!isValid) {
         logger.error("Invalid SNS signature", createLogContext({
           messageId: snsMessage.MessageId,

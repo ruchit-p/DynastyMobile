@@ -9,6 +9,7 @@ import {
 import {createError, ErrorCode} from "../utils/errors";
 import {SubscriptionService} from "../services/subscriptionService";
 import {StorageCalculationService} from "../services/storageCalculationService";
+import {SubscriptionEmailService} from "../services/subscriptionEmailService";
 import {PLAN_LIMITS} from "../config/stripeProducts";
 
 export interface FamilyMemberInvitation {
@@ -86,10 +87,12 @@ export class FamilyPlanService {
   private db = getFirestore();
   private subscriptionService: SubscriptionService;
   private storageService: StorageCalculationService;
+  private emailService: SubscriptionEmailService;
 
   constructor() {
     this.subscriptionService = new SubscriptionService();
     this.storageService = new StorageCalculationService();
+    this.emailService = new SubscriptionEmailService();
   }
 
   /**
@@ -609,17 +612,26 @@ export class FamilyPlanService {
    */
   private async sendFamilyInvitationEmail(invitation: FamilyMemberInvitation): Promise<void> {
     try {
-      // This would integrate with your email service
-      logger.info("Would send family invitation email", {
+      // Generate invitation link
+      const baseUrl = process.env.APP_URL || "https://app.dynastyapp.com";
+      const inviteLink = `${baseUrl}/family/accept-invite?token=${invitation.id}`;
+
+      // Send family member invitation email
+      await this.emailService.sendFamilyMemberNotification({
         to: invitation.memberEmail,
-        from: invitation.familyOwnerEmail,
-        invitationId: invitation.id,
+        memberName: invitation.memberName,
+        ownerName: invitation.familyOwnerName,
+        action: "invited",
+        inviteLink,
       });
 
-      // TODO: Implement email sending logic
-      // await emailService.sendFamilyInvitation(invitation);
+      logger.info("Sent family invitation email", {
+        to: invitation.memberEmail,
+        invitationId: invitation.id,
+      });
     } catch (error) {
       logger.error("Failed to send family invitation email", {invitation, error});
+      // Don't throw - email failure shouldn't block the invitation creation
     }
   }
 
@@ -632,16 +644,59 @@ export class FamilyPlanService {
     gracePeriodDays?: number
   ): Promise<void> {
     try {
-      logger.info("Would send family removal notification", {
+      // Get subscription owner details
+      const subscriptionDoc = await this.db.collection("subscriptions")
+        .doc(member.subscriptionId)
+        .get();
+      
+      if (!subscriptionDoc.exists) {
+        logger.warn("Subscription not found for removal notification", {
+          subscriptionId: member.subscriptionId,
+        });
+        return;
+      }
+
+      const subscription = subscriptionDoc.data() as Subscription;
+      const ownerDoc = await this.db.collection("users")
+        .doc(subscription.userId)
+        .get();
+      
+      const ownerName = ownerDoc.exists 
+        ? ownerDoc.data()?.displayName || ownerDoc.data()?.email 
+        : "Family Plan Owner";
+
+      // Send removal notification email
+      await this.emailService.sendFamilyMemberNotification({
+        to: member.email,
+        memberName: member.name,
+        ownerName,
+        action: "removed",
+      });
+
+      // Also create an in-app notification
+      const {createNotification} = await import("../utils/notificationHelpers");
+      await createNotification({
+        userId: member.userId,
+        title: "Removed from Family Plan",
+        body: gracePeriodDays 
+          ? `You have been removed from the family plan. You have ${gracePeriodDays} days of continued access.`
+          : "You have been removed from the family plan. Your access has been updated.",
+        type: "family:member_removed",
+        data: {
+          reason,
+          gracePeriodDays: gracePeriodDays?.toString(),
+        },
+      });
+
+      logger.info("Sent family removal notification", {
         to: member.email,
         memberId: member.userId,
         reason,
         gracePeriodDays,
       });
-
-      // TODO: Implement notification sending logic
     } catch (error) {
       logger.error("Failed to send family removal notification", {member, error});
+      // Don't throw - notification failure shouldn't block the removal
     }
   }
 
@@ -650,14 +705,35 @@ export class FamilyPlanService {
    */
   private async sendFamilyWelcomeNotification(invitation: FamilyMemberInvitation): Promise<void> {
     try {
-      logger.info("Would send family welcome notification", {
+      // Send welcome email
+      await this.emailService.sendFamilyMemberNotification({
+        to: invitation.memberEmail,
+        memberName: invitation.memberName,
+        ownerName: invitation.familyOwnerName,
+        action: "added",
+      });
+
+      // Also create an in-app notification
+      const {createNotification} = await import("../utils/notificationHelpers");
+      await createNotification({
+        userId: invitation.memberId,
+        title: "Welcome to the Family Plan!",
+        body: `You've been added to ${invitation.familyOwnerName}'s family plan. Enjoy all the premium features!`,
+        type: "family:member_added",
+        link: "/settings/subscription",
+        data: {
+          familyOwnerId: invitation.familyOwnerId,
+          subscriptionId: invitation.subscriptionId,
+        },
+      });
+
+      logger.info("Sent family welcome notification", {
         to: invitation.memberEmail,
         familyOwner: invitation.familyOwnerName,
       });
-
-      // TODO: Implement welcome notification logic
     } catch (error) {
       logger.error("Failed to send family welcome notification", {invitation, error});
+      // Don't throw - notification failure shouldn't block the acceptance
     }
   }
 }

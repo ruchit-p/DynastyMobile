@@ -542,45 +542,223 @@ async function executeBulkMove(
 }
 
 /**
- * Execute bulk encrypt operation (placeholder for future implementation)
+ * Execute bulk encrypt operation
+ * Note: This prepares items for encryption - actual encryption must be done client-side
  */
 async function executeBulkEncrypt(
   userId: string,
   itemIds: string[],
   operationId: string
 ): Promise<VaultBulkResult> {
-  // TODO: Implement bulk encryption
-  return {
-    success: false,
+  const result: VaultBulkResult = {
+    success: true,
     totalItems: itemIds.length,
     successfulItems: [],
-    failedItems: itemIds.map((id) => ({
-      itemId: id,
-      error: "Bulk encryption not yet implemented",
-    })),
+    failedItems: [],
     operationId,
   };
+
+  // Process in batches
+  for (let i = 0; i < itemIds.length; i += MAX_BATCH_SIZE) {
+    const batchIds = itemIds.slice(i, i + MAX_BATCH_SIZE);
+
+    try {
+      // Get items to verify ownership and check encryption status
+      const itemsSnapshot = await db.collection("vaultItems")
+        .where(admin.firestore.FieldPath.documentId(), "in", batchIds)
+        .where("ownerId", "==", userId)
+        .where("isDeleted", "==", false)
+        .get();
+
+      const batch = db.batch();
+      const encryptableItems: string[] = [];
+
+      for (const doc of itemsSnapshot.docs) {
+        const data = doc.data();
+
+        // Check if item is already encrypted
+        const encryptionMetadataDoc = await db.collection("vaultEncryptionMetadata")
+          .doc(doc.id)
+          .get();
+
+        if (encryptionMetadataDoc.exists && encryptionMetadataDoc.data()?.encryptionMetadata) {
+          result.failedItems.push({
+            itemId: doc.id,
+            error: "Item is already encrypted",
+          });
+          continue;
+        }
+
+        // Check if item type supports encryption (files only for now)
+        if (data.type !== "file") {
+          result.failedItems.push({
+            itemId: doc.id,
+            error: "Only files can be encrypted",
+          });
+          continue;
+        }
+
+        // Mark item as pending encryption
+        batch.update(doc.ref, {
+          encryptionStatus: "pending",
+          encryptionOperationId: operationId,
+          updatedAt: Timestamp.now(),
+        });
+
+        encryptableItems.push(doc.id);
+        result.successfulItems.push(doc.id);
+      }
+
+      // Commit batch update
+      if (encryptableItems.length > 0) {
+        await batch.commit();
+
+        // Log encryption preparation
+        logger.info("Prepared items for encryption", {
+          operationId,
+          userId,
+          itemCount: encryptableItems.length,
+          itemIds: encryptableItems,
+        });
+      }
+
+      // Mark items that weren't found as failed
+      const foundIds = itemsSnapshot.docs.map((doc) => doc.id);
+      const notFoundIds = batchIds.filter((id) => !foundIds.includes(id));
+
+      for (const id of notFoundIds) {
+        result.failedItems.push({
+          itemId: id,
+          error: "Item not found or not owned by user",
+        });
+      }
+    } catch (error) {
+      logger.error("Batch encryption preparation failed:", error);
+
+      // Mark all items in this batch as failed
+      for (const id of batchIds) {
+        if (!result.successfulItems.includes(id)) {
+          result.failedItems.push({
+            itemId: id,
+            error: error.message || "Unknown error",
+          });
+        }
+      }
+    }
+  }
+
+  result.success = result.failedItems.length === 0;
+  return result;
 }
 
 /**
- * Execute bulk decrypt operation (placeholder for future implementation)
+ * Execute bulk decrypt operation
+ * Note: This prepares items for decryption - actual decryption must be done client-side
  */
 async function executeBulkDecrypt(
   userId: string,
   itemIds: string[],
   operationId: string
 ): Promise<VaultBulkResult> {
-  // TODO: Implement bulk decryption
-  return {
-    success: false,
+  const result: VaultBulkResult = {
+    success: true,
     totalItems: itemIds.length,
     successfulItems: [],
-    failedItems: itemIds.map((id) => ({
-      itemId: id,
-      error: "Bulk decryption not yet implemented",
-    })),
+    failedItems: [],
     operationId,
   };
+
+  // Process in batches
+  for (let i = 0; i < itemIds.length; i += MAX_BATCH_SIZE) {
+    const batchIds = itemIds.slice(i, i + MAX_BATCH_SIZE);
+
+    try {
+      // Get items to verify ownership and check encryption status
+      const itemsSnapshot = await db.collection("vaultItems")
+        .where(admin.firestore.FieldPath.documentId(), "in", batchIds)
+        .where("ownerId", "==", userId)
+        .where("isDeleted", "==", false)
+        .get();
+
+      const batch = db.batch();
+      const decryptableItems: string[] = [];
+
+      for (const doc of itemsSnapshot.docs) {
+        const data = doc.data();
+
+        // Check if item is encrypted
+        const encryptionMetadataDoc = await db.collection("vaultEncryptionMetadata")
+          .doc(doc.id)
+          .get();
+
+        if (!encryptionMetadataDoc.exists || !encryptionMetadataDoc.data()?.encryptionMetadata) {
+          result.failedItems.push({
+            itemId: doc.id,
+            error: "Item is not encrypted",
+          });
+          continue;
+        }
+
+        // Check if item type supports decryption (files only for now)
+        if (data.type !== "file") {
+          result.failedItems.push({
+            itemId: doc.id,
+            error: "Only files can be decrypted",
+          });
+          continue;
+        }
+
+        // Mark item as pending decryption
+        batch.update(doc.ref, {
+          encryptionStatus: "pending_decryption",
+          decryptionOperationId: operationId,
+          updatedAt: Timestamp.now(),
+        });
+
+        decryptableItems.push(doc.id);
+        result.successfulItems.push(doc.id);
+      }
+
+      // Commit batch update
+      if (decryptableItems.length > 0) {
+        await batch.commit();
+
+        // Log decryption preparation
+        logger.info("Prepared items for decryption", {
+          operationId,
+          userId,
+          itemCount: decryptableItems.length,
+          itemIds: decryptableItems,
+        });
+      }
+
+      // Mark items that weren't found as failed
+      const foundIds = itemsSnapshot.docs.map((doc) => doc.id);
+      const notFoundIds = batchIds.filter((id) => !foundIds.includes(id));
+
+      for (const id of notFoundIds) {
+        result.failedItems.push({
+          itemId: id,
+          error: "Item not found or not owned by user",
+        });
+      }
+    } catch (error) {
+      logger.error("Batch decryption preparation failed:", error);
+
+      // Mark all items in this batch as failed
+      for (const id of batchIds) {
+        if (!result.successfulItems.includes(id)) {
+          result.failedItems.push({
+            itemId: id,
+            error: error.message || "Unknown error",
+          });
+        }
+      }
+    }
+  }
+
+  result.success = result.failedItems.length === 0;
+  return result;
 }
 
 /**

@@ -5,12 +5,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { ErrorSeverity } from '../../src/lib/ErrorHandlingService';
+import DeviceInfo from 'react-native-device-info';
 
 // MARK: - Main Component
 const AboutScreenContent = () => {
   const navigation = useNavigation();
-  const appVersion = "1.0.0"; // TODO: Get this dynamically
-  const buildNumber = "100123"; // TODO: Get this dynamically
+  const appVersion = DeviceInfo.getVersion(); // Get version dynamically
+  const buildNumber = DeviceInfo.getBuildNumber(); // Get build number dynamically
 
   // Initialize error handler
   const { withErrorHandling, clearError } = useErrorHandler({

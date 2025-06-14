@@ -9,6 +9,7 @@ import {createError, ErrorCode} from "../utils/errors";
 import {StripeService} from "../services/stripeService";
 import {SubscriptionService} from "../services/subscriptionService";
 import {StorageCalculationService} from "../services/storageCalculationService";
+import {SubscriptionEmailService} from "../services/subscriptionEmailService";
 import {
   ADDON_STORAGE,
   getAddonPriceId,
@@ -81,6 +82,7 @@ export class AddonService {
   private stripeService: StripeService;
   private subscriptionService: SubscriptionService;
   private storageService: StorageCalculationService;
+  private emailService: SubscriptionEmailService;
 
   // Addon compatibility rules - updated for pricing matrix
   private compatibilityMatrix: AddonCompatibilityMatrix = {
@@ -110,6 +112,7 @@ export class AddonService {
     this.stripeService = new StripeService();
     this.subscriptionService = new SubscriptionService();
     this.storageService = new StorageCalculationService();
+    this.emailService = new SubscriptionEmailService();
   }
 
   /**
@@ -579,16 +582,53 @@ export class AddonService {
    */
   private async sendAddonPurchaseConfirmation(userId: string, addon: SubscriptionAddon): Promise<void> {
     try {
-      logger.info("Would send addon purchase confirmation", {
+      // Get user details
+      const userDoc = await this.db.collection("users").doc(userId).get();
+      if (!userDoc.exists) {
+        logger.warn("User not found for addon purchase confirmation", {userId});
+        return;
+      }
+
+      const userData = userDoc.data();
+      const userEmail = userData?.email;
+      
+      if (!userEmail) {
+        logger.warn("User email not found for addon purchase confirmation", {userId});
+        return;
+      }
+
+      // Send addon purchase confirmation email
+      await this.emailService.sendAddonNotification({
+        to: userEmail,
+        addonName: this.getAddonDisplayName(addon.type),
+        addonType: addon.type,
+        price: this.formatAddonPrice(addon.priceMonthly, addon.priceYearly),
+        action: "activated",
+      });
+
+      // Also create an in-app notification
+      const {createNotification} = await import("../utils/notificationHelpers");
+      await createNotification({
+        userId,
+        title: "Storage Add-on Activated",
+        body: `Your ${this.getAddonDisplayName(addon.type)} storage add-on has been activated successfully.`,
+        type: "subscription:addon_added",
+        link: "/settings/subscription",
+        data: {
+          addonType: addon.type,
+          storageGB: addon.storageGB?.toString(),
+        },
+      });
+
+      logger.info("Sent addon purchase confirmation", {
         userId,
         addonType: addon.type,
         storageGB: addon.storageGB,
         priceMonthly: addon.priceMonthly,
       });
-
-      // TODO: Implement email/notification sending
     } catch (error) {
       logger.error("Failed to send addon purchase confirmation", {userId, addon, error});
+      // Don't throw - notification failure shouldn't block the purchase
     }
   }
 
@@ -601,15 +641,66 @@ export class AddonService {
     reason?: string
   ): Promise<void> {
     try {
-      logger.info("Would send addon removal confirmation", {
+      // Get user details
+      const userDoc = await this.db.collection("users").doc(userId).get();
+      if (!userDoc.exists) {
+        logger.warn("User not found for addon removal confirmation", {userId});
+        return;
+      }
+
+      const userData = userDoc.data();
+      const userEmail = userData?.email;
+      
+      if (!userEmail) {
+        logger.warn("User email not found for addon removal confirmation", {userId});
+        return;
+      }
+
+      // Send addon removal confirmation email
+      await this.emailService.sendAddonNotification({
+        to: userEmail,
+        addonName: this.getAddonDisplayName(addon.type),
+        addonType: addon.type,
+        price: this.formatAddonPrice(addon.priceMonthly, addon.priceYearly),
+        action: "removed",
+      });
+
+      // Also create an in-app notification
+      const {createNotification} = await import("../utils/notificationHelpers");
+      await createNotification({
+        userId,
+        title: "Storage Add-on Removed",
+        body: `Your ${this.getAddonDisplayName(addon.type)} storage add-on has been removed.`,
+        type: "subscription:addon_removed",
+        link: "/settings/subscription",
+        data: {
+          addonType: addon.type,
+          reason,
+          storageGB: addon.storageGB?.toString(),
+        },
+      });
+
+      logger.info("Sent addon removal confirmation", {
         userId,
         addonType: addon.type,
         reason,
       });
-
-      // TODO: Implement email/notification sending
     } catch (error) {
       logger.error("Failed to send addon removal confirmation", {userId, addon, error});
+      // Don't throw - notification failure shouldn't block the removal
     }
+  }
+
+
+  /**
+   * Format addon price for display
+   */
+  private formatAddonPrice(monthlyPrice: number, yearlyPrice?: number): string {
+    const monthly = (monthlyPrice / 100).toFixed(2);
+    if (yearlyPrice) {
+      const yearly = (yearlyPrice / 100).toFixed(2);
+      return `$${monthly}/month or $${yearly}/year`;
+    }
+    return `$${monthly}/month`;
   }
 }

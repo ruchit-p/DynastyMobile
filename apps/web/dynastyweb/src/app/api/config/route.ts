@@ -129,12 +129,23 @@ export async function GET() {
 // Force refresh endpoint (requires admin auth in production)
 export async function POST(request: NextRequest) {
   try {
-    // TODO: Add admin authentication check here
+    // Verify Firebase authentication and admin status
     const authHeader = request.headers.get('authorization');
     
-    // Simple check for now - replace with proper admin auth
-    if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_API_KEY}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized - Missing or invalid authorization header' }, { status: 401 });
+    }
+
+    // Dynamic import to avoid loading firebase-admin on client side
+    const { verifyAuthHeader } = await import('@/lib/firebase-admin');
+    const user = await verifyAuthHeader(authHeader);
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized - Invalid token' }, { status: 401 });
+    }
+
+    if (!user.isAdmin) {
+      return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 
     // Clear cache

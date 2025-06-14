@@ -4,6 +4,7 @@
  */
 
 import { jest } from '@jest/globals';
+import * as admin from 'firebase-admin';
 
 // Configure test timeouts
 jest.setTimeout(30000); // 30 seconds default timeout
@@ -86,13 +87,35 @@ beforeAll(async () => {
   process.env.FIREBASE_PROJECT_ID = 'dynasty-test-project';
   process.env.FUNCTIONS_EMULATOR = 'true';
   process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = 'localhost:9099';
 
-  // Mock Firebase Admin initialization to prevent real connections
+  // Initialize Firebase Admin with test configuration
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      projectId: 'dynasty-test-project',
+    });
+  }
+
+  // Mock Firebase Admin to use test doubles
   jest.doMock('firebase-admin', () => ({
-    initializeApp: jest.fn(),
+    apps: admin.apps,
+    app: admin.app,
+    initializeApp: jest.fn(() => admin.app()),
     credential: {
       applicationDefault: jest.fn(),
+      cert: jest.fn(),
     },
+    auth: jest.fn(() => ({
+      verifyIdToken: jest.fn(),
+      createUser: jest.fn(),
+      updateUser: jest.fn(),
+      deleteUser: jest.fn(),
+      getUserByEmail: jest.fn(),
+      getUser: jest.fn(),
+      listUsers: jest.fn(),
+      createCustomToken: jest.fn(),
+      setCustomUserClaims: jest.fn(),
+    })),
     firestore: jest.fn(() => ({
       collection: jest.fn(() => ({
         doc: jest.fn(() => ({
@@ -117,7 +140,29 @@ beforeAll(async () => {
         set: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
-        commit: jest.fn(),
+        commit: jest.fn().mockResolvedValue(undefined),
+      })),
+      runTransaction: jest.fn((callback) => callback({
+        get: jest.fn(),
+        set: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+      })),
+    })),
+    storage: jest.fn(() => ({
+      bucket: jest.fn(() => ({
+        file: jest.fn(() => ({
+          exists: jest.fn(),
+          download: jest.fn(),
+          save: jest.fn(),
+          delete: jest.fn(),
+          getMetadata: jest.fn(),
+          setMetadata: jest.fn(),
+          makePublic: jest.fn(),
+          makePrivate: jest.fn(),
+        })),
+        upload: jest.fn(),
+        getFiles: jest.fn(),
       })),
     })),
   }));

@@ -1,6 +1,7 @@
 import {onRequest, onCall} from "firebase-functions/v2/https";
 import {logger} from "firebase-functions/v2";
 import {defineSecret} from "firebase-functions/params";
+import {getFirestore} from "firebase-admin/firestore";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
 import {createError, ErrorCode, withErrorHandling} from "./utils/errors";
 import {createLogContext} from "./utils/sanitization";
@@ -276,10 +277,17 @@ export const manageEmailSuppression = onCall(
     async (request) => {
       const {action, email, reason, type, metadata} = request.data;
 
-      // TODO: Add admin role check
-      // if (!request.auth?.admin) {
-      //   throw createError(ErrorCode.PERMISSION_DENIED, "Admin access required");
-      // }
+      // Verify admin status
+      const uid = request.auth?.uid;
+      if (!uid) {
+        throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
+      }
+
+      const db = getFirestore();
+      const userDoc = await db.collection("users").doc(uid).get();
+      if (!userDoc.exists || !userDoc.data()?.isAdmin) {
+        throw createError(ErrorCode.PERMISSION_DENIED, "Admin access required");
+      }
 
       const suppressionService = getEmailSuppressionService();
 
