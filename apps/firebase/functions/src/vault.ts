@@ -86,7 +86,6 @@ interface VaultShareLink {
   lastAccessedAt?: Timestamp;
 }
 
-const MAX_UPDATE_DEPTH = 10;
 
 // MARK: - Access Control Helper Functions
 
@@ -208,31 +207,36 @@ async function getAccessibleVaultItems(
 /**
  * Iteratively updates descendant paths when renaming/moving folders using a stack
  */
-async function updateDescendantPathsRecursive(
+async function updateDescendantPaths(
   db: FirebaseFirestore.Firestore,
-  rootFolderId: string,
-  rootPath: string
+  oldPath: string,
+  newPath: string
 ): Promise<void> {
-  type Node = { folderId: string; parentPath: string; depth: number };
-  const stack: Node[] = [{folderId: rootFolderId, parentPath: rootPath, depth: 0}];
-  while (stack.length) {
-    const {folderId, parentPath, depth} = stack.pop()!;
-    if (depth >= MAX_UPDATE_DEPTH) {
-      logger.warn(`Max update depth ${MAX_UPDATE_DEPTH} reached for folder ${folderId}`);
-      continue;
+  const snapshot = await db
+    .collection('vaultItems')
+    .where('path', '>=', `${oldPath}/`)
+    .where('path', '<', `${oldPath}/\uf8ff`)
+    .get();
+
+  let batch = db.batch();
+  let batchCount = 0;
+  const MAX_BATCH_SIZE = 490;
+
+  for (const doc of snapshot.docs) {
+    const currentPath = doc.data().path as string;
+    const updatedPath = currentPath.replace(oldPath, newPath);
+    batch.update(doc.ref, {path: updatedPath, updatedAt: FieldValue.serverTimestamp()});
+    batchCount++;
+
+    if (batchCount >= MAX_BATCH_SIZE) {
+      await batch.commit();
+      batch = db.batch();
+      batchCount = 0;
     }
-    const snapshot = await db.collection("vaultItems").where("parentId", "==", folderId).get();
-    for (const doc of snapshot.docs) {
-      const data = doc.data() as VaultItem;
-      const newPath = `${parentPath}/${data.name}`;
-      await db
-        .collection("vaultItems")
-        .doc(doc.id)
-        .update({path: newPath, updatedAt: FieldValue.serverTimestamp()});
-      if (data.type === "folder") {
-        stack.push({folderId: doc.id, parentPath: newPath, depth: depth + 1});
-      }
-    }
+  }
+
+  if (batchCount > 0) {
+    await batch.commit();
   }
 }
 
@@ -1083,8 +1087,8 @@ export const renameVaultItem = onCall(
         updatedAt: FieldValue.serverTimestamp(),
       });
       // If folder, update descendants
-      if (data.type === "folder") {
-        await updateDescendantPathsRecursive(db, itemId, newPath);
+      if (data.type === 'folder') {
+        await updateDescendantPaths(db, data.path, newPath);
       }
       return {success: true};
     },
@@ -1145,8 +1149,8 @@ export const moveVaultItem = onCall(
         updatedAt: FieldValue.serverTimestamp(),
       });
       // If folder, update descendants
-      if (data.type === "folder") {
-        await updateDescendantPathsRecursive(db, itemId, newPath);
+      if (data.type === 'folder') {
+        await updateDescendantPaths(db, data.path, newPath);
       }
       return {success: true};
     },
