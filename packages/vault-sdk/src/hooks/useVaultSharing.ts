@@ -215,10 +215,6 @@ export function useVaultSharing(
       staleTime: 2 * 60 * 1000, // 2 minutes
       gcTime: 10 * 60 * 1000, // 10 minutes
       ...options,
-      onError: (error) => {
-        handleError(error, 'Get shared with me');
-        options?.onError?.(error);
-      },
     });
   };
 
@@ -239,10 +235,6 @@ export function useVaultSharing(
       staleTime: 2 * 60 * 1000, // 2 minutes
       gcTime: 10 * 60 * 1000, // 10 minutes
       ...options,
-      onError: (error) => {
-        handleError(error, 'Get my shares');
-        options?.onError?.(error);
-      },
     });
   };
 
@@ -255,8 +247,8 @@ export function useVaultSharing(
    */
   const useBulkShareItems = () => {
     return useMutation({
-      mutationFn: withVaultErrorHandling(
-        async (request: { itemIds: string[]; userIds: string[]; permissions: string }) => {
+      mutationFn: async (request: { itemIds: string[]; userIds: string[]; permissions: string }) => {
+        return withVaultErrorHandling(async () => {
           // Share each item individually
           const results = await Promise.allSettled(
             request.itemIds.map(itemId =>
@@ -278,16 +270,15 @@ export function useVaultSharing(
           }
           
           return { success: true, sharedCount: request.itemIds.length };
-        },
-        'bulkShareItems'
-      ),
-      onSuccess: (data, variables) => {
+        }, 'bulkShareItems')();
+      },
+      onSuccess: (_data, variables) => {
         // Invalidate all relevant queries
         queryClient.invalidateQueries({ queryKey: vaultQueryKeys.items() });
         queryClient.invalidateQueries({ queryKey: vaultSharingQueryKeys.myShares() });
         
         // Invalidate individual items
-        variables.itemIds.forEach(itemId => {
+        variables.itemIds.forEach((itemId: string) => {
           queryClient.invalidateQueries({ queryKey: vaultQueryKeys.item(itemId) });
         });
       },

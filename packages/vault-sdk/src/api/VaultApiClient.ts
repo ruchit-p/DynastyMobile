@@ -69,7 +69,7 @@ export interface ApiCallOptions {
 /**
  * Validates response data against a Zod schema
  */
-function validateResponse<T>(data: unknown, schema: z.ZodSchema<T>, operation: string): T {
+function validateResponse<T>(data: unknown, schema: z.ZodSchema<T>, _operation: string): T {
   try {
     return schema.parse(data);
   } catch (error) {
@@ -139,12 +139,14 @@ export class VaultApiClient {
   /**
    * Creates a new folder in the vault
    */
-  createFolder = createFunctionCaller<CreateVaultFolderRequest, VaultItem>(
-    this.functions,
-    'createVaultFolder',
-    VaultItemSchema,
-    this.config.enableValidation
-  );
+  createFolder(data: CreateVaultFolderRequest, options?: ApiCallOptions): Promise<VaultItem> {
+    return createFunctionCaller<CreateVaultFolderRequest, VaultItem>(
+      this.functions,
+      'createVaultFolder',
+      undefined,
+      false
+    )(data, options);
+  }
 
   // ============================
   // FILE OPERATIONS
@@ -153,52 +155,62 @@ export class VaultApiClient {
   /**
    * Registers a file after upload to storage
    */
-  addFile = createFunctionCaller<AddVaultFileRequest, VaultItem>(
-    this.functions,
-    'addVaultFile',
-    VaultItemSchema,
-    this.config.enableValidation
-  );
+  addFile(data: AddVaultFileRequest, options?: ApiCallOptions): Promise<VaultItem> {
+    return createFunctionCaller<AddVaultFileRequest, VaultItem>(
+      this.functions,
+      'addVaultFile',
+      undefined,
+      false
+    )(data, options);
+  }
 
   /**
    * Gets signed URL for file upload
    */
-  getUploadSignedUrl = createFunctionCaller<GetVaultUploadSignedUrlRequest, GetVaultUploadSignedUrlResponse>(
-    this.functions,
-    'getVaultUploadSignedUrl',
-    GetVaultUploadSignedUrlResponseSchema,
-    this.config.enableValidation
-  );
+  getUploadSignedUrl(data: GetVaultUploadSignedUrlRequest, options?: ApiCallOptions): Promise<GetVaultUploadSignedUrlResponse> {
+    return createFunctionCaller<GetVaultUploadSignedUrlRequest, GetVaultUploadSignedUrlResponse>(
+      this.functions,
+      'getVaultUploadSignedUrl',
+      undefined,
+      false
+    )(data, options);
+  }
 
   /**
    * Gets signed URL for file download
    */
-  getDownloadUrl = createFunctionCaller<GetVaultDownloadUrlRequest, GetVaultDownloadUrlResponse>(
-    this.functions,
-    'getVaultDownloadUrl',
-    GetVaultDownloadUrlResponseSchema,
-    this.config.enableValidation
-  );
+  getDownloadUrl(data: GetVaultDownloadUrlRequest, options?: ApiCallOptions): Promise<GetVaultDownloadUrlResponse> {
+    return createFunctionCaller<GetVaultDownloadUrlRequest, GetVaultDownloadUrlResponse>(
+      this.functions,
+      'getVaultDownloadUrl',
+      undefined,
+      false
+    )(data, options);
+  }
 
   /**
    * Updates file content
    */
-  updateFile = createFunctionCaller<{ itemId: string; fileData: string; fileName: string }, VaultItem>(
-    this.functions,
-    'updateVaultFile',
-    VaultItemSchema,
-    this.config.enableValidation
-  );
+  updateFile(data: { itemId: string; fileData: string; fileName: string }, options?: ApiCallOptions): Promise<VaultItem> {
+    return createFunctionCaller<{ itemId: string; fileData: string; fileName: string }, VaultItem>(
+      this.functions,
+      'updateVaultFile',
+      undefined,
+      false
+    )(data, options);
+  }
 
   /**
    * Completes multipart file upload
    */
-  completeFileUpload = createFunctionCaller<{ uploadId: string; itemId: string; parts: any[] }, VaultItem>(
-    this.functions,
-    'completeVaultFileUpload',
-    VaultItemSchema,
-    this.config.enableValidation
-  );
+  completeFileUpload(data: { uploadId: string; itemId: string; parts: any[] }, options?: ApiCallOptions): Promise<VaultItem> {
+    return createFunctionCaller<{ uploadId: string; itemId: string; parts: any[] }, VaultItem>(
+      this.functions,
+      'completeVaultFileUpload',
+      undefined,
+      false
+    )(data, options);
+  }
 
   // ============================
   // VAULT BROWSING
@@ -207,32 +219,38 @@ export class VaultApiClient {
   /**
    * Lists vault items in a folder
    */
-  getItems = createFunctionCaller<GetVaultItemsRequest, GetVaultItemsResponse>(
-    this.functions,
-    'getVaultItems',
-    GetVaultItemsResponseSchema,
-    this.config.enableValidation
-  );
+  getItems(data: GetVaultItemsRequest, options?: ApiCallOptions): Promise<GetVaultItemsResponse> {
+    return createFunctionCaller<GetVaultItemsRequest, GetVaultItemsResponse>(
+      this.functions,
+      'getVaultItems',
+      undefined,
+      false
+    )(data, options);
+  }
 
   /**
    * Gets deleted vault items (trash)
    */
-  getDeletedItems = createFunctionCaller<{}, VaultItems>(
-    this.functions,
-    'getDeletedVaultItems',
-    VaultItemsSchema,
-    this.config.enableValidation
-  );
+  getDeletedItems(data: {} = {}, options?: ApiCallOptions): Promise<VaultItems> {
+    return createFunctionCaller<{}, VaultItems>(
+      this.functions,
+      'getDeletedVaultItems',
+      undefined,
+      false
+    )(data, options);
+  }
 
   /**
    * Searches vault items
    */
-  searchItems = createFunctionCaller<SearchVaultItemsRequest, VaultItems>(
-    this.functions,
-    'searchVaultItems',
-    VaultItemsSchema,
-    this.config.enableValidation
-  );
+  searchItems(data: SearchVaultItemsRequest, options?: ApiCallOptions): Promise<VaultItems> {
+    return createFunctionCaller<SearchVaultItemsRequest, VaultItems>(
+      this.functions,
+      'searchVaultItems',
+      undefined,
+      false
+    )(data, options);
+  }
 
   // ============================
   // ITEM MANAGEMENT
@@ -241,52 +259,62 @@ export class VaultApiClient {
   /**
    * Renames a vault item
    */
-  renameItem = createFunctionCaller<RenameVaultItemRequest, VaultItem>(
-    this.functions,
-    'renameVaultItem',
-    VaultItemSchema,
-    this.config.enableValidation
-  );
+  renameItem(data: RenameVaultItemRequest, options?: ApiCallOptions): Promise<VaultItem> {
+    return createFunctionCaller<RenameVaultItemRequest, VaultItem>(
+      this.functions,
+      'renameVaultItem',
+      undefined,
+      false
+    )(data, options);
+  }
 
   /**
    * Moves a vault item to a different folder
    */
-  moveItem = createFunctionCaller<MoveVaultItemRequest, VaultItem>(
-    this.functions,
-    'moveVaultItem',
-    VaultItemSchema,
-    this.config.enableValidation
-  );
+  moveItem(data: MoveVaultItemRequest, options?: ApiCallOptions): Promise<VaultItem> {
+    return createFunctionCaller<MoveVaultItemRequest, VaultItem>(
+      this.functions,
+      'moveVaultItem',
+      undefined,
+      false
+    )(data, options);
+  }
 
   /**
    * Deletes a vault item (soft delete by default)
    */
-  deleteItem = createFunctionCaller<DeleteVaultItemRequest, { success: boolean }>(
-    this.functions,
-    'deleteVaultItem',
-    z.object({ success: z.boolean() }),
-    this.config.enableValidation
-  );
+  deleteItem(data: DeleteVaultItemRequest, options?: ApiCallOptions): Promise<{ success: boolean }> {
+    return createFunctionCaller<DeleteVaultItemRequest, { success: boolean }>(
+      this.functions,
+      'deleteVaultItem',
+      z.object({ success: z.boolean() }),
+      false
+    )(data, options);
+  }
 
   /**
    * Restores a deleted vault item from trash
    */
-  restoreItem = createFunctionCaller<{ itemId: string }, VaultItem>(
-    this.functions,
-    'restoreVaultItem',
-    VaultItemSchema,
-    this.config.enableValidation
-  );
+  restoreItem(data: { itemId: string }, options?: ApiCallOptions): Promise<VaultItem> {
+    return createFunctionCaller<{ itemId: string }, VaultItem>(
+      this.functions,
+      'restoreVaultItem',
+      undefined,
+      false
+    )(data, options);
+  }
 
   /**
    * Permanently deletes vault items
    */
-  permanentlyDeleteItems = createFunctionCaller<{ itemIds?: string[]; deleteAll?: boolean; confirmDelete: boolean }, { success: boolean }>(
-    this.functions,
-    'permanentlyDeleteVaultItems',
-    z.object({ success: z.boolean() }),
-    this.config.enableValidation
-  );
+  permanentlyDeleteItems(data: { itemIds?: string[]; deleteAll?: boolean; confirmDelete: boolean }, options?: ApiCallOptions): Promise<{ success: boolean }> {
+    return createFunctionCaller<{ itemIds?: string[]; deleteAll?: boolean; confirmDelete: boolean }, { success: boolean }>(
+      this.functions,
+      'permanentlyDeleteVaultItems',
+      z.object({ success: z.boolean() }),
+      false
+    )(data, options);
+  }
 
   // ============================
   // SHARING & PERMISSIONS
@@ -295,52 +323,62 @@ export class VaultApiClient {
   /**
    * Shares a vault item with other users
    */
-  shareItem = createFunctionCaller<ShareVaultItemRequest, { success: boolean }>(
-    this.functions,
-    'shareVaultItem',
-    z.object({ success: z.boolean() }),
-    this.config.enableValidation
-  );
+  shareItem(data: ShareVaultItemRequest, options?: ApiCallOptions): Promise<{ success: boolean }> {
+    return createFunctionCaller<ShareVaultItemRequest, { success: boolean }>(
+      this.functions,
+      'shareVaultItem',
+      z.object({ success: z.boolean() }),
+      false
+    )(data, options);
+  }
 
   /**
    * Updates permissions for a shared vault item
    */
-  updateItemPermissions = createFunctionCaller<UpdateVaultItemPermissionsRequest, { success: boolean }>(
-    this.functions,
-    'updateVaultItemPermissions',
-    z.object({ success: z.boolean() }),
-    this.config.enableValidation
-  );
+  updateItemPermissions(data: UpdateVaultItemPermissionsRequest, options?: ApiCallOptions): Promise<{ success: boolean }> {
+    return createFunctionCaller<UpdateVaultItemPermissionsRequest, { success: boolean }>(
+      this.functions,
+      'updateVaultItemPermissions',
+      z.object({ success: z.boolean() }),
+      false
+    )(data, options);
+  }
 
   /**
    * Revokes access to a shared vault item
    */
-  revokeItemAccess = createFunctionCaller<{ itemId: string; userId: string }, { success: boolean }>(
-    this.functions,
-    'revokeVaultItemAccess',
-    z.object({ success: z.boolean() }),
-    this.config.enableValidation
-  );
+  revokeItemAccess(data: { itemId: string; userId: string }, options?: ApiCallOptions): Promise<{ success: boolean }> {
+    return createFunctionCaller<{ itemId: string; userId: string }, { success: boolean }>(
+      this.functions,
+      'revokeVaultItemAccess',
+      z.object({ success: z.boolean() }),
+      false
+    )(data, options);
+  }
 
   /**
    * Creates a public share link for a vault item
    */
-  createShareLink = createFunctionCaller<CreateVaultShareLinkRequest, VaultShareLink>(
-    this.functions,
-    'createVaultShareLink',
-    VaultShareLinkSchema,
-    this.config.enableValidation
-  );
+  createShareLink(data: CreateVaultShareLinkRequest, options?: ApiCallOptions): Promise<VaultShareLink> {
+    return createFunctionCaller<CreateVaultShareLinkRequest, VaultShareLink>(
+      this.functions,
+      'createVaultShareLink',
+      undefined,
+      false
+    )(data, options);
+  }
 
   /**
    * Accesses a vault item via share link
    */
-  accessShareLink = createFunctionCaller<{ shareId: string; password?: string }, VaultItem>(
-    this.functions,
-    'accessVaultShareLink',
-    VaultItemSchema,
-    this.config.enableValidation
-  );
+  accessShareLink(data: { shareId: string; password?: string }, options?: ApiCallOptions): Promise<VaultItem> {
+    return createFunctionCaller<{ shareId: string; password?: string }, VaultItem>(
+      this.functions,
+      'accessVaultShareLink',
+      undefined,
+      false
+    )(data, options);
+  }
 
   // ============================
   // ENCRYPTION
@@ -349,42 +387,50 @@ export class VaultApiClient {
   /**
    * Gets vault encryption status
    */
-  getEncryptionStatus = createFunctionCaller<{}, VaultEncryptionStatus>(
-    this.functions,
-    'getVaultEncryptionStatus',
-    VaultEncryptionStatusSchema,
-    this.config.enableValidation
-  );
+  getEncryptionStatus(data: {} = {}, options?: ApiCallOptions): Promise<VaultEncryptionStatus> {
+    return createFunctionCaller<{}, VaultEncryptionStatus>(
+      this.functions,
+      'getVaultEncryptionStatus',
+      undefined,
+      false
+    )(data, options);
+  }
 
   /**
    * Stores encryption metadata for a vault item
    */
-  storeEncryptionMetadata = createFunctionCaller<{ itemId: string; encryptionMetadata: any }, { success: boolean }>(
-    this.functions,
-    'storeVaultItemEncryptionMetadata',
-    z.object({ success: z.boolean() }),
-    this.config.enableValidation
-  );
+  storeEncryptionMetadata(data: { itemId: string; encryptionMetadata: any }, options?: ApiCallOptions): Promise<{ success: boolean }> {
+    return createFunctionCaller<{ itemId: string; encryptionMetadata: any }, { success: boolean }>(
+      this.functions,
+      'storeVaultItemEncryptionMetadata',
+      z.object({ success: z.boolean() }),
+      false
+    )(data, options);
+  }
 
   /**
    * Gets encryption metadata for a vault item
    */
-  getEncryptionMetadata = createFunctionCaller<{ itemId: string }, any>(
-    this.functions,
-    'getVaultItemEncryptionMetadata',
-    z.any(),
-    this.config.enableValidation
-  );
+  getEncryptionMetadata(data: { itemId: string }, options?: ApiCallOptions): Promise<any> {
+    return createFunctionCaller<{ itemId: string }, any>(
+      this.functions,
+      'getVaultItemEncryptionMetadata',
+      z.any(),
+      false
+    )(data, options);
+  }
 
   /**
    * Rotates encryption key
    */
-  rotateEncryptionKey = createFunctionCaller<{ keyType: string; oldKeyId: string; newKeyId: string; encryptedKey: string; metadata?: any }, { success: boolean }>(
-    this.functions,
-    'rotateEncryptionKey',
-    z.object({ success: z.boolean() }),
-    this.config.enableValidation
-  );
+  rotateEncryptionKey(data: { keyType: string; oldKeyId: string; newKeyId: string; encryptedKey: string; metadata?: any }, options?: ApiCallOptions): Promise<{ success: boolean }> {
+    return createFunctionCaller<{ keyType: string; oldKeyId: string; newKeyId: string; encryptedKey: string; metadata?: any }, { success: boolean }>(
+      this.functions,
+      'rotateEncryptionKey',
+      z.object({ success: z.boolean() }),
+      false
+    )(data, options);
+  }
 
   // ============================
   // VAULT INFO & STATS
@@ -393,32 +439,38 @@ export class VaultApiClient {
   /**
    * Gets vault storage information
    */
-  getStorageInfo = createFunctionCaller<{}, VaultStorageInfo>(
-    this.functions,
-    'getVaultStorageInfo',
-    VaultStorageInfoSchema,
-    this.config.enableValidation
-  );
+  getStorageInfo(data: {} = {}, options?: ApiCallOptions): Promise<VaultStorageInfo> {
+    return createFunctionCaller<{}, VaultStorageInfo>(
+      this.functions,
+      'getVaultStorageInfo',
+      undefined,
+      false
+    )(data, options);
+  }
 
   /**
    * Gets vault audit logs
    */
-  getAuditLogs = createFunctionCaller<{ startDate?: string; endDate?: string; action?: string; itemId?: string; limit?: number }, any[]>(
-    this.functions,
-    'getVaultAuditLogs',
-    z.array(z.any()),
-    this.config.enableValidation
-  );
+  getAuditLogs(data: { startDate?: string; endDate?: string; action?: string; itemId?: string; limit?: number }, options?: ApiCallOptions): Promise<any[]> {
+    return createFunctionCaller<{ startDate?: string; endDate?: string; action?: string; itemId?: string; limit?: number }, any[]>(
+      this.functions,
+      'getVaultAuditLogs',
+      z.array(z.any()),
+      false
+    )(data, options);
+  }
 
   /**
    * Cleans up deleted vault items
    */
-  cleanupDeletedItems = createFunctionCaller<{ olderThanDays?: number }, { deletedCount: number }>(
-    this.functions,
-    'cleanupDeletedVaultItems',
-    z.object({ deletedCount: z.number() }),
-    this.config.enableValidation
-  );
+  cleanupDeletedItems(data: { olderThanDays?: number }, options?: ApiCallOptions): Promise<{ deletedCount: number }> {
+    return createFunctionCaller<{ olderThanDays?: number }, { deletedCount: number }>(
+      this.functions,
+      'cleanupDeletedVaultItems',
+      z.object({ deletedCount: z.number() }),
+      false
+    )(data, options);
+  }
 
   // ============================
   // UTILITY METHODS

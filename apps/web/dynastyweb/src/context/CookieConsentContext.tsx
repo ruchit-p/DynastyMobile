@@ -73,11 +73,11 @@ export function CookieConsentProvider({ children }: CookieConsentProviderProps) 
     // Google Analytics
     if (typeof window !== 'undefined' && window.gtag) {
       if (prefs.analytics) {
-        window.gtag('consent', 'update', {
+        (window.gtag as any)('consent', 'update', {
           'analytics_storage': 'granted'
         });
       } else {
-        window.gtag('consent', 'update', {
+        (window.gtag as any)('consent', 'update', {
           'analytics_storage': 'denied'
         });
       }
@@ -149,7 +149,6 @@ export function CookieConsentProvider({ children }: CookieConsentProviderProps) 
 // Extend Window interface for TypeScript
 declare global {
   interface Window {
-    gtag?: (...args: unknown[]) => void;
     firebase?: {
       analytics: () => {
         setAnalyticsCollectionEnabled: (enabled: boolean) => void;

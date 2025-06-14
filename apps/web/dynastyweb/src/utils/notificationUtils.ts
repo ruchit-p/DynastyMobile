@@ -3,26 +3,10 @@ import { db, messaging } from '@/lib/firebase';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '@/context/AuthContext';
 import { getToken, onMessage } from 'firebase/messaging';
-import { functions } from '@/lib/firebase';
-import { FirebaseFunctionsClient, createFirebaseClient } from '@/lib/functions-client';
+import { getFunctionsClient } from './functionsClient';
 
 // Token registration lock to prevent race conditions
 let isTokenRegistrationInProgress = false;
-
-// Firebase Functions client
-let functionsClient: FirebaseFunctionsClient | null = null;
-
-// Initialize the functions client
-if (functions) {
-  functionsClient = createFirebaseClient(functions);
-}
-
-function getFunctionsClient(): FirebaseFunctionsClient {
-  if (!functionsClient) {
-    throw new Error('Firebase Functions not initialized');
-  }
-  return functionsClient;
-}
 
 // Notification types
 export type NotificationType = 
@@ -65,11 +49,16 @@ export const registerDeviceToken = async (token: string, platform: 'web' | 'ios'
 
 // Function to initialize Firebase messaging
 export const initializeMessaging = async () => {
-  // If registration is already in progress, wait
+  // If registration is already in progress, wait for it to complete
   if (isTokenRegistrationInProgress) {
     console.log('Token registration already in progress, waiting...');
-    // Wait for the current registration to complete (using a delay)
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Wait for the current registration to complete using a proper Promise
+    let attempts = 0;
+    const maxAttempts = 10;
+    while (isTokenRegistrationInProgress && attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      attempts++;
+    }
     
     // Check if a token now exists in localStorage after waiting
     const existingToken = localStorage.getItem('fcm_token');

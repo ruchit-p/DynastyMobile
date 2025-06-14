@@ -2,21 +2,7 @@ import { headers } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 
-// Validate environment variables at startup
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('STRIPE_SECRET_KEY environment variable is required')
-}
-
-if (!process.env.STRIPE_WEBHOOK_SECRET) {
-  throw new Error('STRIPE_WEBHOOK_SECRET environment variable is required')
-}
-
-// Initialize Stripe with secret key from environment
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-05-28.basil",
-})
-
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+// Stripe will be initialized at runtime
 
 // Security constants
 const MAX_PAYLOAD_SIZE = 1024 * 1024 // 1MB max payload
@@ -40,6 +26,26 @@ export async function POST(request: NextRequest) {
   let eventId: string | undefined
 
   try {
+    // Validate environment variables at runtime
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return NextResponse.json(
+        { error: 'Stripe configuration error' },
+        { status: 500 }
+      )
+    }
+
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+      return NextResponse.json(
+        { error: 'Webhook configuration error' },
+        { status: 500 }
+      )
+    }
+
+    // Initialize Stripe at runtime
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: "2025-05-28.basil",
+    })
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
     // Security: Verify HTTPS in production
     const proto = request.headers.get('x-forwarded-proto')
     if (process.env.NODE_ENV === 'production' && proto !== 'https') {

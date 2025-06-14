@@ -1,15 +1,17 @@
 // Vault Setup Component for Dynasty Web App
 // Provides UI for setting up vault encryption
+// SDK-aware for enhanced vault operations when enabled
 
 import { useState } from 'react';
 import { useWebVaultEncryption } from '@/hooks/useWebVaultEncryption';
+import { useFeatureFlags } from '@/lib/feature-flags';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Lock, Shield, Fingerprint, AlertCircle } from 'lucide-react';
+import { Lock, Shield, Fingerprint, AlertCircle, Zap } from 'lucide-react';
 import { PasswordStrengthIndicator } from '@/components/PasswordStrengthIndicator';
 import { useToast } from '@/hooks/use-toast';
 
@@ -23,6 +25,7 @@ export function VaultSetup({ userId, onComplete }: VaultSetupProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [enableBiometric, setEnableBiometric] = useState(false);
   const { toast } = useToast();
+  const { useVaultSDK: useSDK } = useFeatureFlags();
   
   const { 
     setupVault, 
@@ -68,7 +71,7 @@ export function VaultSetup({ userId, onComplete }: VaultSetupProps) {
     if (result.success) {
       toast({
         title: "Vault setup complete!",
-        description: "Your files will now be encrypted for maximum security"
+        description: `Your files will now be encrypted for maximum security${useSDK ? ' with enhanced SDK performance' : ''}`
       });
       onComplete();
     } else {
@@ -86,9 +89,18 @@ export function VaultSetup({ userId, onComplete }: VaultSetupProps) {
         <div className="flex items-center gap-2">
           <Shield className="h-6 w-6 text-dynastyGreen" />
           <CardTitle className="text-2xl">Setup Vault Encryption</CardTitle>
+          {useSDK && (
+            <div className="flex items-center gap-1 ml-auto">
+              <Zap className="h-4 w-4 text-blue-500" />
+              <span className="text-sm text-blue-500 font-medium">SDK</span>
+            </div>
+          )}
         </div>
         <CardDescription>
           Protect your files with military-grade encryption. Your files will be encrypted before upload and only you will have the key.
+          {useSDK && (
+            <span className="text-blue-600 text-sm ml-1">• Enhanced with Vault SDK v2 for improved performance</span>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

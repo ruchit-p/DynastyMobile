@@ -62,8 +62,12 @@ export function createVaultError(
   error.name = 'VaultError';
   error.code = code;
   error.severity = errorCodeToSeverity[code] || VaultErrorSeverity.MEDIUM;
-  error.statusCode = statusCode;
-  error.context = context;
+  if (statusCode !== undefined) {
+    error.statusCode = statusCode;
+  }
+  if (context !== undefined) {
+    error.context = context;
+  }
   return error;
 }
 
