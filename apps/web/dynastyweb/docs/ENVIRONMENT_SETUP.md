@@ -21,6 +21,22 @@ NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true
 NEXT_PUBLIC_FIREBASE_API_KEY=your-dev-api-key
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-dev-auth-domain
 NEXT_PUBLIC_FIREBASE_PROJECT_ID=dynasty-eba63
+# Optional Feature Flags / External Services
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-dev-storage-bucket
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-dev-messaging-sender-id
+NEXT_PUBLIC_FIREBASE_APP_ID=your-dev-app-id
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your-dev-measurement-id
+
+# Web-Push Notifications
+NEXT_PUBLIC_FIREBASE_VAPID_KEY=your-dev-vapid-key
+
+# Stripe Payments
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your-stripe-publishable-key
+
+# Frontend Behaviour Flags
+NEXT_PUBLIC_ENABLE_ANALYTICS=true       # 'false' to disable
+NEXT_PUBLIC_ENVIRONMENT=development     # development | staging | production
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 # ... additional configuration
 ```
 
@@ -31,6 +47,22 @@ NEXT_PUBLIC_USE_FIREBASE_EMULATOR=false
 NEXT_PUBLIC_FIREBASE_API_KEY=your-prod-api-key
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-prod-auth-domain
 NEXT_PUBLIC_FIREBASE_PROJECT_ID=dynasty-eba63
+# Optional Feature Flags / External Services
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-prod-storage-bucket
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-prod-messaging-sender-id
+NEXT_PUBLIC_FIREBASE_APP_ID=your-prod-app-id
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your-prod-measurement-id
+
+# Web-Push Notifications
+NEXT_PUBLIC_FIREBASE_VAPID_KEY=your-prod-vapid-key
+
+# Stripe Payments
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_your-stripe-publishable-key
+
+# Frontend Behaviour Flags
+NEXT_PUBLIC_ENABLE_ANALYTICS=true       # Keep analytics on in prod
+NEXT_PUBLIC_ENVIRONMENT=production
+NEXT_PUBLIC_APP_URL=https://mydynastyapp.com
 # ... additional configuration
 ```
 
