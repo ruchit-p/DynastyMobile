@@ -25,12 +25,20 @@ import {logger} from "firebase-functions/v2";
 // Used to authenticate webhook calls from Cloudflare Worker
 export const WORKER_SCAN_HOOK_SECRET = defineSecret("WORKER_SCAN_HOOK_SECRET");
 
+// Cloudmersive API Key for virus scanning
+export const CLOUDMERSIVE_API_KEY = defineSecret("CLOUDMERSIVE_API_KEY");
+
 /**
  * Vault scan configuration interface
  */
 export interface VaultScanConfig {
   workerHookSecret: string;
-  // Future: Add Cloudmersive API key here if Firebase needs direct access
+  cloudmersiveApiKey: string;
+  stagingBucket: string;
+  quarantineBucket: string;
+  finalStorageProvider: "b2" | "r2";
+  scanTimeoutMs: number;
+  maxFileSizeForScanning: number;
 }
 
 /**
@@ -40,10 +48,16 @@ export function getVaultScanConfig(): VaultScanConfig {
   // For local development with emulator
   if (process.env.FUNCTIONS_EMULATOR === "true") {
     // Try environment variables first for local development
-    if (process.env.WORKER_SCAN_HOOK_SECRET) {
+    if (process.env.WORKER_SCAN_HOOK_SECRET && process.env.CLOUDMERSIVE_API_KEY) {
       logger.info("Using vault scan config from environment variables");
       return {
         workerHookSecret: process.env.WORKER_SCAN_HOOK_SECRET,
+        cloudmersiveApiKey: process.env.CLOUDMERSIVE_API_KEY,
+        stagingBucket: process.env.R2_STAGING_BUCKET || "dynasty-staging-local",
+        quarantineBucket: process.env.R2_QUARANTINE_BUCKET || "dynasty-quarantine-local",
+        finalStorageProvider: (process.env.FINAL_STORAGE_PROVIDER as "b2" | "r2") || "b2",
+        scanTimeoutMs: parseInt(process.env.SCAN_TIMEOUT_MS || "30000"),
+        maxFileSizeForScanning: parseInt(process.env.MAX_FILE_SIZE_FOR_SCANNING || "2147483648"), // 2GB
       };
     }
 
@@ -51,6 +65,12 @@ export function getVaultScanConfig(): VaultScanConfig {
     logger.warn("Vault scan config not found in environment, using test defaults");
     return {
       workerHookSecret: "test_hook_secret_for_development_only",
+      cloudmersiveApiKey: "test_cloudmersive_key",
+      stagingBucket: "dynasty-staging-local",
+      quarantineBucket: "dynasty-quarantine-local",
+      finalStorageProvider: "b2",
+      scanTimeoutMs: 30000,
+      maxFileSizeForScanning: 2147483648, // 2GB
     };
   }
 
@@ -58,12 +78,18 @@ export function getVaultScanConfig(): VaultScanConfig {
   try {
     const config: VaultScanConfig = {
       workerHookSecret: WORKER_SCAN_HOOK_SECRET.value(),
+      cloudmersiveApiKey: CLOUDMERSIVE_API_KEY.value(),
+      stagingBucket: process.env.NODE_ENV === "production" ? "dynasty-staging-prod" : "dynasty-staging-test",
+      quarantineBucket: process.env.NODE_ENV === "production" ? "dynasty-quarantine-prod" : "dynasty-quarantine-test",
+      finalStorageProvider: "b2", // Use B2 as final storage
+      scanTimeoutMs: 30000,
+      maxFileSizeForScanning: 2147483648, // 2GB
     };
 
     logger.info("Using vault scan config from Secret Manager");
     return config;
   } catch (error) {
     logger.error("Failed to load vault scan configuration from secrets", error);
-    throw new Error("Vault scan configuration is missing. Please set WORKER_SCAN_HOOK_SECRET secret.");
+    throw new Error("Vault scan configuration is missing. Please set required secrets.");
   }
 }
