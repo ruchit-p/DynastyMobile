@@ -86,7 +86,7 @@ print_success "Jest is available"
 print_section "Installing Dependencies"
 if [[ ! -d "node_modules" ]]; then
     echo "📦 Installing npm dependencies..."
-    npm install
+    yarn install
     print_success "Dependencies installed"
 else
     echo "📦 Dependencies already installed"
@@ -95,7 +95,7 @@ fi
 # Run TypeScript compilation check
 print_section "TypeScript Compilation Check"
 echo "🔧 Checking TypeScript compilation..."
-if npm run build 2>/dev/null; then
+if yarn build 2>/dev/null; then
     print_success "TypeScript compilation passed"
 else
     print_warning "TypeScript compilation has issues - but tests can still run with ts-jest"
@@ -105,7 +105,7 @@ fi
 # Run linting
 print_section "Code Quality Checks"
 echo "🔍 Running ESLint..."
-if npm run lint; then
+if yarn lint; then
     print_success "Linting passed"
 else
     print_warning "Linting issues found - please review before deployment"
@@ -119,7 +119,7 @@ echo "🧪 Running unit tests for subscription services..."
 UNIT_TEST_PATTERN="src/**/__tests__/**/*test.ts"
 UNIT_TESTS_EXCLUDE_PATTERN="--testPathIgnorePatterns=integration performance"
 
-if npm test -- --testPathPattern="services.*test.ts" --verbose --coverage --coverageDirectory="$COVERAGE_DIR/unit" --testResultsProcessor=jest-junit --outputFile="$TEST_RESULTS_DIR/unit-test-results.xml" 2>&1 | tee "$TEST_RESULTS_DIR/unit-tests.log"; then
+if yarn test --testPathPattern="services.*test.ts" --verbose --coverage --coverageDirectory="$COVERAGE_DIR/unit" --testResultsProcessor=jest-junit --outputFile="$TEST_RESULTS_DIR/unit-test-results.xml" 2>&1 | tee "$TEST_RESULTS_DIR/unit-tests.log"; then
     print_success "Unit tests passed"
 else
     print_error "Unit tests failed"
@@ -131,7 +131,7 @@ fi
 print_section "Integration Tests"
 echo "🔗 Running integration tests..."
 
-if npm test -- --testPathPattern="integration.*test.ts" --verbose --coverage --coverageDirectory="$COVERAGE_DIR/integration" --testResultsProcessor=jest-junit --outputFile="$TEST_RESULTS_DIR/integration-test-results.xml" 2>&1 | tee "$TEST_RESULTS_DIR/integration-tests.log"; then
+if yarn test --testPathPattern="integration.*test.ts" --verbose --coverage --coverageDirectory="$COVERAGE_DIR/integration" --testResultsProcessor=jest-junit --outputFile="$TEST_RESULTS_DIR/integration-test-results.xml" 2>&1 | tee "$TEST_RESULTS_DIR/integration-tests.log"; then
     print_success "Integration tests passed"
 else
     print_error "Integration tests failed"
@@ -143,7 +143,7 @@ fi
 print_section "Security Validation Tests"
 echo "🔒 Running security validation tests..."
 
-if npm test -- --testPathPattern="security.*test.ts" --verbose --testResultsProcessor=jest-junit --outputFile="$TEST_RESULTS_DIR/security-test-results.xml" 2>&1 | tee "$TEST_RESULTS_DIR/security-tests.log"; then
+if yarn test --testPathPattern="security.*test.ts" --verbose --testResultsProcessor=jest-junit --outputFile="$TEST_RESULTS_DIR/security-test-results.xml" 2>&1 | tee "$TEST_RESULTS_DIR/security-tests.log"; then
     print_success "Security tests passed"
 else
     print_error "Security tests failed"
@@ -157,7 +157,7 @@ if [[ "$1" != "--skip-performance" ]]; then
     echo "⚡ Running performance tests..."
     print_warning "Performance tests may take several minutes..."
 
-    if npm test -- --testPathPattern="performance.*test.ts" --verbose --testTimeout=120000 --testResultsProcessor=jest-junit --outputFile="$TEST_RESULTS_DIR/performance-test-results.xml" 2>&1 | tee "$TEST_RESULTS_DIR/performance-tests.log"; then
+    if yarn test --testPathPattern="performance.*test.ts" --verbose --testTimeout=120000 --testResultsProcessor=jest-junit --outputFile="$TEST_RESULTS_DIR/performance-test-results.xml" 2>&1 | tee "$TEST_RESULTS_DIR/performance-tests.log"; then
         print_success "Performance tests passed"
     else
         print_warning "Performance tests failed or timed out"
@@ -193,7 +193,7 @@ fi
 print_section "Stripe Integration Validation"
 echo "💳 Running Stripe webhook and integration tests..."
 
-if npm test -- --testPathPattern="webhooks.*test.ts" --verbose --testResultsProcessor=jest-junit --outputFile="$TEST_RESULTS_DIR/stripe-webhook-test-results.xml" 2>&1 | tee "$TEST_RESULTS_DIR/stripe-tests.log"; then
+if yarn test --testPathPattern="webhooks.*test.ts" --verbose --testResultsProcessor=jest-junit --outputFile="$TEST_RESULTS_DIR/stripe-webhook-test-results.xml" 2>&1 | tee "$TEST_RESULTS_DIR/stripe-tests.log"; then
     print_success "Stripe integration tests passed"
 else
     print_error "Stripe integration tests failed"

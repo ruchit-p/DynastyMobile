@@ -33,7 +33,7 @@ echo "✅ Configuration verified successfully"
 
 # Build functions first
 echo "🔨 Building functions..."
-if ! npm run build; then
+if ! yarn build; then
     echo "❌ Build failed. Please fix TypeScript errors first."
     exit 1
 fi
@@ -217,7 +217,7 @@ else
     echo "🔧 Troubleshooting steps:"
     echo "   1. Check function logs: firebase functions:log --only [function-name]"
     echo "   2. Verify configuration: ./scripts/verify-production-config.sh"
-    echo "   3. Check TypeScript build: npm run build"
+    echo "   3. Check TypeScript build: yarn build"
     echo "   4. Retry failed deployments individually"
     
     exit 1
