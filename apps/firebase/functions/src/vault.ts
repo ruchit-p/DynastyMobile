@@ -3,7 +3,7 @@ import {onSchedule} from "firebase-functions/v2/scheduler";
 import {getFirestore, Timestamp, FieldValue, FieldPath} from "firebase-admin/firestore";
 import {getStorage} from "firebase-admin/storage";
 import {logger} from "firebase-functions/v2";
-import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
+import {DEFAULT_REGION, FUNCTION_TIMEOUT, FILE_SIZE_LIMITS} from "./common";
 import {createError, withErrorHandling, ErrorCode} from "./utils/errors";
 import {withAuth, requireAuth} from "./middleware";
 import {SECURITY_CONFIG} from "./config/security-config";
@@ -1080,49 +1080,6 @@ export const moveVaultItem = onCall(
     }
   )
 );
-          logger.info(
-            "Generated emulator download URL",
-            createLogContext({
-              projectId,
-              storageProvider: "firebase",
-            })
-          );
-        }
-      }
-
-      const vaultItem: any = {
-        userId: uid,
-        name,
-        type: "file",
-        parentId,
-        path: vaultPath,
-        fileType,
-        size,
-        storagePath,
-        downloadURL: finalDownloadURL,
-        mimeType,
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        isDeleted: false,
-        storageProvider: "firebase", // Legacy items use Firebase
-      };
-
-      // Add encryption fields if file is encrypted
-      if (isEncrypted) {
-        vaultItem.isEncrypted = true;
-        vaultItem.encryptionKeyId = encryptionKeyId;
-        vaultItem.encryptedBy = uid;
-      }
-
-      const docRef = await db.collection("vaultItems").add(vaultItem);
-      return {id: docRef.id, downloadURL: finalDownloadURL, isEncrypted};
-    },
-    "addVaultFile",
-    {
-      authLevel: "onboarded",
-      rateLimitConfig: SECURITY_CONFIG.rateLimits.write,
-    }
-  )
 );
 
 /**
@@ -2718,8 +2675,8 @@ export const getVaultStorageInfo = onCall(
       }
     });
 
-    // Get user's storage quota (default 5GB for now)
-    const quota = 5 * 1024 * 1024 * 1024; // 5GB in bytes
+    // Get user's storage quota (using standardized limit)
+    const quota = FILE_SIZE_LIMITS.MAX_FILE_SIZE; // 1GB in bytes
 
     logger.info(
       "Retrieved storage info",
