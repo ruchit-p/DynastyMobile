@@ -7,15 +7,14 @@ import {DEFAULT_REGION, FUNCTION_TIMEOUT} from "./common";
 import {createError, withErrorHandling, ErrorCode} from "./utils/errors";
 import {validateRequest} from "./utils/request-validator";
 import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
-import {twilioAuthToken} from "./config/twilioConfig";
 import {
-  getTwilioService,
+  getAWSSmsService,
   SMS_TEMPLATES,
   checkRateLimit,
   validateSmsPreferences,
   formatPhoneNumber,
   type SmsType,
-} from "./services/twilioService";
+} from "./services/awsSmsService";
 
 const db = getFirestore();
 
@@ -24,7 +23,7 @@ const db = getFirestore();
 export const updateSmsPreferences = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-  secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"],
+  secrets: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION", "AWS_SMS_PHONE_POOL_ID", "AWS_SMS_CONFIGURATION_SET_NAME"],
 }, async (request) => {
   return withErrorHandling(async () => {
     // Validate request
@@ -68,18 +67,21 @@ export const updateSmsPreferences = onCall({
 export const sendPhoneVerification = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-  secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"],
+  secrets: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION", "AWS_SMS_PHONE_POOL_ID", "AWS_SMS_CONFIGURATION_SET_NAME"],
 }, async (request) => {
   return withErrorHandling(async () => {
+    // Validate request
+    const validation = validateRequest(request, VALIDATION_SCHEMAS.sendPhoneVerification);
+    if (!validation.valid) {
+      throw createError(ErrorCode.INVALID_ARGUMENT, validation.error);
+    }
+
     const {auth} = request;
     if (!auth) {
       throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
     }
 
     const {phoneNumber} = request.data;
-    if (!phoneNumber) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Phone number is required");
-    }
 
     // Check rate limit
     await checkRateLimit(auth.uid, "phone_verification");
@@ -100,8 +102,8 @@ export const sendPhoneVerification = onCall({
     });
 
     // Send SMS
-    const twilioService = getTwilioService();
-    await twilioService.sendSms(
+    const awsSmsService = getAWSSmsService();
+    await awsSmsService.sendSms(
       {
         to: phoneNumber,
         body: SMS_TEMPLATES.phoneVerification(code),
@@ -124,15 +126,18 @@ export const verifySmsCode = onCall({
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
 }, async (request) => {
   return withErrorHandling(async () => {
+    // Validate request
+    const validation = validateRequest(request, VALIDATION_SCHEMAS.verifySmsCode);
+    if (!validation.valid) {
+      throw createError(ErrorCode.INVALID_ARGUMENT, validation.error);
+    }
+
     const {auth} = request;
     if (!auth) {
       throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
     }
 
     const {phoneNumber, code} = request.data;
-    if (!phoneNumber || !code) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Phone number and code are required");
-    }
 
     // Get verification record
     const verificationDoc = await db.collection("phoneVerifications").doc(auth.uid).get();
@@ -187,7 +192,7 @@ export const verifySmsCode = onCall({
 export const sendEventSms = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.MEDIUM,
-  secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"],
+  secrets: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION", "AWS_SMS_PHONE_POOL_ID", "AWS_SMS_CONFIGURATION_SET_NAME"],
 }, async (request) => {
   return withErrorHandling(async () => {
     const {auth} = request;
@@ -218,14 +223,14 @@ export const sendEventSms = onCall({
       .where("__name__", "in", recipientIds)
       .get();
 
-    const twilioService = getTwilioService();
+    const awsSmsService = getAWSSmsService();
     const messages = [];
 
     for (const doc of recipientDocs.docs) {
       const recipient = doc.data();
 
       // Check if user has SMS enabled
-      if (!await twilioService.canSendSmsToUser(doc.id, "event_invite")) {
+      if (!await awsSmsService.canSendSmsToUser(doc.id, "event_invite")) {
         continue;
       }
 
@@ -277,7 +282,7 @@ export const sendEventSms = onCall({
     }
 
     // Send batch SMS
-    const results = await twilioService.sendBatchSms(messages);
+    const results = await awsSmsService.sendBatchSms(messages);
 
     return {
       success: true,
@@ -293,25 +298,28 @@ export const sendEventSms = onCall({
 export const sendTestSms = onCall({
   region: DEFAULT_REGION,
   timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-  secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"],
+  secrets: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION", "AWS_SMS_PHONE_POOL_ID", "AWS_SMS_CONFIGURATION_SET_NAME"],
 }, async (request) => {
   return withErrorHandling(async () => {
+    // Validate request
+    const validation = validateRequest(request, VALIDATION_SCHEMAS.sendTestSms);
+    if (!validation.valid) {
+      throw createError(ErrorCode.INVALID_ARGUMENT, validation.error);
+    }
+
     const {auth} = request;
     if (!auth) {
       throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
     }
 
     const {phoneNumber} = request.data;
-    if (!phoneNumber) {
-      throw createError(ErrorCode.INVALID_ARGUMENT, "Phone number is required");
-    }
 
     // Check rate limit
     await checkRateLimit(auth.uid, "phone_verification");
 
     // Send test SMS
-    const twilioService = getTwilioService();
-    await twilioService.sendSms(
+    const awsSmsService = getAWSSmsService();
+    await awsSmsService.sendSms(
       {
         to: phoneNumber,
         body: "This is a test message from Dynasty. If you received this, SMS is working correctly!",
@@ -327,72 +335,5 @@ export const sendTestSms = onCall({
   }, "sendTestSms")();
 });
 
-// MARK: - Twilio Webhook Handler
-
-export const twilioWebhook = onRequest({
-  region: DEFAULT_REGION,
-  timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
-  secrets: ["TWILIO_AUTH_TOKEN"],
-}, async (req, res) => {
-  return withErrorHandling(async () => {
-    // Only accept POST requests
-    if (req.method !== "POST") {
-      res.status(405).send("Method Not Allowed");
-      return;
-    }
-
-    // Verify webhook signature - CRITICAL for security
-    const twilioSignature = req.headers["x-twilio-signature"] as string;
-
-    if (!twilioSignature) {
-      logger.warn("Twilio webhook called without signature");
-      res.status(403).send("Forbidden: Missing signature");
-      return;
-    }
-
-    // Construct the full URL for signature validation - sanitize headers
-    const protocol = req.headers["x-forwarded-proto"] === "http" ? "http" : "https";
-    const host = req.headers.host || "";
-
-    // Validate host header to prevent header injection
-    if (!host || !/^[a-zA-Z0-9.-]+(:[0-9]+)?$/.test(host)) {
-      logger.warn("Invalid host header in Twilio webhook", {host});
-      res.status(400).send("Bad Request: Invalid host header");
-      return;
-    }
-
-    const url = `${protocol}://${host}${req.originalUrl}`;
-
-    // Get Twilio auth token for validation
-    const authToken = twilioAuthToken.value();
-
-    // Validate the request signature
-    const twilio = await import("twilio");
-    const isValid = twilio.validateRequest(
-      authToken,
-      twilioSignature,
-      url,
-      req.body
-    );
-
-    if (!isValid) {
-      logger.warn("Invalid Twilio webhook signature", {
-        url,
-        signatureReceived: twilioSignature.substring(0, 10) + "...",
-      });
-      res.status(403).send("Forbidden: Invalid signature");
-      return;
-    }
-
-    const {MessageSid, MessageStatus, ErrorCode: errorCode} = req.body;
-
-    if (MessageSid && MessageStatus) {
-      const twilioService = getTwilioService();
-      await twilioService.updateSmsStatus(MessageSid, MessageStatus, errorCode);
-    }
-
-    // Respond with empty TwiML
-    res.set("Content-Type", "text/xml");
-    res.send("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>");
-  }, "twilioWebhook")();
-});
+// Note: AWS SMS webhook is now handled in webhooks/awsSmsWebhook.ts
+// The old twilioWebhook export has been removed as it's no longer needed

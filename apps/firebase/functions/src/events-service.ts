@@ -625,8 +625,8 @@ export const createEvent = onCall(
       // Send SMS notifications to invited members
       if (eventData.invitedMemberIds && eventData.invitedMemberIds.length > 0) {
         try {
-          const {getTwilioService} = await import("./services/twilioService");
-          const twilioService = getTwilioService();
+          const {getAWSSmsService} = await import("./services/awsSmsService");
+          const awsSmsService = getAWSSmsService();
 
           // Get invited users' details
           const invitedUsersSnapshot = await db
@@ -656,7 +656,7 @@ export const createEvent = onCall(
                 });
                 const eventLink = `https://mydynastyapp.com/events/${newEventId}`;
 
-                await twilioService.sendSms(
+                await awsSmsService.sendSms(
                   {
                     to: userData.phoneNumber,
                     body: `${hostName} invited you to "${eventData.title}" on ${dateString}. RSVP here: ${eventLink}`,
@@ -845,8 +845,8 @@ export const updateEvent = onCall(
 
       if (hasSignificantChange) {
         try {
-          const {getTwilioService} = await import("./services/twilioService");
-          const twilioService = getTwilioService();
+          const {getAWSSmsService} = await import("./services/awsSmsService");
+          const awsSmsService = getAWSSmsService();
 
           // Get all RSVPed users
           const rsvpsSnapshot = await db
@@ -907,7 +907,7 @@ export const updateEvent = onCall(
                 userData.smsPreferences?.eventUpdates
               ) {
                 try {
-                  await twilioService.sendSms(
+                  await awsSmsService.sendSms(
                     {
                       to: userData.phoneNumber,
                       body: `"${currentEventData.title}" - ${changeText}. Details: ${eventLink}`,
@@ -1103,8 +1103,8 @@ export const rsvpToEvent = onCall(
             userData?.smsPreferences?.enabled &&
             userData?.smsPreferences?.rsvpConfirmations
           ) {
-            const {getTwilioService} = await import("./services/twilioService");
-            const twilioService = getTwilioService();
+            const {getAWSSmsService} = await import("./services/awsSmsService");
+            const awsSmsService = getAWSSmsService();
 
             const eventDate = new Date(eventData.eventDate);
             const dateString = eventDate.toLocaleDateString("en-US", {
@@ -1126,7 +1126,7 @@ export const rsvpToEvent = onCall(
               smsBody = `You've declined "${eventData.title}" on ${dateString}. We'll miss you!`;
             }
 
-            await twilioService.sendSms(
+            await awsSmsService.sendSms(
               {
                 to: userData.phoneNumber,
                 body: smsBody,
