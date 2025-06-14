@@ -118,7 +118,7 @@ if [ "$SKIP_LOCAL_TESTS" = false ]; then
         if [ -d "apps/firebase/functions" ]; then
             print_status "Running Firebase tests..."
             cd apps/firebase/functions
-            if ! npm run lint || ! npm run build || ! npm test -- --ci --passWithNoTests; then
+            if ! yarn lint || ! yarn build || ! yarn test --ci --passWithNoTests; then
                 print_error "Firebase tests failed"
                 all_passed=false
             fi

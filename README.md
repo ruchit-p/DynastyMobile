@@ -63,7 +63,7 @@ DynastyMobile/
 ### Prerequisites
 
 - Node.js 20.x or higher
-- Yarn or npm
+- Yarn (recommended package manager)
 - iOS Simulator (for iOS development)
 - Android Studio (for Android development)
 - Firebase CLI
@@ -83,10 +83,8 @@ DynastyMobile/
    # Install root dependencies
    yarn install
 
-   # Install app-specific dependencies
-   cd apps/mobile && yarn install
-   cd ../web/dynastyweb && yarn install
-   cd ../firebase/functions && npm install
+   # Install all workspace dependencies
+   yarn
    ```
 
 3. **Environment Setup**
@@ -135,9 +133,9 @@ yarn test                 # Run tests
 
 ```bash
 cd apps/firebase/functions
-npm run serve             # Start Firebase emulators
-npm run deploy            # Deploy to Firebase
-npm test                  # Run tests
+yarn serve             # Start Firebase emulators
+yarn deploy            # Deploy to Firebase
+yarn test                  # Run tests
 ```
 
 ## 🔒 Security
@@ -176,7 +174,7 @@ yarn test:coverage
 # Run specific platform tests
 cd apps/mobile && yarn test
 cd apps/web/dynastyweb && yarn test
-cd apps/firebase/functions && npm test
+yarn test:firebase
 ```
 
 ## 🚢 Deployment
@@ -205,8 +203,8 @@ vercel --prod                  # Deploy to production
 
 ```bash
 cd apps/firebase/functions
-npm run deploy                 # Deploy all functions
-npm run deploy:production      # Deploy with production config
+yarn deploy                 # Deploy all functions
+yarn deploy:production      # Deploy with production config
 ```
 
 ## 🤝 Contributing

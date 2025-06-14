@@ -35,7 +35,7 @@
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "clean": "rimraf dist",
-    "dev": "npm run build:watch"
+    "dev": "yarn build:watch"
   },
   "files": [
     "dist",
