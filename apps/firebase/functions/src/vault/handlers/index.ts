@@ -7,6 +7,12 @@ export * from "./crud";
 // Item Management
 export * from "./items/getItems";
 
+// File Operations
+export * from "./files";
+
+// Sharing Operations  
+export * from "./sharing";
+
 // Encryption Operations  
 export * from "./encryption";
 
