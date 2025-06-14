@@ -15,5 +15,5 @@ git commit -m "$1" --no-verify
 
 echo "✅ Committed with message: $1"
 echo "⚠️  Note: This bypassed linting and tests. Run them manually before pushing:"
-echo "   npm run lint:fix"
-echo "   npm run test:all"
+echo "   yarn lint:fix"
+echo "   yarn test:all"

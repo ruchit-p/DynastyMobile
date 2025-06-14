@@ -42,21 +42,21 @@ When you run `git push`, the following happens automatically:
 
 ### Test Commands
 ```bash
-npm run test:all          # Run Web + Firebase tests
-npm run test:web          # Run only Web app tests  
-npm run test:firebase     # Run only Firebase tests
-npm run test:integration  # Run integration tests
+yarn test:all          # Run Web + Firebase tests
+yarn test:web          # Run only Web app tests  
+yarn test:firebase     # Run only Firebase tests
+yarn test:integration  # Run integration tests
 ```
 
 ### Lint Commands
 ```bash
-npm run lint:all          # Check linting (Web + Firebase)
-npm run lint:fix          # Auto-fix linting issues
+yarn lint:all          # Check linting (Web + Firebase)
+yarn lint:fix          # Auto-fix linting issues
 ```
 
 ### Quick Commands
 ```bash
-npm run commit:quick "message"  # Commit bypassing hooks (emergency)
+yarn commit:quick "message"  # Commit bypassing hooks (emergency)
 ```
 
 ## Bypassing Hooks
@@ -69,7 +69,7 @@ npm run commit:quick "message"  # Commit bypassing hooks (emergency)
 ### How to Bypass
 ```bash
 # Option 1: Use quick commit script
-npm run commit:quick "emergency fix"
+yarn commit:quick "emergency fix"
 
 # Option 2: Use git --no-verify flag
 git commit -m "message" --no-verify
@@ -92,7 +92,7 @@ git push --no-verify
       "prettier --write"
     ],
     "apps/firebase/functions/**/*.{js,ts}": [
-      "cd apps/firebase/functions && npm run lint -- --fix", 
+      "cd apps/firebase/functions && yarn lint -- --fix", 
       "prettier --write"
     ]
   }
@@ -115,18 +115,18 @@ chmod +x .husky/pre-commit .husky/pre-push
 ### Linting Errors
 ```bash
 # Auto-fix what's possible
-npm run lint:fix
+yarn lint:fix
 
 # Check specific project
 cd apps/web/dynastyweb && yarn lint
-cd apps/firebase/functions && npm run lint
+cd apps/firebase/functions && yarn lint
 ```
 
 ### Test Failures
 ```bash
 # Run tests individually
-npm run test:web
-npm run test:firebase
+yarn test:web
+yarn test:firebase
 
 # Debug specific test files
 cd apps/web/dynastyweb && yarn test SomeComponent.test.tsx

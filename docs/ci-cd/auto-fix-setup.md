@@ -27,11 +27,11 @@ Install missing tools:
 ```bash
 # macOS
 brew install gh jq
-npm install -g ts-node typescript
+yarn global add ts-node typescript
 
 # Ubuntu/Debian
 apt-get install gh jq
-npm install -g ts-node typescript
+yarn global add ts-node typescript
 ```
 
 ### 2. GitHub Repository Settings
@@ -176,7 +176,7 @@ rm test-ci-errors.ts
 
 3. **Prettier Not Found**
    ```bash
-   npm install --save-dev prettier
+   yarn add --dev prettier
    ```
 
 4. **TypeScript Errors Not Fixed**

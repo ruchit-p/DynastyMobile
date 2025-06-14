@@ -12,7 +12,7 @@ cd "$(dirname "$0")/apps/firebase/functions"
 # Check if firebase CLI is installed
 if ! command -v firebase &> /dev/null; then
     echo "❌ Firebase CLI is not installed. Please install it first:"
-    echo "   npm install -g firebase-tools"
+    echo "   yarn global add firebase-tools"
     exit 1
 fi
 
