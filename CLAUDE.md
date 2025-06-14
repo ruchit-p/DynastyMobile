@@ -4,6 +4,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Recent Updates (January 2025)
 
+### SMS Service Migration to AWS End User Messaging (January 2025)
+
+**Complete Migration**: Successfully migrated SMS functionality from Twilio to AWS End User Messaging (Pinpoint SMS Voice v2) while maintaining feature parity and enhancing security.
+
+**Key Changes**:
+- **Service Provider**: Twilio → AWS End User Messaging with 10-digit long code support
+- **Dependencies**: Removed `twilio` package, added `@aws-sdk/client-pinpoint-sms-voice-v2` and `@aws-sdk/client-sns`
+- **Security**: Enhanced input validation, XSS sanitization, and secure logging practices
+- **Cost Tracking**: Updated pricing model to reflect AWS rates (US: $0.00581/SMS)
+
+**Implementation Details**:
+- **AWS Configuration**: Uses Firebase secrets for AWS credentials and service configuration
+- **Webhook Handler**: SNS-based delivery status updates with signature validation
+- **Error Handling**: Comprehensive error mapping from AWS exceptions to appropriate HTTP codes
+- **Rate Limiting**: Maintained existing rate limits per SMS type
+- **Batch Processing**: Optimized batch SMS sending with 10-message chunks
+
+**Security Enhancements**:
+```typescript
+// All phone numbers validated and sanitized
+const formattedPhone = formatPhoneNumber(sanitizeUserInput(phoneNumber));
+
+// SMS content XSS-sanitized
+const sanitizedBody = sanitizeSmsContent(message.body);
+
+// Secure logging with automatic sanitization
+logger.info("SMS sent", createLogContext({ phoneNumber, messageId }));
+```
+
+**Migration Checklist**:
+- [ ] Configure AWS phone pool with 10-digit long code
+- [ ] Create SNS topic for SMS events: `dynasty-sms-events`
+- [ ] Set Firebase secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_SMS_PHONE_POOL_ID`, `AWS_SMS_CONFIGURATION_SET_NAME`
+- [ ] Update webhook URL in AWS SNS to: `/webhooks/aws/sms-events`
+- [ ] Test all SMS flows before removing Twilio configuration
+
 ### Package Manager Migration to Yarn (June 2025)
 
 **Complete Migration**: Successfully migrated the entire monorepo from mixed npm/yarn usage to consistent Yarn workspace management. This standardizes package management across all projects and improves development workflow consistency.

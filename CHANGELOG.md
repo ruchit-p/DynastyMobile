@@ -1,5 +1,83 @@
 # Dynasty Changelog
 
+## Version 2.16.0 - January 2025
+
+### 📱 SMS Service Migration to AWS End User Messaging
+
+**Breaking Changes**
+- ❌ **Twilio SMS Service Removed**:
+  - Removed `twilio` package dependency (v5.7.1)
+  - Deleted Twilio configuration and service files (pending final cleanup)
+  - Migrated all SMS functionality to AWS End User Messaging (Pinpoint SMS Voice v2)
+  - Updated webhook endpoints from `/webhooks/twilio/status` to `/webhooks/aws/sms-events`
+
+**Infrastructure Changes**
+- ✅ **AWS End User Messaging Integration**:
+  - Added `@aws-sdk/client-pinpoint-sms-voice-v2` (v3.817.0) for SMS operations
+  - Added `@aws-sdk/client-sns` (v3.817.0) for webhook handling
+  - Implemented SNS-based delivery status tracking
+  - Support for 10-digit long codes and phone pools
+
+**Security Enhancements**
+- ✅ **Input Validation & Sanitization**:
+  - All phone numbers validated with `isValidPhone()` and sanitized
+  - SMS content XSS-sanitized using `sanitizeUserInput()`
+  - Secure logging with `createLogContext()` for automatic PII sanitization
+  - Mandatory SNS signature validation for webhooks
+
+- ✅ **Error Handling Improvements**:
+  - Comprehensive AWS error mapping to HTTP error codes
+  - Added `withErrorHandling()` wrapper to all SMS operations
+  - Proper error context with sanitized data
+
+**Features Maintained**
+- ✅ **Full Feature Parity**:
+  - Phone number verification with 6-digit codes
+  - SMS preferences management
+  - Event invitations and reminders
+  - Family tree invitations
+  - RSVP confirmations
+  - Rate limiting per SMS type
+  - SMS delivery tracking and cost calculation
+  - E.164 phone number formatting
+  - Test mode support
+  - Batch SMS sending (10-message chunks)
+
+**Configuration Required**
+- 🔧 **AWS Setup**:
+  - Create phone pool: `dynasty-sms-pool`
+  - Create configuration set: `dynasty-sms-config`
+  - Create SNS topic: `dynasty-sms-events`
+  - Set Firebase secrets:
+    - `AWS_ACCESS_KEY_ID`
+    - `AWS_SECRET_ACCESS_KEY`
+    - `AWS_REGION`
+    - `AWS_SMS_PHONE_POOL_ID`
+    - `AWS_SMS_CONFIGURATION_SET_NAME`
+
+**Key Files Modified**
+- `apps/firebase/functions/package.json`: Updated dependencies
+- `apps/firebase/functions/src/config/awsConfig.ts`: New AWS configuration
+- `apps/firebase/functions/src/services/awsSmsService.ts`: New SMS service implementation
+- `apps/firebase/functions/src/webhooks/awsSmsWebhook.ts`: SNS webhook handler
+- `apps/firebase/functions/src/sms.ts`: Updated endpoints to use AWS
+- `apps/firebase/functions/src/events-service.ts`: SMS notifications via AWS
+- `apps/firebase/functions/src/auth/modules/family-invitations.ts`: Family invites via AWS
+
+**Cost Impact**
+- 💰 **Pricing Updates**:
+  - US: $0.00581/SMS (AWS) vs $0.0079/SMS (Twilio)
+  - UK: $0.0311/SMS (AWS) vs $0.04/SMS (Twilio)
+  - ~26% cost reduction for US messages
+  - ~22% cost reduction for UK messages
+
+**Migration Notes**
+- Twilio webhook handler preserved but deprecated
+- All SMS templates and formatting maintained
+- Rate limiting configuration unchanged
+- Test phone numbers array preserved
+- Auto-confirmation of SNS subscriptions implemented
+
 ## Version 2.15.0 - January 2025
 
 ### 🧹 FingerprintJS Library Removal & Security Cleanup
