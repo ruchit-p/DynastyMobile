@@ -19,6 +19,16 @@ export const DEFAULT_MEMORY = {
   LARGE: "1GiB" as const,
 };
 
+// File upload size limits (standardized to 1GB)
+export const FILE_SIZE_LIMITS = {
+  MAX_FILE_SIZE: 1024 * 1024 * 1024, // 1GB in bytes
+  MAX_FILE_SIZE_MB: 1024, // 1GB in MB
+  MAX_IMAGE_SIZE: 1024 * 1024 * 1024, // 1GB for images
+  MAX_VIDEO_SIZE: 1024 * 1024 * 1024, // 1GB for videos
+  MAX_DOCUMENT_SIZE: 1024 * 1024 * 1024, // 1GB for documents
+  MAX_AUDIO_SIZE: 1024 * 1024 * 1024, // 1GB for audio
+} as const;
+
 // CORS settings
 export const CORS_ORIGINS = {
   PRODUCTION: "https://mydynastyapp.com",
