@@ -1,15 +1,18 @@
 // Example component demonstrating vault encryption usage
 // Shows how to integrate VaultService with encryption hooks
+// Supports both legacy VaultService and new VaultSDKService based on feature flags
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useWebVaultEncryption } from '@/hooks/useWebVaultEncryption';
 import { vaultService, VaultItem } from '@/services/VaultService';
+import { vaultSDKService } from '@/services/VaultSDKService';
+import { useFeatureFlags } from '@/lib/feature-flags';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, Download, Lock, Shield, FileText } from 'lucide-react';
+import { Upload, Download, Lock, Shield, FileText, Zap } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { VaultSetup } from './VaultSetup';
 import { VaultUnlock } from './VaultUnlock';
@@ -17,6 +20,7 @@ import { VaultUnlock } from './VaultUnlock';
 export function VaultUploadExample() {
   const { currentUser } = useAuth();
   const { toast } = useToast();
+  const { useVaultSDK: useSDK } = useFeatureFlags();
   const [files, setFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isUploading, setIsUploading] = useState(false);
@@ -33,12 +37,15 @@ export function VaultUploadExample() {
     progress: encryptionProgress
   } = useWebVaultEncryption(currentUser?.uid || '');
 
-  // Set user ID in vault service
+  // Initialize vault services based on feature flags
+  const activeVaultService = useSDK ? vaultSDKService : vaultService;
+  
+  // Set user ID in legacy vault service (SDK service doesn't need this)
   useEffect(() => {
-    if (currentUser?.uid) {
+    if (currentUser?.uid && !useSDK) {
       vaultService.setUserId(currentUser.uid);
     }
-  }, [currentUser?.uid]);
+  }, [currentUser?.uid, useSDK]);
 
   // Check vault status on mount
   useEffect(() => {
@@ -69,7 +76,7 @@ export function VaultUploadExample() {
     
     try {
       for (const file of files) {
-        await vaultService.uploadFile(
+        await activeVaultService.uploadFile(
           file,
           null, // parentId
           (progress) => {
@@ -83,7 +90,7 @@ export function VaultUploadExample() {
         
         toast({
           title: "Upload successful",
-          description: `${file.name} uploaded and encrypted`
+          description: `${file.name} uploaded and encrypted${useSDK ? ' (SDK)' : ''}`
         });
       }
       
@@ -105,7 +112,7 @@ export function VaultUploadExample() {
   // Load vault items
   const loadVaultItems = async () => {
     try {
-      const { items } = await vaultService.getItems();
+      const { items } = await activeVaultService.getItems();
       setVaultItems(items);
     } catch (error) {
       console.error('Failed to load vault items:', error);
@@ -120,7 +127,7 @@ export function VaultUploadExample() {
     }
 
     try {
-      const blob = await vaultService.downloadFile(item, {
+      const blob = await activeVaultService.downloadFile(item, {
         decrypt: decryptFile
       });
       
@@ -136,7 +143,7 @@ export function VaultUploadExample() {
       
       toast({
         title: "Download complete",
-        description: `${item.name} decrypted and downloaded`
+        description: `${item.name} decrypted and downloaded${useSDK ? ' (SDK)' : ''}`
       });
     } catch (error) {
       toast({
@@ -185,24 +192,45 @@ export function VaultUploadExample() {
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-dynastyGreen" />
             Vault Encryption Status
+            {useSDK && (
+              <div className="flex items-center gap-1 ml-auto">
+                <Zap className="h-4 w-4 text-blue-500" />
+                <span className="text-sm text-blue-500 font-medium">SDK</span>
+              </div>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-2">
-            {isUnlocked ? (
-              <>
-                <Lock className="h-4 w-4 text-green-500" />
-                <span className="text-green-500">Vault Unlocked - Encryption Active</span>
-              </>
-            ) : (
-              <>
-                <Lock className="h-4 w-4 text-red-500" />
-                <span className="text-red-500">Vault Locked</span>
-                <Button size="sm" onClick={() => setShowUnlock(true)}>
-                  Unlock
-                </Button>
-              </>
-            )}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              {isUnlocked ? (
+                <>
+                  <Lock className="h-4 w-4 text-green-500" />
+                  <span className="text-green-500">Vault Unlocked - Encryption Active</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="h-4 w-4 text-red-500" />
+                  <span className="text-red-500">Vault Locked</span>
+                  <Button size="sm" onClick={() => setShowUnlock(true)}>
+                    Unlock
+                  </Button>
+                </>
+              )}
+            </div>
+            
+            {/* Service indicator */}
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <span>Using:</span>
+              {useSDK ? (
+                <div className="flex items-center gap-1">
+                  <Zap className="h-3 w-3 text-blue-500" />
+                  <span className="text-blue-600 font-medium">Vault SDK v2 (New)</span>
+                </div>
+              ) : (
+                <span className="text-gray-500">Legacy Vault Service</span>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -316,6 +344,11 @@ export function VaultUploadExample() {
         <AlertDescription>
           All files are encrypted on your device before upload. Only you have the decryption key.
           We use military-grade XChaCha20-Poly1305 encryption to protect your files.
+          {useSDK && (
+            <div className="mt-2 text-blue-600 text-sm font-medium">
+              ⚡ Enhanced with Vault SDK v2 for improved performance and reliability
+            </div>
+          )}
         </AlertDescription>
       </Alert>
     </div>
