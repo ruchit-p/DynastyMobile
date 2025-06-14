@@ -25,6 +25,7 @@
     "emulator:start": "cd ../../firebase && firebase emulators:start --import=./emulator-data --export-on-exit"
   },
   "dependencies": {
+    "@dynasty/vault-sdk": "file:../../../packages/vault-sdk",
     "@radix-ui/react-accordion": "^1.2.3",
     "@radix-ui/react-alert-dialog": "^1.1.6",
     "@radix-ui/react-avatar": "^1.1.10",
