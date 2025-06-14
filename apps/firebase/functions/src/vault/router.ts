@@ -65,6 +65,23 @@ export function routeVaultFunction(functionName: string, request: CallableReques
       
     case "getVaultItemEncryptionMetadata":
       return useV2 ? VaultV2.getVaultItemEncryptionMetadata : VaultV1.getVaultItemEncryptionMetadata;
+
+    // File Operations (Phase 3B)
+    case "getVaultUploadSignedUrl":
+      return useV2 ? VaultV2.getVaultUploadSignedUrl : VaultV1.getVaultUploadSignedUrl;
+      
+    case "addVaultFile":
+      return useV2 ? VaultV2.addVaultFile : VaultV1.addVaultFile;
+      
+    case "getVaultDownloadUrl":
+      return useV2 ? VaultV2.getVaultDownloadUrl : VaultV1.getVaultDownloadUrl;
+      
+    case "getMediaUploadUrl":
+      return useV2 ? VaultV2.getMediaUploadUrl : VaultV1.getMediaUploadUrl;
+
+    // Sharing Operations (Phase 3B) 
+    case "shareVaultItem":
+      return useV2 ? VaultV2.shareVaultItem : VaultV1.shareVaultItem;
       
     default:
       // For functions not yet migrated, always use V1
