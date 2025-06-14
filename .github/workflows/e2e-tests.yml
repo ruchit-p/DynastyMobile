@@ -1,0 +1,132 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'apps/web/dynastyweb/**'
+      - '.github/workflows/e2e-tests.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'apps/web/dynastyweb/**'
+      - '.github/workflows/e2e-tests.yml'
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    strategy:
+      matrix:
+        browser: [chromium, firefox, webkit]
+        shard: [1, 2, 3]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.19.2'
+        cache: 'yarn'
+
+    - name: Install dependencies
+      run: yarn install --frozen-lockfile
+
+    - name: Install Playwright browsers
+      uses: microsoft/playwright-github-action@v1
+      
+    - name: Cache Playwright browsers
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ runner.os }}-playwright-${{ hashFiles('**/yarn.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-playwright-
+
+    - name: Build web application
+      run: |
+        cd apps/web/dynastyweb
+        yarn build
+      env:
+        NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.FIREBASE_AUTH_DOMAIN }}
+        NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+        NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+        NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}
+        NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+
+    - name: Start Firebase emulators
+      run: |
+        cd apps/firebase
+        yarn emulator:start &
+        sleep 10
+      if: matrix.shard == 1 # Only start once
+
+    - name: Run E2E tests
+      run: |
+        cd apps/web/dynastyweb
+        yarn test:e2e --project=${{ matrix.browser }} --shard=${{ matrix.shard }}/3
+      env:
+        CI: true
+        PLAYWRIGHT_BASE_URL: http://localhost:3000
+        USE_FIREBASE_EMULATOR: true
+        TEST_USER_EMAIL: test@dynasty.com
+        TEST_USER_PASSWORD: TestPassword123!
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: playwright-report-${{ matrix.browser }}-${{ matrix.shard }}
+        path: |
+          apps/web/dynastyweb/playwright-report/
+          apps/web/dynastyweb/test-results/
+        retention-days: 7
+
+    - name: Upload test videos
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: test-videos-${{ matrix.browser }}-${{ matrix.shard }}
+        path: apps/web/dynastyweb/test-results/**/*.webm
+        retention-days: 7
+
+    - name: Upload test traces
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: test-traces-${{ matrix.browser }}-${{ matrix.shard }}
+        path: apps/web/dynastyweb/test-results/**/*.zip
+        retention-days: 7
+
+  merge-reports:
+    needs: e2e-tests
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts/
+
+    - name: Merge test reports
+      run: |
+        mkdir -p merged-report
+        cp -r artifacts/playwright-report-*/* merged-report/
+
+    - name: Upload merged report
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-report-merged
+        path: merged-report/
+        retention-days: 30
+
+    - name: Comment PR with results
+      uses: daun/playwright-report-comment@v3
+      if: github.event_name == 'pull_request'
+      with:
+        report-file: merged-report/index.html
