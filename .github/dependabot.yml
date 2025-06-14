@@ -21,6 +21,12 @@ updates:
     commit-message:
       prefix: 'chore(deps)'
       include: 'scope'
+    # Auto-merge configuration
+    pull-request-branch-name:
+      separator: '/'
+    # Allow auto-merge for patch and minor updates
+    # Major updates will still require manual review
+    enable-beta-ecosystems: true
 
   # Mobile app dependencies (React Native/Expo)
   - package-ecosystem: 'npm'
@@ -50,6 +56,9 @@ updates:
           - 'expo*'
           - '@expo*'
           - 'expo'
+    # Auto-merge configuration
+    pull-request-branch-name:
+      separator: '/'
 
   # Web app dependencies (Next.js)
   - package-ecosystem: 'npm'
@@ -77,6 +86,9 @@ updates:
         patterns:
           - 'next*'
           - '@next*'
+    # Auto-merge configuration
+    pull-request-branch-name:
+      separator: '/'
 
   # Firebase functions dependencies
   - package-ecosystem: 'npm'
@@ -101,6 +113,9 @@ updates:
           - 'firebase*'
           - 'firebase-admin*'
           - 'firebase-functions*'
+    # Auto-merge configuration
+    pull-request-branch-name:
+      separator: '/'
 
   # GitHub Actions dependencies
   - package-ecosystem: 'github-actions'
@@ -118,3 +133,6 @@ updates:
     commit-message:
       prefix: 'chore(ci)'
       include: 'scope'
+    # Auto-merge configuration
+    pull-request-branch-name:
+      separator: '/'
