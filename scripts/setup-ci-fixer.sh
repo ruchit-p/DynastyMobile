@@ -42,7 +42,7 @@ fi
 
 # Check ts-node
 if ! check_tool "ts-node"; then
-    echo "  Install with: npm install -g ts-node typescript"
+    echo "  Install with: yarn global add ts-node typescript"
     ALL_GOOD=false
 fi
 
@@ -78,7 +78,7 @@ echo -e "\n${YELLOW}Checking project dependencies...${NC}"
 # Check if prettier is installed
 if ! grep -q "prettier" package.json; then
     echo -e "${YELLOW}Installing prettier...${NC}"
-    npm install --save-dev prettier
+    yarn add --dev prettier
 fi
 
 # 5. Create prettier config if it doesn't exist
