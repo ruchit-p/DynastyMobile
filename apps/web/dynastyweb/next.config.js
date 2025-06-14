@@ -21,24 +21,22 @@ const nextConfig = {
   },
   
   // Turbopack configuration (replaces webpack config)
-  experimental: {
-    turbo: {
-      resolveAlias: {
-        '@': './src',
-        'react-native$': 'react-native-web',
-      },
-      resolveExtensions: [
-        '.web.js',
-        '.web.jsx',
-        '.web.ts',
-        '.web.tsx',
-        '.js',
-        '.jsx',
-        '.ts',
-        '.tsx',
-        '.json',
-      ],
+  turbopack: {
+    resolveAlias: {
+      '@': './src',
+      'react-native$': 'react-native-web',
     },
+    resolveExtensions: [
+      '.web.js',
+      '.web.jsx',
+      '.web.ts',
+      '.web.tsx',
+      '.js',
+      '.jsx',
+      '.ts',
+      '.tsx',
+      '.json',
+    ],
   },
   
   // Add security headers for development to allow Firebase emulator connections
@@ -258,7 +256,11 @@ const { withSentryConfig } = require("@sentry/nextjs");
 
 // Only apply Sentry configuration if auth token is available
 // This prevents build failures when SENTRY_AUTH_TOKEN is not set
-const shouldUseSentry = !!process.env.SENTRY_AUTH_TOKEN;
+const shouldUseSentry = !!process.env.SENTRY_AUTH_TOKEN && process.env.NODE_ENV === 'production';
+
+if (!shouldUseSentry && process.env.NODE_ENV === 'development') {
+  console.log('🚫 Sentry disabled for local development');
+}
 
 const finalConfig = shouldUseSentry ? withSentryConfig(
   nextConfig,
