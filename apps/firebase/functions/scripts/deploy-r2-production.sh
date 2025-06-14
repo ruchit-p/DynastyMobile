@@ -35,7 +35,7 @@ echo "✅ All required environment variables are set"
 
 # Run tests
 echo "🧪 Running tests..."
-npm test
+yarn test
 if [ $? -ne 0 ]; then
     echo "❌ Tests failed. Deployment aborted."
     exit 1
@@ -43,7 +43,7 @@ fi
 
 # Build functions
 echo "🔨 Building functions..."
-npm run build
+yarn build
 if [ $? -ne 0 ]; then
     echo "❌ Build failed. Deployment aborted."
     exit 1

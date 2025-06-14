@@ -58,7 +58,7 @@ cd "$FUNCTIONS_DIR"
 
 # Build the functions
 echo "Building functions..."
-npm run build
+yarn build
 if [ $? -ne 0 ]; then
     echo -e "${RED}Build failed! Please fix errors before deploying.${NC}"
     exit 1
@@ -66,7 +66,7 @@ fi
 
 # Run tests
 echo "Running tests..."
-npm test -- --passWithNoTests
+yarn test --passWithNoTests
 if [ $? -ne 0 ]; then
     echo -e "${RED}Tests failed! Please fix tests before deploying.${NC}"
     exit 1

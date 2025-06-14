@@ -4,6 +4,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Recent Updates (January 2025)
 
+### Package Manager Migration to Yarn (June 2025)
+
+**Complete Migration**: Successfully migrated the entire monorepo from mixed npm/yarn usage to consistent Yarn workspace management. This standardizes package management across all projects and improves development workflow consistency.
+
+**Environment Upgrades**:
+- **Node.js**: Upgraded from 18.20.8 → 20.19.2 for compatibility with latest package versions
+- **Package Manager**: Standardized on Yarn v1.22.22 for all workspace operations
+
+**Workspace Configuration**:
+- **Fixed workspace paths**: Corrected `apps/web` → `apps/web/dynastyweb` for proper resolution
+- **Added Firebase functions**: Integrated `apps/firebase/functions` into workspace management
+- **Four workspaces managed**: dynastyweb, mobile, functions, @dynasty/vault-sdk
+
+**Migration Changes**:
+- **Root scripts**: All `npm test` → `yarn test` commands updated for consistency
+- **Firebase functions**: Complete script migration from npm to yarn (5 scripts updated)
+- **Web app integration**: Updated emulator script to use yarn for Firebase functions
+- **Deployment scripts**: Updated 6 critical shell scripts with 25+ command conversions
+- **Removed conflicts**: Eliminated package-lock.json files to prevent npm/yarn conflicts
+
+**Development Commands**:
+```bash
+# Install all workspace dependencies
+yarn
+
+# Run tests across workspaces  
+yarn test:firebase
+yarn test:web
+
+# Build specific workspaces
+yarn build:functions
+yarn build:web
+
+# Start development servers
+yarn web               # Next.js web app
+yarn mobile           # React Native mobile app
+```
+
+**Benefits**:
+- **Consistent tooling**: Single package manager across entire monorepo
+- **Faster installs**: Shared dependency caching between workspaces
+- **Simplified onboarding**: Single `yarn` command installs everything
+- **Better workspace management**: Proper dependency resolution between projects
+
 ### Performance Optimizations (January 2025)
 
 **Family Tree Blood Relation Algorithm**: The `isBloodRelated` utility in Firebase functions has been optimized from O(n²) to O(n) complexity by pre-computing all blood relations once using BFS, then using O(1) Set lookups. This provides ~100x performance improvement for large family trees.

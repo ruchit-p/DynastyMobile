@@ -46,7 +46,7 @@ fi
 # Step 1: Build the functions
 echo -e "\n${CYAN}Step 1: Building functions...${NC}"
 cd /Users/ruchitpatel/Documents/DynastyMobile/apps/firebase/functions
-npm run build
+yarn build
 
 # Step 2: Deploy migration function to staging
 echo -e "\n${CYAN}Step 2: Deploying migration function to staging...${NC}"
@@ -137,7 +137,7 @@ EOF
 
 # Install required packages temporarily
 echo -e "\n${CYAN}Installing temporary dependencies...${NC}"
-npm install --no-save node-fetch@2 googleapis
+yarn add node-fetch@2 googleapis --no-save
 
 # Run the migration
 echo -e "\n${CYAN}Calling migration function...${NC}"
