@@ -59,7 +59,7 @@
   "resolutions": {
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "string-width": "4.2.3",
+    "string-width": "^5.1.2",
     "cliui": "^7.0.4"
   },
   "dependencies": {
