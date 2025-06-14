@@ -7,6 +7,7 @@ import {
   validateRequiredFields,
 } from "./validation";
 import {createError, ErrorCode} from "./errors";
+import {FILE_SIZE_LIMITS} from "../common";
 
 // Input length limits
 export const INPUT_LIMITS = {
@@ -24,11 +25,11 @@ export const INPUT_LIMITS = {
   invitees: 100,
   files: 20,
 
-  // File sizes (in bytes)
-  image: 10 * 1024 * 1024, // 10MB
-  video: 100 * 1024 * 1024, // 100MB
-  document: 50 * 1024 * 1024, // 50MB
-  avatar: 5 * 1024 * 1024, // 5MB
+  // File sizes (in bytes) - standardized to 1GB
+  image: FILE_SIZE_LIMITS.MAX_IMAGE_SIZE, // 1GB
+  video: FILE_SIZE_LIMITS.MAX_VIDEO_SIZE, // 1GB
+  document: FILE_SIZE_LIMITS.MAX_DOCUMENT_SIZE, // 1GB
+  avatar: FILE_SIZE_LIMITS.MAX_IMAGE_SIZE, // 1GB
 };
 
 // Validate Firestore document ID

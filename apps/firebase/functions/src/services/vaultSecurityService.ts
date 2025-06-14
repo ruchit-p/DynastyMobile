@@ -4,6 +4,7 @@
 import * as sodium from "libsodium-wrappers";
 import * as winston from "winston";
 import {getFirestore} from "firebase-admin/firestore";
+import {FILE_SIZE_LIMITS} from "../common";
 
 // Configure winston logger
 const logger = winston.createLogger({
@@ -22,7 +23,7 @@ const logger = winston.createLogger({
 
 // Constants
 const VAULT_ENCRYPTION_VERSION = "2.0";
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+const MAX_FILE_SIZE = FILE_SIZE_LIMITS.MAX_FILE_SIZE; // 1GB
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
   "image/png",
