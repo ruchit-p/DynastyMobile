@@ -70,7 +70,8 @@ export * from "./auth/index"; // Modular auth functions (user management, authen
 export * from "./api"; // HTTP API endpoints
 export * from "./events-service"; // Consolidated event management functions
 export * from "./notifications"; // Notification functions
-export * from "./vault";
+export * from "./vault"; // V1 Vault functions (legacy)
+export * from "./vault/handlers"; // V2 Vault handlers (modular)
 export * from "./vault-scan-hooks"; // Vault malware scanning webhooks
 export * from "./vault-scanning"; // Vault scanning processing functions
 export * from "./placesApi";
