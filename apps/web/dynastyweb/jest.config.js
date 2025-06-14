@@ -35,6 +35,7 @@ const customJestConfig = {
     const patterns = [
       '<rootDir>/node_modules/',
       '<rootDir>/.next/',
+      '<rootDir>/e2e/',
     ];
     if (process.env.TEST_TYPE === 'unit') {
       patterns.push('<rootDir>/src/__tests__/integration/');
@@ -47,8 +48,13 @@ const customJestConfig = {
     '!src/**/*.stories.{js,jsx,ts,tsx}',
     '!src/**/__tests__/**',
   ],
+  transform: {
+    // Use babel-jest to transpile JavaScript/TypeScript, including ESM in node_modules that we opt-in via transformIgnorePatterns
+    '^.+\\.(js|jsx|mjs|cjs|ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
+  },
+  // Override transform ignore pattern to allow specific ESM packages to be transformed
   transformIgnorePatterns: [
-    'node_modules/(?!(lucide-react|@radix-ui|@dynasty|nanoid|ics|uuid|firebase|fake-indexeddb|swiper)/).*$',
+    'node_modules/(?!(lucide-react|@radix-ui|@dynasty|nanoid|ics|uuid|firebase|fake-indexeddb|swiper)/)',
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
 }
