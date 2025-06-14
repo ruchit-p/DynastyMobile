@@ -67,6 +67,7 @@ export * from "./api"; // HTTP API endpoints
 export * from "./events-service"; // Consolidated event management functions
 export * from "./notifications"; // Notification functions
 export * from "./vault";
+export * from "./vault-scan-hooks"; // Vault malware scanning webhooks
 export * from "./placesApi";
 export * from "./encryption"; // End-to-end encryption functions
 export * from "./support"; // Support and contact functions

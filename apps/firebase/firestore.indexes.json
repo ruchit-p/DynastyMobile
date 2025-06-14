@@ -353,6 +353,24 @@
       ]
     },
     {
+      "collectionGroup": "vaultItems",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scanStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "vaultAuditLogs",
       "queryScope": "COLLECTION",
       "fields": [
