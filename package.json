@@ -60,7 +60,7 @@
     "@craftzdog/react-native-buffer": "^6.0.5",
     "@react-native-community/datetimepicker": "^8.4.1",
     "@react-native-picker/picker": "^2.11.0",
-    "@signalapp/libsignal-client": "^0.72.1",
+    "@signalapp/libsignal-client": "^0.74.1",
     "expo": "~53.0.8",
     "expo-document-picker": "^13.1.5",
     "expo-file-system": "^18.1.10",
