@@ -1,5 +1,14 @@
 import {logger} from "firebase-functions/v2";
+import {getFirestore, Timestamp} from "firebase-admin/firestore";
 import {ErrorCode, createError, handleError} from "./errors";
+import {createLogContext} from "./sanitization";
+import {sanitizeUserInput} from "./xssSanitization";
+
+// Firestore database instance
+const db = getFirestore();
+
+// Collection constants
+const PAYMENT_ATTEMPTS_COLLECTION = "payment_attempts";
 
 /**
  * Payment error severity levels for monitoring and alerting
@@ -206,11 +215,11 @@ export class PaymentErrorHandler {
   /**
    * Track payment error for monitoring and alerting
    */
-  static trackPaymentError(
+  static async trackPaymentError(
     error: any,
     severity: PaymentErrorSeverity,
     context: PaymentErrorContext
-  ): void {
+  ): Promise<void> {
     const errorMetrics = {
       timestamp: new Date().toISOString(),
       severity,
@@ -297,28 +306,63 @@ export class PaymentErrorHandler {
     status: "success" | "failed" | "retry",
     error?: any
   ): Promise<void> {
-    const logEntry = {
-      timestamp: new Date().toISOString(),
-      userId: context.userId,
-      subscriptionId: context.subscriptionId,
-      stripeCustomerId: context.stripeCustomerId,
-      paymentMethodId: context.paymentMethodId,
-      amount: context.amount,
-      currency: context.currency,
-      planType: context.planType,
-      attemptNumber: context.attemptNumber || 1,
-      status,
-      error: error ? {
-        code: error.code,
-        type: error.type,
-        message: error.message,
-        decline_code: error.decline_code,
-      } : undefined,
-    };
+    try {
+      // Sanitize all inputs before storage
+      const sanitizedContext = {
+        userId: sanitizeUserInput(context.userId),
+        subscriptionId: context.subscriptionId ? sanitizeUserInput(context.subscriptionId) : undefined,
+        stripeCustomerId: context.stripeCustomerId ? sanitizeUserInput(context.stripeCustomerId) : undefined,
+        paymentMethodId: context.paymentMethodId ? sanitizeUserInput(context.paymentMethodId) : undefined,
+        amount: context.amount,
+        currency: context.currency ? sanitizeUserInput(context.currency) : undefined,
+        planType: context.planType ? sanitizeUserInput(context.planType) : undefined,
+        attemptNumber: context.attemptNumber || 1,
+      };
 
-    logger.info("Payment attempt logged", logEntry);
+      const logEntry = {
+        timestamp: Timestamp.now(),
+        createdAt: new Date().toISOString(), // Keep ISO string for backwards compatibility
+        ...sanitizedContext,
+        status: sanitizeUserInput(status),
+        error: error ? {
+          code: error.code ? sanitizeUserInput(error.code) : undefined,
+          type: error.type ? sanitizeUserInput(error.type) : undefined,
+          message: error.message ? sanitizeUserInput(error.message) : undefined,
+          decline_code: error.decline_code ? sanitizeUserInput(error.decline_code) : undefined,
+        } : undefined,
+        // Additional audit fields
+        environment: process.env.NODE_ENV || "development",
+        functionVersion: process.env.FUNCTION_VERSION || "unknown",
+      };
 
-    // TODO: Store in payment_attempts collection for audit trail
+      // Structured logging with sanitized context
+      logger.log({
+        severity: "INFO",
+        message: "Payment attempt logged",
+        labels: {
+          type: "payment_attempt",
+          status,
+          userId: sanitizedContext.userId,
+        },
+        data: createLogContext(logEntry),
+      });
+
+      // Store in payment_attempts collection for audit trail
+      await db.collection(PAYMENT_ATTEMPTS_COLLECTION).add(logEntry);
+
+      logger.debug("Payment attempt stored in audit trail", createLogContext({
+        userId: sanitizedContext.userId,
+        status,
+        attemptNumber: sanitizedContext.attemptNumber,
+      }));
+    } catch (firestoreError) {
+      // Log Firestore error but don't throw - audit logging failure shouldn't break payment processing
+      logger.error("Failed to log payment attempt", createLogContext({
+        error: firestoreError,
+        context,
+        status,
+      }));
+    }
   }
 }
 
