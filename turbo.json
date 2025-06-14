@@ -1,0 +1,95 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env.*local"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "lib/**", "dist/**"],
+      "env": [
+        "NODE_ENV",
+        "NEXT_PUBLIC_*",
+        "SENTRY_*",
+        "VERCEL_*",
+        "FIREBASE_*",
+        "ENABLE_*"
+      ]
+    },
+    "build:prod": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "lib/**", "dist/**"],
+      "env": [
+        "NODE_ENV",
+        "NEXT_PUBLIC_*",
+        "SENTRY_*",
+        "VERCEL_*",
+        "FIREBASE_*",
+        "ENABLE_*"
+      ]
+    },
+    "build:analyze": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", ".next/analyze/**"],
+      "env": [
+        "NODE_ENV",
+        "ANALYZE",
+        "NEXT_PUBLIC_*",
+        "SENTRY_*",
+        "VERCEL_*",
+        "FIREBASE_*"
+      ]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "env": [
+        "NODE_ENV",
+        "NEXT_PUBLIC_*",
+        "FIREBASE_*",
+        "FUNCTIONS_EMULATOR"
+      ]
+    },
+    "lint": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "lint:ci": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"],
+      "env": ["NODE_ENV", "TEST_*", "USE_FIREBASE_EMULATOR"]
+    },
+    "test:coverage": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"],
+      "env": ["NODE_ENV", "TEST_*", "USE_FIREBASE_EMULATOR"]
+    },
+    "test:watch": {
+      "cache": false,
+      "persistent": true
+    },
+    "serve": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "persistent": true
+    },
+    "deploy": {
+      "dependsOn": ["build", "lint", "test"],
+      "cache": false,
+      "env": [
+        "NODE_ENV",
+        "FIREBASE_*",
+        "SENTRY_*",
+        "VERCEL_*"
+      ]
+    }
+  },
+  "globalEnv": [
+    "NODE_ENV",
+    "CI",
+    "VERCEL",
+    "FIREBASE_PROJECT_ID"
+  ]
+}
