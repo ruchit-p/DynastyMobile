@@ -2,9 +2,9 @@
   "name": "dynasty-monorepo",
   "private": true,
   "workspaces": [
-    "apps/web",
+    "apps/web/dynastyweb",
     "apps/mobile",
-    "packages/*",
+    "apps/firebase/functions",
     "packages/vault-sdk"
   ],
   "scripts": {
@@ -23,13 +23,13 @@
     "fix:ci:ts": "ts-node scripts/claude-ci-fixer.ts",
     "fix:pr": "./scripts/claude-fix-ci-errors.sh --pr",
     "commit:quick": "./scripts/quick-commit.sh",
-    "test:all": "cd apps/web/dynastyweb && yarn test && cd ../../.. && cd apps/firebase/functions && npm test && cd ../../..",
+    "test:all": "cd apps/web/dynastyweb && yarn test && cd ../../.. && cd apps/firebase/functions && yarn test && cd ../../..",
     "test:web": "cd apps/web/dynastyweb && yarn test",
-    "test:firebase": "cd apps/firebase/functions && npm test",
+    "test:firebase": "cd apps/firebase/functions && yarn test",
     "test:integration": "cd apps/web/dynastyweb && yarn test:integration",
-    "lint:all": "cd apps/web/dynastyweb && yarn lint && cd ../../.. && cd apps/firebase/functions && npm run lint && cd ../../..",
-    "lint:fix": "cd apps/web/dynastyweb && yarn lint --fix && cd ../../.. && cd apps/firebase/functions && npm run lint -- --fix && cd ../../..",
-    "pre-push": "npm run test:all"
+    "lint:all": "cd apps/web/dynastyweb && yarn lint && cd ../../.. && cd apps/firebase/functions && yarn lint && cd ../../..",
+    "lint:fix": "cd apps/web/dynastyweb && yarn lint --fix && cd ../../.. && cd apps/firebase/functions && yarn lint --fix && cd ../../..",
+    "pre-push": "yarn test:all"
   },
   "devDependencies": {
     "babel-plugin-module-resolver": "^5.0.2",
