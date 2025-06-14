@@ -75,7 +75,7 @@ export const useSessionValidation = (
     // Set up new interval
     intervalRef.current = setInterval(() => {
       validateSession();
-    }, interval);
+    }, interval) as unknown as NodeJS.Timeout;
 
     return () => {
       if (intervalRef.current) {

@@ -24,11 +24,12 @@ export async function GET(request: NextRequest) {
     
     if (cached && typeof cached === 'object' && 'uid' in cached) {
       // 90% of requests hit this - no Firebase call needed!
+      const cachedData = cached as { uid: string; email?: string; emailVerified?: boolean };
       return NextResponse.json({ 
         valid: true, 
-        uid: cached.uid,
-        email: cached.email || '',
-        emailVerified: cached.emailVerified || false,
+        uid: cachedData.uid,
+        email: cachedData.email || '',
+        emailVerified: cachedData.emailVerified || false,
         cached: true
       });
     }

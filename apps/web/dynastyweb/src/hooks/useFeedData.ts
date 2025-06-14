@@ -91,7 +91,7 @@ export function useFeedData(userId: string, familyTreeId: string): UseFeedDataRe
       if (cachedStories && cachedEvents) {
         // Use cached data immediately
         setStories(cachedStories.stories);
-        setEvents(cachedEvents.events);
+        setEvents(cachedEvents.events as EventData[]);
         setHasMoreStories(cachedStories.hasMore);
         setHasMoreEvents(cachedEvents.hasMore);
         setLastStoryId(cachedStories.lastDocId);
@@ -138,7 +138,7 @@ export function useFeedData(userId: string, familyTreeId: string): UseFeedDataRe
       ]);
       
       setStories(storiesResult.stories);
-      setEvents(eventsResult.events);
+      setEvents(eventsResult.events as EventData[]);
       setHasMoreStories(storiesResult.hasMore);
       setHasMoreEvents(eventsResult.hasMore);
       setLastStoryId(storiesResult.lastDocId);
@@ -192,7 +192,7 @@ export function useFeedData(userId: string, familyTreeId: string): UseFeedDataRe
             setLastStoryId(result.lastDocId);
           }
         } else if (type === 'events') {
-          setEvents(prev => [...prev, ...result.events]);
+          setEvents(prev => [...prev, ...(result.events as EventData[])]);
           setHasMoreEvents(result.hasMore);
           if (result.lastEventDate) {
             setLastEventDate(result.lastEventDate);
