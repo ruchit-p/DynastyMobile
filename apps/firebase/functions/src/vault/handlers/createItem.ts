@@ -1,7 +1,7 @@
 import { onCall } from 'firebase-functions/v2/https';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
-import { DEFAULT_REGION, FUNCTION_TIMEOUT } from '../../common';
+import { DEFAULT_REGION, FUNCTION_TIMEOUT, FILE_SIZE_LIMITS } from '../../common';
 import { createError, ErrorCode } from '../../utils/errors';
 import { withAuth, requireAuth } from '../../middleware';
 import { SECURITY_CONFIG } from '../../config/security-config';
@@ -97,12 +97,11 @@ export const createItem = onCall(
         const sanitizedName = sanitizeFileName(name);
         const sanitizedMimeType = mimeType ? sanitizeMimeType(mimeType) : undefined;
 
-        // Validate file size (100MB limit)
-        const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
-        if (fileSize && fileSize > MAX_FILE_SIZE) {
+        // Validate file size (1GB limit)
+        if (fileSize && fileSize > FILE_SIZE_LIMITS.MAX_FILE_SIZE) {
           throw createError(
             ErrorCode.INVALID_REQUEST,
-            `File size exceeds maximum allowed size of ${MAX_FILE_SIZE / (1024 * 1024)}MB`
+            `File size exceeds maximum allowed size of ${FILE_SIZE_LIMITS.MAX_FILE_SIZE_MB}MB`
           );
         }
 
