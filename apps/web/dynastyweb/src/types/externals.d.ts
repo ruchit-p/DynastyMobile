@@ -1,11 +1,11 @@
 declare module 'react-window' {
   import * as React from 'react';
-  export interface ListChildComponentProps<T = any> {
+  export interface ListChildComponentProps<T = unknown> {
     index: number;
     style: React.CSSProperties;
     data: T;
   }
-  export interface FixedSizeListProps<T = any> {
+  export interface FixedSizeListProps<T = unknown> {
     height: number;
     width: number;
     itemCount: number;
@@ -13,7 +13,7 @@ declare module 'react-window' {
     itemData?: T;
     children: (props: ListChildComponentProps<T>) => React.ReactElement;
   }
-  export function FixedSizeList<T = any>(
+  export function FixedSizeList<T = unknown>(
     props: FixedSizeListProps<T>
   ): React.ReactElement;
   export { FixedSizeList as List, ListChildComponentProps };
@@ -30,11 +30,23 @@ declare module 'react-virtualized-auto-sizer' {
 }
 
 declare module 'crypto-js' {
-  const CryptoJS: any;
+  const CryptoJS: {
+    AES: {
+      encrypt(message: string | ArrayBuffer, key: string): { toString(): string };
+      decrypt(ciphertext: string, key: string): { toString(encoding: { _name: string }): string };
+    };
+    enc: {
+      Utf8: { _name: string };
+    };
+    SHA256(message: string): { toString(): string };
+  };
   export default CryptoJS;
 }
 
-declare const jest: any;
+declare const jest: {
+  fn(): unknown;
+  fn<T>(implementation: T): T;
+};
 
 declare module 'libsodium-wrappers-sumo' {
   import sodium from 'libsodium-wrappers';

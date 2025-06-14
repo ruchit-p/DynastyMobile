@@ -10,8 +10,7 @@ import { StoryCard } from "@/components/Story"
 import { Spinner } from "@/components/ui/spinner"
 import { EventData } from "@/utils/eventUtils"
 import { EventFeedCard } from "@/components/EventFeedCard"
-import { useFeedData, type FeedItem } from "@/hooks/useFeedData"
-// @ts-ignore - Will be installed separately due to permission issues
+import { useFeedData } from "@/hooks/useFeedData"
 import { useInView } from 'react-intersection-observer'
 
 // Define the enriched story type (using the same type as the hook)

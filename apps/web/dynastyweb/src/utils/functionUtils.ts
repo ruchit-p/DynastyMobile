@@ -1,5 +1,6 @@
 import type { Node } from 'relatives-tree/lib/types';
 import type { Story } from './storyUtils';
+import type { EventData } from './eventUtils';
 import { Timestamp } from 'firebase/firestore';
 import { functions } from '@/lib/firebase';
 import { FirebaseFunctionsClient, createFirebaseClient } from '@/lib/functions-client';
@@ -284,7 +285,7 @@ export const getEventsForFeedPaginated = async (
   try {
     const result = await getFunctionsClient().callFunction<
       { userId: string; familyTreeId: string; lastEventDate?: string; limit?: number },
-      { events: unknown[], hasMore: boolean, lastEventDate?: string }
+      { events: EventData[], hasMore: boolean, lastEventDate?: string }
     >('getEventsForFeedPaginated', {
       userId,
       familyTreeId,
@@ -294,7 +295,7 @@ export const getEventsForFeedPaginated = async (
     
     if (!result.data || !Array.isArray(result.data.events)) {
       console.error('Invalid paginated events data structure:', result.data);
-      return { events: [], hasMore: false, lastEventDate: undefined };
+      return { events: [] as EventData[], hasMore: false, lastEventDate: undefined };
     }
     
     return {
@@ -304,7 +305,7 @@ export const getEventsForFeedPaginated = async (
     };
   } catch (error) {
     console.error('Error fetching paginated events for feed:', error);
-    return { events: [], hasMore: false, lastEventDate: undefined };
+    return { events: [] as EventData[], hasMore: false, lastEventDate: undefined };
   }
 };
 

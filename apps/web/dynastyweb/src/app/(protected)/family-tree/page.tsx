@@ -561,23 +561,6 @@ export default function FamilyTreePage() {
     setPosition({ x, y });
   }, [rootNode, treeLayout, scale, DEBUG_MODE]);
 
-  // Add debug info for tree wrapper dimensions
-  const getTreeWrapperDebugInfo = useCallback(() => {
-    if (!treeLayout.nodes.length) return null;
-
-    const layout = treeLayout;
-
-    return {
-      wrapperWidth: Math.max(layout.canvas.width * WIDTH, window.innerWidth),
-      wrapperHeight: Math.max(layout.canvas.height * HEIGHT, window.innerHeight),
-      transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-      layout: {
-        canvasWidth: layout.canvas.width,
-        canvasHeight: layout.canvas.height,
-        nodeCount: layout.nodes.length
-      }
-    };
-  }, [treeLayout, position.x, position.y, scale]);
 
   const handleNodeClick = (node: ExtNode, isClick: boolean) => {
     if (!isClick) return;

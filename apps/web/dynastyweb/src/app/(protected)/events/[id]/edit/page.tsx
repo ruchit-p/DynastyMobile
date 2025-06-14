@@ -381,7 +381,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       }
 
       // Update the event
-      const result = await updateEvent(eventId, eventData);
+      await updateEvent(eventId, eventData);
       
       toast({
         title: "Success",

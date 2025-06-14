@@ -55,7 +55,7 @@ export async function subscriptionRateLimit(
   }
 
   try {
-    const ip = (request as any).ip ?? request.headers.get('x-forwarded-for') ?? 'anonymous'
+    const ip = request.headers.get('x-real-ip') ?? request.headers.get('x-forwarded-for') ?? 'anonymous'
     const { success, limit, reset, remaining } = await rateLimiters[type].limit(ip)
 
     if (!success) {

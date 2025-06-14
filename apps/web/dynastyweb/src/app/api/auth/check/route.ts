@@ -4,9 +4,6 @@ import { kv } from '@vercel/kv';
 // Using Node.js runtime for Firebase Admin SDK support
 // export const runtime = 'edge';
 
-const FIREBASE_FUNCTIONS_URL = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL || 
-  `https://us-central1-${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}.cloudfunctions.net`;
-
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   

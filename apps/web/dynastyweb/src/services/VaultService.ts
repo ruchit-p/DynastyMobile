@@ -33,6 +33,17 @@ export interface VaultItem {
   };
   tags?: string[];
   description?: string;
+  // Scan status for malware/security scanning
+  scanStatus?: "pending" | "scanning" | "clean" | "infected" | "error";
+  scanResults?: {
+    scannedAt: Date;
+    threats?: string[];
+    provider: "cloudmersive";
+  };
+  quarantineInfo?: {
+    quarantinedAt: Date;
+    reason: string;
+  };
 }
 
 export interface VaultFolder {
@@ -71,6 +82,17 @@ interface VaultItemData {
   };
   tags?: string[];
   description?: string;
+  // Scan status for malware/security scanning
+  scanStatus?: "pending" | "scanning" | "clean" | "infected" | "error";
+  scanResults?: {
+    scannedAt: Timestamp | string | Date;
+    threats?: string[];
+    provider: "cloudmersive";
+  };
+  quarantineInfo?: {
+    quarantinedAt: Timestamp | string | Date;
+    reason: string;
+  };
 }
 
 export interface UploadProgress {
@@ -1160,6 +1182,19 @@ class VaultService {
                   : undefined,
                 // Note: downloadURL is not provided by getVaultItems, need to fetch separately
                 url: item.url || undefined,
+                // Convert scan-related timestamps
+                scanResults: item.scanResults
+                  ? {
+                      ...item.scanResults,
+                      scannedAt: this.convertTimestampToDate(item.scanResults.scannedAt),
+                    }
+                  : undefined,
+                quarantineInfo: item.quarantineInfo
+                  ? {
+                      ...item.quarantineInfo,
+                      quarantinedAt: this.convertTimestampToDate(item.quarantineInfo.quarantinedAt),
+                    }
+                  : undefined,
               });
             }
           });
@@ -1228,8 +1263,34 @@ class VaultService {
         query,
         filters,
       });
-      const data = result.data as { items?: VaultItem[] };
-      return data.items || [];
+      const data = result.data as { items?: VaultItemData[] };
+      
+      // Convert timestamps for search results
+      const items = (data.items || []).map(item => ({
+        ...item,
+        isEncrypted: item.isEncrypted ?? false,
+        isShared: item.isShared ?? false,
+        createdAt: this.convertTimestampToDate(item.createdAt),
+        updatedAt: this.convertTimestampToDate(item.updatedAt),
+        lastAccessedAt: item.lastAccessedAt
+          ? this.convertTimestampToDate(item.lastAccessedAt)
+          : undefined,
+        // Convert scan-related timestamps
+        scanResults: item.scanResults
+          ? {
+              ...item.scanResults,
+              scannedAt: this.convertTimestampToDate(item.scanResults.scannedAt),
+            }
+          : undefined,
+        quarantineInfo: item.quarantineInfo
+          ? {
+              ...item.quarantineInfo,
+              quarantinedAt: this.convertTimestampToDate(item.quarantineInfo.quarantinedAt),
+            }
+          : undefined,
+      }));
+      
+      return items;
     } catch (error) {
       errorHandler.handleError(error, ErrorSeverity.LOW, {
         action: 'vault-search',
@@ -1242,15 +1303,30 @@ class VaultService {
   async getDeletedItems(): Promise<VaultItem[]> {
     try {
       const result = await this.functionsClient.callFunction('getDeletedVaultItems', {});
-      const data = result.data as { items?: VaultItem[] };
+      const data = result.data as { items?: VaultItemData[] };
 
       // Convert timestamps for deleted items
       const items = (data.items || []).map(item => ({
         ...item,
+        isEncrypted: item.isEncrypted ?? false,
+        isShared: item.isShared ?? false,
         createdAt: this.convertTimestampToDate(item.createdAt),
         updatedAt: this.convertTimestampToDate(item.updatedAt),
         lastAccessedAt: item.lastAccessedAt
           ? this.convertTimestampToDate(item.lastAccessedAt)
+          : undefined,
+        // Convert scan-related timestamps
+        scanResults: item.scanResults
+          ? {
+              ...item.scanResults,
+              scannedAt: this.convertTimestampToDate(item.scanResults.scannedAt),
+            }
+          : undefined,
+        quarantineInfo: item.quarantineInfo
+          ? {
+              ...item.quarantineInfo,
+              quarantinedAt: this.convertTimestampToDate(item.quarantineInfo.quarantinedAt),
+            }
           : undefined,
       }));
 
