@@ -4,9 +4,6 @@ import { kv } from '@vercel/kv';
 // Using Node.js runtime for better compatibility
 // export const runtime = 'edge';
 
-const FIREBASE_FUNCTIONS_URL = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL || 
-  `https://us-central1-${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}.cloudfunctions.net`;
-
 export async function GET(request: NextRequest) {
   // Support pagination via query params
   const searchParams = request.nextUrl.searchParams;
@@ -35,7 +32,7 @@ export async function GET(request: NextRequest) {
   // For now, returning mock data structure
   try {
     // TODO: Replace with actual Firebase function call
-    // const response = await fetch(`${FIREBASE_FUNCTIONS_URL}/getPublicFeed`, {
+    // const response = await fetch(`https://us-central1-${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}.cloudfunctions.net/getPublicFeed`, {
     //   method: 'POST',
     //   headers: { 'Content-Type': 'application/json' },
     //   body: JSON.stringify({ page: parseInt(page), limit: parseInt(limit) })
@@ -108,7 +105,7 @@ export async function GET(request: NextRequest) {
 }
 
 // Invalidate cache endpoint
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     // Clear all public feed cache entries
     const keys = await kv.keys('public:feed:preview:*');

@@ -11,7 +11,6 @@ import {getStorageAdapter} from "./services/storageAdapter";
 import {validateUploadRequest, checkUserStorageCapacity} from "./config/r2Security";
 import {R2_CONFIG} from "./config/r2Secrets";
 import {R2Service} from "./services/r2Service";
-import {B2Service} from "./services/b2Service";
 import {SubscriptionValidationService} from "./services/subscriptionValidationService";
 import {createLogContext, formatErrorForLogging} from "./utils/sanitization";
 import {validateRequest} from "./utils/request-validator";
@@ -71,6 +70,17 @@ interface VaultItem {
   cachedUploadUrlExpiry?: Timestamp;
   cachedDownloadUrl?: string;
   cachedDownloadUrlExpiry?: Timestamp;
+  // Scan status for malware/security scanning
+  scanStatus?: "pending" | "scanning" | "clean" | "infected" | "error";
+  scanResults?: {
+    scannedAt: Timestamp;
+    threats?: string[];
+    provider: "cloudmersive";
+  };
+  quarantineInfo?: {
+    quarantinedAt: Timestamp;
+    reason: string;
+  };
 }
 
 interface VaultShareLink {
@@ -448,90 +458,11 @@ export const getVaultUploadSignedUrl = onCall(
 
       // Initialize storage adapter
       const storageAdapter = getStorageAdapter();
-      // Default to B2, fallback to Firebase only when explicitly set
-      const storageProvider = process.env.STORAGE_PROVIDER === "firebase" ? "firebase" : "b2";
+      // Force provider to be "r2"
+      const storageProvider = "r2";
 
-      let signedUrl: string;
-      let storagePath: string;
-      // R2
-      let r2Bucket: string | undefined;
-      let r2Key: string | undefined;
-      // B2
-      let b2Bucket: string | undefined;
-      let b2Key: string | undefined;
-
-      if (storageProvider === "b2") {
-        // Use Backblaze B2 storage
-        b2Bucket = B2Service.getBucketName();
-        b2Key = B2Service.generateStorageKey(
-          "vault",
-          uid,
-          sanitizedFileName,
-          parentId || undefined
-        );
-
-        const result = await storageAdapter.generateUploadUrl({
-          path: b2Key,
-          contentType: sanitizedMimeType,
-          expiresIn: 300, // 5 minutes
-          metadata: {
-            uploadedBy: uid,
-            originalName: sanitizedFileName,
-            parentId: parentId || "root",
-            isEncrypted: isEncrypted.toString(),
-          },
-          bucket: b2Bucket,
-          provider: "b2",
-        });
-
-        signedUrl = result.signedUrl;
-        storagePath = b2Key; // For B2, storagePath is the key
-      } else if (storageProvider === "r2") {
-        // Use R2 storage (legacy)
-        r2Bucket = R2Service.getBucketName();
-        r2Key = R2Service.generateStorageKey(
-          "vault",
-          uid,
-          sanitizedFileName,
-          parentId || undefined
-        );
-
-        const result = await storageAdapter.generateUploadUrl({
-          path: r2Key,
-          contentType: sanitizedMimeType,
-          expiresIn: 300, // 5 minutes
-          metadata: {
-            uploadedBy: uid,
-            originalName: sanitizedFileName,
-            parentId: parentId || "root",
-            isEncrypted: isEncrypted.toString(),
-          },
-          bucket: r2Bucket,
-          provider: "r2",
-        });
-
-        signedUrl = result.signedUrl;
-        storagePath = r2Key; // For R2, storagePath is the key
-      } else {
-        // Use Firebase Storage (existing logic)
-        const effectiveParentIdForStorage = parentId || "root";
-        storagePath = `vault/${uid}/${effectiveParentIdForStorage}/${sanitizedFileName}`;
-
-        const fiveMinutesInSeconds = 5 * 60;
-        const expires = Date.now() + fiveMinutesInSeconds * 1000;
-
-        const [url] = await getStorage().bucket().file(storagePath).getSignedUrl({
-          version: "v4",
-          action: "write",
-          expires,
-          contentType: sanitizedMimeType,
-        });
-
-        signedUrl = url;
-      }
-
-      // Pre-create the vault item with cached upload URL
-      const vaultItem: Partial<VaultItem> = {
+      // Pre-create the vault item BEFORE generating signed URL
+      const vaultItemData: Partial<VaultItem> = {
         userId: uid,
         name: sanitizedFileName,
         type: "file",
@@ -544,17 +475,48 @@ export const getVaultUploadSignedUrl = onCall(
         isDeleted: false,
         isEncrypted,
         storageProvider,
-        storagePath,
-        ...(r2Bucket && {r2Bucket}),
-        ...(r2Key && {r2Key}),
-        ...(b2Bucket && {b2Bucket}),
-        ...(b2Key && {b2Key}),
-        cachedUploadUrl: signedUrl,
-        cachedUploadUrlExpiry: Timestamp.fromMillis(Date.now() + 300000), // 5 minutes
+        scanStatus: "pending", // Add scanStatus field
       };
 
-      // Create the item in Firestore
-      const docRef = await db.collection("vaultItems").add(vaultItem);
+      // Create the item in Firestore first to get the document ID
+      const docRef = await db.collection("vaultItems").add(vaultItemData);
+      const itemId = docRef.id;
+
+      // Since we're forcing provider to be "r2", we only handle R2 storage
+      const r2Bucket = R2Service.getBucketName();
+      const r2Key = R2Service.generateStorageKey(
+        "vault",
+        uid,
+        sanitizedFileName,
+        parentId || undefined
+      );
+
+      const result = await storageAdapter.generateUploadUrl({
+        path: r2Key,
+        contentType: sanitizedMimeType,
+        expiresIn: 300, // 5 minutes
+        metadata: {
+          "uploadedby": uid, // lowercase key
+          "originalname": sanitizedFileName, // lowercase key
+          "parentid": parentId || "root", // lowercase key
+          "isencrypted": isEncrypted.toString(), // lowercase key
+          "cf-item-id": itemId, // Add cf-item-id with the document ID
+        },
+        bucket: r2Bucket,
+        provider: "r2",
+      });
+
+      const signedUrl = result.signedUrl;
+      const storagePath = r2Key; // For R2, storagePath is the key
+
+      // Update the vault item with storage details and cached upload URL
+      await docRef.update({
+        storagePath,
+        r2Bucket,
+        r2Key,
+        cachedUploadUrl: signedUrl,
+        cachedUploadUrlExpiry: Timestamp.fromMillis(Date.now() + 300000), // 5 minutes
+      });
 
       return {
         signedUrl,
@@ -563,10 +525,8 @@ export const getVaultUploadSignedUrl = onCall(
         isEncrypted,
         itemId: docRef.id,
         storageProvider,
-        ...(r2Bucket && {r2Bucket}),
-        ...(r2Key && {r2Key}),
-        ...(b2Bucket && {b2Bucket}),
-        ...(b2Key && {b2Key}),
+        r2Bucket,
+        r2Key,
       };
     },
     "getVaultUploadSignedUrl",
@@ -4112,10 +4072,11 @@ async function internalGetVaultDownloadUrl(uid: string, itemId: string): Promise
   // Generate signed URL using StorageAdapter
   const storageAdapter = getStorageAdapter();
 
-  const result = await storageAdapter.generateDownloadUrl(
-    item.storagePath!,
-    3600 // 1 hour
-  );
+  const result = await storageAdapter.generateDownloadUrl({
+    path: item.storagePath!,
+    expiresIn: 3600, // 1 hour
+    provider: item.storageProvider, // Pass the provider from the vault item
+  });
 
   return result.signedUrl;
 }
@@ -4532,4 +4493,4 @@ export const getMediaUploadUrl = onCall(
 // ============================================================================
 
 // Export V2 handlers that use the vault-sdk schemas
-export * from './vault/v2';
+export * from "./vault/v2";

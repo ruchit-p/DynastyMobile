@@ -86,7 +86,7 @@ const getAppConfig = () => ({
   },
 });
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   const cacheKey = 'app:config:v1';
   
   try {

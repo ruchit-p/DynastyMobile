@@ -14,10 +14,52 @@ import {
   ExternalLink,
   FileAudio,
   File,
+  Shield,
+  AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import { VaultItem, vaultService, formatFileSize } from '@/services/VaultService';
 import { formatVaultDate } from '@/utils/dateUtils';
 import { useToast } from '@/hooks/use-toast';
+
+// Scan status badge component
+function ScanStatusBadge({ scanStatus }: { scanStatus?: VaultItem['scanStatus'] }) {
+  if (!scanStatus) return null;
+
+  switch (scanStatus) {
+    case 'pending':
+    case 'scanning':
+      return (
+        <div className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Scanning
+        </div>
+      );
+    case 'clean':
+      return (
+        <div className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+          <Shield className="h-3 w-3" />
+          Clean
+        </div>
+      );
+    case 'infected':
+      return (
+        <div className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+          <AlertTriangle className="h-3 w-3" />
+          Infected
+        </div>
+      );
+    case 'error':
+      return (
+        <div className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
+          <AlertTriangle className="h-3 w-3" />
+          Error
+        </div>
+      );
+    default:
+      return null;
+  }
+}
 
 interface FilePreviewProps {
   item: VaultItem | null;
@@ -306,9 +348,12 @@ export default function FilePreview({ item, isOpen, onClose, onDownload, onShare
       <div className="flex h-48 flex-col items-center justify-center space-y-4 text-gray-500">
         <File className="h-16 w-16" />
         <p>Preview not available for this file type</p>
-        <Button onClick={() => onDownload(item)}>
+        <Button 
+          onClick={() => onDownload(item)}
+          disabled={item.scanStatus === 'infected' || item.scanStatus === 'error'}
+        >
           <Download className="mr-2 h-4 w-4" />
-          Download to view
+          {item.scanStatus === 'infected' || item.scanStatus === 'error' ? 'Download blocked' : 'Download to view'}
         </Button>
       </div>
     );
@@ -321,7 +366,10 @@ export default function FilePreview({ item, isOpen, onClose, onDownload, onShare
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <div className="flex items-center justify-between">
-            <DialogTitle className="pr-8">{item.name}</DialogTitle>
+            <div className="flex items-center gap-2">
+              <DialogTitle className="pr-2">{item.name}</DialogTitle>
+              <ScanStatusBadge scanStatus={item.scanStatus} />
+            </div>
             <div className="flex items-center space-x-2">
               {/* Zoom controls for images */}
               {item.mimeType?.startsWith('image/') && (
@@ -354,7 +402,13 @@ export default function FilePreview({ item, isOpen, onClose, onDownload, onShare
               <Button variant="ghost" size="icon" onClick={() => onShare(item)}>
                 <Share2 className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => onDownload(item)}>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => onDownload(item)}
+                disabled={item.scanStatus === 'infected' || item.scanStatus === 'error'}
+                title={item.scanStatus === 'infected' || item.scanStatus === 'error' ? 'Download blocked due to security concerns' : 'Download'}
+              >
                 <Download className="h-4 w-4" />
               </Button>
               {item.url && (

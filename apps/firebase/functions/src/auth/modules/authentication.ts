@@ -13,6 +13,7 @@ import {validateRequest} from "../../utils/request-validator";
 import {VALIDATION_SCHEMAS} from "../../config/validation-schemas";
 import {withAuth} from "../../middleware/auth";
 import {SECURITY_CONFIG} from "../../config/security-config";
+import * as admin from "firebase-admin";
 
 /**
  * Handles standard email/password sign-in
@@ -161,86 +162,53 @@ export const handleSignUp = onCall({
       const auth = getAuth();
       const db = getFirestore();
 
-      // Check if email already exists
-      let userExists = false;
+      // Attempt to create the Firebase Auth account directly. Rely on the Admin SDK
+      // to enforce uniqueness and return a deterministic error when the email
+      // already exists. This removes the fragile pre-check and avoids race conditions.
+
+      let userRecord: admin.auth.UserRecord;
       try {
-        await auth.getUserByEmail(signupData.email);
-        // If no error is thrown, user exists
-        userExists = true;
-      } catch (error: any) {
-        // Log the error details to understand Firebase Auth emulator behavior
-        logger.info("Firebase Auth getUserByEmail error", createLogContext({
+        userRecord = await auth.createUser({
           email: signupData.email,
-          errorCode: error?.code,
-          errorMessage: error?.message,
-          errorType: typeof error,
-        }));
-
-        // Firebase Auth emulator might use different error codes
-        // Check for various "user not found" error patterns
-        const userNotFoundCodes = [
-          "auth/user-not-found",
-          "auth/invalid-email",
-          "NOT_FOUND",
-          "not-found",
-        ];
-
-        // Check for Firebase Admin SDK authentication errors - these should be treated as "user not found"
-        // because we can't verify user existence when the SDK can't authenticate
-        const adminSdkAuthErrors = [
-          "app/invalid-credential",
-          "invalid-credential",
-          "invalid_grant",
-          "invalid-argument",
-        ];
-
+          password: signupData.password,
+          emailVerified: false,
+        });
+      } catch (error: any) {
         const errorCode = error?.code || error?.errorInfo?.code || "";
-        const errorMessage = error?.message || "";
 
-        const isUserNotFound = userNotFoundCodes.some((code) =>
-          errorCode.includes(code) || errorCode === code
-        );
+        // The Admin SDK throws one of the following when an email is already registered.
+        // We map all of them to our standardized EMAIL_EXISTS error.
+        const emailExistsCodes = [
+          "auth/email-already-exists",
+          "auth/email-already-in-use",
+          "already-exists",
+          "ALREADY_EXISTS",
+        ];
 
-        const isAdminSdkAuthError = adminSdkAuthErrors.some((code) =>
-          errorCode.includes(code) || errorMessage.includes(code)
-        );
-
-        if (isUserNotFound || isAdminSdkAuthError) {
-          // User doesn't exist OR we can't verify due to SDK auth issues
-          // In both cases, proceed with account creation
-          logger.info("Proceeding with account creation", createLogContext({
+        if (emailExistsCodes.some((code) => errorCode === code)) {
+          logger.info("Account creation blocked – email already registered", createLogContext({
             email: signupData.email,
-            reason: isUserNotFound ? "user_not_found" : "admin_sdk_auth_error",
+            reason: "existing_account",
             errorCode,
           }));
-        } else {
-          // If it's not a "user not found" or admin auth error, re-throw it
-          if (error instanceof HttpsError) {
-            throw error;
-          }
-          // For other unexpected errors, treat as user exists for safety
-          userExists = true;
+          throw createError(
+            ErrorCode.EMAIL_EXISTS,
+            "An account with this email already exists. Please sign in instead or use a different email address."
+          );
         }
-        // If it is a "user not found" error, userExists remains false
-      }
 
-      if (userExists) {
-        logger.info("Account creation blocked - email already registered", createLogContext({
+        // For any other error, log and re-throw as INTERNAL to avoid leaking details.
+        logger.error("handleSignUp: Unexpected error during createUser", createLogContext({
           email: signupData.email,
-          reason: "existing_account",
+          errorCode,
+          errorMessage: error?.message,
         }));
+
         throw createError(
-          ErrorCode.EMAIL_EXISTS,
-          "An account with this email already exists. Please sign in instead or use a different email address."
+          ErrorCode.INTERNAL,
+          "Unable to create account. Please try again or contact support if the problem persists."
         );
       }
-
-      // Create the Firebase Auth account
-      const userRecord = await auth.createUser({
-        email: signupData.email,
-        password: signupData.password,
-        emailVerified: false,
-      });
 
       const userId = userRecord.uid;
 
