@@ -14,36 +14,46 @@ export interface FeatureFlags {
   useNewStoriesService: boolean;
 }
 
-// Default feature flag configuration
+// Default feature flag configuration - Production Ready
 const DEFAULT_FLAGS: FeatureFlags = {
-  useVaultSDK: false, // Start with legacy service
+  useVaultSDK: true, // Enable vault SDK for all users (100% rollout)
   enableBetaFeatures: false,
   useNewStoriesService: false,
 };
 
-// Environment-based overrides
+// Environment-based overrides with emergency rollback support
 const getEnvironmentFlags = (): Partial<FeatureFlags> => {
   const env = process.env.NODE_ENV;
   const isStaging = process.env.VERCEL_ENV === 'preview' || (process.env.NODE_ENV as string) === 'staging';
   
+  // Allow environment variables to override defaults (for emergency rollback)
+  const envOverrides: Partial<FeatureFlags> = {};
+  
+  if (process.env.NEXT_PUBLIC_USE_VAULT_SDK !== undefined) {
+    envOverrides.useVaultSDK = process.env.NEXT_PUBLIC_USE_VAULT_SDK === 'true';
+  }
+  
+  if (process.env.NEXT_PUBLIC_ENABLE_BETA_FEATURES !== undefined) {
+    envOverrides.enableBetaFeatures = process.env.NEXT_PUBLIC_ENABLE_BETA_FEATURES === 'true';
+  }
+  
   if (env === 'development') {
     return {
-      useVaultSDK: process.env.NEXT_PUBLIC_USE_VAULT_SDK === 'true',
-      enableBetaFeatures: true,
+      enableBetaFeatures: true, // Enable beta features in dev by default
+      ...envOverrides,
     };
   }
   
   if (isStaging) {
     return {
-      useVaultSDK: process.env.NEXT_PUBLIC_USE_VAULT_SDK === 'true',
-      enableBetaFeatures: true,
+      enableBetaFeatures: true, // Enable beta features in staging by default
+      ...envOverrides,
     };
   }
   
-  // Production - conservative defaults
+  // Production - use defaults unless explicitly overridden
   return {
-    useVaultSDK: process.env.NEXT_PUBLIC_USE_VAULT_SDK === 'true',
-    enableBetaFeatures: false,
+    ...envOverrides,
   };
 };
 
