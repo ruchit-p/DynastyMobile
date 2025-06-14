@@ -97,8 +97,6 @@ interface VaultShareLink {
   lastAccessedAt?: Timestamp;
 }
 
-const MAX_UPDATE_DEPTH = 10;
-
 // MARK: - Access Control Helper Functions
 
 /**
@@ -216,34 +214,38 @@ async function getAccessibleVaultItems(
   return Array.from(itemsMap.values());
 }
 
-/**
- * Iteratively updates descendant paths when renaming/moving folders using a stack
- */
-async function updateDescendantPathsRecursive(
+// Optimized descendant-path updater: single query on path prefix + batched writes
+async function updateDescendantPaths(
   db: FirebaseFirestore.Firestore,
-  rootFolderId: string,
-  rootPath: string
+  oldPath: string,
+  newPath: string
 ): Promise<void> {
-  type Node = { folderId: string; parentPath: string; depth: number };
-  const stack: Node[] = [{folderId: rootFolderId, parentPath: rootPath, depth: 0}];
-  while (stack.length) {
-    const {folderId, parentPath, depth} = stack.pop()!;
-    if (depth >= MAX_UPDATE_DEPTH) {
-      logger.warn(`Max update depth ${MAX_UPDATE_DEPTH} reached for folder ${folderId}`);
-      continue;
+  const snapshot = await db
+    .collection('vaultItems')
+    .where('path', '>=', `${oldPath}/`)
+    .where('path', '<', `${oldPath}/\uf8ff`)
+    .get();
+
+  // Batch writes in chunks (Firestore max 500 / keep headroom)
+  let batch = db.batch();
+  let count = 0;
+  const MAX_BATCH = 490;
+
+  for (const doc of snapshot.docs) {
+    const currentPath = doc.data().path as string;
+    const updatedPath = currentPath.replace(oldPath, newPath);
+    batch.update(doc.ref, {path: updatedPath, updatedAt: FieldValue.serverTimestamp()});
+    count++;
+
+    if (count >= MAX_BATCH) {
+      await batch.commit();
+      batch = db.batch();
+      count = 0;
     }
-    const snapshot = await db.collection("vaultItems").where("parentId", "==", folderId).get();
-    for (const doc of snapshot.docs) {
-      const data = doc.data() as VaultItem;
-      const newPath = `${parentPath}/${data.name}`;
-      await db
-        .collection("vaultItems")
-        .doc(doc.id)
-        .update({path: newPath, updatedAt: FieldValue.serverTimestamp()});
-      if (data.type === "folder") {
-        stack.push({folderId: doc.id, parentPath: newPath, depth: depth + 1});
-      }
-    }
+  }
+
+  if (count > 0) {
+    await batch.commit();
   }
 }
 
@@ -1011,7 +1013,7 @@ export const renameVaultItem = onCall(
       
       // If folder, update descendants
       if (data.type === "folder") {
-        await updateDescendantPathsRecursive(db, itemId, newPath);
+        await updateDescendantPaths(db, data.path, newPath);
       }
       
       return {success: true};
@@ -1068,7 +1070,7 @@ export const moveVaultItem = onCall(
       
       // If folder, update descendants
       if (data.type === "folder") {
-        await updateDescendantPathsRecursive(db, itemId, newPath);
+        await updateDescendantPaths(db, data.path, newPath);
       }
       
       return {success: true};
