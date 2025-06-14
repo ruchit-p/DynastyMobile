@@ -2,13 +2,15 @@
 
 import React, { useEffect, useState } from 'react';
 import { vaultService } from '@/services/VaultService';
+import { vaultSDKService } from '@/services/VaultSDKService';
+import { useFeatureFlags } from '@/lib/feature-flags';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Shield, Share2, AlertTriangle, HardDrive } from 'lucide-react';
+import { Shield, Share2, AlertTriangle, HardDrive, Zap } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface EncryptionStats {
@@ -107,6 +109,7 @@ interface SystemStats {
 }
 
 export default function VaultMonitoringDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
+  const { useVaultSDK: useSDK } = useFeatureFlags();
   const [encryptionStats, setEncryptionStats] = useState<EncryptionStats | null>(null);
   const [keyRotationStatus, setKeyRotationStatus] = useState<KeyRotationStatus | null>(null);
   const [shareLinkAnalytics, setShareLinkAnalytics] = useState<ShareLinkAnalytics | null>(null);
@@ -114,29 +117,63 @@ export default function VaultMonitoringDashboard({ isAdmin = false }: { isAdmin?
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [sdkLimitations, setSdkLimitations] = useState<string[]>([]);
+
+  // Initialize vault service based on feature flags
+  const activeVaultService = useSDK ? vaultSDKService : vaultService;
 
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
         setLoading(true);
         setError(null);
+        setSdkLimitations([]);
 
-        // Load user-specific stats
-        const [encStats, keyStatus, shareAnalytics] = await Promise.all([
-          vaultService.getEncryptionStats(),
-          vaultService.getKeyRotationStatus(),
-          vaultService.getShareLinkAnalytics()
-        ]);
+        // Load user-specific stats with fallback handling
+        const limitations = [];
+
+        // Load encryption stats
+        let encStats;
+        if (typeof activeVaultService.getEncryptionStats === 'function') {
+          encStats = await activeVaultService.getEncryptionStats();
+        } else {
+          limitations.push('Encryption statistics not available with SDK');
+          encStats = await vaultService.getEncryptionStats();
+        }
+
+        // Load key rotation status
+        let keyStatus;
+        if (typeof activeVaultService.getKeyRotationStatus === 'function') {
+          keyStatus = await activeVaultService.getKeyRotationStatus();
+        } else {
+          limitations.push('Key rotation status not available with SDK');
+          keyStatus = await vaultService.getKeyRotationStatus();
+        }
+
+        // Load share analytics
+        let shareAnalytics;
+        if (typeof activeVaultService.getShareLinkAnalytics === 'function') {
+          shareAnalytics = await activeVaultService.getShareLinkAnalytics();
+        } else {
+          limitations.push('Share link analytics not available with SDK');
+          shareAnalytics = await vaultService.getShareLinkAnalytics();
+        }
 
         setEncryptionStats(encStats);
         setKeyRotationStatus(keyStatus);
         setShareLinkAnalytics(shareAnalytics);
+        setSdkLimitations(limitations);
 
         // Load admin stats if user is admin
         if (isAdmin) {
           try {
+            // System stats always use legacy service for now
             const sysStats = await vaultService.getSystemVaultStats();
             setSystemStats(sysStats);
+            if (useSDK) {
+              limitations.push('System statistics using legacy service');
+              setSdkLimitations([...limitations]);
+            }
           } catch (err) {
             console.error('Failed to load system stats:', err);
           }
@@ -150,7 +187,7 @@ export default function VaultMonitoringDashboard({ isAdmin = false }: { isAdmin?
     };
     
     loadDashboardData();
-  }, [isAdmin]);
+  }, [isAdmin, useSDK, activeVaultService]);
 
 
   const formatBytes = (bytes: number) => {
@@ -190,9 +227,40 @@ export default function VaultMonitoringDashboard({ isAdmin = false }: { isAdmin?
 
   return (
     <div className="space-y-6">
+      {/* SDK Status Header */}
+      {useSDK && (
+        <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <Zap className="h-4 w-4 text-blue-500" />
+          <span className="text-blue-700 font-medium">Using Vault SDK v2</span>
+          {sdkLimitations.length > 0 && (
+            <span className="text-blue-600 text-sm">
+              • Some features use legacy service
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* SDK Limitations Alert */}
+      {sdkLimitations.length > 0 && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Feature Limitations</AlertTitle>
+          <AlertDescription>
+            <ul className="mt-2 space-y-1">
+              {sdkLimitations.map((limitation, idx) => (
+                <li key={idx} className="text-sm">• {limitation}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="overview">
+            Overview
+            {useSDK && <Zap className="h-3 w-3 ml-1 text-blue-500" />}
+          </TabsTrigger>
           <TabsTrigger value="keys">Key Management</TabsTrigger>
           <TabsTrigger value="sharing">Share Analytics</TabsTrigger>
           {isAdmin && <TabsTrigger value="system">System Stats</TabsTrigger>}

@@ -1,8 +1,11 @@
 // Vault Share Link Component for Dynasty Web App
 // Provides UI for creating secure share links for vault items
+// Supports both legacy VaultService and new VaultSDKService based on feature flags
 
 import { useState } from 'react';
 import { vaultService } from '@/services/VaultService';
+import { vaultSDKService } from '@/services/VaultSDKService';
+import { useFeatureFlags } from '@/lib/feature-flags';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Share2, Link, Calendar as CalendarIcon, Lock, Copy, CheckCircle2, Users } from 'lucide-react';
+import { Share2, Link, Calendar as CalendarIcon, Lock, Copy, CheckCircle2, Users, Zap } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -25,6 +28,7 @@ interface VaultShareLinkProps {
 
 export function VaultShareLink({ item, onClose }: VaultShareLinkProps) {
   const { toast } = useToast();
+  const { useVaultSDK: useSDK } = useFeatureFlags();
   const [isCreating, setIsCreating] = useState(false);
   const [shareLink, setShareLink] = useState('');
   const [shareId, setShareId] = useState('');
@@ -37,11 +41,14 @@ export function VaultShareLink({ item, onClose }: VaultShareLinkProps) {
   const [selectedUsers] = useState<string[]>([]);
   const [shareMode, setShareMode] = useState<'link' | 'users'>('link');
   
+  // Initialize vault service based on feature flags
+  const activeVaultService = useSDK ? vaultSDKService : vaultService;
+  
   const handleCreateShareLink = async () => {
     setIsCreating(true);
     
     try {
-      const result = await vaultService.shareItem(item.id, {
+      const result = await activeVaultService.shareItem(item.id, {
         expiresAt,
         allowDownload,
         password: password || undefined,
@@ -53,7 +60,7 @@ export function VaultShareLink({ item, onClose }: VaultShareLinkProps) {
       
       toast({
         title: "Share link created",
-        description: "Your secure share link has been generated"
+        description: `Your secure share link has been generated${useSDK ? ' (SDK)' : ''}`
       });
     } catch (error) {
       toast({
@@ -87,13 +94,15 @@ export function VaultShareLink({ item, onClose }: VaultShareLinkProps) {
   
   const handleRevokeShare = async () => {
     try {
-      await vaultService.revokeShare(shareId);
+      // Note: VaultSDKService doesn't have revokeShare yet, so use legacy service
+      const revokeService = useSDK ? vaultService : vaultService;
+      await revokeService.revokeShare(shareId);
       setShareLink('');
       setShareId('');
       
       toast({
         title: "Share link revoked",
-        description: "The share link has been disabled"
+        description: `The share link has been disabled${useSDK ? ' (using legacy service)' : ''}`
       });
       
       onClose();
@@ -113,9 +122,18 @@ export function VaultShareLink({ item, onClose }: VaultShareLinkProps) {
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="h-5 w-5" />
             Share &quot;{item.name}&quot;
+            {useSDK && (
+              <div className="flex items-center gap-1 ml-auto">
+                <Zap className="h-4 w-4 text-blue-500" />
+                <span className="text-sm text-blue-500 font-medium">SDK</span>
+              </div>
+            )}
           </DialogTitle>
           <DialogDescription>
             Create a secure link to share this {item.isEncrypted ? 'encrypted' : ''} file
+            {useSDK && (
+              <span className="text-blue-600 text-sm ml-1">• Enhanced with Vault SDK v2</span>
+            )}
           </DialogDescription>
         </DialogHeader>
         
