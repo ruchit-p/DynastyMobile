@@ -3248,10 +3248,10 @@
   resolved "https://registry.npmjs.org/@react-native-firebase/firestore/-/firestore-22.2.0.tgz"
   integrity sha512-SO6U9u2B4sDuu+R5o7XxtB7Yvf860tZU6yNQNtdlIeXCtf8Sj67OrQbJcPBX7TJftTmuzDd2gzxaOMwAOLsdDw==
 
-"@react-native-firebase/functions@^22.1.0":
-  version "22.2.0"
-  resolved "https://registry.npmjs.org/@react-native-firebase/functions/-/functions-22.2.0.tgz"
-  integrity sha512-OaWylOn05gd3LRec6RbZPVNysdNQYuBwBT9m8YfsS6WwTeoHfPhW8x0an+Rc0vMddREN7qbeqGaTZvwENk7eNQ==
+"@react-native-firebase/functions@^22.2.1":
+  version "22.2.1"
+  resolved "https://registry.yarnpkg.com/@react-native-firebase/functions/-/functions-22.2.1.tgz#7567845948c54fef8532b3f3838a1d1073d04533"
+  integrity sha512-qUKGT56MAaExLcuxmLu6kRzbH0773TLfRlfxYgWjrdkqQN/HLVsRW1ThWOGizxhdpXB6e0iFfj9e2GXD4kFfSw==
 
 "@react-native-firebase/messaging@^22.2.1":
   version "22.2.1"
