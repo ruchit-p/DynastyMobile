@@ -23,6 +23,7 @@ import {
   STRIPE_PUBLISHABLE_KEY,
   STRIPE_API_VERSION,
 } from "./config/stripeSecrets";
+import {B2_CONFIG} from "./config/b2Secrets";
 
 // Set global options for ALL Firebase Functions
 setGlobalOptions({
@@ -35,6 +36,8 @@ setGlobalOptions({
     STRIPE_WEBHOOK_SECRET,
     STRIPE_PUBLISHABLE_KEY,
     STRIPE_API_VERSION,
+    // B2 secrets
+    B2_CONFIG,
   ],
 });
 
@@ -84,6 +87,26 @@ if (process.env.ENABLE_R2_MIGRATION === "true") {
   console.log("R2 migration functions enabled");
   // Dynamic imports for optional functions
   import("./migrations/r2VaultMigration").then((module) => {
+    Object.keys(module).forEach((key) => {
+      (exports as any)[key] = (module as any)[key];
+    });
+  });
+}
+
+// B2 Migration functions (only when enabled)
+if (process.env.ENABLE_B2_MIGRATION === "true") {
+  console.log("B2 migration functions enabled");
+  import("./migrations/b2VaultMigration").then((module) => {
+    Object.keys(module).forEach((key) => {
+      (exports as any)[key] = (module as any)[key];
+    });
+  });
+}
+
+// B2 Test functions (only in development)
+if (process.env.NODE_ENV !== "production" && process.env.ENABLE_B2_TESTS === "true") {
+  console.log("B2 test functions enabled");
+  import("./services/b2Service").then((module) => {
     Object.keys(module).forEach((key) => {
       (exports as any)[key] = (module as any)[key];
     });
