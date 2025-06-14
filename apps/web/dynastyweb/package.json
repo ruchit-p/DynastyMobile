@@ -18,7 +18,7 @@
     "test:coverage": "TEST_TYPE=unit jest --coverage",
     "test:integration": "TEST_TYPE=integration jest --config=jest.integration.config.js",
     "test:integration:watch": "TEST_TYPE=integration jest --config=jest.integration.config.js --watch",
-    "test:all": "npm run test && npm run test:integration",
+    "test:all": "yarn test && yarn test:integration",
     "test:emulator": "USE_FIREBASE_EMULATOR=true jest",
     "test:emulator:watch": "USE_FIREBASE_EMULATOR=true jest --watch",
     "emulator:export": "cd ../../firebase && firebase emulators:export ./emulator-data",

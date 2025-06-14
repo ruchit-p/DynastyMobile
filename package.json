@@ -1,6 +1,7 @@
 {
   "name": "dynasty-monorepo",
   "private": true,
+  "packageManager": "yarn@1.22.22",
   "workspaces": [
     "apps/web/dynastyweb",
     "apps/mobile",
@@ -19,7 +20,7 @@
     "lint": "turbo run lint",
     "lint:ci": "turbo run lint:ci",
     "test": "turbo run test",
-    "test:all": "turbo run test test:coverage",
+    "test:all": "turbo run test",
     "format": "prettier --write .",
     "android": "expo run:android",
     "ios": "expo run:ios",
@@ -31,12 +32,11 @@
     "fix:ci:ts": "ts-node scripts/claude-ci-fixer.ts",
     "fix:pr": "./scripts/claude-fix-ci-errors.sh --pr",
     "commit:quick": "./scripts/quick-commit.sh",
-    "test:all": "cd apps/web/dynastyweb && yarn test && cd ../../.. && cd apps/firebase/functions && yarn test && cd ../../..",
     "test:web": "cd apps/web/dynastyweb && yarn test",
     "test:firebase": "cd apps/firebase/functions && yarn test",
     "test:integration": "cd apps/web/dynastyweb && yarn test:integration",
-    "lint:all": "cd apps/web/dynastyweb && yarn lint && cd ../../.. && cd apps/firebase/functions && yarn lint && cd ../../..",
-    "lint:fix": "cd apps/web/dynastyweb && yarn lint --fix && cd ../../.. && cd apps/firebase/functions && yarn lint --fix && cd ../../..",
+    "lint:all": "turbo run lint",
+    "lint:fix": "turbo run lint -- --fix",
     "pre-push": "yarn test:all"
   },
   "devDependencies": {
@@ -70,7 +70,8 @@
     "expo-file-system": "^18.1.10",
     "expo-location": "~18.1.4",
     "expo-sharing": "~13.1.5",
-    "react": "19.0.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
     "react-native": "0.79.2",
     "react-native-get-random-values": "^1.11.0",
     "react-native-google-places-autocomplete": "^2.5.7",
