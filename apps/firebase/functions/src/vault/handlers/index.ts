@@ -13,6 +13,9 @@ export * from "./files";
 // Sharing Operations  
 export * from "./sharing";
 
+// Monitoring & Analytics
+export * from "./monitoring";
+
 // Encryption Operations  
 export * from "./encryption";
 
