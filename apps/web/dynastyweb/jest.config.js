@@ -22,8 +22,9 @@ const customJestConfig = {
     '^@/hooks/(.*)$': '<rootDir>/src/hooks/$1',
     '^@/types/(.*)$': '<rootDir>/src/types/$1',
     '^@/utils/(.*)$': '<rootDir>/src/utils/$1',
-    // Mock CSS modules
+    // Mock CSS modules and Swiper CSS
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+    '^swiper/css.*$': 'identity-obj-proxy',
   },
   testMatch: [
     '**/__tests__/**/*.test.[jt]s?(x)',
@@ -47,7 +48,7 @@ const customJestConfig = {
     '!src/**/__tests__/**',
   ],
   transformIgnorePatterns: [
-    'node_modules/(?!(lucide-react|nanoid|ics|uuid|firebase|fake-indexeddb)/)',
+    'node_modules/(?!(lucide-react|@radix-ui|@dynasty|nanoid|ics|uuid|firebase|fake-indexeddb|swiper)/).*$',
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
 }
