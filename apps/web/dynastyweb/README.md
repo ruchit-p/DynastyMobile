@@ -57,6 +57,16 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-firebase-storage-bucket
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-firebase-messaging-sender-id
 NEXT_PUBLIC_FIREBASE_APP_ID=your-firebase-app-id
 NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your-firebase-measurement-id
+
+# Optional Feature Flags / External Services
+NEXT_PUBLIC_FIREBASE_VAPID_KEY=your-firebase-vapid-key
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your-stripe-publishable-key
+
+# Frontend Behaviour Flags
+NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true           # set to false in prod
+NEXT_PUBLIC_ENABLE_ANALYTICS=true               # 'false' to disable analytics locally
+NEXT_PUBLIC_ENVIRONMENT=development             # development | staging | production
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
 ### Secret Management
