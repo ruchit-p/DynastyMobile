@@ -139,7 +139,7 @@ fix_eslint_errors() {
     if [ -d "apps/firebase/functions" ]; then
         print_info "Fixing Firebase functions linting errors..."
         cd apps/firebase/functions
-        if npm run lint -- --fix; then
+        if yarn lint --fix; then
             fixed=true
         fi
         cd ../../..
@@ -168,7 +168,7 @@ fix_typescript_errors() {
             
             # Capture TypeScript errors
             if [ "$project" = "apps/firebase/functions" ]; then
-                npm run build 2>&1 | tee "$ts_errors_file" || true
+                yarn build 2>&1 | tee "$ts_errors_file" || true
             else
                 npx tsc --noEmit 2>&1 | tee "$ts_errors_file" || true
             fi
@@ -208,7 +208,7 @@ fix_test_failures() {
             cd "$project"
             
             if [ "$project" = "apps/firebase/functions" ]; then
-                npm test -- --ci 2>&1 | tee "$test_output" || true
+                yarn test --ci 2>&1 | tee "$test_output" || true
             else
                 yarn test --ci --passWithNoTests 2>&1 | tee "$test_output" || true
             fi
@@ -217,7 +217,7 @@ fix_test_failures() {
             if grep -q "Snapshot Summary" "$test_output" && grep -q "failed" "$test_output"; then
                 print_info "Found snapshot test failures - updating snapshots..."
                 if [ "$project" = "apps/firebase/functions" ]; then
-                    npm test -- --ci --updateSnapshot
+                    yarn test --ci --updateSnapshot
                 else
                     yarn test --ci --updateSnapshot
                 fi
