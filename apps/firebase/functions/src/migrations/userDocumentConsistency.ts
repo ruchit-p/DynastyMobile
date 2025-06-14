@@ -20,17 +20,17 @@ export const migrateUserDocumentConsistency = onCall(
     timeoutSeconds: FUNCTION_TIMEOUT.LONG,
   },
   withErrorHandling(async (request) => {
-    // Check if user is admin (implement your own admin check)
+    // Check if user is authenticated and has admin privileges
     const uid = request.auth?.uid;
     if (!uid) {
       throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
     }
 
-    // TODO: Add proper admin check
-    // const userDoc = await getFirestore().collection("users").doc(uid).get();
-    // if (!userDoc.exists || !userDoc.data()?.isAdmin) {
-    //   throw createError(ErrorCode.PERMISSION_DENIED, "Admin access required");
-    // }
+    // Verify admin status
+    const userDoc = await getFirestore().collection("users").doc(uid).get();
+    if (!userDoc.exists || !userDoc.data()?.isAdmin) {
+      throw createError(ErrorCode.PERMISSION_DENIED, "Admin access required");
+    }
 
     const {dryRun = true, batchSize = 500} = request.data;
     const db = getFirestore();

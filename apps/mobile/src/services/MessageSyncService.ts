@@ -1,19 +1,24 @@
 import { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+
+const Timestamp = FirebaseFirestoreTypes.Timestamp;
 import { getErrorMessage } from '../lib/errorUtils';
 import { getFirebaseDb } from '../lib/firebase';
 import { SyncDatabase } from '../database/SyncDatabase';
 import { LocalMessage, SyncQueueItem } from '../database/schema';
 import { ChatEncryptionService } from './encryption/ChatEncryptionService';
+import { KeyRotationService } from './encryption/KeyRotationService';
 import NetInfo from '@react-native-community/netinfo';
 import DeviceInfo from 'react-native-device-info';
 import { logger } from './LoggingService';
+import { callFirebaseFunction } from '../lib/errorUtils';
 
 // Types
 export interface Message {
   id: string;
   conversationId: string;
+  chatId: string; // Alias for conversationId used in some contexts
   senderId: string;
-  recipientId: string;
+  recipientId?: string;
   content: string;
   encryptedContent?: string;
   type: 'text' | 'image' | 'video' | 'audio' | 'file';
@@ -24,6 +29,9 @@ export interface Message {
   encryptionKeyId?: string;
   isEncrypted: boolean;
   readBy?: { userId: string; timestamp: FirebaseFirestoreTypes.Timestamp }[];
+  conversationType?: 'direct' | 'group';
+  updatedAt?: FirebaseFirestoreTypes.Timestamp;
+  keyRotationVersion?: string;
 }
 
 export interface Conversation {
@@ -436,7 +444,7 @@ export class MessageSyncService implements IMessageSyncService {
     logger.debug('[MessageSyncService] Resolving message conflict:', conflict);
     
     try {
-      // TODO: Implement conflict resolution
+      // Implement conflict resolution
       // 1. For content conflicts: prefer encrypted version
       // 2. For delivery conflicts: prefer most advanced status
       // 3. For encryption conflicts: re-encrypt if needed
@@ -469,8 +477,51 @@ export class MessageSyncService implements IMessageSyncService {
         case 'encryption':
           // Re-encrypt if keys don't match
           logger.debug('[MessageSyncService] Re-encrypting message due to key mismatch');
-          // TODO: Re-encrypt with current keys
-          return remoteMessage;
+          
+          // Get current encryption service
+          const encryptionService = ChatEncryptionService.getInstance();
+          
+          // Decrypt the message if it's encrypted
+          let originalContent = localMessage.content;
+          if (localMessage.isEncrypted && localMessage.encryptedContent) {
+            try {
+              const decrypted = await encryptionService.decryptMessage(
+                localMessage.encryptedContent,
+                localMessage.chatId,
+                localMessage.senderId
+              );
+              originalContent = decrypted.text || originalContent;
+            } catch (error) {
+              logger.error('[MessageSyncService] Failed to decrypt for re-encryption:', error);
+              // If we can't decrypt, prefer the remote version
+              return remoteMessage;
+            }
+          }
+          
+          // Re-encrypt with current keys
+          try {
+            const reEncrypted = await encryptionService.encryptMessage(
+              { text: originalContent },
+              localMessage.chatId,
+              localMessage.conversationType === 'direct' ? [localMessage.recipientId!] : []
+            );
+            
+            // Update local message with new encryption
+            const updatedMessage: Message = {
+              ...localMessage,
+              encryptedContent: reEncrypted,
+              isEncrypted: true,
+              updatedAt: Timestamp.now(),
+            };
+            
+            // Save to local database
+            await db.doc(`messages/${localMessage.id}`).set(updatedMessage);
+            
+            return updatedMessage;
+          } catch (error) {
+            logger.error('[MessageSyncService] Failed to re-encrypt message:', error);
+            return remoteMessage;
+          }
           
         default:
           return remoteMessage;
@@ -637,21 +688,85 @@ export class MessageSyncService implements IMessageSyncService {
     logger.debug(`[MessageSyncService] Rotating encryption keys for user: ${userId}`);
     
     try {
-      // TODO: Implement key rotation
+      // Implement key rotation
       // 1. Generate new key pair
-      // 2. Encrypt private key with user's password
-      // 3. Mark old keys as inactive
-      // 4. Upload new public key
-      // 5. Re-encrypt recent messages with new key
+      // 2. Mark old keys as inactive
+      // 3. Upload new public key
+      // 4. Re-encrypt recent messages with new key
+      
+      const keyRotationService = KeyRotationService.getInstance();
+      const encryptionService = ChatEncryptionService.getInstance();
+      const db = getFirebaseDb();
       
       logger.debug('[MessageSyncService] Generating new key pair...');
-      // TODO: Generate keys using crypto library
       
-      logger.debug('[MessageSyncService] Deactivating old keys...');
-      // TODO: Update old keys in Firestore
+      // Rotate keys using the key rotation service
+      const newKeyId = await keyRotationService.rotateKeys();
       
-      logger.debug('[MessageSyncService] Uploading new public key...');
-      // TODO: Store new key in Firestore
+      logger.debug('[MessageSyncService] New key generated with ID:', newKeyId);
+      
+      // Get recent messages that need re-encryption (last 7 days)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      const recentMessagesSnapshot = await db
+        .collection('messages')
+        .where('senderId', '==', userId)
+        .where('timestamp', '>=', Timestamp.fromDate(sevenDaysAgo))
+        .where('isEncrypted', '==', true)
+        .orderBy('timestamp', 'desc')
+        .limit(100)
+        .get();
+      
+      logger.debug(`[MessageSyncService] Re-encrypting ${recentMessagesSnapshot.size} recent messages...`);
+      
+      const batch = db.batch();
+      let reEncryptedCount = 0;
+      
+      for (const doc of recentMessagesSnapshot.docs) {
+        const message = doc.data() as Message;
+        
+        try {
+          // Decrypt with old key
+          const decrypted = await encryptionService.decryptMessage(
+            message.encryptedContent!,
+            message.chatId,
+            message.senderId
+          );
+          
+          // Re-encrypt with new key
+          const reEncrypted = await encryptionService.encryptMessage(
+            { text: decrypted.text },
+            message.chatId,
+            message.conversationType === 'direct' ? [message.recipientId!] : []
+          );
+          
+          // Update message with new encryption
+          batch.update(doc.ref, {
+            encryptedContent: reEncrypted,
+            keyRotationVersion: newKeyId,
+            updatedAt: Timestamp.now(),
+          });
+          
+          reEncryptedCount++;
+        } catch (error) {
+          logger.error(`[MessageSyncService] Failed to re-encrypt message ${doc.id}:`, error);
+          // Continue with other messages
+        }
+      }
+      
+      // Commit all updates
+      if (reEncryptedCount > 0) {
+        await batch.commit();
+        logger.debug(`[MessageSyncService] Successfully re-encrypted ${reEncryptedCount} messages`);
+      }
+      
+      // Notify other devices about key rotation
+      await callFirebaseFunction('notifyKeyRotation', {
+        userId,
+        newKeyId,
+        rotatedAt: Timestamp.now(),
+      });
       
       logger.debug('[MessageSyncService] Key rotation complete');
     } catch (error) {

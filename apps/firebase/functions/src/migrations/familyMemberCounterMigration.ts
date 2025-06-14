@@ -24,6 +24,19 @@ export const migrateFamilyMemberCounters = onCall(
     maxInstances: 1, // Single instance to avoid race conditions
   },
   withErrorHandling(async (request) => {
+    // Check if user is authenticated and has admin privileges
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
+    }
+
+    // Verify admin status
+    const db = getFirestore();
+    const userDoc = await db.collection("users").doc(uid).get();
+    if (!userDoc.exists || !userDoc.data()?.isAdmin) {
+      throw createError(ErrorCode.PERMISSION_DENIED, "Admin access required");
+    }
+
     // Validate request parameters
     const validationResult = validateRequest(
       request.data,
@@ -41,7 +54,6 @@ export const migrateFamilyMemberCounters = onCall(
     }
 
     const {dryRun = false, batchSize = 100} = request.data;
-    const db = getFirestore();
 
     logger.info("Starting family member counter migration", {
       dryRun,

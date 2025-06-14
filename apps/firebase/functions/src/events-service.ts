@@ -2200,8 +2200,41 @@ export const sendEventInvitations = onCall(
 
       logger.info(`User ${uid} sent ${newInvitees.length} invitations for event ${eventId}`);
 
-      // TODO: Send push notifications or emails to invited users
-      // This would integrate with your notification service
+      // Send push notifications to invited users
+      if (newInvitees.length > 0) {
+        try {
+          const {createAndSendNotification} = await import("./utils/notificationHelpers");
+          const inviterDoc = await db.collection("users").doc(uid).get();
+          const inviterName = inviterDoc.exists 
+            ? inviterDoc.data()?.displayName || inviterDoc.data()?.email 
+            : "Someone";
+
+          // Send notifications to all new invitees
+          const notificationPromises = newInvitees.map(userId => 
+            createAndSendNotification({
+              userId,
+              title: "Event Invitation",
+              body: `${inviterName} invited you to ${eventData.title}`,
+              type: "event:invitation",
+              relatedItemId: eventId,
+              link: `/events/${eventId}`,
+              imageUrl: eventData.coverImage,
+              data: {
+                eventId,
+                eventTitle: eventData.title,
+                eventDate: eventData.date?.toString(),
+                inviterId: uid,
+              },
+            })
+          );
+
+          await Promise.all(notificationPromises);
+          logger.info(`Sent ${newInvitees.length} event invitation notifications`);
+        } catch (error) {
+          logger.error("Failed to send event invitation notifications", {error});
+          // Don't fail the invitation if notifications fail
+        }
+      }
 
       return {
         success: true,

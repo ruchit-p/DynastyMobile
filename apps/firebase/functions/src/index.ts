@@ -88,6 +88,8 @@ export * from "./subscriptions"; // Stripe subscription management and webhooks
 export * from "./emailCompliance"; // Email compliance management (unsubscribe, preferences, suppression)
 export * from "./webhooks/ses/sesEventHandler"; // SES webhook handlers for bounces and complaints
 export * from "./webhooks/awsSmsWebhook"; // AWS SMS webhook handler for delivery status
+export * from "./admin-management"; // Admin management and audit logging
+export * from "./admin-analytics"; // Admin dashboard and analytics functions
 
 // R2 Migration functions (only when enabled)
 if (process.env.ENABLE_R2_MIGRATION === "true") {

@@ -1,5 +1,16 @@
 import {logger} from "firebase-functions/v2";
-import {getFirestore} from "firebase-admin/firestore";
+import {
+  getUserStoragePlan as getStoragePlan,
+  getUserStorageUsage as getStorageUsage,
+  checkUserStorageCapacity as checkStorageCapacity,
+  formatBytes,
+  STORAGE_PLANS,
+} from "../utils/storageUtils";
+import {
+  validateUploadRequest as validateFileUpload,
+  FILE_VALIDATION_CONFIG,
+} from "../utils/fileValidation";
+import {sendStorageWarningNotification} from "../utils/notificationHelpers";
 
 /**
  * Consolidated R2 Configuration
@@ -158,24 +169,108 @@ export const R2_CONFIG = {
 
 /**
  * Get user's storage plan and limits
- * TODO: Implement actual plan lookup from user document or subscription
+ * Fetches from user document subscription fields or subscription collection
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function getUserStoragePlan(userId: string): Promise<{
   plan: keyof typeof STORAGE_PLANS;
   storageLimit: number;
 }> {
-  // TODO: Fetch user's actual plan from database
-  // For now, return free plan as default
-  return {
-    plan: "free",
-    storageLimit: STORAGE_PLANS.free.storageLimit,
-  };
+  const db = getFirestore();
+
+  try {
+    // First, check user document for subscription info
+    const userDoc = await db.collection("users").doc(userId).get();
+    
+    if (!userDoc.exists) {
+      logger.warn("User document not found", {userId});
+      return {
+        plan: "free",
+        storageLimit: STORAGE_PLANS.free.storageLimit,
+      };
+    }
+
+    const userData = userDoc.data();
+    const subscriptionPlan = userData?.subscriptionPlan;
+    const subscriptionStatus = userData?.subscriptionStatus;
+    const subscriptionId = userData?.subscriptionId;
+
+    // If user has active subscription, determine storage based on plan
+    if (subscriptionStatus === "active" && subscriptionPlan) {
+      switch (subscriptionPlan) {
+      case "individual":
+        return {
+          plan: "individual",
+          storageLimit: STORAGE_PLANS.individual.storageLimit,
+        };
+      case "family":
+        return {
+          plan: "family",
+          storageLimit: STORAGE_PLANS.family.storageLimit,
+        };
+      default:
+        // Check if there's a subscription document for more details
+        if (subscriptionId) {
+          const subDoc = await db.collection("subscriptions").doc(subscriptionId).get();
+          if (subDoc.exists) {
+            const subData = subDoc.data();
+            // Check for storage add-ons
+            const addons = subData?.addons || [];
+            let baseStorage = STORAGE_PLANS.free.storageLimit;
+            
+            if (subData?.plan === "individual") {
+              baseStorage = STORAGE_PLANS.individual.storageLimit;
+            } else if (subData?.plan === "family") {
+              baseStorage = STORAGE_PLANS.family.storageLimit;
+            }
+
+            // Add storage from add-ons
+            let additionalStorage = 0;
+            for (const addon of addons) {
+              if (addon.type === "storage" && addon.active) {
+                additionalStorage += addon.amount || 0;
+              }
+            }
+
+            return {
+              plan: subData?.plan || "free",
+              storageLimit: baseStorage + additionalStorage,
+            };
+          }
+        }
+        break;
+      }
+    }
+
+    // Check if user is part of a family plan
+    if (userData?.familyPlanOwnerId) {
+      const ownerDoc = await db.collection("users").doc(userData.familyPlanOwnerId).get();
+      if (ownerDoc.exists && ownerDoc.data()?.subscriptionPlan === "family" && 
+          ownerDoc.data()?.subscriptionStatus === "active") {
+        return {
+          plan: "family",
+          storageLimit: STORAGE_PLANS.family.storageLimit,
+        };
+      }
+    }
+
+    // Default to free plan
+    return {
+      plan: "free",
+      storageLimit: STORAGE_PLANS.free.storageLimit,
+    };
+  } catch (error) {
+    logger.error("Error fetching user storage plan", {userId, error});
+    // Return free plan as fallback
+    return {
+      plan: "free",
+      storageLimit: STORAGE_PLANS.free.storageLimit,
+    };
+  }
 }
 
 /**
  * Get user's current storage usage
- * TODO: This should query the actual storage usage from database
+ * Queries all user's vault items to calculate total storage used
  */
 export async function getUserStorageUsage(userId: string): Promise<number> {
   const db = getFirestore();
@@ -327,16 +422,32 @@ export async function logSecurityEvent(
   logger.info("R2 Security Event", event);
 
   // Check if user is approaching storage limit
-  if (event.storageUsage && event.storageLimit) {
+  if (event.storageUsage && event.storageLimit && event.userId) {
     const usageRatio = event.storageUsage / event.storageLimit;
+    const usagePercentage = Math.round(usageRatio * 100);
+    
     if (usageRatio >= R2_CONFIG.monitoring.alertOnStorageThreshold) {
       logger.warn("User approaching storage limit", {
         userId: event.userId,
         usage: formatBytes(event.storageUsage),
         limit: formatBytes(event.storageLimit),
-        percentage: Math.round(usageRatio * 100),
+        percentage: usagePercentage,
       });
-      // TODO: Send notification to user about storage limit
+      
+      // Send notification to user about storage limit
+      try {
+        await sendStorageWarningNotification(
+          event.userId,
+          usagePercentage,
+          event.storageUsage,
+          event.storageLimit
+        );
+      } catch (error) {
+        logger.error("Failed to send storage warning notification", {
+          userId: event.userId,
+          error,
+        });
+      }
     }
   }
 }

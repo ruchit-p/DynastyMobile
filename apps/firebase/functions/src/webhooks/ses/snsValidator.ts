@@ -2,7 +2,7 @@ import * as crypto from "crypto";
 import {logger} from "firebase-functions/v2";
 import {createLogContext} from "../../utils/sanitization";
 
-interface SNSMessage {
+export interface SNSMessage {
   Type: string;
   MessageId: string;
   TopicArn: string;

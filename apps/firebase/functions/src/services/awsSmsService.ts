@@ -1,7 +1,7 @@
 // MARK: - AWS End User Messaging SMS Service
 
 import {getFirestore, FieldValue, Timestamp} from "firebase-admin/firestore";
-import {createError, ErrorCode, handleError, withErrorHandling} from "../utils/errors";
+import {createError, ErrorCode, handleError} from "../utils/errors";
 import {logger} from "firebase-functions/v2";
 import {sanitizePhoneNumber as sanitizePhoneForLogs, createLogContext} from "../utils/sanitization";
 import {sanitizeUserInput} from "../utils/xssSanitization";
@@ -9,7 +9,6 @@ import {isValidPhone} from "../utils/validation";
 import {
   PinpointSMSVoiceV2Client,
   SendTextMessageCommand,
-  SendTextMessageCommandInput,
   DescribePhoneNumbersCommand,
   MessageType,
   ConflictException,
@@ -26,6 +25,7 @@ import {
   awsSmsPhonePoolId,
   awsSmsConfigurationSetName,
   SMS_CONFIG,
+  SMS_COSTS,
   AWS_SDK_CONFIG,
   AWS_SMS_SERVICE_CONFIG,
 } from "../config/awsConfig";
@@ -341,14 +341,14 @@ export class AWSSmsService {
         OriginationIdentity: this.config!.phonePoolId,
         ConfigurationSetName: this.config!.configurationSetName,
         // Add sender ID for countries that support it
-        ...(AWS_SMS_SERVICE_CONFIG.senderId && {
+        ...(AWS_SMS_SERVICE_CONFIG.senderId ? {
           SenderId: AWS_SMS_SERVICE_CONFIG.senderId,
-        }),
+        } : {}),
         // Add DLT parameters for India if configured
-        ...(AWS_SMS_SERVICE_CONFIG.entityId && {
+        ...(AWS_SMS_SERVICE_CONFIG.entityId ? {
           DltEntityId: AWS_SMS_SERVICE_CONFIG.entityId,
           DltTemplateId: AWS_SMS_SERVICE_CONFIG.templateId,
-        }),
+        } : {}),
       });
 
       // Send SMS via AWS

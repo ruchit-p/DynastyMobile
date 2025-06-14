@@ -136,8 +136,41 @@ export const sendMessage = onCall(
         lastRead: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // TODO: Trigger push notifications for other participants
-      // This should be done via a Firestore trigger or separate notification service
+      // Trigger push notifications for other participants
+      try {
+        const {createAndSendNotification} = await import("./utils/notificationHelpers");
+        const senderDoc = await db.collection("users").doc(senderId).get();
+        const senderName = senderDoc.exists 
+          ? senderDoc.data()?.displayName || senderDoc.data()?.email 
+          : "Someone";
+
+        // Send notifications to all participants except the sender
+        const recipientIds = participants.filter(id => id !== senderId);
+        const notificationPromises = recipientIds.map(userId => 
+          createAndSendNotification({
+            userId,
+            title: chat.type === "direct" ? senderName : chat.name || "Group Chat",
+            body: sanitizedMessageData.text?.substring(0, 100) || 
+                  (sanitizedMessageData.media ? "Sent a photo" : "Sent a message"),
+            type: "message:new",
+            relatedItemId: chatId,
+            link: `/chat/${chatId}`,
+            data: {
+              chatId,
+              messageId: messageRef.id,
+              senderId,
+              senderName,
+              chatType: chat.type,
+            },
+          })
+        );
+
+        await Promise.all(notificationPromises);
+        logger.info(`Sent ${recipientIds.length} message notifications`);
+      } catch (error) {
+        logger.error("Failed to send message notifications", {error});
+        // Don't fail the message send if notifications fail
+      }
 
       return {
         success: true,

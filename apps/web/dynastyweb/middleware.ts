@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from './src/lib/rate-limit';
 import { subscriptionRateLimit } from './src/middleware/subscription-rate-limit';
+import { handleAdminAuth, isAdminRequest } from './src/middleware/adminAuth';
 
 export async function middleware(request: NextRequest) {
+  // Handle admin subdomain requests
+  if (isAdminRequest(request)) {
+    const adminResponse = await handleAdminAuth(request);
+    if (adminResponse) {
+      return adminResponse;
+    }
+  }
   // Skip auth check for the auth check endpoint itself to prevent infinite loop
   if (request.nextUrl.pathname === '/api/auth/check') {
     // Continue to the auth check handler
