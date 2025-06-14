@@ -111,13 +111,13 @@ export const sendFamilyTreeInvitation = onCall({
     // Also send SMS if phone number is provided
     if (invitationData.phoneNumber) {
       try {
-        const {getTwilioService} = await import("../../services/twilioService");
-        const twilioService = getTwilioService();
+        const {getAWSSmsService} = await import("../../services/awsSmsService");
+        const awsSmsService = getAWSSmsService();
 
         // Create shortened link or use full link
         const smsLink = invitationLink; // In production, you might want to use a URL shortener
 
-        await twilioService.sendSms(
+        await awsSmsService.sendSms(
           {
             to: invitationData.phoneNumber,
             body: `${invitationData.inviterName} invited you to join the ${invitationData.familyTreeName} family tree on Dynasty! Accept here: ${smsLink}`,

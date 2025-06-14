@@ -1,4 +1,5 @@
 import {ValidationSchema} from "../utils/request-validator";
+import {FILE_SIZE_LIMITS} from "../common";
 
 export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
   // Migration schemas
@@ -1138,7 +1139,7 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
   updateVaultFile: {
     rules: [
       {field: "itemId", type: "string", required: true, maxLength: 100},
-      {field: "fileData", type: "string", required: true, maxLength: 50 * 1024 * 1024}, // 50MB base64
+      {field: "fileData", type: "string", required: true, maxLength: FILE_SIZE_LIMITS.MAX_FILE_SIZE}, // 1GB base64
       {field: "fileName", type: "string", required: true, maxLength: 255},
     ],
     xssCheck: true,
@@ -1499,6 +1500,23 @@ export const VALIDATION_SCHEMAS: Record<string, ValidationSchema> = {
           }
         },
       },
+    ],
+    xssCheck: false,
+  },
+
+  // AWS SNS webhook validation
+  awsSnsWebhook: {
+    rules: [
+      {field: "Type", type: "string", required: true},
+      {field: "MessageId", type: "string", required: true},
+      {field: "TopicArn", type: "string", required: true},
+      {field: "Message", type: "string", required: true},
+      {field: "Timestamp", type: "string", required: true},
+      {field: "SignatureVersion", type: "string", required: true},
+      {field: "Signature", type: "string", required: true},
+      {field: "SigningCertURL", type: "string", required: true},
+      {field: "SubscribeURL", type: "string"},
+      {field: "UnsubscribeURL", type: "string"},
     ],
     xssCheck: false,
   },
