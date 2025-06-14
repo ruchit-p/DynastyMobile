@@ -71,6 +71,7 @@ export interface CheckoutSessionParams {
   addons?: AddonType[];
   referralCode?: string;
   familyMemberIds?: string[];
+  mode?: 'hosted' | 'embedded'; // Add mode selection
 }
 
 export interface SubscriptionDetails {
@@ -96,8 +97,19 @@ export interface SubscriptionDetails {
  * Create a Stripe checkout session
  */
 export async function createCheckoutSession(params: CheckoutSessionParams) {
-  const result = await getFunctionsClient().callFunction('createCheckoutSession', params);
-  return result.data as { sessionId: string; url: string };
+  // Use enhanced checkout for embedded mode, basic checkout for hosted mode
+  const functionName = params.mode === 'embedded' ? 'createEnhancedCheckoutSession' : 'createCheckoutSession';
+  const result = await getFunctionsClient().callFunction(functionName, params);
+  
+  if (params.mode === 'embedded') {
+    return result.data as { 
+      sessionId: string; 
+      clientSecret: string; 
+      stripePublishableKey: string;
+    };
+  } else {
+    return result.data as { sessionId: string; url: string };
+  }
 }
 
 /**

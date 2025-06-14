@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, useEffect, Suspense, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useStripe, useElements, PaymentElement } from "@stripe/react-stripe-js"
 import { Loader2, Lock, CreditCard, Shield, Check } from "lucide-react"
@@ -21,8 +21,19 @@ import {
   SubscriptionTier,
   CheckoutSessionParams
 } from "@/utils/subscriptionUtils"
+import { 
+  handleStripeError, 
+  validateStripeElements, 
+  trackStripeEvent,
+  createPaymentElementOptions 
+} from "@/utils/stripeUtils"
+import { StripeConfigurationCheck } from "@/hooks/useStripeSetup"
 
-function CheckoutContent() {
+interface CheckoutContentProps {
+  onClientSecretChange: (clientSecret: string | null) => void
+}
+
+function CheckoutContent({ onClientSecretChange }: CheckoutContentProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const stripe = useStripe()
@@ -31,7 +42,8 @@ function CheckoutContent() {
 
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
-  const [clientSecret] = useState<string | null>(null)
+  const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [sessionId, setSessionId] = useState<string | null>(null)
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -48,8 +60,11 @@ function CheckoutContent() {
 
   const price = interval === 'year' ? selectedPricing.yearlyPrice : selectedPricing.monthlyPrice
 
-  const initializeCheckout = withErrorHandling(async () => {
+  const initializeCheckout = useCallback(
+    withErrorHandling(async () => {
     setLoading(true)
+    setError(null)
+    
     try {
       const user = auth.currentUser
       if (!user) {
@@ -57,41 +72,65 @@ function CheckoutContent() {
         return
       }
 
-      // Create checkout session
+      // Create embedded checkout session
       const params: CheckoutSessionParams = {
         plan,
         tier,
         interval,
+        mode: 'embedded' // Use embedded checkout
       }
 
-      const { url } = await createCheckoutSession(params)
+      const response = await createCheckoutSession(params)
       
-      // For embedded checkout, we'd get a client secret
-      // For hosted checkout, we get a URL
-      // This example uses embedded checkout
-      // Store sessionId if needed for tracking
-      
-      // In a real implementation, the backend would return clientSecret
-      // For now, we'll redirect to Stripe hosted checkout
-      if (url) {
-        window.location.href = url
+      if ('clientSecret' in response) {
+        // Embedded checkout - we got client secret
+        setClientSecret(response.clientSecret)
+        setSessionId(response.sessionId)
+        onClientSecretChange(response.clientSecret)
+      } else if ('url' in response) {
+        // Fallback to hosted checkout if embedded fails
+        window.location.href = response.url
+        return
+      } else {
+        throw new Error('Invalid response from checkout session creation')
       }
     } catch (err) {
-      setError('Failed to initialize checkout. Please try again.')
       console.error('Checkout initialization error:', err)
+      setError('Failed to initialize checkout. Please try again.')
     } finally {
       setLoading(false)
     }
-  })
+  }),
+  [plan, tier, interval, router, onClientSecretChange]
+)
 
   useEffect(() => {
-    initializeCheckout()
-  }, [plan, tier, interval, initializeCheckout])
+    let cancelled = false
+    
+    const init = async () => {
+      if (!cancelled) {
+        await initializeCheckout()
+      }
+    }
+    
+    init()
+    
+    return () => {
+      cancelled = true
+    }
+  }, [initializeCheckout])
 
   const handleSubmit = withErrorHandling(async (event: React.FormEvent) => {
     event.preventDefault()
 
-    if (!stripe || !elements || !termsAccepted) {
+    if (!stripe || !elements || !termsAccepted || !clientSecret) {
+      return
+    }
+
+    // Validate elements before submission
+    const validation = validateStripeElements(elements)
+    if (!validation.isValid) {
+      setError(validation.error || 'Please check your payment information')
       return
     }
 
@@ -99,18 +138,57 @@ function CheckoutContent() {
     setError(null)
 
     try {
+      // Track checkout attempt
+      trackStripeEvent('checkout_attempted', {
+        plan,
+        tier,
+        interval,
+        amount: price
+      })
+
       // Confirm the payment
       const result = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: `${window.location.origin}/account-settings/subscription?success=true`,
+          return_url: `${window.location.origin}/checkout/success?session_id=${sessionId}`,
         },
       })
 
       if (result.error) {
-        // Show error to customer
-        setError(result.error.message || 'Payment failed. Please try again.')
+        // Use our enhanced error handler
+        const friendlyError = handleStripeError(result.error)
+        setError(friendlyError)
+        
+        // Track failed payment
+        trackStripeEvent('checkout_failed', {
+          error_code: result.error.code,
+          error_type: result.error.type,
+          plan,
+          tier
+        })
+      } else {
+        // Payment succeeded
+        trackStripeEvent('checkout_succeeded', {
+          plan,
+          tier,
+          interval,
+          amount: price
+        })
+        
+        // Redirect to success page
+        router.push(`/checkout/success?session_id=${sessionId}`)
       }
+    } catch (err) {
+      console.error('Payment confirmation error:', err)
+      const friendlyError = handleStripeError(err)
+      setError(friendlyError)
+      
+      // Track unexpected errors
+      trackStripeEvent('checkout_error', {
+        error: err instanceof Error ? err.message : 'Unknown error',
+        plan,
+        tier
+      })
     } finally {
       setProcessing(false)
     }
@@ -225,28 +303,27 @@ function CheckoutContent() {
                   )}
 
                   {/* Stripe Payment Element */}
-                  {clientSecret && (
-                    <PaymentElement 
-                      options={{
-                        layout: 'tabs',
-                        defaultValues: {
-                          billingDetails: {
-                            email: auth.currentUser?.email || '',
+                  {clientSecret ? (
+                    <div className="stripe-payment-element">
+                      <PaymentElement 
+                        options={{
+                          layout: 'tabs',
+                          defaultValues: {
+                            billingDetails: {
+                              email: auth.currentUser?.email || '',
+                            }
                           }
-                        }
-                      }}
-                    />
-                  )}
-
-                  {/* For demo purposes, show a placeholder */}
-                  {!clientSecret && (
+                        }}
+                      />
+                    </div>
+                  ) : (
                     <div className="border rounded-lg p-8 bg-gray-50 text-center">
-                      <CreditCard className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                      <Loader2 className="h-8 w-8 mx-auto text-gray-400 mb-4 animate-spin" />
                       <p className="text-gray-600">
-                        Stripe payment form will appear here
+                        Preparing payment form...
                       </p>
-                      <p className="text-sm text-gray-500 mt-2">
-                        In production, this will be the Stripe Payment Element
+                      <p className="text-xs text-gray-500 mt-2">
+                        This may take a few seconds
                       </p>
                     </div>
                   )}
@@ -303,16 +380,26 @@ function CheckoutContent() {
   )
 }
 
-export default function CheckoutPage() {
+function CheckoutWrapper() {
+  const [clientSecret, setClientSecret] = useState<string | null>(null)
+
   return (
-    <StripeProvider>
+    <StripeProvider options={{ clientSecret: clientSecret || undefined }}>
       <Suspense fallback={
         <div className="flex items-center justify-center min-h-screen">
           <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
         </div>
       }>
-        <CheckoutContent />
+        <CheckoutContent onClientSecretChange={setClientSecret} />
       </Suspense>
     </StripeProvider>
+  )
+}
+
+export default function CheckoutPage() {
+  return (
+    <StripeConfigurationCheck>
+      <CheckoutWrapper />
+    </StripeConfigurationCheck>
   )
 }
