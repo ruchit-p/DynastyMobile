@@ -1,14 +1,27 @@
 // Integration test for vault encryption feature
 // Tests the complete flow from setup to encrypted upload/download
+// Now supports both legacy VaultService and new VaultSDKService
 
 import { renderHook, act } from '@testing-library/react';
 import { useWebVaultEncryption } from '@/hooks/useWebVaultEncryption';
 import { WebVaultCryptoService } from '@/services/encryption/VaultCryptoService';
 import { WebVaultKeyManager } from '@/services/encryption/WebVaultKeyManager';
 import { vaultService } from '@/services/VaultService';
+import { vaultSDKService } from '@/services/VaultSDKService';
+
+// Import test utilities for dual service testing
+import { 
+  describeBothVaultServices, 
+  testBothVaultServices,
+  createTestVaultItem,
+  createTestFile,
+  withFeatureFlag,
+  type VaultServiceTestConfig 
+} from './test-utils/vault-service-helpers';
 
 // Mock dependencies
 jest.mock('@/services/VaultService');
+jest.mock('@/services/VaultSDKService');
 jest.mock('@/lib/firebase', () => ({
   auth: { currentUser: { uid: 'test-user-123' } },
   functions: {},
@@ -47,21 +60,31 @@ describe('Vault Encryption Integration', () => {
     cryptoService = WebVaultCryptoService.getInstance();
     keyManager = WebVaultKeyManager.getInstance();
 
-    // Mock vault service methods
-    (vaultService.setUserId as jest.Mock) = jest.fn();
-    (vaultService.isEncryptionEnabled as jest.Mock) = jest.fn().mockResolvedValue(true);
-    (vaultService.uploadFile as jest.Mock) = jest.fn().mockResolvedValue({
+    // Mock vault service methods for both services
+    const mockUploadResult = {
       id: 'file-123',
       name: 'test.pdf',
       isEncrypted: true,
-    });
-    (vaultService.downloadFile as jest.Mock) = jest
-      .fn()
-      .mockResolvedValue(new Blob(['decrypted content'], { type: 'application/pdf' }));
+    };
+
+    const mockDownloadResult = new Blob(['decrypted content'], { type: 'application/pdf' });
+
+    // Mock legacy vault service
+    (vaultService.setUserId as jest.Mock) = jest.fn();
+    (vaultService.isEncryptionEnabled as jest.Mock) = jest.fn().mockResolvedValue(true);
+    (vaultService.uploadFile as jest.Mock) = jest.fn().mockResolvedValue(mockUploadResult);
+    (vaultService.downloadFile as jest.Mock) = jest.fn().mockResolvedValue(mockDownloadResult);
+
+    // Mock SDK vault service
+    (vaultSDKService.isEncryptionEnabled as jest.Mock) = jest.fn().mockResolvedValue(true);
+    (vaultSDKService.uploadFile as jest.Mock) = jest.fn().mockResolvedValue(mockUploadResult);
+    (vaultSDKService.downloadFile as jest.Mock) = jest.fn().mockResolvedValue(mockDownloadResult);
   });
 
   afterEach(() => {
     jest.clearAllMocks();
+    // Reset feature flags
+    delete process.env.NEXT_PUBLIC_USE_VAULT_SDK;
   });
 
   test('complete encryption flow: setup, upload, download', async () => {
@@ -273,6 +296,139 @@ describe('Vault Encryption Integration', () => {
       expiresAt: expect.any(Date),
       allowDownload: true,
       password: 'SharePassword123',
+    });
+  });
+
+  // Test vault service compatibility with encryption
+  describeBothVaultServices('Vault Service Integration with Encryption', (config: VaultServiceTestConfig) => {
+    test('encryption hook works with vault service', async () => {
+      // Set up feature flag environment
+      if (config.useFeatureFlag) {
+        process.env.NEXT_PUBLIC_USE_VAULT_SDK = 'true';
+      } else {
+        process.env.NEXT_PUBLIC_USE_VAULT_SDK = 'false';
+      }
+
+      const { result } = renderHook(() => useWebVaultEncryption(userId));
+
+      // Setup vault encryption
+      await act(async () => {
+        const setupResult = await result.current.setupVault(testPassword, {
+          enableBiometric: false,
+          keyRotation: true,
+        });
+        expect(setupResult.success).toBe(true);
+      });
+
+      expect(result.current.isUnlocked).toBe(true);
+
+      // Create test file and encrypt
+      const testFile = createTestFile({ name: 'service-test.pdf', type: 'application/pdf' });
+      
+      let encryptedResult: any;
+      await act(async () => {
+        encryptedResult = await result.current.encryptFile(testFile, 'file-456');
+      });
+
+      expect(encryptedResult.success).toBe(true);
+      expect(encryptedResult.encryptedFile).toBeDefined();
+      expect(encryptedResult.header).toBeDefined();
+      expect(encryptedResult.metadata).toBeDefined();
+
+      // Verify the correct service methods were called based on feature flag
+      if (config.serviceName === 'sdk') {
+        expect(vaultSDKService.isEncryptionEnabled).toHaveBeenCalled();
+      } else {
+        expect(vaultService.isEncryptionEnabled).toHaveBeenCalled();
+      }
+    });
+
+    test('file upload integration with encryption', async () => {
+      // Set up feature flag environment
+      if (config.useFeatureFlag) {
+        process.env.NEXT_PUBLIC_USE_VAULT_SDK = 'true';
+      } else {
+        process.env.NEXT_PUBLIC_USE_VAULT_SDK = 'false';
+      }
+
+      const { result } = renderHook(() => useWebVaultEncryption(userId));
+
+      // Setup vault
+      await act(async () => {
+        await result.current.setupVault(testPassword);
+      });
+
+      // Test file upload with the specific service
+      const testFile = createTestFile({ name: 'upload-test.txt', type: 'text/plain' });
+      
+      // Mock upload method for specific service
+      const mockUploadResult = createTestVaultItem({
+        id: 'upload-test-123',
+        name: testFile.name,
+        mimeType: testFile.type,
+        isEncrypted: true,
+      });
+
+      jest.spyOn(config.service, 'uploadFile').mockResolvedValue(mockUploadResult);
+
+      // Simulate upload call that would happen in components
+      const uploadResult = await config.service.uploadFile(testFile, null, undefined, {
+        encrypt: result.current.encryptFile,
+        getCurrentKeyId: result.current.getCurrentKeyId,
+      });
+
+      expect(uploadResult.id).toBe('upload-test-123');
+      expect(uploadResult.isEncrypted).toBe(true);
+      expect(config.service.uploadFile).toHaveBeenCalledWith(
+        testFile,
+        null,
+        undefined,
+        expect.objectContaining({
+          encrypt: expect.any(Function),
+          getCurrentKeyId: expect.any(Function),
+        })
+      );
+    });
+
+    test('encrypted file download and decryption', async () => {
+      // Set up feature flag environment
+      if (config.useFeatureFlag) {
+        process.env.NEXT_PUBLIC_USE_VAULT_SDK = 'true';
+      } else {
+        process.env.NEXT_PUBLIC_USE_VAULT_SDK = 'false';
+      }
+
+      const { result } = renderHook(() => useWebVaultEncryption(userId));
+
+      // Setup vault
+      await act(async () => {
+        await result.current.setupVault(testPassword);
+      });
+
+      // Mock encrypted vault item
+      const mockVaultItem = createTestVaultItem({
+        id: 'download-test-123',
+        name: 'encrypted-file.pdf',
+        mimeType: 'application/pdf',
+        isEncrypted: true,
+      });
+
+      // Mock download method for specific service
+      const mockDecryptedBlob = new Blob(['decrypted content'], { type: 'application/pdf' });
+      jest.spyOn(config.service, 'downloadFile').mockResolvedValue(mockDecryptedBlob);
+
+      // Download and decrypt
+      const downloadedBlob = await config.service.downloadFile(mockVaultItem, {
+        decrypt: result.current.decryptFile,
+      });
+
+      expect(downloadedBlob).toBeInstanceOf(Blob);
+      expect(config.service.downloadFile).toHaveBeenCalledWith(
+        mockVaultItem,
+        expect.objectContaining({
+          decrypt: expect.any(Function),
+        })
+      );
     });
   });
 });

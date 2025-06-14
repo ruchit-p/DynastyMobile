@@ -1,13 +1,15 @@
 // Vault Unlock Component for Dynasty Web App
 // Provides UI for unlocking an existing vault
+// SDK-aware for enhanced vault operations when enabled
 
 import { useState } from 'react';
 import { useWebVaultEncryption } from '@/hooks/useWebVaultEncryption';
+import { useFeatureFlags } from '@/lib/feature-flags';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Lock, Fingerprint, AlertCircle, KeyRound } from 'lucide-react';
+import { Lock, Fingerprint, AlertCircle, KeyRound, Zap } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface VaultUnlockProps {
@@ -19,6 +21,7 @@ interface VaultUnlockProps {
 export function VaultUnlock({ userId, onUnlock, onSetup }: VaultUnlockProps) {
   const [password, setPassword] = useState('');
   const { toast } = useToast();
+  const { useVaultSDK: useSDK } = useFeatureFlags();
   
   const { 
     unlockVault,
@@ -46,7 +49,7 @@ export function VaultUnlock({ userId, onUnlock, onSetup }: VaultUnlockProps) {
     if (result.success) {
       toast({
         title: "Vault unlocked",
-        description: "You can now access your encrypted files"
+        description: `You can now access your encrypted files${useSDK ? ' with enhanced SDK performance' : ''}`
       });
       onUnlock();
     } else {
@@ -64,7 +67,7 @@ export function VaultUnlock({ userId, onUnlock, onSetup }: VaultUnlockProps) {
     if (result.success) {
       toast({
         title: "Vault unlocked",
-        description: "Biometric authentication successful"
+        description: `Biometric authentication successful${useSDK ? ' - SDK ready for enhanced performance' : ''}`
       });
       onUnlock();
     } else {
@@ -90,9 +93,18 @@ export function VaultUnlock({ userId, onUnlock, onSetup }: VaultUnlockProps) {
         <div className="flex items-center gap-2">
           <Lock className="h-6 w-6 text-dynastyGreen" />
           <CardTitle className="text-2xl">Unlock Your Vault</CardTitle>
+          {useSDK && (
+            <div className="flex items-center gap-1 ml-auto">
+              <Zap className="h-4 w-4 text-blue-500" />
+              <span className="text-sm text-blue-500 font-medium">SDK</span>
+            </div>
+          )}
         </div>
         <CardDescription>
           Enter your password to access your encrypted files
+          {useSDK && (
+            <span className="text-blue-600 text-sm ml-1">• Enhanced with Vault SDK v2 for improved performance</span>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

@@ -24,7 +24,7 @@ const DEFAULT_FLAGS: FeatureFlags = {
 // Environment-based overrides
 const getEnvironmentFlags = (): Partial<FeatureFlags> => {
   const env = process.env.NODE_ENV;
-  const isStaging = process.env.VERCEL_ENV === 'preview' || process.env.NODE_ENV === 'staging';
+  const isStaging = process.env.VERCEL_ENV === 'preview' || (process.env.NODE_ENV as string) === 'staging';
   
   if (env === 'development') {
     return {
@@ -94,7 +94,7 @@ export const FeatureFlagsProvider = ({ children, flags = {} }: FeatureFlagsProvi
 };
 
 // Feature flag utilities
-export const withFeatureFlag = <T>(
+export const withFeatureFlag = <T,>(
   flagName: keyof FeatureFlags,
   enabledComponent: T,
   fallbackComponent: T

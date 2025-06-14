@@ -42,6 +42,12 @@ export enum ErrorCode {
   OFFLINE_OPERATION_FAILED = "offline-operation-failed",
   SYNC_VERSION_MISMATCH = "sync-version-mismatch",
 
+  // File/Security errors
+  FILE_TOO_LARGE = "file-too-large",
+  INVALID_FILE_TYPE = "invalid-file-type",
+  SECURITY_VIOLATION = "security-violation",
+  ACCOUNT_LOCKED = "account-locked",
+
   // General errors
   ABORTED = "aborted",
   INTERNAL = "internal",
@@ -175,6 +181,12 @@ export const ErrorMessages = {
   [ErrorCode.ADDON_NOT_FOUND]: "Addon not found. It may have already been removed.",
   [ErrorCode.ADDON_TIER_REQUIREMENT_NOT_MET]:
     "This addon requires a higher tier plan. Please upgrade your tier first.",
+
+  // File/Security error messages
+  [ErrorCode.FILE_TOO_LARGE]: "File size exceeds the maximum allowed limit.",
+  [ErrorCode.INVALID_FILE_TYPE]: "File type is not supported.",
+  [ErrorCode.SECURITY_VIOLATION]: "Security violation detected. Please contact support.",
+  [ErrorCode.ACCOUNT_LOCKED]: "Account is temporarily locked. Please try again later.",
 };
 
 /**

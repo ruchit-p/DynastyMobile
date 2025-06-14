@@ -4,8 +4,8 @@
  * Follows existing Dynasty patterns for error handling, caching, and user feedback
  */
 
-import { VaultApiClient, VaultApiConfig, VaultItem as SDKVaultItem } from '@dynasty/vault-sdk';
-import { functions } from '@/lib/firebase';
+import { VaultApiClient, VaultApiClientConfig, VaultItem as SDKVaultItem } from '@dynasty/vault-sdk';
+import { app } from '@/lib/firebase';
 import { errorHandler, ErrorSeverity } from './ErrorHandlingService';
 import { cacheService, cacheKeys } from './CacheService';
 import { toast } from '@/components/ui/use-toast';
@@ -15,18 +15,10 @@ import { showRateLimitedToast } from '../utils/toastRateLimiter';
 import type { VaultItem, VaultFolder, UploadProgress, VaultStorageInfo } from './VaultService';
 
 // SDK Configuration with V2 header support
-const createVaultSDKConfig = (): VaultApiConfig => ({
-  functions,
+const createVaultSDKConfig = (): VaultApiClientConfig => ({
+  app,
   enableValidation: process.env.NODE_ENV === 'development',
-  retryConfig: {
-    maxRetries: 3,
-    retryDelay: 1000,
-    retryOn: ['network-error', 'timeout', 'server-error'],
-  },
-  customHeaders: {
-    'x-vault-sdk': 'v2', // Route to V2 handlers
-    'x-client': 'web',
-  },
+  maxRetries: 3,
 });
 
 class VaultSDKService {
@@ -54,25 +46,20 @@ class VaultSDKService {
       name: sdkItem.name,
       type: 'file' as const, // SDK primarily handles files
       mimeType: sdkItem.mimeType,
-      size: sdkItem.fileSize,
+      size: sdkItem.size,
       parentId: null, // SDK doesn't have parent concept yet
       path: `/${sdkItem.name}`,
-      url: sdkItem.fileUrl,
-      thumbnailUrl: sdkItem.fileUrl,
-      isEncrypted: !!sdkItem.encryptionKey,
+      url: sdkItem.cachedDownloadUrl,
+      thumbnailUrl: sdkItem.thumbnailUrl,
+      isEncrypted: !!sdkItem.isEncrypted,
       isShared: (sdkItem.sharedWith?.length || 0) > 0,
       sharedWith: sdkItem.sharedWith,
       createdAt: new Date(sdkItem.createdAt),
       updatedAt: new Date(sdkItem.updatedAt),
       lastAccessedAt: undefined,
-      metadata: sdkItem.metadata ? {
-        width: sdkItem.metadata.width,
-        height: sdkItem.metadata.height,
-        duration: sdkItem.metadata.duration,
-        pages: sdkItem.metadata.pages,
-      } : undefined,
-      tags: sdkItem.tags,
-      description: sdkItem.description,
+      metadata: undefined,
+      tags: [],
+      description: undefined,
       scanStatus: undefined, // SDK doesn't expose scan status yet
     };
   }
@@ -99,8 +86,8 @@ class VaultSDKService {
   // Check if encryption is enabled for the current user
   async isEncryptionEnabled(): Promise<boolean> {
     try {
-      const result = await this.apiClient.getEncryptionStatus();
-      return result.encryptionEnabled;
+      const result = await this.apiClient.getEncryptionStatus({});
+      return result.isEnabled;
     } catch (error) {
       this.handleVaultError(error, 'check-encryption-status');
       return false;
@@ -186,21 +173,14 @@ class VaultSDKService {
       }, 200);
 
       // Use SDK to create the vault item
-      const result = await this.apiClient.createItem({
-        familyId: 'current-user', // Will be set by backend
+      const result = await this.apiClient.addFile({
+        itemId: uploadId, // Use upload ID as item ID
         name: file.name,
-        description: undefined,
-        type: this.getFileTypeFromMime(file.type),
-        tags: [],
-        fileUrl: undefined, // Will be set after upload
-        fileSize: uploadData.size,
+        storagePath: `uploads/${file.name}`,
+        fileType: this.getFileTypeFromMime(file.type),
+        size: file.size,
         mimeType: file.type,
-        encryptionKey: encryptionKeyId || undefined,
-        encryptionIV: undefined,
-        sharedWith: [],
-        createdBy: 'current-user', // Will be set by backend
-        lastModifiedBy: 'current-user',
-        metadata: undefined,
+        isEncrypted: !!encryptionKeyId,
       });
 
       // Complete progress
@@ -380,10 +360,10 @@ class VaultSDKService {
         cacheKey,
         async () => {
           // Use SDK to get items
-          const sdkItems = await this.apiClient.getItems();
+          const sdkItems = await this.apiClient.getItems({});
           
           // Convert SDK items to legacy format
-          const items = sdkItems.map(item => this.convertSDKItemToLegacy(item));
+          const items = sdkItems.items.map(item => this.convertSDKItemToLegacy(item));
           
           // For now, folders are empty since SDK doesn't handle folders yet
           const folders: VaultFolder[] = [];
@@ -430,7 +410,7 @@ class VaultSDKService {
 
   async deleteFile(itemId: string, permanent = false): Promise<void> {
     try {
-      await this.apiClient.deleteItem(itemId);
+      await this.apiClient.deleteItem({ itemId, permanent });
       
       // Show success toast
       showRateLimitedToast(toast, {
@@ -452,7 +432,7 @@ class VaultSDKService {
 
   async renameItem(itemId: string, newName: string): Promise<void> {
     try {
-      await this.apiClient.updateItem(itemId, { name: newName });
+      await this.apiClient.renameItem({ itemId, newName });
       
       // Show success toast
       showRateLimitedToast(toast, {
@@ -490,9 +470,8 @@ class VaultSDKService {
 
       await this.apiClient.shareItem({
         itemId,
-        sharedWith: options.userIds,
-        permissions: 'view', // Default to view permission
-        expiresAt: options.expiresAt?.toISOString(),
+        userIds: options.userIds,
+        permissions: 'read', // Default to read permission
       });
 
       // Show success toast

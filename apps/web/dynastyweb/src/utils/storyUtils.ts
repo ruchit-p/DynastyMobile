@@ -1,23 +1,37 @@
 import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { toast } from '@/components/ui/use-toast';
+import { showRateLimitedToast } from './toastRateLimiter';
 import eventManager, { LikeEventData } from "./eventUtils";
-import { functions } from '@/lib/firebase';
-import { FirebaseFunctionsClient, createFirebaseClient } from '@/lib/functions-client';
+import { getFunctionsClient } from './functionsClient';
+import { storyCacheService } from './storyCacheService';
 
-// Firebase Functions client
-let functionsClient: FirebaseFunctionsClient | null = null;
-
-// Initialize the functions client
-if (functions) {
-  functionsClient = createFirebaseClient(functions);
-}
-
-function getFunctionsClient(): FirebaseFunctionsClient {
-  if (!functionsClient) {
-    throw new Error('Firebase Functions not initialized');
+// Utility function to safely convert Firestore Timestamp to Date
+function timestampToDate(timestamp: any): Date {
+  if (!timestamp) return new Date();
+  
+  if (timestamp instanceof Timestamp) {
+    return timestamp.toDate();
   }
-  return functionsClient;
+  
+  if (timestamp?.toDate && typeof timestamp.toDate === 'function') {
+    return timestamp.toDate();
+  }
+  
+  if (timestamp?.seconds && typeof timestamp.seconds === 'number') {
+    return new Date(timestamp.seconds * 1000);
+  }
+  
+  if (timestamp instanceof Date) {
+    return timestamp;
+  }
+  
+  // Fallback for string dates
+  if (typeof timestamp === 'string') {
+    return new Date(timestamp);
+  }
+  
+  return new Date();
 }
 
 export interface Story {
@@ -179,8 +193,18 @@ export const toggleStoryLike = async (
 ): Promise<boolean> => {
   try {
     // Optimistic update
+    const newLiked = !isCurrentlyLiked;
+    const countChange = isCurrentlyLiked ? -1 : 1;
+    
     if (onLikeChange) {
-      onLikeChange(!isCurrentlyLiked, isCurrentlyLiked ? -1 : 1);
+      onLikeChange(newLiked, countChange);
+    }
+    
+    // Update cache optimistically
+    const cachedStory = storyCacheService.getCachedStory(storyId);
+    if (cachedStory) {
+      const newLikeCount = (cachedStory.likeCount || 0) + countChange;
+      storyCacheService.updateCachedStoryLikes(storyId, newLiked, newLikeCount);
     }
     
     // Call Firebase Function
@@ -215,7 +239,7 @@ export const toggleStoryLike = async (
       onLikeChange(isCurrentlyLiked, 0);
     }
     
-    toast({
+    showRateLimitedToast(toast, {
       title: 'Error',
       description: 'Failed to update like status',
       variant: 'destructive',
@@ -258,7 +282,7 @@ export const getStoryLikes = async (storyId: string): Promise<CommentUser[]> => 
   } catch (error) {
     console.error('Error fetching story likes:', error);
     
-    toast({
+    showRateLimitedToast(toast, {
       title: 'Error',
       description: 'Failed to load likes',
       variant: 'destructive',
@@ -315,7 +339,7 @@ export const toggleCommentLike = async (
       onCommentUpdated(isCurrentlyLiked);
     }
     
-    toast({
+    showRateLimitedToast(toast, {
       title: 'Error',
       description: 'Failed to update like status',
       variant: 'destructive',
@@ -339,7 +363,7 @@ export const getCommentLikes = async (commentId: string): Promise<CommentUser[]>
   } catch (error) {
     console.error('Error fetching comment likes:', error);
     
-    toast({
+    showRateLimitedToast(toast, {
       title: 'Error',
       description: 'Failed to load likes',
       variant: 'destructive',
@@ -622,6 +646,13 @@ export async function getStoryById(storyId: string) {
       throw new Error("Story ID is required");
     }
 
+    // Check cache first
+    const cachedStory = storyCacheService.getCachedStory(storyId);
+    if (cachedStory) {
+      console.log("🚀 CACHE HIT: Story loaded from cache in <1ms");
+      return cachedStory;
+    }
+
     const startTime = performance.now();
     
     const result = await getFunctionsClient().callFunction('getStoryById', {
@@ -634,6 +665,10 @@ export async function getStoryById(storyId: string) {
     
     if (data.success && data.story) {
       console.log(`✅ PERFORMANCE: Story fetched in ${fetchTime}ms (optimized direct fetch)`);
+      
+      // Cache the story for future requests
+      storyCacheService.cacheStory(storyId, data.story);
+      
       return data.story;
     } else {
       throw new Error(data.message || 'Story not found');
