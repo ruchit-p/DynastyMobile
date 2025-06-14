@@ -42,8 +42,17 @@ export default function SubscriptionPage() {
   
   const [loading, setLoading] = useState(true)
   const [subscription, setSubscription] = useState<SubscriptionDetails | null>(null)
-  const [storageUsed, setStorageUsed] = useState(0) // GB
-  const [totalStorage, setTotalStorage] = useState(5) // GB
+  const [storageData, setStorageData] = useState<{
+    totalGB: number
+    usedBytes: number
+    availableBytes: number
+    usagePercentage: number
+    breakdown?: {
+      basePlanGB: number
+      addonGB: number
+      referralBonusGB: number
+    }
+  } | null>(null)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
   const [cancelFeedback, setCancelFeedback] = useState("")
@@ -52,30 +61,26 @@ export default function SubscriptionPage() {
   const loadSubscriptionData = withErrorHandling(async () => {
     setLoading(true)
     try {
-      const { subscription } = await getSubscriptionDetails()
-      setSubscription(subscription)
+      const response = await getSubscriptionDetails()
+      setSubscription(response.subscription)
       
-      // Set storage based on plan
-      if (subscription) {
-        switch (subscription.plan) {
-          case SubscriptionPlan.FREE:
-            setTotalStorage(5)
-            break
-          case SubscriptionPlan.INDIVIDUAL:
-            setTotalStorage(subscription.tier === 'premium' ? 200 : 50)
-            break
-          case SubscriptionPlan.FAMILY:
-            setTotalStorage(500)
-            break
-        }
-        
-        // Add extra storage from addons
-        const extraStorageAddons = subscription.addons.filter(a => a === AddonType.EXTRA_STORAGE).length
-        setTotalStorage(prev => prev + (extraStorageAddons * 100))
+      // Set storage data from the response
+      if (response.storage) {
+        setStorageData(response.storage)
+      } else if (!response.subscription) {
+        // Default free plan storage if no subscription
+        setStorageData({
+          totalGB: 5,
+          usedBytes: 0,
+          availableBytes: 5 * 1024 * 1024 * 1024,
+          usagePercentage: 0,
+          breakdown: {
+            basePlanGB: 5,
+            addonGB: 0,
+            referralBonusGB: 0
+          }
+        })
       }
-      
-      // Simulate storage usage (in real app, fetch from backend)
-      setStorageUsed(Math.random() * (totalStorage * 0.7))
     } finally {
       setLoading(false)
     }
@@ -166,7 +171,10 @@ export default function SubscriptionPage() {
     )
   }
 
-  const storagePercentage = (storageUsed / totalStorage) * 100
+  // Calculate storage values for display
+  const storageUsedGB = storageData ? storageData.usedBytes / (1024 * 1024 * 1024) : 0
+  const storagePercentage = storageData?.usagePercentage || 0
+  const totalStorageGB = storageData?.totalGB || 5
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
@@ -344,23 +352,101 @@ export default function SubscriptionPage() {
             Storage Usage
           </CardTitle>
           <CardDescription>
-            {storageUsed.toFixed(1)} GB of {totalStorage} GB used
+            {storageUsedGB.toFixed(1)} GB of {totalStorageGB} GB used
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Progress value={storagePercentage} className="h-2 mb-4" />
+        <CardContent className="space-y-4">
+          <Progress 
+            value={storagePercentage} 
+            className={`h-2 ${
+              storagePercentage >= 100 ? 'bg-red-100' : 
+              storagePercentage >= 90 ? 'bg-orange-100' : 
+              storagePercentage >= 80 ? 'bg-yellow-100' : ''
+            }`} 
+          />
           <div className="flex justify-between text-sm text-gray-600">
             <span>{storagePercentage.toFixed(0)}% used</span>
-            <span>{(totalStorage - storageUsed).toFixed(1)} GB available</span>
+            <span>{((totalStorageGB * 1024 * 1024 * 1024 - storageData?.usedBytes || 0) / (1024 * 1024 * 1024)).toFixed(1)} GB available</span>
           </div>
+          
+          {/* Storage breakdown if available */}
+          {storageData?.breakdown && (
+            <div className="text-sm text-gray-600 space-y-1 pt-2 border-t">
+              <div className="flex justify-between">
+                <span>Base plan storage:</span>
+                <span>{storageData.breakdown.basePlanGB} GB</span>
+              </div>
+              {storageData.breakdown.addonGB > 0 && (
+                <div className="flex justify-between">
+                  <span>Add-on storage:</span>
+                  <span>+{storageData.breakdown.addonGB} GB</span>
+                </div>
+              )}
+              {storageData.breakdown.referralBonusGB > 0 && (
+                <div className="flex justify-between">
+                  <span>Referral bonus:</span>
+                  <span>+{storageData.breakdown.referralBonusGB} GB</span>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
-        {storagePercentage > 80 && (
+        
+        {/* Enhanced storage warnings */}
+        {storagePercentage >= 100 && (
           <CardFooter>
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Storage Almost Full</AlertTitle>
-              <AlertDescription>
-                You&apos;re using {storagePercentage.toFixed(0)}% of your storage. Consider upgrading your plan or managing your files.
+            <Alert className="border-red-200 bg-red-50">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <AlertTitle className="text-red-800">Storage Full!</AlertTitle>
+              <AlertDescription className="text-red-700">
+                Your storage is completely full. You cannot upload new files until you free up space or upgrade your plan.
+              </AlertDescription>
+            </Alert>
+          </CardFooter>
+        )}
+        
+        {storagePercentage >= 90 && storagePercentage < 100 && (
+          <CardFooter>
+            <Alert className="border-orange-200 bg-orange-50">
+              <AlertCircle className="h-4 w-4 text-orange-600" />
+              <AlertTitle className="text-orange-800">Storage Almost Full</AlertTitle>
+              <AlertDescription className="text-orange-700">
+                You&apos;re using {storagePercentage.toFixed(0)}% of your storage. Only {((totalStorageGB * 1024 * 1024 * 1024 - storageData?.usedBytes || 0) / (1024 * 1024 * 1024)).toFixed(1)} GB remaining. 
+                <Button 
+                  variant="link" 
+                  className="h-auto p-0 text-orange-700 underline ml-1"
+                  onClick={() => router.push('/pricing')}
+                >
+                  Upgrade now
+                </Button>
+                to avoid interruptions.
+              </AlertDescription>
+            </Alert>
+          </CardFooter>
+        )}
+        
+        {storagePercentage >= 80 && storagePercentage < 90 && (
+          <CardFooter>
+            <Alert className="border-yellow-200 bg-yellow-50">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertTitle className="text-yellow-800">Storage 80% Full</AlertTitle>
+              <AlertDescription className="text-yellow-700">
+                You&apos;re using {storagePercentage.toFixed(0)}% of your storage. Consider 
+                <Button 
+                  variant="link" 
+                  className="h-auto p-0 text-yellow-700 underline mx-1"
+                  onClick={() => router.push('/vault')}
+                >
+                  managing your files
+                </Button>
+                or
+                <Button 
+                  variant="link" 
+                  className="h-auto p-0 text-yellow-700 underline ml-1"
+                  onClick={() => router.push('/pricing')}
+                >
+                  upgrading your plan
+                </Button>.
               </AlertDescription>
             </Alert>
           </CardFooter>

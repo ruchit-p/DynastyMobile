@@ -117,7 +117,20 @@ export async function createCheckoutSession(params: CheckoutSessionParams) {
  */
 export async function getSubscriptionDetails() {
   const result = await getFunctionsClient().callFunction('getSubscriptionStatus', {});
-  return result.data as { subscription: SubscriptionDetails | null };
+  return result.data as { 
+    subscription: SubscriptionDetails | null;
+    storage?: {
+      totalGB: number;
+      usedBytes: number;
+      availableBytes: number;
+      usagePercentage: number;
+      breakdown?: {
+        basePlanGB: number;
+        addonGB: number;
+        referralBonusGB: number;
+      };
+    };
+  };
 }
 
 /**

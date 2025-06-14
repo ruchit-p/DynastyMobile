@@ -1454,3 +1454,51 @@ export const cleanupExpiredReferrals = onSchedule(
     }
   }
 );
+
+/**
+ * Get storage usage information for the current user
+ * This is useful for users to see their storage usage even without a subscription
+ */
+export const getStorageInfo = onCall(
+  {
+    region: "us-central1",
+    maxInstances: 10,
+  },
+  withAuth(async (request) => {
+    const uid = request.auth!.uid;
+
+    try {
+      // Calculate storage for the user
+      const storageInfo = await storageService.calculateUserStorage(uid);
+
+      logger.info("Storage info retrieved", {
+        userId: uid,
+        usagePercentage: storageInfo.usagePercentage.toFixed(1),
+        totalGB: storageInfo.totalGB,
+      });
+
+      return {
+        storage: {
+          totalGB: storageInfo.totalGB,
+          usedBytes: storageInfo.usedBytes,
+          availableBytes: storageInfo.availableBytes,
+          usagePercentage: storageInfo.usagePercentage,
+          breakdown: {
+            basePlanGB: storageInfo.basePlanGB,
+            addonGB: storageInfo.addonGB,
+            referralBonusGB: storageInfo.referralBonusGB,
+          },
+          isOverLimit: storageInfo.isOverLimit,
+        },
+      };
+    } catch (error) {
+      logger.error("Failed to get storage info", {error, uid});
+      throw error;
+    }
+  }, "getStorageInfo", {
+    authLevel: "auth",
+    rateLimitConfig: {
+      type: RateLimitType.STRIPE_SUBSCRIPTION_READ,
+    },
+  })
+);

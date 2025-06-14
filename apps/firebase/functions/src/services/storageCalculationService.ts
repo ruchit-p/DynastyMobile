@@ -14,6 +14,7 @@ import {
   REFERRAL_CONFIG,
 } from "../config/stripeProducts";
 import {createError, ErrorCode} from "../utils/errors";
+import {storageNotificationService} from "./storageNotificationService";
 
 export interface StorageCalculationResult {
   basePlanGB: number;
@@ -103,6 +104,14 @@ export class StorageCalculationService {
       // Update subscription with latest calculation
       await this.updateStorageAllocation(userId, subscription.id, result);
 
+      // Check if we need to send storage notifications
+      try {
+        await storageNotificationService.checkAndNotifyStorageLimit(userId, result);
+      } catch (notificationError) {
+        // Log but don't fail the calculation if notification fails
+        logger.warn("Failed to check storage notifications", {userId, error: notificationError});
+      }
+
       return result;
     } catch (error) {
       logger.error("Failed to calculate user storage", {userId, error});
@@ -130,7 +139,7 @@ export class StorageCalculationService {
     const availableBytes = Math.max(0, totalBytes - usedBytes);
     const usagePercentage = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : 0;
 
-    return {
+    const result: StorageCalculationResult = {
       basePlanGB,
       addonGB: 0,
       referralBonusGB,
@@ -140,6 +149,16 @@ export class StorageCalculationService {
       usagePercentage,
       isOverLimit: usedBytes > totalBytes,
     };
+
+    // Check if we need to send storage notifications for free users
+    try {
+      await storageNotificationService.checkAndNotifyStorageLimit(userId, result);
+    } catch (notificationError) {
+      // Log but don't fail the calculation if notification fails
+      logger.warn("Failed to check storage notifications for free user", {userId, error: notificationError});
+    }
+
+    return result;
   }
 
   /**
@@ -465,6 +484,15 @@ export class StorageCalculationService {
         userId,
         deltaBytes,
       });
+
+      // After updating storage, check if we need to send notifications
+      try {
+        const storageResult = await this.calculateUserStorage(userId);
+        // This will internally check and send notifications if needed
+      } catch (notificationError) {
+        // Log but don't fail the storage update if notification check fails
+        logger.warn("Failed to check storage after usage update", {userId, error: notificationError});
+      }
     } catch (error) {
       logger.error("Failed to update user storage usage", {userId, deltaBytes, error});
       throw error;
