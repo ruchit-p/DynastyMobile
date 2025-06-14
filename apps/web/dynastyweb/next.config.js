@@ -1,5 +1,37 @@
 /** @type {import('next').NextConfig} */
+const withBundleAnalyzer = require('@next/bundle-analyzer')({
+  enabled: process.env.ANALYZE === 'true',
+  openAnalyzer: false, // Don't auto-open in CI
+});
+
 const nextConfig = {
+  // Production output optimization
+  output: 'standalone',
+  
+  // Compiler optimizations
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
+  
+  // Experimental optimizations
+  experimental: {
+    optimizeCss: true,
+  },
+  
+  // Module imports optimization (webpack configuration)
+  modularizeImports: {
+    '@mui/icons-material': {
+      transform: '@mui/icons-material/{{member}}',
+    },
+    'date-fns': {
+      transform: 'date-fns/{{member}}',
+    },
+    'lucide-react': {
+      transform: 'lucide-react/dist/esm/icons/{{kebabCase member}}',
+      preventFullImport: true,
+    },
+  },
+  
   typescript: {
     tsconfigPath: './tsconfig.json',
   },
@@ -197,6 +229,10 @@ const nextConfig = {
   },
   
   images: {
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    minimumCacheTTL: 60 * 60 * 24 * 7, // 1 week cache
     remotePatterns: [
       {
         protocol: 'https',
@@ -260,11 +296,11 @@ const isProductionBuild = process.env.VERCEL === '1' || process.env.CI === 'true
 // For local development, we always use the base config without Sentry
 if (!isProductionBuild) {
   console.log('🚫 Sentry disabled for local development');
-  module.exports = nextConfig;
+  module.exports = withBundleAnalyzer(nextConfig);
 } else {
   // For production builds, apply Sentry configuration
   const finalConfig = withSentryConfig(
-    nextConfig,
+    withBundleAnalyzer(nextConfig),
     {
       // For all available options, see:
       // https://www.npmjs.com/package/@sentry/webpack-plugin#options

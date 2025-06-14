@@ -30,6 +30,47 @@ export class FileSecurityService {
   private static instance: FileSecurityService;
   private readonly db = getFirestore();
 
+  // Legitimate file signatures (magic bytes) for validation
+  private readonly legitimateSignatures = new Map<string, { signatures: string[]; description: string }>([
+    // Images
+    ["image/jpeg", { signatures: ["FFD8FF"], description: "JPEG image" }],
+    ["image/png", { signatures: ["89504E47"], description: "PNG image" }],
+    ["image/gif", { signatures: ["474946383761", "474946383961"], description: "GIF image" }],
+    ["image/webp", { signatures: ["52494646"], description: "WebP image" }],
+    ["image/bmp", { signatures: ["424D"], description: "BMP image" }],
+    ["image/tiff", { signatures: ["49492A00", "4D4D002A"], description: "TIFF image" }],
+    ["image/heic", { signatures: ["667479706865696378"], description: "HEIC image" }],
+    
+    // Videos
+    ["video/mp4", { signatures: ["667479706D703432", "667479704D534E56", "667479706973"], description: "MP4 video" }],
+    ["video/quicktime", { signatures: ["6674797071742020"], description: "QuickTime video" }],
+    ["video/webm", { signatures: ["1A45DFA3"], description: "WebM video" }],
+    ["video/x-msvideo", { signatures: ["52494646"], description: "AVI video" }],
+    
+    // Audio
+    ["audio/mpeg", { signatures: ["494433", "FFFB", "FFF3", "FFF2"], description: "MP3 audio" }],
+    ["audio/wav", { signatures: ["52494646"], description: "WAV audio" }],
+    ["audio/ogg", { signatures: ["4F676753"], description: "OGG audio" }],
+    ["audio/flac", { signatures: ["664C6143"], description: "FLAC audio" }],
+    ["audio/aac", { signatures: ["FFF1", "FFF9"], description: "AAC audio" }],
+    
+    // Documents
+    ["application/pdf", { signatures: ["255044462D"], description: "PDF document" }],
+    ["application/msword", { signatures: ["D0CF11E0A1B11AE1"], description: "DOC document" }],
+    ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", { signatures: ["504B0304"], description: "DOCX document" }],
+    ["application/vnd.ms-excel", { signatures: ["D0CF11E0A1B11AE1"], description: "XLS document" }],
+    ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", { signatures: ["504B0304"], description: "XLSX document" }],
+    ["text/plain", { signatures: [], description: "Text document" }], // Text files can have any content
+    ["text/csv", { signatures: [], description: "CSV document" }],
+    
+    // Archives
+    ["application/zip", { signatures: ["504B0304", "504B0506", "504B0708"], description: "ZIP archive" }],
+    ["application/x-rar-compressed", { signatures: ["526172211A0700", "526172211A070100"], description: "RAR archive" }],
+    ["application/x-7z-compressed", { signatures: ["377ABCAF271C"], description: "7-Zip archive" }],
+    ["application/gzip", { signatures: ["1F8B"], description: "GZIP archive" }],
+    ["application/x-tar", { signatures: [], description: "TAR archive" }], // TAR has no fixed signature
+  ]);
+
   // Malicious file signatures (magic bytes)
   private readonly maliciousSignatures = new Map<string, string[]>([
     // Executables
@@ -140,31 +181,37 @@ export class FileSecurityService {
 
       const threats: string[] = [];
 
-      // 1. Check file signature
-      const signatureThreat = this.checkFileSignature(fileBuffer);
-      if (signatureThreat) {
-        threats.push(signatureThreat);
+      // 1. Validate file signature matches MIME type
+      const signatureValidation = this.validateFileSignature(fileBuffer, mimeType, fileName);
+      if (!signatureValidation.valid) {
+        threats.push(signatureValidation.error!);
+      }
+      
+      // 2. Check for malicious signatures
+      const maliciousSignature = this.checkMaliciousSignature(fileBuffer);
+      if (maliciousSignature) {
+        threats.push(maliciousSignature);
       }
 
-      // 2. Check file extension risk
+      // 3. Check file extension risk
       const extensionRisk = this.checkFileExtension(fileName);
       if (extensionRisk) {
         threats.push(extensionRisk);
       }
 
-      // 3. Scan for suspicious patterns (only for text-based files)
+      // 4. Scan for suspicious patterns (only for text-based files)
       if (this.isTextBasedFile(mimeType)) {
         const patternThreats = this.scanForPatterns(fileBuffer);
         threats.push(...patternThreats);
       }
 
-      // 4. Check file size anomalies
+      // 5. Check file size anomalies
       const sizeAnomaly = this.checkFileSizeAnomaly(fileSize, mimeType);
       if (sizeAnomaly) {
         threats.push(sizeAnomaly);
       }
 
-      // 5. External virus scan (if configured)
+      // 6. External virus scan (if configured)
       if (process.env.VIRUS_SCAN_API_KEY) {
         const virusScanResult = await this.performVirusScan(fileBuffer, fileName);
         if (!virusScanResult.safe) {
@@ -211,20 +258,132 @@ export class FileSecurityService {
   }
 
   /**
-   * Check file signature (magic bytes)
+   * ENHANCED: Validate file signature matches declared MIME type
+   * This prevents file type spoofing attacks
    */
-  private checkFileSignature(buffer: Buffer): string | null {
+  private validateFileSignature(buffer: Buffer, declaredMimeType: string, fileName: string): { valid: boolean; error?: string } {
+    // Get file header (up to 16 bytes for comprehensive checking)
+    const headerHex = buffer.slice(0, 16).toString("hex").toUpperCase();
+    
+    // Get expected signature for the declared MIME type
+    const expectedSignature = this.legitimateSignatures.get(declaredMimeType);
+    
+    if (!expectedSignature) {
+      // Unknown MIME type - allow but log for monitoring
+      logger.warn("Unknown MIME type uploaded", {
+        mimeType: declaredMimeType,
+        fileName,
+        headerHex: headerHex.slice(0, 16) // Log first 8 bytes
+      });
+      return { valid: true };
+    }
+    
+    // Text files and some formats don't have fixed signatures
+    if (expectedSignature.signatures.length === 0) {
+      return { valid: true };
+    }
+    
+    // Check if file header matches any expected signature
+    const matchesSignature = expectedSignature.signatures.some(signature => 
+      headerHex.startsWith(signature)
+    );
+    
+    if (!matchesSignature) {
+      logger.warn("File signature mismatch detected", {
+        fileName,
+        declaredMimeType,
+        expectedDescription: expectedSignature.description,
+        expectedSignatures: expectedSignature.signatures,
+        actualHeader: headerHex.slice(0, 16)
+      });
+      
+      return {
+        valid: false,
+        error: `File signature mismatch: File claims to be ${expectedSignature.description} but signature doesn't match`
+      };
+    }
+    
+    return { valid: true };
+  }
+  
+  /**
+   * Check for malicious file signatures
+   */
+  private checkMaliciousSignature(buffer: Buffer): string | null {
     const headerHex = buffer.slice(0, 8).toString("hex").toUpperCase();
 
     for (const [type, signatures] of this.maliciousSignatures) {
       for (const signature of signatures) {
         if (headerHex.startsWith(signature)) {
-          return `Detected ${type} file signature`;
+          return `Detected malicious ${type} file signature`;
         }
       }
     }
 
     return null;
+  }
+
+  /**
+   * Detect actual file type from magic numbers
+   * Returns the detected MIME type based on file signature
+   */
+  private detectActualFileType(buffer: Buffer): string | null {
+    const headerHex = buffer.slice(0, 16).toString("hex").toUpperCase();
+    
+    for (const [mimeType, signature] of this.legitimateSignatures) {
+      if (signature.signatures.length === 0) continue; // Skip types without fixed signatures
+      
+      for (const sig of signature.signatures) {
+        if (headerHex.startsWith(sig)) {
+          return mimeType;
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Enhanced file validation that includes actual vs declared type comparison
+   */
+  validateFileTypeConsistency(buffer: Buffer, declaredMimeType: string, fileName: string): {
+    consistent: boolean;
+    actualType?: string;
+    declaredType: string;
+    warning?: string;
+  } {
+    const actualType = this.detectActualFileType(buffer);
+    
+    if (!actualType) {
+      // Could not detect type from signature - not necessarily bad
+      return {
+        consistent: true,
+        declaredType: declaredMimeType,
+        warning: "File type could not be determined from signature"
+      };
+    }
+    
+    if (actualType !== declaredMimeType) {
+      logger.warn("File type inconsistency detected", {
+        fileName,
+        declaredType: declaredMimeType,
+        actualType,
+        headerBytes: buffer.slice(0, 8).toString("hex").toUpperCase()
+      });
+      
+      return {
+        consistent: false,
+        actualType,
+        declaredType: declaredMimeType,
+        warning: `File appears to be ${actualType} but was declared as ${declaredMimeType}`
+      };
+    }
+    
+    return {
+      consistent: true,
+      actualType,
+      declaredType: declaredMimeType
+    };
   }
 
   /**

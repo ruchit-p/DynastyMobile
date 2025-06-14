@@ -24,6 +24,7 @@ import { httpsCallable } from 'firebase/functions';
 import { doc, getDoc } from 'firebase/firestore';
 import type { InvitedSignupFormData } from "@/lib/validation";
 import { useSessionValidation } from '@/hooks/useSessionValidation';
+import { checkAccountLockout, recordAuthenticationFailure, extractFirebaseErrorCode } from '@/utils/authUtils';
 
 // Add global type declarations for window properties
 declare global {
@@ -241,8 +242,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
+      // SECURITY: Check account lockout before attempting sign-in
+      const lockoutStatus = await checkAccountLockout(email);
+      
+      if (lockoutStatus.isLocked) {
+        const error = new Error(`Account locked: ${lockoutStatus.message}`);
+        error.name = 'AccountLocked';
+        throw error;
+      }
+      
+      // Proceed with normal authentication
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
+      // Record failed authentication attempt for security monitoring
+      if (error instanceof Error) {
+        const errorCode = extractFirebaseErrorCode(error);
+        
+        // Only record certain types of authentication failures
+        const recordableErrors = [
+          'auth/wrong-password',
+          'auth/user-not-found',
+          'auth/invalid-credential',
+          'auth/invalid-email',
+          'auth/user-disabled',
+          'auth/too-many-requests'
+        ];
+        
+        if (recordableErrors.includes(errorCode)) {
+          // Record the failure asynchronously (don't wait for it)
+          recordAuthenticationFailure(email, errorCode).catch(recordError => {
+            console.warn('Failed to record authentication failure:', recordError);
+          });
+        }
+      }
+      
       throw error;
     }
   };
