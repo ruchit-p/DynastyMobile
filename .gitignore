@@ -42,7 +42,6 @@ package-lock.json
 
 # Empty directories
 logs/
-packages/
 
 # Backup files
 *.bak
@@ -92,6 +91,11 @@ out/
 *.ipa
 *.apk
 *.aab
+
+# Package build outputs
+packages/*/dist/
+packages/*/build/
+packages/*/node_modules/
 
 # Next.js
 .next/
