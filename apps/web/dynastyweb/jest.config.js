@@ -22,9 +22,18 @@ const customJestConfig = {
     '^@/hooks/(.*)$': '<rootDir>/src/hooks/$1',
     '^@/types/(.*)$': '<rootDir>/src/types/$1',
     '^@/utils/(.*)$': '<rootDir>/src/utils/$1',
-    // Mock CSS modules and Swiper CSS
-    '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+    // ESM packages fallbacks
+    '^lucide-react$': 'lucide-react/dist/cjs',
+    '^lucide-react/(.*)$': 'lucide-react',
+    '^lucide-react/dist/esm/(.*)$': 'lucide-react',
+    '^swiper/css$': 'identity-obj-proxy',
     '^swiper/css.*$': 'identity-obj-proxy',
+    '^lucide-react/dist/esm/icons/(.*)$': 'lucide-react',
+    '^swiper/(.*)$': 'identity-obj-proxy',
+    // Remove problematic vault-sdk mappings to rely on Babel transform
+    // '^@dynasty/vault-sdk$': '<rootDir>/node_modules/@dynasty/vault-sdk/dist/index.js',
+    // '^@dynasty/vault-sdk/dist/(.*)$': '<rootDir>/node_modules/@dynasty/vault-sdk/dist/$1',
+    '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
   },
   testMatch: [
     '**/__tests__/**/*.test.[jt]s?(x)',
@@ -54,7 +63,7 @@ const customJestConfig = {
   },
   // Override transform ignore pattern to allow specific ESM packages to be transformed
   transformIgnorePatterns: [
-    'node_modules/(?!(lucide-react|@radix-ui|@dynasty|nanoid|ics|uuid|firebase|fake-indexeddb|swiper)/)',
+    'node_modules/(?!(lucide-react|@radix-ui|@dynasty|nanoid|ics|uuid|firebase|fake-indexeddb|swiper)/).*$',
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
 }

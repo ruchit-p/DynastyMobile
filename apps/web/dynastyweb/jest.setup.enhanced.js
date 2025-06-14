@@ -12,6 +12,7 @@
 // Learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
 import React from 'react';
+import 'jest-extended';
 
 // Setup fake IndexedDB for testing
 import 'fake-indexeddb/auto';
@@ -372,288 +373,7 @@ global.navigator.share = jest.fn(() => Promise.resolve());
 // =============================================================================
 
 // Mock libsodium-wrappers-sumo (Comprehensive)
-jest.mock('libsodium-wrappers-sumo', () => {
-  // Create predictable random data generator for tests
-  let randomCounters = new Map(); // Track separate counters for different contexts
-
-  const generatePredictableRandom = (length, context = 'default') => {
-    if (!randomCounters.has(context)) {
-      randomCounters.set(context, 0);
-    }
-
-    const counter = randomCounters.get(context);
-    const array = new Uint8Array(length);
-    for (let i = 0; i < length; i++) {
-      array[i] = (counter + i) % 256;
-    }
-    randomCounters.set(context, (counter + length) % 256);
-    return array;
-  };
-
-  // Mock constants (actual values from libsodium)
-  const mockSodium = {
-    // Ready promise
-    ready: Promise.resolve(),
-
-    // Constants
-    crypto_pwhash_ALG_ARGON2ID13: 2,
-    crypto_pwhash_OPSLIMIT_INTERACTIVE: 4,
-    crypto_pwhash_MEMLIMIT_INTERACTIVE: 67108864,
-    crypto_pwhash_SALTBYTES: 16,
-    crypto_secretstream_xchacha20poly1305_KEYBYTES: 32,
-    crypto_secretstream_xchacha20poly1305_HEADERBYTES: 24,
-    crypto_secretstream_xchacha20poly1305_ABYTES: 17,
-    crypto_secretstream_xchacha20poly1305_TAG_MESSAGE: 0,
-    crypto_secretstream_xchacha20poly1305_TAG_FINAL: 3,
-    crypto_secretbox_NONCEBYTES: 24,
-    crypto_secretbox_KEYBYTES: 32,
-    crypto_box_NONCEBYTES: 24,
-    crypto_box_PUBLICKEYBYTES: 32,
-    crypto_box_SECRETKEYBYTES: 32,
-    crypto_generichash_BYTES: 32,
-    crypto_kdf_KEYBYTES: 32,
-
-    // Random functions
-    randombytes_buf: jest.fn(len => generatePredictableRandom(len, 'random')),
-
-    // Password hashing
-    crypto_pwhash: jest.fn((keylen, password, salt, opslimit, memlimit, alg) => {
-      // Convert password to Uint8Array if it's a string for the mock
-      const encoder =
-        global.TextEncoder ||
-        (typeof TextEncoder !== 'undefined' ? TextEncoder : require('util').TextEncoder);
-      const passwordBytes =
-        typeof password === 'string' ? new encoder().encode(password) : password;
-
-      // Generate deterministic key based on password and salt for consistency
-      const combinedInput = Array.from(passwordBytes).concat(Array.from(salt)).join(',');
-      const deterministicSeed = combinedInput
-        .split('')
-        .reduce((acc, char) => acc + char.charCodeAt(0), 0);
-
-      const result = new Uint8Array(keylen);
-      for (let i = 0; i < keylen; i++) {
-        result[i] = (deterministicSeed + i) % 256;
-      }
-      return result;
-    }),
-
-    // Generic hash
-    crypto_generichash: jest.fn((outlen, input, key) => {
-      const len = outlen || mockSodium.crypto_generichash_BYTES;
-      // Generate deterministic hash based on input
-      let inputStr = '';
-      if (typeof input === 'string') {
-        inputStr = input;
-      } else if (input instanceof Uint8Array) {
-        inputStr = Array.from(input).join(',');
-      } else {
-        inputStr = String(input);
-      }
-
-      const seed = inputStr.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-      const result = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        result[i] = (seed + i) % 256;
-      }
-      return result;
-    }),
-
-    // Key derivation
-    crypto_kdf_derive_from_key: jest.fn((subkey_len, subkey_id, ctx, key) => {
-      // Generate deterministic subkey based on inputs
-      const ctxStr = typeof ctx === 'string' ? ctx : Array.from(ctx).join(',');
-      const keyStr = Array.from(key).join(',');
-      const seed =
-        (subkey_id +
-          ctxStr.length +
-          keyStr.split(',').reduce((acc, val) => acc + parseInt(val), 0)) %
-        256;
-
-      const result = new Uint8Array(subkey_len);
-      for (let i = 0; i < subkey_len; i++) {
-        result[i] = (seed + i) % 256;
-      }
-      return result;
-    }),
-
-    // Secretstream (for file encryption)
-    crypto_secretstream_xchacha20poly1305_keygen: jest.fn(() => {
-      return generatePredictableRandom(mockSodium.crypto_secretstream_xchacha20poly1305_KEYBYTES);
-    }),
-
-    crypto_secretstream_xchacha20poly1305_init_push: jest.fn(key => ({
-      state: { key: key, counter: 0 },
-      header: generatePredictableRandom(
-        mockSodium.crypto_secretstream_xchacha20poly1305_HEADERBYTES
-      ),
-    })),
-
-    crypto_secretstream_xchacha20poly1305_push: jest.fn((state, chunk, ad, tag) => {
-      // Return chunk with additional MAC bytes
-      const result = new Uint8Array(
-        chunk.length + mockSodium.crypto_secretstream_xchacha20poly1305_ABYTES
-      );
-      result.set(chunk, 0);
-      result.set(
-        generatePredictableRandom(mockSodium.crypto_secretstream_xchacha20poly1305_ABYTES),
-        chunk.length
-      );
-      return result;
-    }),
-
-    crypto_secretstream_xchacha20poly1305_init_pull: jest.fn((header, key) => ({
-      key: key,
-      header: header,
-      counter: 0,
-    })),
-
-    crypto_secretstream_xchacha20poly1305_pull: jest.fn((state, chunk) => {
-      // Return original chunk without MAC bytes
-      const messageLen = chunk.length - mockSodium.crypto_secretstream_xchacha20poly1305_ABYTES;
-      const message = chunk.slice(0, messageLen);
-
-      // For testing, assume it's the final chunk if the message is small (simple heuristic)
-      const isLikelyFinal = message.length <= 1024;
-      const tag = isLikelyFinal
-        ? mockSodium.crypto_secretstream_xchacha20poly1305_TAG_FINAL
-        : mockSodium.crypto_secretstream_xchacha20poly1305_TAG_MESSAGE;
-
-      return {
-        message: message,
-        tag: tag,
-      };
-    }),
-
-    // Secretbox (for small data encryption)
-    crypto_secretbox_easy: jest.fn((message, nonce, key) => {
-      // Return message with MAC appended
-      const result = new Uint8Array(message.length + 16);
-      result.set(message, 0);
-      result.set(generatePredictableRandom(16), message.length);
-      return result;
-    }),
-
-    crypto_secretbox_open_easy: jest.fn((ciphertext, nonce, key) => {
-      // Return message without MAC
-      return ciphertext.slice(0, ciphertext.length - 16);
-    }),
-
-    // Box (for asymmetric encryption)
-    crypto_box_keypair: jest.fn(() => ({
-      publicKey: generatePredictableRandom(mockSodium.crypto_box_PUBLICKEYBYTES),
-      privateKey: generatePredictableRandom(mockSodium.crypto_box_SECRETKEYBYTES),
-    })),
-
-    crypto_box_easy: jest.fn((message, nonce, publicKey, secretKey) => {
-      const result = new Uint8Array(message.length + 16);
-      result.set(message, 0);
-      result.set(generatePredictableRandom(16), message.length);
-      return result;
-    }),
-
-    crypto_box_open_easy: jest.fn((ciphertext, nonce, publicKey, secretKey) => {
-      return ciphertext.slice(0, ciphertext.length - 16);
-    }),
-
-    // Utility functions
-    from_string: jest.fn(str => {
-      const encoder =
-        global.TextEncoder ||
-        (typeof TextEncoder !== 'undefined' ? TextEncoder : require('util').TextEncoder);
-      return new encoder().encode(str);
-    }),
-    to_string: jest.fn(bytes => {
-      const decoder =
-        global.TextDecoder ||
-        (typeof TextDecoder !== 'undefined' ? TextDecoder : require('util').TextDecoder);
-      return new decoder().decode(bytes);
-    }),
-    from_base64: jest.fn(str => {
-      // Simple base64 decode mock
-      const binary = atob(str);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      return bytes;
-    }),
-    to_base64: jest.fn(bytes => {
-      // Simple base64 encode mock
-      const binary = Array.from(bytes)
-        .map(byte => String.fromCharCode(byte))
-        .join('');
-      return btoa(binary);
-    }),
-    from_hex: jest.fn(hex => {
-      const bytes = new Uint8Array(hex.length / 2);
-      for (let i = 0; i < hex.length; i += 2) {
-        bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
-      }
-      return bytes;
-    }),
-    to_hex: jest.fn(bytes => {
-      return Array.from(bytes)
-        .map(byte => byte.toString(16).padStart(2, '0'))
-        .join('');
-    }),
-
-    // Memory functions
-    memcmp: jest.fn((a, b) => {
-      if (a.length !== b.length) return false;
-      for (let i = 0; i < a.length; i++) {
-        if (a[i] !== b[i]) return false;
-      }
-      return true;
-    }),
-    memzero: jest.fn(data => {
-      // Zero out the array
-      for (let i = 0; i < data.length; i++) {
-        data[i] = 0;
-      }
-    }),
-
-    // Default export compatibility
-    default: {
-      ready: Promise.resolve(),
-      randombytes_buf: jest.fn(len => generatePredictableRandom(len)),
-      crypto_pwhash: jest.fn((keylen, password, salt, opslimit, memlimit, alg) => {
-        return generatePredictableRandom(keylen);
-      }),
-      crypto_secretstream_xchacha20poly1305_init_push: jest.fn(key => ({
-        state: { key: key, counter: 0 },
-        header: generatePredictableRandom(24),
-      })),
-      crypto_secretstream_xchacha20poly1305_push: jest.fn((state, chunk, ad, tag) => {
-        const result = new Uint8Array(chunk.length + 17);
-        result.set(chunk, 0);
-        result.set(generatePredictableRandom(17), chunk.length);
-        return result;
-      }),
-      crypto_secretstream_xchacha20poly1305_init_pull: jest.fn((header, key) => ({
-        key: key,
-        header: header,
-        counter: 0,
-      })),
-      crypto_secretstream_xchacha20poly1305_pull: jest.fn((state, chunk) => {
-        const messageLen = chunk.length - 17;
-        const message = chunk.slice(0, messageLen);
-
-        // For testing, assume it's the final chunk if the message is small
-        const isLikelyFinal = message.length <= 1024;
-        const tag = isLikelyFinal ? 3 : 0; // 3 is TAG_FINAL, 0 is TAG_MESSAGE
-
-        return {
-          message: message,
-          tag: tag,
-        };
-      }),
-      memzero: jest.fn(),
-    },
-  };
-
-  return mockSodium;
-});
+jest.mock('libsodium-wrappers-sumo', () => require('libsodium-wrappers'));
 
 // Mock DOMPurify (Enhanced)
 jest.mock('isomorphic-dompurify', () => ({
@@ -1031,9 +751,29 @@ if (isIntegrationTest) {
 // =============================================================================
 
 // Mock libsodium to resolve immediately in tests
-jest.mock('libsodium-wrappers-sumo', () => ({
-  __esModule: true,
-  ready: Promise.resolve(),
-  crypto_generichash: () => new Uint8Array(32),
-  crypto_scalarmult: () => new Uint8Array(32),
-}));
+jest.mock('libsodium-wrappers', () => {
+  return {
+    // Signal readiness immediately
+    ready: Promise.resolve(),
+    // Mock only the functions used by our crypto services
+    randombytes_buf: (len = 32) => new Uint8Array(len),
+    crypto_secretbox_easy: jest.fn(() => new Uint8Array()),
+    crypto_secretbox_open_easy: jest.fn(() => new Uint8Array()),
+    crypto_generichash: jest.fn(() => new Uint8Array(32)),
+    to_hex: jest.fn(() => ''),
+    from_string: jest.fn(() => new Uint8Array()),
+  };
+});
+
+// Polyfill TextEncoder/TextDecoder in Node test env
+if (typeof global.TextEncoder === 'undefined') {
+  global.TextEncoder = require('util').TextEncoder;
+}
+if (typeof global.TextDecoder === 'undefined') {
+  global.TextDecoder = require('util').TextDecoder;
+}
+
+// Ensure libsodium ready always resolves
+import * as _sodium from 'libsodium-wrappers';
+// eslint-disable-next-line no-underscore-dangle
+(_sodium).ready = Promise.resolve();
