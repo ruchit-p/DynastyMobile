@@ -82,6 +82,10 @@ export function routeVaultFunction(functionName: string, request: CallableReques
     // Sharing Operations (Phase 3B) 
     case "shareVaultItem":
       return useV2 ? VaultV2.shareVaultItem : VaultV1.shareVaultItem;
+
+    // Monitoring & Analytics (Phase 3B)
+    case "getShareLinkAnalytics":
+      return useV2 ? VaultV2.getShareLinkAnalytics : VaultV1.getShareLinkAnalytics;
       
     default:
       // For functions not yet migrated, always use V1
@@ -95,6 +99,7 @@ export function routeVaultFunction(functionName: string, request: CallableReques
  */
 export function getV2AvailableFunctions(): string[] {
   return [
+    // Phase 3A - Core handlers
     "getVaultItems",
     "createVaultFolder", 
     "renameVaultItem",
@@ -102,6 +107,18 @@ export function getV2AvailableFunctions(): string[] {
     "getVaultEncryptionStatus",
     "storeVaultItemEncryptionMetadata",
     "getVaultItemEncryptionMetadata",
+    
+    // Phase 3B - File operations
+    "getVaultUploadSignedUrl",
+    "addVaultFile",
+    "getVaultDownloadUrl",
+    "getMediaUploadUrl",
+    
+    // Phase 3B - Sharing operations
+    "shareVaultItem",
+    
+    // Phase 3B - Monitoring & Analytics
+    "getShareLinkAnalytics",
   ];
 }
 
