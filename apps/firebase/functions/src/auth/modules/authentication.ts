@@ -14,6 +14,7 @@ import {VALIDATION_SCHEMAS} from "../../config/validation-schemas";
 import {withAuth} from "../../middleware/auth";
 import {SECURITY_CONFIG} from "../../config/security-config";
 import * as admin from "firebase-admin";
+import {checkAccountLockout, recordFailedLogin} from "./account-lockout";
 
 /**
  * Handles standard email/password sign-in
@@ -41,6 +42,23 @@ export const handleSignIn = onCall(
       }));
 
       try {
+        // SECURITY: Check account lockout before proceeding
+        const lockoutResult = await checkAccountLockout.run({
+          data: { email },
+          rawRequest: request.rawRequest
+        } as any);
+        
+        if (lockoutResult.data.isLocked) {
+          logger.warn("handleSignIn: Account locked", createLogContext({
+            email,
+            minutesRemaining: lockoutResult.data.minutesRemaining,
+          }));
+          throw createError(
+            ErrorCode.PERMISSION_DENIED,
+            lockoutResult.data.message
+          );
+        }
+
         const auth = getAuth();
         const db = getFirestore();
 
@@ -1210,6 +1228,107 @@ export const handleAppleSignIn = onCall(
     "handleAppleSignIn",
     {
       authLevel: "none", // No auth required for initial sign-in
+      rateLimitConfig: SECURITY_CONFIG.rateLimits.auth,
+    }
+  )
+);
+
+/**
+ * Records a failed authentication attempt and handles account lockout logic
+ * This should be called from the client when Firebase Auth sign-in fails
+ */
+export const handleAuthenticationFailure = onCall(
+  {
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+    cors: true,
+  },
+  withAuth(
+    async (request) => {
+      // Validate and sanitize input
+      const validatedData = validateRequest(
+        request.data,
+        {
+          rules: [
+            {field: "email", type: "email", required: true},
+            {field: "errorCode", type: "string", required: true, maxLength: 100},
+          ],
+          xssCheck: true,
+        },
+        undefined
+      );
+
+      const {email, errorCode} = validatedData;
+      
+      logger.info("handleAuthenticationFailure: Recording failed authentication", createLogContext({
+        email,
+        errorCode,
+      }));
+
+      try {
+        // Only record failed login attempts for authentication errors (not other errors)
+        const authErrorCodes = [
+          "auth/wrong-password",
+          "auth/user-not-found", 
+          "auth/invalid-credential",
+          "auth/invalid-email",
+          "auth/user-disabled",
+          "auth/too-many-requests"
+        ];
+
+        if (authErrorCodes.includes(errorCode)) {
+          // Record the failed login attempt using the existing lockout system
+          const failureResult = await recordFailedLogin.run({
+            data: { email },
+            rawRequest: request.rawRequest
+          } as any);
+
+          logger.info("handleAuthenticationFailure: Recorded failed attempt", createLogContext({
+            email,
+            failedAttempts: failureResult.data.failedAttempts,
+            remainingAttempts: failureResult.data.remainingAttempts,
+          }));
+
+          return {
+            success: true,
+            failedAttempts: failureResult.data.failedAttempts,
+            remainingAttempts: failureResult.data.remainingAttempts,
+            message: failureResult.data.message,
+          };
+        } else {
+          // For non-authentication errors, just log but don't count as failed attempt
+          logger.info("handleAuthenticationFailure: Non-auth error, not counting", createLogContext({
+            email,
+            errorCode,
+          }));
+
+          return {
+            success: true,
+            message: "Error logged but not counted as failed authentication attempt",
+          };
+        }
+      } catch (error: any) {
+        // If it's already an account lockout error, pass it through
+        if (error instanceof HttpsError) {
+          throw error;
+        }
+
+        logger.error("handleAuthenticationFailure: Error recording failure", createLogContext({
+          email,
+          errorType: typeof error,
+          errorMessage: error?.message || "Unknown error",
+        }));
+
+        // Don't throw error here - we don't want to block user from knowing about auth failure
+        return {
+          success: false,
+          message: "Unable to record authentication failure",
+        };
+      }
+    },
+    "handleAuthenticationFailure",
+    {
+      authLevel: "none", // No auth required since this is for failed auth attempts
       rateLimitConfig: SECURITY_CONFIG.rateLimits.auth,
     }
   )

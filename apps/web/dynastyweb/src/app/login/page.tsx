@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { loginFormSchema, type LoginFormData, validateFormData } from '@/lib/validation';
+import { getAuthErrorMessage, extractFirebaseErrorCode } from '@/utils/authUtils';
 import { GoogleSignInButton } from '@/components/ui/google-sign-in-button';
 import { AppleSignInButton } from '@/components/ui/apple-sign-in-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -114,56 +115,27 @@ export default function LoginPage() {
     } catch (error) {
       console.error("Login error:", error);
       
-      // Handle Firebase-specific authentication errors with user-friendly messages
+      // Handle authentication errors with enhanced security features
       if (error instanceof Error) {
-        const errorMessage = error.message.toLowerCase();
-        const errorCode = errorMessage.includes('auth/') 
-          ? errorMessage.split('auth/')[1].split(')')[0].trim() 
-          : '';
-        
-        switch (errorCode) {
-          case 'invalid-credential':
-            toast({
-              title: "Invalid Credentials",
-              description: "The email or password you entered is incorrect. Please try again.",
-              variant: "destructive",
-            });
-            break;
-          case 'user-not-found':
-            toast({
-              title: "User not found",
-              description: "No account exists with this email address. Please check your email or create a new account.",
-              variant: "destructive",
-            });
-            break;
-          case 'wrong-password':
-            toast({
-              title: "Invalid Credentials",
-              description: "The email or password you entered is incorrect. Please try again.",
-              variant: "destructive",
-            });
-            break;
-          case 'too-many-requests':
-            toast({
-              title: "Too many attempts",
-              description: "Access to this account has been temporarily disabled due to many failed login attempts. Please try again later.",
-              variant: "destructive",
-            });
-            break;
-          case 'user-disabled':
-            toast({
-              title: "Account disabled",
-              description: "This account has been disabled. Please contact support for help.",
-              variant: "destructive",
-            });
-            break;
-          default:
-            toast({
-              title: "Login failed",
-              description: "Unable to sign in. Please check your credentials and try again.",
-              variant: "destructive",
-            });
+        // Check for account lockout errors
+        if (error.name === 'AccountLocked') {
+          toast({
+            title: "Account Locked",
+            description: error.message.replace('Account locked: ', ''),
+            variant: "destructive",
+          });
+          return;
         }
+        
+        // Handle Firebase authentication errors
+        const errorCode = extractFirebaseErrorCode(error);
+        const errorInfo = getAuthErrorMessage(errorCode);
+        
+        toast({
+          title: errorInfo.title,
+          description: errorInfo.description,
+          variant: "destructive",
+        });
       } else {
         // Fallback for non-Error objects
         toast({
