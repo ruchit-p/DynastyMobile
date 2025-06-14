@@ -74,6 +74,46 @@ export function useFeedData(userId: string, familyTreeId: string): UseFeedDataRe
     );
   }, [stories, events]);
   
+  const loadFreshData = useCallback(async () => {
+    try {
+      const [storiesResult, eventsResult] = await Promise.all([
+        getAccessibleStoriesPaginated(userId, familyTreeId, undefined, STORIES_PER_PAGE),
+        getEventsForFeedPaginated(userId, familyTreeId, undefined, EVENTS_PER_PAGE)
+      ]);
+      
+      // Cache the results
+      const storiesCacheKey = cacheKeys.stories(familyTreeId, 0);
+      const eventsCacheKey = cacheKeys.events(familyTreeId, 0);
+      
+      await Promise.all([
+        cacheService.set(storiesCacheKey, storiesResult, {
+          ttl: 60000, // 1 minute
+          persist: true
+        }),
+        cacheService.set(eventsCacheKey, eventsResult, {
+          ttl: 60000, // 1 minute
+          persist: true
+        })
+      ]);
+      
+      setStories(storiesResult.stories);
+      setEvents(eventsResult.events as EventData[]);
+      setHasMoreStories(storiesResult.hasMore);
+      setHasMoreEvents(eventsResult.hasMore);
+      setLastStoryId(storiesResult.lastDocId);
+      setLastEventDate(eventsResult.lastEventDate);
+    } catch (error) {
+      errorHandler.handleError(error, ErrorSeverity.LOW, {
+        action: 'load-fresh-feed-data',
+        context: { userId, familyTreeId }
+      });
+      if (!stories.length && !events.length) {
+        // Only set error if we have no cached data to show
+        setError(error instanceof Error ? error.message : 'Failed to load feed content');
+      }
+    }
+  }, [userId, familyTreeId, stories.length, events.length]);
+  
   const loadInitialData = useCallback(async () => {
     if (!userId || !familyTreeId) return;
     
@@ -113,47 +153,7 @@ export function useFeedData(userId: string, familyTreeId: string): UseFeedDataRe
     } finally {
       setLoading(false);
     }
-  }, [userId, familyTreeId]);
-  
-  const loadFreshData = async () => {
-    try {
-      const [storiesResult, eventsResult] = await Promise.all([
-        getAccessibleStoriesPaginated(userId, familyTreeId, undefined, STORIES_PER_PAGE),
-        getEventsForFeedPaginated(userId, familyTreeId, undefined, EVENTS_PER_PAGE)
-      ]);
-      
-      // Cache the results
-      const storiesCacheKey = cacheKeys.stories(familyTreeId, 0);
-      const eventsCacheKey = cacheKeys.events(familyTreeId, 0);
-      
-      await Promise.all([
-        cacheService.set(storiesCacheKey, storiesResult, {
-          ttl: 60000, // 1 minute
-          persist: true
-        }),
-        cacheService.set(eventsCacheKey, eventsResult, {
-          ttl: 60000, // 1 minute
-          persist: true
-        })
-      ]);
-      
-      setStories(storiesResult.stories);
-      setEvents(eventsResult.events as EventData[]);
-      setHasMoreStories(storiesResult.hasMore);
-      setHasMoreEvents(eventsResult.hasMore);
-      setLastStoryId(storiesResult.lastDocId);
-      setLastEventDate(eventsResult.lastEventDate);
-    } catch (error) {
-      errorHandler.handleError(error, ErrorSeverity.LOW, {
-        action: 'load-fresh-feed-data',
-        context: { userId, familyTreeId }
-      });
-      if (!stories.length && !events.length) {
-        // Only set error if we have no cached data to show
-        setError(error instanceof Error ? error.message : 'Failed to load feed content');
-      }
-    }
-  };
+  }, [userId, familyTreeId, loadFreshData]);
   
   const loadMoreContent = useCallback(async () => {
     if ((!hasMoreStories && !hasMoreEvents) || loadingMore) return;
@@ -162,13 +162,15 @@ export function useFeedData(userId: string, familyTreeId: string): UseFeedDataRe
     setError(null);
     
     try {
-      const promises: Promise<any>[] = [];
+      type StoryResult = { type: 'stories'; result: { stories: EnrichedStory[], hasMore: boolean, lastDocId?: string } };
+      type EventResult = { type: 'events'; result: { events: EventData[], hasMore: boolean, lastEventDate?: string } };
+      const promises: Promise<StoryResult | EventResult>[] = [];
       
       // Load more stories if available
       if (hasMoreStories && lastStoryId) {
         promises.push(
           getAccessibleStoriesPaginated(userId, familyTreeId, lastStoryId, STORIES_PER_PAGE)
-            .then(result => ({ type: 'stories', result }))
+            .then(result => ({ type: 'stories' as const, result }))
         );
       }
       
@@ -176,7 +178,7 @@ export function useFeedData(userId: string, familyTreeId: string): UseFeedDataRe
       if (hasMoreEvents && lastEventDate) {
         promises.push(
           getEventsForFeedPaginated(userId, familyTreeId, lastEventDate, EVENTS_PER_PAGE)
-            .then(result => ({ type: 'events', result }))
+            .then(result => ({ type: 'events' as const, result }))
         );
       }
       
@@ -184,18 +186,18 @@ export function useFeedData(userId: string, familyTreeId: string): UseFeedDataRe
       
       const results = await Promise.all(promises);
       
-      results.forEach(({ type, result }) => {
-        if (type === 'stories') {
-          setStories(prev => [...prev, ...result.stories]);
-          setHasMoreStories(result.hasMore);
-          if (result.lastDocId) {
-            setLastStoryId(result.lastDocId);
+      results.forEach((item) => {
+        if (item.type === 'stories') {
+          setStories(prev => [...prev, ...item.result.stories]);
+          setHasMoreStories(item.result.hasMore);
+          if (item.result.lastDocId) {
+            setLastStoryId(item.result.lastDocId);
           }
-        } else if (type === 'events') {
-          setEvents(prev => [...prev, ...(result.events as EventData[])]);
-          setHasMoreEvents(result.hasMore);
-          if (result.lastEventDate) {
-            setLastEventDate(result.lastEventDate);
+        } else if (item.type === 'events') {
+          setEvents(prev => [...prev, ...item.result.events]);
+          setHasMoreEvents(item.result.hasMore);
+          if (item.result.lastEventDate) {
+            setLastEventDate(item.result.lastEventDate);
           }
         }
       });

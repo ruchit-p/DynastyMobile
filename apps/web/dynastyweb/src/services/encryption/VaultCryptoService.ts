@@ -7,7 +7,6 @@ import { errorHandler, ErrorSeverity } from '../ErrorHandlingService';
 // Constants for vault encryption - matching mobile implementation
 const SECRETSTREAM_CHUNK_SIZE = 32 * 1024; // 32KB optimal for web
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
-const FILE_DERIVATION_CONTEXT = 'FileKey '; // 8 bytes with space padding
 
 // Types
 export interface EncryptedFileMetadata {

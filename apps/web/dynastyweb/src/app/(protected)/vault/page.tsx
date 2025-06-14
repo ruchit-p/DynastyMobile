@@ -24,6 +24,9 @@ import {
   FileAudio,
   FileText,
   File,
+  Shield,
+  AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import { formatVaultDate } from '@/utils/dateUtils';
 import { useToast } from '@/hooks/use-toast';
@@ -40,6 +43,45 @@ const FilePreview = dynamic(() => import('@/components/FilePreview'), { ssr: fal
 interface BreadcrumbItem {
   id: string | null;
   name: string;
+}
+
+// Scan status badge component
+function ScanStatusBadge({ scanStatus }: { scanStatus?: VaultItem['scanStatus'] }) {
+  if (!scanStatus) return null;
+
+  switch (scanStatus) {
+    case 'pending':
+    case 'scanning':
+      return (
+        <div className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Scanning
+        </div>
+      );
+    case 'clean':
+      return (
+        <div className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+          <Shield className="h-3 w-3" />
+          Clean
+        </div>
+      );
+    case 'infected':
+      return (
+        <div className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+          <AlertTriangle className="h-3 w-3" />
+          Infected
+        </div>
+      );
+    case 'error':
+      return (
+        <div className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
+          <AlertTriangle className="h-3 w-3" />
+          Error
+        </div>
+      );
+    default:
+      return null;
+  }
 }
 
 export default function VaultPage() {
@@ -204,6 +246,16 @@ export default function VaultPage() {
   };
 
   const handleDownload = async (item: VaultItem) => {
+    // Prevent download of infected files
+    if (item.scanStatus === 'infected' || item.scanStatus === 'error') {
+      toast({
+        title: 'Download blocked',
+        description: 'This file cannot be downloaded due to security concerns',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       const blob = await vaultService.downloadFile(item);
       const url = URL.createObjectURL(blob);
@@ -391,7 +443,7 @@ export default function VaultPage() {
           onContextMenu={(e) => handleContextMenu(e, item, 'file')}
         >
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-1">
               <div className="h-12 w-12 relative flex-shrink-0">
                 {canShowThumbnail(item) ? (
                   item.url || item.thumbnailUrl ? (
@@ -427,8 +479,11 @@ export default function VaultPage() {
                   </div>
                 )}
               </div>
-              <div>
-                <p className="font-medium">{item.name}</p>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-medium">{item.name}</p>
+                  <ScanStatusBadge scanStatus={item.scanStatus} />
+                </div>
                 <p className="text-sm text-gray-500">
                   {formatFileSize(item.size || 0)}
                 </p>
@@ -686,6 +741,9 @@ export default function VaultPage() {
                     </div>
                     <p className="truncate text-sm font-medium">{item.name}</p>
                     <p className="text-xs text-gray-500">{formatFileSize(item.size || 0)}</p>
+                    <div className="mt-1">
+                      <ScanStatusBadge scanStatus={item.scanStatus} />
+                    </div>
                   </Card>
                 </div>
               ))}
@@ -772,15 +830,24 @@ export default function VaultPage() {
                       <FileImage className="mr-2 h-4 w-4" />
                       Preview
                     </button>
+                    {(contextMenu.item as VaultItem).scanStatus && (
+                      <div className="px-3 py-2">
+                        <ScanStatusBadge scanStatus={(contextMenu.item as VaultItem).scanStatus} />
+                      </div>
+                    )}
                     <button
-                      className="flex w-full items-center px-3 py-2 text-sm hover:bg-gray-100"
+                      className="flex w-full items-center px-3 py-2 text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => {
                         handleDownload(contextMenu.item as VaultItem);
                         setContextMenu(null);
                       }}
+                      disabled={(contextMenu.item as VaultItem).scanStatus === 'infected' || (contextMenu.item as VaultItem).scanStatus === 'error'}
                     >
                       <Download className="mr-2 h-4 w-4" />
                       Download
+                      {((contextMenu.item as VaultItem).scanStatus === 'infected' || (contextMenu.item as VaultItem).scanStatus === 'error') && (
+                        <span className="ml-auto text-xs text-red-600">Blocked</span>
+                      )}
                     </button>
                     <button
                       className="flex w-full items-center px-3 py-2 text-sm hover:bg-gray-100"
