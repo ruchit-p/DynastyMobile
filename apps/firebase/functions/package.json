@@ -2,7 +2,7 @@
   "name": "functions",
   "version": "1.0.0",
   "scripts": {
-    "lint": "eslint --ext .js,.ts .",
+    "lint": "cross-env ESLINT_USE_FLAT_CONFIG=false eslint --config .eslintrc.js --ext .js,.ts .",
     "lint:ci": "eslint --ext .js,.ts src --ignore-pattern '**/*.test.ts' --ignore-pattern '**/__tests__/**'",
     "build": "node esbuild.config.mjs",
     "build:watch": "node -e \"import('./esbuild.config.mjs').then(m => require('esbuild').context(m.buildOptions).then(ctx => ctx.watch()))\"",
