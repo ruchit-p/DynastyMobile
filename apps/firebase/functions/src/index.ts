@@ -50,22 +50,26 @@ setGlobalOptions({
   ],
 });
 
-// Initialize Firebase Admin
-if (process.env.FUNCTIONS_EMULATOR === "true") {
-  // Set environment variables BEFORE initializing Firebase Admin SDK
-  // Use the correct environment variable names for Firebase emulators
-  process.env.FIRESTORE_EMULATOR_HOST = "localhost:8080";
-  process.env.FIREBASE_AUTH_EMULATOR_HOST = "localhost:9099";
-  process.env.FIREBASE_STORAGE_EMULATOR_HOST = "localhost:9199";
+// Initialize Firebase Admin (only if not already initialized)
+import * as admin from "firebase-admin";
 
-  // For emulator, use the configured project ID to avoid warnings
-  initializeApp({
-    projectId: "dynasty-eba63",
-    // No credentials needed for emulator
-  });
-} else {
-  // For production, use default credentials
-  initializeApp();
+if (!admin.apps.length) {
+  if (process.env.FUNCTIONS_EMULATOR === "true") {
+    // Set environment variables BEFORE initializing Firebase Admin SDK
+    // Use the correct environment variable names for Firebase emulators
+    process.env.FIRESTORE_EMULATOR_HOST = "localhost:8080";
+    process.env.FIREBASE_AUTH_EMULATOR_HOST = "localhost:9099";
+    process.env.FIREBASE_STORAGE_EMULATOR_HOST = "localhost:9199";
+
+    // For emulator, use the configured project ID to avoid warnings
+    initializeApp({
+      projectId: "dynasty-eba63",
+      // No credentials needed for emulator
+    });
+  } else {
+    // For production, use default credentials
+    initializeApp();
+  }
 }
 
 // Export all functions
