@@ -176,7 +176,7 @@ export const EncryptionMigrationProgress: React.FC<EncryptionMigrationProgressPr
             </View>
             <Text style={styles.title}>Upgrading Encryption</Text>
             <Text style={styles.subtitle}>
-              We're upgrading your messages to use Signal Protocol for enhanced security
+              We&apos;re upgrading your messages to use Signal Protocol for enhanced security
             </Text>
           </View>
 

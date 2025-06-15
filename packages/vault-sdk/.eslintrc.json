@@ -1,6 +1,6 @@
 {
   "extends": [
-    "../../apps/mobile/.eslintrc.json"
+    "../../apps/web/dynastyweb/.eslintrc.json"
   ],
   "parserOptions": {
     "project": "./tsconfig.json"
