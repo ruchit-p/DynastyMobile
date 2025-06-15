@@ -4,8 +4,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { X, Download, Share2, ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { vaultService, formatFileSize, getFileIcon } from '@/services/VaultService';
+import { formatFileSize, getFileIcon } from '@/services/VaultService';
 import type { VaultItem } from '@/services/VaultService';
+import { vaultSDKService as vaultService } from '@/services/VaultSDKService';
 
 interface FilePreviewProps {
   item: VaultItem;

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { vaultService } from '@/services/VaultService';
 import { vaultSDKService } from '@/services/VaultSDKService';
 import { useFeatureFlags } from '@/lib/feature-flags';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -138,7 +137,7 @@ export default function VaultMonitoringDashboard({ isAdmin = false }: { isAdmin?
           encStats = await activeVaultService.getEncryptionStats();
         } else {
           limitations.push('Encryption statistics not available with SDK');
-          encStats = await vaultService.getEncryptionStats();
+          encStats = await vaultSDKService.getEncryptionStats();
         }
 
         // Load key rotation status
@@ -147,7 +146,7 @@ export default function VaultMonitoringDashboard({ isAdmin = false }: { isAdmin?
           keyStatus = await activeVaultService.getKeyRotationStatus();
         } else {
           limitations.push('Key rotation status not available with SDK');
-          keyStatus = await vaultService.getKeyRotationStatus();
+          keyStatus = await vaultSDKService.getKeyRotationStatus();
         }
 
         // Load share analytics
@@ -156,7 +155,7 @@ export default function VaultMonitoringDashboard({ isAdmin = false }: { isAdmin?
           shareAnalytics = await activeVaultService.getShareLinkAnalytics();
         } else {
           limitations.push('Share link analytics not available with SDK');
-          shareAnalytics = await vaultService.getShareLinkAnalytics();
+          shareAnalytics = await vaultSDKService.getShareLinkAnalytics();
         }
 
         setEncryptionStats(encStats);
@@ -168,7 +167,7 @@ export default function VaultMonitoringDashboard({ isAdmin = false }: { isAdmin?
         if (isAdmin) {
           try {
             // System stats always use legacy service for now
-            const sysStats = await vaultService.getSystemVaultStats();
+            const sysStats = await vaultSDKService.getSystemVaultStats();
             setSystemStats(sysStats);
             if (useSDK) {
               limitations.push('System statistics using legacy service');

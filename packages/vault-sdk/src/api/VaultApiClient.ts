@@ -28,16 +28,12 @@ import {
   VaultItem,
   VaultItems,
   VaultShareLink,
-  
-  // Schemas for validation
-  GetVaultItemsResponseSchema,
-  GetVaultUploadSignedUrlResponseSchema,
-  GetVaultDownloadUrlResponseSchema,
-  VaultItemSchema,
-  VaultItemsSchema,
-  VaultShareLinkSchema,
-  VaultStorageInfoSchema,
-  VaultEncryptionStatusSchema,
+  RestoreVaultItemRequest,
+  GetVaultAuditLogsRequest,
+  GetVaultAuditLogsResponse,
+  AccessVaultShareLinkRequest,
+  GetVaultSystemStatsRequest,
+  GetVaultSystemStatsResponse,
 } from '../types/Vault';
 
 import { 
@@ -295,8 +291,8 @@ export class VaultApiClient {
   /**
    * Restores a deleted vault item from trash
    */
-  restoreItem(data: { itemId: string }, options?: ApiCallOptions): Promise<VaultItem> {
-    return createFunctionCaller<{ itemId: string }, VaultItem>(
+  restoreItem(data: RestoreVaultItemRequest, options?: ApiCallOptions): Promise<VaultItem> {
+    return createFunctionCaller<RestoreVaultItemRequest, VaultItem>(
       this.functions,
       'restoreVaultItem',
       undefined,
@@ -371,11 +367,23 @@ export class VaultApiClient {
   /**
    * Accesses a vault item via share link
    */
-  accessShareLink(data: { shareId: string; password?: string }, options?: ApiCallOptions): Promise<VaultItem> {
-    return createFunctionCaller<{ shareId: string; password?: string }, VaultItem>(
+  accessShareLink(data: AccessVaultShareLinkRequest, options?: ApiCallOptions): Promise<VaultItem> {
+    return createFunctionCaller<AccessVaultShareLinkRequest, VaultItem>(
       this.functions,
       'accessVaultShareLink',
       undefined,
+      false
+    )(data, options);
+  }
+  
+  /**
+   * Revokes a share link
+   */
+  revokeShareLink(data: { shareId: string }, options?: ApiCallOptions): Promise<{ success: boolean }> {
+    return createFunctionCaller<{ shareId: string }, { success: boolean }>(
+      this.functions,
+      'revokeVaultShareLink',
+      z.object({ success: z.boolean() }),
       false
     )(data, options);
   }
@@ -451,11 +459,23 @@ export class VaultApiClient {
   /**
    * Gets vault audit logs
    */
-  getAuditLogs(data: { startDate?: string; endDate?: string; action?: string; itemId?: string; limit?: number }, options?: ApiCallOptions): Promise<any[]> {
-    return createFunctionCaller<{ startDate?: string; endDate?: string; action?: string; itemId?: string; limit?: number }, any[]>(
+  getAuditLogs(data: GetVaultAuditLogsRequest, options?: ApiCallOptions): Promise<GetVaultAuditLogsResponse> {
+    return createFunctionCaller<GetVaultAuditLogsRequest, GetVaultAuditLogsResponse>(
       this.functions,
       'getVaultAuditLogs',
-      z.array(z.any()),
+      undefined,
+      false
+    )(data, options);
+  }
+  
+  /**
+   * Gets system-wide vault statistics
+   */
+  getSystemStats(data: GetVaultSystemStatsRequest = {}, options?: ApiCallOptions): Promise<GetVaultSystemStatsResponse> {
+    return createFunctionCaller<GetVaultSystemStatsRequest, GetVaultSystemStatsResponse>(
+      this.functions,
+      'getVaultSystemStats',
+      undefined,
       false
     )(data, options);
   }

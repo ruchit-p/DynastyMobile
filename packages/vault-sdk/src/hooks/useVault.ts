@@ -2,10 +2,11 @@ import { useQuery, useMutation, useQueryClient, type UseQueryOptions, type UseMu
 import { type FirebaseApp } from 'firebase/app';
 
 import {
-  VaultApiClient,
   createVaultApiClient,
-  type VaultApiClientConfig,
 } from '../api/VaultApiClient';
+import {
+  createVaultRealtimeService,
+} from '../services/VaultRealtimeService';
 import {
   type VaultItem,
   type VaultItems,
@@ -77,10 +78,16 @@ export function useVault(config: UseVaultConfig, errorHandler?: VaultErrorHandle
   // Create API client instance
   const apiClient = createVaultApiClient({
     app: config.firebaseApp,
-    region: config.region,
-    timeout: config.timeout,
-    maxRetries: config.maxRetries,
-    enableValidation: config.enableValidation,
+    region: config.region || 'us-central1',
+    timeout: config.timeout || 30000,
+    maxRetries: config.maxRetries || 3,
+    enableValidation: config.enableValidation !== false,
+  });
+
+  // Create realtime service instance
+  const realtimeService = createVaultRealtimeService({
+    app: config.firebaseApp,
+    enableOfflinePersistence: true,
   });
 
   // Error handling wrapper
@@ -115,10 +122,6 @@ export function useVault(config: UseVaultConfig, errorHandler?: VaultErrorHandle
       staleTime: 5 * 60 * 1000, // 5 minutes
       gcTime: 10 * 60 * 1000, // 10 minutes
       ...options,
-      onError: (error) => {
-        handleError(error, 'Get vault items');
-        options?.onError?.(error);
-      },
     });
   };
 
@@ -135,10 +138,6 @@ export function useVault(config: UseVaultConfig, errorHandler?: VaultErrorHandle
       staleTime: 2 * 60 * 1000, // 2 minutes
       gcTime: 5 * 60 * 1000, // 5 minutes
       ...options,
-      onError: (error) => {
-        handleError(error, 'Get deleted vault items');
-        options?.onError?.(error);
-      },
     });
   };
 
@@ -159,10 +158,6 @@ export function useVault(config: UseVaultConfig, errorHandler?: VaultErrorHandle
       staleTime: 30 * 1000, // 30 seconds
       gcTime: 2 * 60 * 1000, // 2 minutes
       ...options,
-      onError: (error) => {
-        handleError(error, 'Search vault items');
-        options?.onError?.(error);
-      },
     });
   };
 
@@ -179,10 +174,6 @@ export function useVault(config: UseVaultConfig, errorHandler?: VaultErrorHandle
       staleTime: 10 * 60 * 1000, // 10 minutes
       gcTime: 30 * 60 * 1000, // 30 minutes
       ...options,
-      onError: (error) => {
-        handleError(error, 'Get vault storage info');
-        options?.onError?.(error);
-      },
     });
   };
 
@@ -199,10 +190,6 @@ export function useVault(config: UseVaultConfig, errorHandler?: VaultErrorHandle
       staleTime: 5 * 60 * 1000, // 5 minutes
       gcTime: 15 * 60 * 1000, // 15 minutes
       ...options,
-      onError: (error) => {
-        handleError(error, 'Get vault encryption status');
-        options?.onError?.(error);
-      },
     });
   };
 
@@ -399,6 +386,9 @@ export function useVault(config: UseVaultConfig, errorHandler?: VaultErrorHandle
     
     // Direct API access for advanced use cases
     apiClient,
+    
+    // Real-time service for subscriptions
+    realtimeService,
     
     // Cache management
     invalidateAll: () => queryClient.invalidateQueries({ queryKey: vaultQueryKeys.all }),

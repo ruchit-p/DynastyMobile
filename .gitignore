@@ -40,6 +40,17 @@ firebase-export-*
 # Package manager conflicts
 package-lock.json
 
+# Yarn Berry/Modern files
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/plugins
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+.yarnrc.yml
+yarn.lock
+
 # Empty directories
 logs/
 

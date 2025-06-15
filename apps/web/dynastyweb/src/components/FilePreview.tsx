@@ -18,7 +18,8 @@ import {
   AlertTriangle,
   Loader2,
 } from 'lucide-react';
-import { VaultItem, vaultService, formatFileSize } from '@/services/VaultService';
+import { VaultItem, formatFileSize } from '@/services/VaultService';
+import { vaultSDKService as vaultService } from '@/services/VaultSDKService';
 import { formatVaultDate } from '@/utils/dateUtils';
 import { useToast } from '@/hooks/use-toast';
 

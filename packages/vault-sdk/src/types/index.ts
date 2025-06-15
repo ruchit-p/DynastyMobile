@@ -18,4 +18,13 @@ export type {
   SearchVaultItemsRequest,
   VaultStorageInfo,
   VaultEncryptionStatus,
+  RestoreVaultItemRequest,
+  GetVaultAuditLogsRequest,
+  VaultAuditLog,
+  GetVaultAuditLogsResponse,
+  AccessVaultShareLinkRequest,
+  RevokeVaultItemAccessRequest,
+  GetVaultSystemStatsRequest,
+  GetVaultSystemStatsResponse,
+  PermanentlyDeleteVaultItemsRequest,
 } from './Vault';

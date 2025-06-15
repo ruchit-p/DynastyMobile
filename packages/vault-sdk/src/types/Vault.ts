@@ -263,6 +263,79 @@ export type SearchVaultItemsRequest = z.infer<typeof SearchVaultItemsRequestSche
 export type VaultStorageInfo = z.infer<typeof VaultStorageInfoSchema>;
 export type VaultEncryptionStatus = z.infer<typeof VaultEncryptionStatusSchema>;
 
+// Additional Request/Response schemas
+export const RestoreVaultItemRequestSchema = z.object({
+  itemId: z.string(),
+});
+
+export const GetVaultAuditLogsRequestSchema = z.object({
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  action: z.string().optional(),
+  itemId: z.string().optional(),
+  limit: z.number().min(1).max(100).optional(),
+});
+
+export const VaultAuditLogSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  action: z.string(),
+  itemId: z.string().optional(),
+  metadata: z.record(z.unknown()).optional(),
+  timestamp: z.string(),
+  suspicious: z.boolean().optional(),
+});
+
+export const GetVaultAuditLogsResponseSchema = z.object({
+  logs: z.array(VaultAuditLogSchema),
+  hasMore: z.boolean().optional(),
+});
+
+export const AccessVaultShareLinkRequestSchema = z.object({
+  shareId: z.string(),
+  password: z.string().optional(),
+});
+
+export const RevokeVaultItemAccessRequestSchema = z.object({
+  itemId: z.string(),
+  userId: z.string(),
+});
+
+export const GetVaultSystemStatsRequestSchema = z.object({
+  includeUserBreakdown: z.boolean().optional(),
+});
+
+export const GetVaultSystemStatsResponseSchema = z.object({
+  totalUsers: z.number(),
+  totalItems: z.number(),
+  totalStorage: z.number(),
+  encryptedItems: z.number(),
+  sharedItems: z.number(),
+  deletedItems: z.number(),
+  userBreakdown: z.array(z.object({
+    userId: z.string(),
+    itemCount: z.number(),
+    storageUsed: z.number(),
+  })).optional(),
+});
+
+export const PermanentlyDeleteVaultItemsRequestSchema = z.object({
+  itemIds: z.array(z.string()).optional(),
+  deleteAll: z.boolean().optional(),
+  confirmDelete: z.boolean(),
+});
+
+// Additional TypeScript types
+export type RestoreVaultItemRequest = z.infer<typeof RestoreVaultItemRequestSchema>;
+export type GetVaultAuditLogsRequest = z.infer<typeof GetVaultAuditLogsRequestSchema>;
+export type VaultAuditLog = z.infer<typeof VaultAuditLogSchema>;
+export type GetVaultAuditLogsResponse = z.infer<typeof GetVaultAuditLogsResponseSchema>;
+export type AccessVaultShareLinkRequest = z.infer<typeof AccessVaultShareLinkRequestSchema>;
+export type RevokeVaultItemAccessRequest = z.infer<typeof RevokeVaultItemAccessRequestSchema>;
+export type GetVaultSystemStatsRequest = z.infer<typeof GetVaultSystemStatsRequestSchema>;
+export type GetVaultSystemStatsResponse = z.infer<typeof GetVaultSystemStatsResponseSchema>;
+export type PermanentlyDeleteVaultItemsRequest = z.infer<typeof PermanentlyDeleteVaultItemsRequestSchema>;
+
 // Error types
 export enum VaultErrorCode {
   UNAUTHENTICATED = 'UNAUTHENTICATED',
