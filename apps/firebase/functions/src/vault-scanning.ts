@@ -13,13 +13,13 @@ import {withAuth, requireAuth} from "./middleware";
 import {createLogContext, formatErrorForLogging} from "./utils/sanitization";
 import {validateRequest} from "./utils/request-validator";
 import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
-import {cloudmersiveService} from "./services/cloudmersiveService";
+import {getCloudmersiveService} from "./services/cloudmersiveService";
 import {quarantineService} from "./services/quarantineService";
 import {getVaultScanConfig, CLOUDMERSIVE_API_KEY} from "./config/vaultScanSecrets";
 import {getStorageAdapter} from "./services/storageAdapter";
 
-// Initialize Firestore
-const db = getFirestore();
+// Lazy-load Firestore to avoid initialization issues
+const getDb = () => getFirestore();
 
 /**
  * Process pending scans in staging bucket
@@ -131,7 +131,7 @@ export const scanVaultItem = onCall(
 
       try {
         // Get vault item
-        const itemDoc = await db.collection("vaultItems").doc(itemId).get();
+        const itemDoc = await getDb().collection("vaultItems").doc(itemId).get();
         if (!itemDoc.exists) {
           throw createError(ErrorCode.NOT_FOUND, "Vault item not found");
         }
@@ -411,7 +411,7 @@ async function processSingleVaultItem(itemId: string, itemData: any) {
     const fileHash = require("crypto").createHash("sha256").update(fileBuffer).digest("hex");
 
     // Perform virus scan
-    const scanResult = await cloudmersiveService.scanFile(
+    const scanResult = await getCloudmersiveService().scanFile(
       fileBuffer,
       itemData.name,
       fileHash,

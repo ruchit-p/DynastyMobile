@@ -40,9 +40,9 @@ export interface FileTransferResult {
  */
 export class QuarantineService {
   private static instance: QuarantineService;
-  private readonly db = getFirestore();
-  private readonly storageAdapter = getStorageAdapter();
-  private readonly config = getVaultScanConfig();
+  private db: ReturnType<typeof getFirestore> | undefined;
+  private storageAdapter: ReturnType<typeof getStorageAdapter> | undefined;
+  private config: ReturnType<typeof getVaultScanConfig> | undefined;
 
   private constructor() {}
 
@@ -51,6 +51,27 @@ export class QuarantineService {
       QuarantineService.instance = new QuarantineService();
     }
     return QuarantineService.instance;
+  }
+
+  private getDb() {
+    if (!this.db) {
+      this.db = getFirestore();
+    }
+    return this.db;
+  }
+
+  private getStorageAdapter() {
+    if (!this.storageAdapter) {
+      this.storageAdapter = getStorageAdapter();
+    }
+    return this.storageAdapter;
+  }
+
+  private getConfig() {
+    if (!this.config) {
+      this.config = getVaultScanConfig();
+    }
+    return this.config;
   }
 
   /**

@@ -70,7 +70,7 @@ export const recordFailedLogin = onCall(
     );
 
     // Get recent failed attempts
-    const failedAttemptsRef = db.collection("failedLoginAttempts");
+    const failedAttemptsRef = getDb().collection("failedLoginAttempts");
     const recentAttemptsSnapshot = await failedAttemptsRef
       .where("email", "==", email.toLowerCase())
       .where("timestamp", ">", windowStart)
@@ -89,7 +89,7 @@ export const recordFailedLogin = onCall(
 
     // Check if we need to lock the account
     if (recentAttempts + 1 >= MAX_FAILED_ATTEMPTS) {
-      const lockoutRef = db.collection("accountLockouts").doc(email.toLowerCase());
+      const lockoutRef = getDb().collection("accountLockouts").doc(email.toLowerCase());
       const unlockAt = Timestamp.fromDate(
         new Date(Date.now() + LOCKOUT_DURATION_MINUTES * 60 * 1000)
       );
@@ -147,7 +147,7 @@ export const checkAccountLockout = onCall(
 
     const {email} = validatedData;
 
-    const lockoutRef = db.collection("accountLockouts").doc(email.toLowerCase());
+    const lockoutRef = getDb().collection("accountLockouts").doc(email.toLowerCase());
     const lockoutDoc = await lockoutRef.get();
 
     if (!lockoutDoc.exists) {
@@ -166,13 +166,13 @@ export const checkAccountLockout = onCall(
       await lockoutRef.delete();
 
       // Also clean up old failed attempts
-      const failedAttemptsRef = db.collection("failedLoginAttempts");
+      const failedAttemptsRef = getDb().collection("failedLoginAttempts");
       const oldAttemptsSnapshot = await failedAttemptsRef
         .where("email", "==", email.toLowerCase())
         .where("timestamp", "<", Timestamp.fromDate(now))
         .get();
 
-      const batch = db.batch();
+      const batch = getDb().batch();
       oldAttemptsSnapshot.forEach((doc) => {
         batch.delete(doc.ref);
       });
@@ -209,7 +209,7 @@ export const clearFailedLoginAttempts = onCall(
       throw createError(ErrorCode.UNAUTHENTICATED, "Authentication required");
     }
 
-    const callerDoc = await db.collection("users").doc(request.auth.uid).get();
+    const callerDoc = await getDb().collection("users").doc(request.auth.uid).get();
     if (!callerDoc.exists || !callerDoc.data()?.isAdmin) {
       throw createError(ErrorCode.PERMISSION_DENIED, "Admin access required");
     }
@@ -229,16 +229,16 @@ export const clearFailedLoginAttempts = onCall(
     const {email} = validatedData;
 
     // Remove lockout
-    const lockoutRef = db.collection("accountLockouts").doc(email.toLowerCase());
+    const lockoutRef = getDb().collection("accountLockouts").doc(email.toLowerCase());
     await lockoutRef.delete();
 
     // Remove failed attempts
-    const failedAttemptsRef = db.collection("failedLoginAttempts");
+    const failedAttemptsRef = getDb().collection("failedLoginAttempts");
     const attemptsSnapshot = await failedAttemptsRef
       .where("email", "==", email.toLowerCase())
       .get();
 
-    const batch = db.batch();
+    const batch = getDb().batch();
     attemptsSnapshot.forEach((doc) => {
       batch.delete(doc.ref);
     });
@@ -281,7 +281,7 @@ export const beforeSignIn = beforeUserSignedIn(
     }));
 
     // Check if account is locked
-    const lockoutRef = db.collection("accountLockouts").doc(email.toLowerCase());
+    const lockoutRef = getDb().collection("accountLockouts").doc(email.toLowerCase());
     const lockoutDoc = await lockoutRef.get();
 
     if (!lockoutDoc.exists) {
@@ -328,26 +328,26 @@ export const cleanupFailedAttempts = onCall(
     );
 
     // Clean up old failed attempts
-    const failedAttemptsRef = db.collection("failedLoginAttempts");
+    const failedAttemptsRef = getDb().collection("failedLoginAttempts");
     const oldAttemptsSnapshot = await failedAttemptsRef
       .where("timestamp", "<", cutoffTime)
       .limit(500) // Process in batches
       .get();
 
-    const batch = db.batch();
+    const batch = getDb().batch();
     oldAttemptsSnapshot.forEach((doc) => {
       batch.delete(doc.ref);
     });
     await batch.commit();
 
     // Clean up expired lockouts
-    const lockoutsRef = db.collection("accountLockouts");
+    const lockoutsRef = getDb().collection("accountLockouts");
     const expiredLockoutsSnapshot = await lockoutsRef
       .where("unlockAt", "<", Timestamp.now())
       .limit(100)
       .get();
 
-    const lockoutBatch = db.batch();
+    const lockoutBatch = getDb().batch();
     expiredLockoutsSnapshot.forEach((doc) => {
       lockoutBatch.delete(doc.ref);
     });
