@@ -460,7 +460,7 @@ export class SignalProtocolStore implements ProtocolStore {
       const sessions = await this.getAllSessions();
       const keysToRemove: string[] = [];
       
-      for (const [addressStr, session] of sessions) {
+      for (const [addressStr] of sessions) {
         // Note: SessionRecord doesn't expose timestamp directly
         // In production, you'd track this separately
         const key = `${this.storagePrefix}session_established_${addressStr}`;

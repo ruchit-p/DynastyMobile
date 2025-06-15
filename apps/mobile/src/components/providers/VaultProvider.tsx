@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo } from 'react';
-import { QueryClient, QueryClientProvider } from 'react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useVaultClient } from '../../services/VaultClient';
 import { getVaultService } from '../../services/VaultServiceV2';
 import { useAuth } from '../../contexts/AuthContext';
