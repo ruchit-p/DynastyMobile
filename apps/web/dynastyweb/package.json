@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "@dynasty/vault-sdk": "file:../../../packages/vault-sdk",
+    "@next/bundle-analyzer": "^15.3.3",
     "@radix-ui/react-accordion": "^1.2.3",
     "@radix-ui/react-alert-dialog": "^1.1.6",
     "@radix-ui/react-avatar": "^1.1.10",
@@ -102,7 +103,6 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@next/bundle-analyzer": "^15.3.3",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/context-async-hooks": "^1.30.1",
     "@opentelemetry/core": "^1.30.1",
