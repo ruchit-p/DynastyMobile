@@ -1401,6 +1401,124 @@ export const deleteVaultItem = onCall(
 /**
  * Get all deleted (soft-deleted) vault items for the user
  */
+export const searchVaultItems = onCall(
+  {
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(
+    async (request) => {
+      const uid = requireAuth(request);
+
+      // Validate and sanitize input
+      const validatedData = validateRequest(
+        request.data,
+        VALIDATION_SCHEMAS.searchVaultItems,
+        uid
+      );
+
+      const { query, fileTypes, parentId, includeDeleted, sortBy, sortOrder, limit } = validatedData;
+      
+      // Sanitize search query
+      const sanitizedQuery = query ? sanitizeUserInput(query) : "";
+      
+      const db = getFirestore();
+
+      try {
+        // Build query - using correct collection name
+        let vaultQuery = db.collection("vaultItems")
+          .where("userId", "==", uid);
+
+        if (!includeDeleted) {
+          vaultQuery = vaultQuery.where("isDeleted", "==", false);
+        }
+
+        if (parentId) {
+          vaultQuery = vaultQuery.where("parentId", "==", parentId);
+        }
+
+        // Execute query
+        const snapshot = await vaultQuery.get();
+        
+        // Filter by search query and file types
+        let items = snapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter(item => {
+            // Text search with sanitized query
+            if (sanitizedQuery && !item.name.toLowerCase().includes(sanitizedQuery.toLowerCase())) {
+              return false;
+            }
+            
+            // File type filter
+            if (fileTypes && fileTypes.length > 0 && !fileTypes.includes(item.fileType)) {
+              return false;
+            }
+            
+            return true;
+          });
+
+        // Sort results
+        const sortField = sortBy || "name";
+        const sortDir = sortOrder || "asc";
+        
+        items.sort((a, b) => {
+          let aVal = a[sortField];
+          let bVal = b[sortField];
+          
+          if (sortField === "size") {
+            aVal = aVal || 0;
+            bVal = bVal || 0;
+          }
+          
+          if (sortDir === "asc") {
+            return aVal > bVal ? 1 : -1;
+          } else {
+            return aVal < bVal ? 1 : -1;
+          }
+        });
+
+        // Apply limit
+        if (limit) {
+          items = items.slice(0, limit);
+        }
+
+        // Log search activity with proper context
+        await logVaultAuditEvent(uid, "search", undefined, createLogContext({
+          query: sanitizedQuery,
+          resultCount: items.length,
+          fileTypes,
+          parentId
+        }));
+
+        // Log successful operation
+        logger.info("Vault search completed", createLogContext({
+          userId: uid,
+          query: sanitizedQuery,
+          resultCount: items.length
+        }));
+
+        return { items };
+      } catch (error) {
+        const {message, context} = formatErrorForLogging(error, {
+          userId: uid,
+          operation: "searchVaultItems",
+          query: sanitizedQuery
+        });
+        logger.error("Vault search failed", {message, ...context});
+        throw createError(
+          ErrorCode.INTERNAL_ERROR,
+          "Failed to search vault items"
+        );
+      }
+    },
+    "searchVaultItems"
+  )
+);
+
 export const getDeletedVaultItems = onCall(
   {
     region: DEFAULT_REGION,
@@ -2447,6 +2565,93 @@ export const accessVaultShareLink = onCall(
       itemId: shareData.itemId,
     };
   }, "accessVaultShareLink")
+);
+
+/**
+ * Get vault statistics for the current user
+ * Note: This is scoped to user's own data for security
+ */
+export const getVaultSystemStats = onCall(
+  {
+    region: DEFAULT_REGION,
+    memory: "256MiB",
+    timeoutSeconds: FUNCTION_TIMEOUT.SHORT,
+  },
+  withAuth(async (request) => {
+    const uid = requireAuth(request);
+
+    // Apply rate limiting for statistics queries
+    await checkRateLimitByIP(request, {
+      type: RateLimitType.QUERY,
+      maxRequests: 50,
+    });
+
+    const db = getFirestore();
+
+    try {
+      // Get user-specific statistics (not system-wide for security)
+      const [
+        vaultSnapshot,
+        storageDoc,
+        sharedWithUserSnapshot,
+      ] = await Promise.all([
+        // Get user's vault items
+        db.collection("vaultItems")
+          .where("userId", "==", uid)
+          .get(),
+        // Get user's storage usage
+        db.collection("userStorageUsage").doc(uid).get(),
+        // Get items shared with the user
+        db.collection("vaultItems")
+          .where("sharedWith", "array-contains", uid)
+          .get(),
+      ]);
+
+      // Calculate statistics
+      const userItems = vaultSnapshot.docs;
+      const totalItems = userItems.length;
+      const deletedItems = userItems.filter(doc => doc.data().isDeleted).length;
+      const encryptedItems = userItems.filter(doc => doc.data().isEncrypted).length;
+      const sharedItems = userItems.filter(doc => 
+        doc.data().sharedWith && doc.data().sharedWith.length > 0
+      ).length;
+
+      // Storage info
+      const storageData = storageDoc.data();
+      const totalStorage = storageData?.totalBytes || 0;
+
+      // Items shared with user
+      const sharedWithUser = sharedWithUserSnapshot.size;
+
+      const stats = {
+        totalUsers: 1, // User's own stats
+        totalItems,
+        totalStorage,
+        encryptedItems,
+        sharedItems,
+        deletedItems,
+        sharedWithUser, // Additional stat
+      };
+
+      // Log successful operation
+      logger.info("Retrieved vault statistics", createLogContext({
+        userId: uid,
+        stats
+      }));
+
+      return stats;
+    } catch (error) {
+      const {message, context} = formatErrorForLogging(error, {
+        userId: uid,
+        operation: "getVaultSystemStats"
+      });
+      logger.error("Failed to get vault stats", {message, ...context});
+      throw createError(
+        ErrorCode.INTERNAL_ERROR,
+        "Failed to retrieve vault statistics"
+      );
+    }
+  }, "getVaultSystemStats")
 );
 
 /**
