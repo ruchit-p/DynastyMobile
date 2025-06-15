@@ -604,6 +604,10 @@ export class SubscriptionService {
     try {
       // Get subscription from Stripe
       const stripeSubscription = await this.stripeService.getSubscription(stripeSubscriptionId);
+      
+      if (!stripeSubscription) {
+        throw createError(ErrorCode.NOT_FOUND, "Stripe subscription not found");
+      }
 
       // Find local subscription
       const snapshot = await this.db

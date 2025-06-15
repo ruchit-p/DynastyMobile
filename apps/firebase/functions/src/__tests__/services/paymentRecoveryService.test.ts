@@ -3,7 +3,68 @@
  * Tests payment failure handling, grace periods, retry logic, and subscription lifecycle
  */
 
-import { PaymentRecoveryService, PaymentRetrySchedule, DunningEmailData } from '../../services/paymentRecoveryService';
+// Create mock objects first
+const mockDoc = {
+  id: 'test-doc-id',
+  get: jest.fn(),
+  set: jest.fn(),
+  update: jest.fn(),
+  ref: { update: jest.fn() },
+};
+
+const mockQuery = {
+  get: jest.fn(),
+  empty: false,
+  docs: [] as any[],
+};
+
+const mockBatch = {
+  update: jest.fn(),
+  commit: jest.fn(),
+};
+
+const mockCollection: any = {
+  doc: jest.fn(() => mockDoc),
+  add: jest.fn(),
+  where: jest.fn(),
+  orderBy: jest.fn(),
+  limit: jest.fn(),
+  get: jest.fn(() => Promise.resolve(mockQuery)),
+};
+
+// Set up method chaining
+mockCollection.where.mockReturnValue(mockCollection);
+mockCollection.orderBy.mockReturnValue(mockCollection);
+mockCollection.limit.mockReturnValue(mockCollection);
+
+const mockFirestore = {
+  collection: jest.fn(() => mockCollection),
+  batch: jest.fn(() => mockBatch),
+};
+
+// Mock firebase-admin/firestore before any imports
+jest.mock('firebase-admin/firestore', () => ({
+  getFirestore: () => mockFirestore,
+  FieldValue: {
+    delete: jest.fn(() => 'DELETE_FIELD'),
+    serverTimestamp: jest.fn(() => ({ _seconds: Date.now() / 1000 })),
+  },
+  Timestamp: {
+    now: jest.fn(() => ({ _seconds: Date.now() / 1000, toDate: () => new Date() })),
+    fromDate: jest.fn((date: Date) => ({ _seconds: date.getTime() / 1000, toDate: () => date })),
+  },
+}));
+
+// Mock logger
+jest.mock('firebase-functions/v2', () => ({
+  logger: {
+    info: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+  },
+}));
+
+import { PaymentRecoveryService, PaymentRetrySchedule } from '../../services/paymentRecoveryService';
 import { SubscriptionService } from '../../services/subscriptionService';
 import { StripeService } from '../../services/stripeService';
 import { sendEmailUniversal } from '../../auth/config/emailConfig';
@@ -12,10 +73,11 @@ import {
   Subscription,
   PaymentFailureRecord,
   GracePeriodStatus,
+  SubscriptionPlan,
 } from '../../types/subscription';
-import { ErrorCode, createError } from '../../utils/errors';
+import { ErrorCode } from '../../utils/errors';
 import { GRACE_PERIOD_CONFIG, PaymentErrorHandler } from '../../utils/paymentErrors';
-import { Timestamp, FieldValue } from 'firebase-admin/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
 
 // Mock dependencies
 jest.mock('../../services/subscriptionService');
@@ -29,70 +91,6 @@ jest.mock('../../utils/paymentErrors', () => ({
   },
 }));
 
-// Mock Firestore
-const mockFirestore = {
-  collection: jest.fn(),
-  batch: jest.fn(),
-};
-
-const mockCollection = {
-  doc: jest.fn(),
-  add: jest.fn(),
-  where: jest.fn(),
-  orderBy: jest.fn(),
-  limit: jest.fn(),
-  get: jest.fn(),
-};
-
-const mockDoc = {
-  id: 'test-doc-id',
-  get: jest.fn(),
-  set: jest.fn(),
-  update: jest.fn(),
-  ref: { update: jest.fn() },
-};
-
-const mockQuery = {
-  get: jest.fn(),
-  empty: false,
-  docs: [],
-};
-
-const mockBatch = {
-  update: jest.fn(),
-  commit: jest.fn(),
-};
-
-// Set up Firestore mocks
-mockFirestore.collection.mockReturnValue(mockCollection);
-mockFirestore.batch.mockReturnValue(mockBatch);
-mockCollection.doc.mockReturnValue(mockDoc);
-mockCollection.where.mockReturnValue(mockCollection);
-mockCollection.orderBy.mockReturnValue(mockCollection);
-mockCollection.limit.mockReturnValue(mockCollection);
-mockCollection.get.mockResolvedValue(mockQuery);
-
-jest.mock('firebase-admin/firestore', () => ({
-  getFirestore: () => mockFirestore,
-  FieldValue: {
-    delete: jest.fn(() => 'DELETE_FIELD'),
-    serverTimestamp: jest.fn(() => ({ _seconds: Date.now() / 1000 })),
-  },
-  Timestamp: {
-    now: jest.fn(() => ({ _seconds: Date.now() / 1000, toDate: () => new Date() })),
-    fromDate: jest.fn((date) => ({ _seconds: date.getTime() / 1000, toDate: () => date })),
-  },
-}));
-
-// Mock logger
-jest.mock('firebase-functions/v2', () => ({
-  logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-  },
-}));
-
 describe('PaymentRecoveryService', () => {
   let paymentRecoveryService: PaymentRecoveryService;
   let mockSubscriptionService: jest.Mocked<SubscriptionService>;
@@ -101,18 +99,44 @@ describe('PaymentRecoveryService', () => {
   const createMockSubscription = (overrides?: Partial<Subscription>): Subscription => ({
     id: 'sub_123',
     userId: 'user_123',
-    plan: 'pro',
-    planDisplayName: 'Dynasty Pro',
+    userEmail: 'user@example.com',
+    plan: SubscriptionPlan.INDIVIDUAL,
+    planDisplayName: 'Dynasty Individual',
     status: SubscriptionStatus.ACTIVE,
     stripeCustomerId: 'cus_123',
     stripeSubscriptionId: 'stripe_sub_123',
+    stripeProductId: 'prod_123',
     stripePriceId: 'price_123',
     amount: 1999,
+    priceMonthly: 1999,
     currency: 'usd',
+    startDate: Timestamp.now(),
     currentPeriodStart: Timestamp.now(),
     currentPeriodEnd: Timestamp.now(),
+    cancelAtPeriodEnd: false,
+    lastPaymentStatus: 'succeeded',
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
+    lastModifiedBy: 'user_123',
+    storageAllocation: {
+      basePlanGB: 100,
+      addonGB: 0,
+      referralBonusGB: 0,
+      totalGB: 100,
+      usedBytes: 0,
+      availableBytes: 100 * 1024 * 1024 * 1024,
+      lastCalculated: Timestamp.now(),
+    },
+    addons: [],
+    features: {
+      unlimitedPhotos: true,
+      videoUpload: true,
+      audioRecording: true,
+      documentScanning: true,
+      aiFeatures: true,
+      advancedSharing: true,
+      prioritySupport: false,
+    },
     ...overrides,
   });
 
@@ -139,18 +163,24 @@ describe('PaymentRecoveryService', () => {
     // Create service instance with mocked dependencies
     paymentRecoveryService = new PaymentRecoveryService();
     
-    // Get mocked instances
-    mockSubscriptionService = SubscriptionService as jest.Mocked<SubscriptionService>;
-    mockStripeService = StripeService as jest.Mocked<StripeService>;
-
-    // Set up default mock implementations
-    mockSubscriptionService.prototype.getSubscription = jest.fn();
-    mockSubscriptionService.prototype.updateSubscription = jest.fn();
-    mockSubscriptionService.prototype.removeFamilyMember = jest.fn();
+    // Create mock instances
+    mockSubscriptionService = {
+      getSubscription: jest.fn(),
+      updateSubscription: jest.fn(),
+      removeFamilyMember: jest.fn(),
+    } as any;
+    
+    mockStripeService = {
+      getStripe: jest.fn(),
+      retrySubscriptionPayment: jest.fn(),
+      cancelSubscription: jest.fn(),
+      updateCustomerPaymentMethod: jest.fn(),
+      createSubscription: jest.fn(),
+    } as any;
 
     // Inject mocked services
-    (paymentRecoveryService as any).subscriptionService = mockSubscriptionService.prototype;
-    (paymentRecoveryService as any).stripeService = mockStripeService.prototype;
+    (paymentRecoveryService as any).subscriptionService = mockSubscriptionService;
+    (paymentRecoveryService as any).stripeService = mockStripeService;
   });
 
   describe('Payment Failure Handling', () => {
@@ -158,7 +188,7 @@ describe('PaymentRecoveryService', () => {
       const subscription = createMockSubscription();
       const error = createMockPaymentError();
 
-      mockSubscriptionService.prototype.getSubscription.mockResolvedValue(subscription);
+      mockSubscriptionService.getSubscription.mockResolvedValue(subscription);
 
       await paymentRecoveryService.handlePaymentFailure(
         subscription.id,
@@ -167,7 +197,7 @@ describe('PaymentRecoveryService', () => {
       );
 
       // Verify subscription was retrieved
-      expect(mockSubscriptionService.prototype.getSubscription).toHaveBeenCalledWith(subscription.id);
+      expect(mockSubscriptionService.getSubscription).toHaveBeenCalledWith(subscription.id);
 
       // Verify payment failure record was created
       expect(mockDoc.set).toHaveBeenCalledWith(
@@ -195,7 +225,7 @@ describe('PaymentRecoveryService', () => {
       );
 
       // Verify subscription status was updated to PAST_DUE
-      expect(mockSubscriptionService.prototype.updateSubscription).toHaveBeenCalledWith({
+      expect(mockSubscriptionService.updateSubscription).toHaveBeenCalledWith({
         subscriptionId: subscription.id,
         status: SubscriptionStatus.PAST_DUE,
       });
@@ -231,22 +261,24 @@ describe('PaymentRecoveryService', () => {
 
       for (const { error, expectedType } of testCases) {
         jest.clearAllMocks();
-        mockSubscriptionService.prototype.getSubscription.mockResolvedValue(subscription);
+        mockSubscriptionService.getSubscription.mockResolvedValue(subscription);
 
         await paymentRecoveryService.handlePaymentFailure(subscription.id, error);
 
-        expect(mockDoc.update).toHaveBeenCalledWith(
-          expect.objectContaining({
-            gracePeriod: expect.objectContaining({
-              type: expectedType,
-            }),
-          })
+        // Find the call that updates the grace period (first call)
+        const gracePeriodUpdateCall = mockDoc.update.mock.calls.find(call => 
+          call[0].gracePeriod !== undefined
         );
+        
+        expect(gracePeriodUpdateCall).toBeDefined();
+        expect(gracePeriodUpdateCall[0].gracePeriod).toMatchObject({
+          type: expectedType,
+        });
       }
     });
 
     it('should handle missing subscription gracefully', async () => {
-      mockSubscriptionService.prototype.getSubscription.mockResolvedValue(null);
+      mockSubscriptionService.getSubscription.mockResolvedValue(null);
 
       await expect(
         paymentRecoveryService.handlePaymentFailure('sub_invalid', createMockPaymentError())
@@ -277,8 +309,8 @@ describe('PaymentRecoveryService', () => {
         lastError: 'Card declined',
       };
 
-      mockSubscriptionService.prototype.getSubscription.mockResolvedValue(subscription);
-      mockStripeService.prototype.retrySubscriptionPayment = jest.fn().mockResolvedValue({});
+      mockSubscriptionService.getSubscription.mockResolvedValue(subscription);
+      mockStripeService.retrySubscriptionPayment.mockResolvedValue({ id: 'inv_123', status: 'paid' } as any);
 
       // Mock successful payment records query
       mockQuery.docs = [
@@ -292,7 +324,7 @@ describe('PaymentRecoveryService', () => {
       await paymentRecoveryService.processPaymentRetry(retrySchedule);
 
       // Verify payment retry was attempted
-      expect(mockStripeService.prototype.retrySubscriptionPayment).toHaveBeenCalledWith(
+      expect(mockStripeService.retrySubscriptionPayment).toHaveBeenCalledWith(
         subscription.stripeSubscriptionId
       );
 
@@ -333,8 +365,8 @@ describe('PaymentRecoveryService', () => {
         lastError: 'Card declined',
       };
 
-      mockSubscriptionService.prototype.getSubscription.mockResolvedValue(subscription);
-      mockStripeService.prototype.retrySubscriptionPayment = jest.fn()
+      mockSubscriptionService.getSubscription.mockResolvedValue(subscription);
+      mockStripeService.retrySubscriptionPayment
         .mockRejectedValue(createMockPaymentError());
 
       // Mock failure record query
@@ -365,7 +397,7 @@ describe('PaymentRecoveryService', () => {
       );
 
       // Verify subscription was NOT suspended (max retries not reached)
-      expect(mockStripeService.prototype.cancelSubscription).not.toHaveBeenCalled();
+      expect(mockStripeService.cancelSubscription).not.toHaveBeenCalled();
     });
 
     it('should suspend subscription after max retries', async () => {
@@ -388,10 +420,10 @@ describe('PaymentRecoveryService', () => {
         lastError: 'Card declined',
       };
 
-      mockSubscriptionService.prototype.getSubscription.mockResolvedValue(subscription);
-      mockStripeService.prototype.retrySubscriptionPayment = jest.fn()
+      mockSubscriptionService.getSubscription.mockResolvedValue(subscription);
+      mockStripeService.retrySubscriptionPayment
         .mockRejectedValue(createMockPaymentError());
-      mockStripeService.prototype.cancelSubscription = jest.fn().mockResolvedValue({});
+      mockStripeService.cancelSubscription.mockResolvedValue({ id: subscription.stripeSubscriptionId, status: 'canceled' } as any);
 
       // Mock failure record query
       mockQuery.empty = false;
@@ -400,7 +432,7 @@ describe('PaymentRecoveryService', () => {
       await paymentRecoveryService.processPaymentRetry(retrySchedule);
 
       // Verify subscription was suspended
-      expect(mockStripeService.prototype.cancelSubscription).toHaveBeenCalledWith({
+      expect(mockStripeService.cancelSubscription).toHaveBeenCalledWith({
         subscriptionId: subscription.stripeSubscriptionId,
         cancelImmediately: true,
         reason: 'payment_failure',
@@ -408,7 +440,7 @@ describe('PaymentRecoveryService', () => {
       });
 
       // Verify subscription status was updated
-      expect(mockSubscriptionService.prototype.updateSubscription).toHaveBeenCalledWith({
+      expect(mockSubscriptionService.updateSubscription).toHaveBeenCalledWith({
         subscriptionId: subscription.id,
         status: SubscriptionStatus.SUSPENDED,
       });
@@ -423,7 +455,7 @@ describe('PaymentRecoveryService', () => {
 
     it('should skip retry if subscription is no longer in grace period', async () => {
       const subscription = createMockSubscription({
-        gracePeriod: null,
+        gracePeriod: undefined,
       });
 
       const retrySchedule: PaymentRetrySchedule = {
@@ -434,32 +466,32 @@ describe('PaymentRecoveryService', () => {
         maxAttempts: 3,
       };
 
-      mockSubscriptionService.prototype.getSubscription.mockResolvedValue(subscription);
+      mockSubscriptionService.getSubscription.mockResolvedValue(subscription);
 
       await paymentRecoveryService.processPaymentRetry(retrySchedule);
 
       // Verify no payment retry was attempted
-      expect(mockStripeService.prototype.retrySubscriptionPayment).not.toHaveBeenCalled();
+      expect(mockStripeService.retrySubscriptionPayment).not.toHaveBeenCalled();
     });
   });
 
   describe('Subscription Suspension', () => {
     it('should suspend subscription and remove family members', async () => {
       const familySubscription = createMockSubscription({
-        plan: 'family',
+        plan: SubscriptionPlan.FAMILY,
         familyMembers: [
-          { userId: 'member_1', status: 'active', joinedAt: Timestamp.now() },
-          { userId: 'member_2', status: 'active', joinedAt: Timestamp.now() },
-          { userId: 'member_3', status: 'pending', joinedAt: Timestamp.now() },
+          { userId: 'member_1', email: 'member1@example.com', displayName: 'Member 1', status: 'active', joinedAt: Timestamp.now() },
+          { userId: 'member_2', email: 'member2@example.com', displayName: 'Member 2', status: 'active', joinedAt: Timestamp.now() },
+          { userId: 'member_3', email: 'member3@example.com', displayName: 'Member 3', status: 'invited', joinedAt: Timestamp.now() },
         ],
       });
 
-      mockStripeService.prototype.cancelSubscription = jest.fn().mockResolvedValue({});
+      mockStripeService.cancelSubscription.mockResolvedValue({ id: familySubscription.stripeSubscriptionId, status: 'canceled' } as any);
 
       await paymentRecoveryService.suspendSubscription(familySubscription);
 
       // Verify Stripe subscription was cancelled
-      expect(mockStripeService.prototype.cancelSubscription).toHaveBeenCalledWith({
+      expect(mockStripeService.cancelSubscription).toHaveBeenCalledWith({
         subscriptionId: familySubscription.stripeSubscriptionId,
         cancelImmediately: true,
         reason: 'payment_failure',
@@ -467,7 +499,7 @@ describe('PaymentRecoveryService', () => {
       });
 
       // Verify subscription status was updated
-      expect(mockSubscriptionService.prototype.updateSubscription).toHaveBeenCalledWith({
+      expect(mockSubscriptionService.updateSubscription).toHaveBeenCalledWith({
         subscriptionId: familySubscription.id,
         status: SubscriptionStatus.SUSPENDED,
       });
@@ -481,14 +513,14 @@ describe('PaymentRecoveryService', () => {
       );
 
       // Verify active family members were removed (not pending ones)
-      expect(mockSubscriptionService.prototype.removeFamilyMember).toHaveBeenCalledTimes(2);
-      expect(mockSubscriptionService.prototype.removeFamilyMember).toHaveBeenCalledWith({
+      expect(mockSubscriptionService.removeFamilyMember).toHaveBeenCalledTimes(2);
+      expect(mockSubscriptionService.removeFamilyMember).toHaveBeenCalledWith({
         subscriptionId: familySubscription.id,
         memberId: 'member_1',
         removedBy: 'system',
         reason: 'Subscription suspended due to payment failure',
       });
-      expect(mockSubscriptionService.prototype.removeFamilyMember).toHaveBeenCalledWith({
+      expect(mockSubscriptionService.removeFamilyMember).toHaveBeenCalledWith({
         subscriptionId: familySubscription.id,
         memberId: 'member_2',
         removedBy: 'system',
@@ -504,10 +536,10 @@ describe('PaymentRecoveryService', () => {
       await paymentRecoveryService.suspendSubscription(subscription);
 
       // Verify Stripe cancellation was not attempted
-      expect(mockStripeService.prototype.cancelSubscription).not.toHaveBeenCalled();
+      expect(mockStripeService.cancelSubscription).not.toHaveBeenCalled();
 
       // Verify subscription was still suspended in database
-      expect(mockSubscriptionService.prototype.updateSubscription).toHaveBeenCalledWith({
+      expect(mockSubscriptionService.updateSubscription).toHaveBeenCalledWith({
         subscriptionId: subscription.id,
         status: SubscriptionStatus.SUSPENDED,
       });
@@ -527,13 +559,13 @@ describe('PaymentRecoveryService', () => {
         status: 'active',
       };
 
-      mockSubscriptionService.prototype.getSubscription
+      mockSubscriptionService.getSubscription
         .mockResolvedValueOnce(suspendedSubscription)
         .mockResolvedValueOnce({ ...suspendedSubscription, status: SubscriptionStatus.ACTIVE });
       
-      mockStripeService.prototype.updateCustomerPaymentMethod = jest.fn().mockResolvedValue({});
-      mockStripeService.prototype.createSubscription = jest.fn()
-        .mockResolvedValue(newStripeSubscription);
+      mockStripeService.updateCustomerPaymentMethod.mockResolvedValue({ id: suspendedSubscription.stripeCustomerId } as any);
+      mockStripeService.createSubscription
+        .mockResolvedValue(newStripeSubscription as any);
 
       const result = await paymentRecoveryService.reactivateSubscription(
         suspendedSubscription.id,
@@ -541,13 +573,13 @@ describe('PaymentRecoveryService', () => {
       );
 
       // Verify payment method was updated
-      expect(mockStripeService.prototype.updateCustomerPaymentMethod).toHaveBeenCalledWith(
+      expect(mockStripeService.updateCustomerPaymentMethod).toHaveBeenCalledWith(
         suspendedSubscription.stripeCustomerId,
         'pm_new_123'
       );
 
       // Verify new Stripe subscription was created
-      expect(mockStripeService.prototype.createSubscription).toHaveBeenCalledWith({
+      expect(mockStripeService.createSubscription).toHaveBeenCalledWith({
         customerId: suspendedSubscription.stripeCustomerId,
         priceId: suspendedSubscription.stripePriceId,
         paymentMethodId: 'pm_new_123',
@@ -558,7 +590,7 @@ describe('PaymentRecoveryService', () => {
       });
 
       // Verify subscription status was updated
-      expect(mockSubscriptionService.prototype.updateSubscription).toHaveBeenCalledWith({
+      expect(mockSubscriptionService.updateSubscription).toHaveBeenCalledWith({
         subscriptionId: suspendedSubscription.id,
         status: SubscriptionStatus.ACTIVE,
       });
@@ -592,7 +624,7 @@ describe('PaymentRecoveryService', () => {
         status: SubscriptionStatus.ACTIVE,
       });
 
-      mockSubscriptionService.prototype.getSubscription.mockResolvedValue(activeSubscription);
+      mockSubscriptionService.getSubscription.mockResolvedValue(activeSubscription);
 
       await expect(
         paymentRecoveryService.reactivateSubscription(activeSubscription.id, 'pm_123')
@@ -608,7 +640,7 @@ describe('PaymentRecoveryService', () => {
         stripeCustomerId: undefined,
       });
 
-      mockSubscriptionService.prototype.getSubscription.mockResolvedValue(suspendedSubscription);
+      mockSubscriptionService.getSubscription.mockResolvedValue(suspendedSubscription);
 
       await expect(
         paymentRecoveryService.reactivateSubscription(suspendedSubscription.id, 'pm_123')
@@ -697,7 +729,7 @@ describe('PaymentRecoveryService', () => {
     it('should handle email sending failures gracefully', async () => {
       const subscription = createMockSubscription();
       
-      mockSubscriptionService.prototype.getSubscription.mockResolvedValue(subscription);
+      mockSubscriptionService.getSubscription.mockResolvedValue(subscription);
       (sendEmailUniversal as jest.Mock).mockRejectedValue(new Error('Email service error'));
 
       // Should not throw even if email fails
@@ -706,7 +738,7 @@ describe('PaymentRecoveryService', () => {
       ).resolves.not.toThrow();
 
       // Verify other operations continued
-      expect(mockSubscriptionService.prototype.updateSubscription).toHaveBeenCalled();
+      expect(mockSubscriptionService.updateSubscription).toHaveBeenCalled();
     });
   });
 
@@ -723,7 +755,7 @@ describe('PaymentRecoveryService', () => {
 
       for (const { type, expectedDays } of testCases) {
         jest.clearAllMocks();
-        mockSubscriptionService.prototype.getSubscription.mockResolvedValue(subscription);
+        mockSubscriptionService.getSubscription.mockResolvedValue(subscription);
 
         const error = type === 'paymentMethodExpired' 
           ? { code: 'expired_card' }
@@ -762,7 +794,7 @@ describe('PaymentRecoveryService', () => {
         },
       });
 
-      mockSubscriptionService.prototype.getSubscription.mockResolvedValue(subscription);
+      mockSubscriptionService.getSubscription.mockResolvedValue(subscription);
 
       // Test multiple retry attempts
       const attempts = [1, 2, 3];
@@ -788,7 +820,7 @@ describe('PaymentRecoveryService', () => {
         createMockPaymentError('insufficient_funds'),
       ];
 
-      mockSubscriptionService.prototype.getSubscription.mockResolvedValue(subscription);
+      mockSubscriptionService.getSubscription.mockResolvedValue(subscription);
 
       // Process multiple failures concurrently
       await Promise.all(
@@ -820,8 +852,8 @@ describe('PaymentRecoveryService', () => {
       ];
 
       mockQuery.docs = mockFailureRecords;
-      mockSubscriptionService.prototype.getSubscription.mockResolvedValue(subscription);
-      mockStripeService.prototype.retrySubscriptionPayment = jest.fn().mockResolvedValue({});
+      mockSubscriptionService.getSubscription.mockResolvedValue(subscription);
+      mockStripeService.retrySubscriptionPayment.mockResolvedValue({ id: 'inv_123', status: 'paid' } as any);
 
       const retrySchedule: PaymentRetrySchedule = {
         subscriptionId: subscription.id,
@@ -841,7 +873,7 @@ describe('PaymentRecoveryService', () => {
 
   describe('Error Handling', () => {
     it('should handle database errors gracefully', async () => {
-      mockSubscriptionService.prototype.getSubscription.mockRejectedValue(
+      mockSubscriptionService.getSubscription.mockRejectedValue(
         new Error('Database connection error')
       );
 
@@ -861,8 +893,8 @@ describe('PaymentRecoveryService', () => {
         },
       });
 
-      mockSubscriptionService.prototype.getSubscription.mockResolvedValue(subscription);
-      mockStripeService.prototype.retrySubscriptionPayment = jest.fn()
+      mockSubscriptionService.getSubscription.mockResolvedValue(subscription);
+      mockStripeService.retrySubscriptionPayment
         .mockRejectedValue(new Error('Stripe API error'));
 
       const retrySchedule: PaymentRetrySchedule = {

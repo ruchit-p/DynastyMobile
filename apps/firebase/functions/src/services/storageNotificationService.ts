@@ -45,7 +45,7 @@ export class StorageNotificationService {
       const userData = userDoc.data();
       
       if (!userData) {
-        throw createError(ErrorCode.USER_NOT_FOUND, "User not found");
+        throw createError(ErrorCode.NOT_FOUND, "User not found");
       }
 
       const tracking = userData.storageNotifications as StorageNotificationTracking || {
