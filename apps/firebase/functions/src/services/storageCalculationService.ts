@@ -487,7 +487,7 @@ export class StorageCalculationService {
 
       // After updating storage, check if we need to send notifications
       try {
-        const storageResult = await this.calculateUserStorage(userId);
+        await this.calculateUserStorage(userId);
         // This will internally check and send notifications if needed
       } catch (notificationError) {
         // Log but don't fail the storage update if notification check fails
