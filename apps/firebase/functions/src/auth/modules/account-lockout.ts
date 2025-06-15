@@ -28,7 +28,8 @@ interface AccountLockout {
   reason: string;
 }
 
-const db = getFirestore();
+// Lazy load Firestore to avoid initialization issues
+const getDb = () => getFirestore();
 
 /**
  * Record a failed login attempt

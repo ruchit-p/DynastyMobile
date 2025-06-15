@@ -25,6 +25,10 @@ import {
 } from "./config/stripeSecrets";
 import {B2_CONFIG} from "./config/b2Secrets";
 import {WORKER_SCAN_HOOK_SECRET, CLOUDMERSIVE_API_KEY} from "./config/vaultScanSecrets";
+import {defineSecret} from "firebase-functions/params";
+
+// Define STRIPE_CONFIG secret here to add to global options
+const STRIPE_CONFIG = defineSecret("STRIPE_CONFIG");
 
 // Set global options for ALL Firebase Functions
 setGlobalOptions({
@@ -37,6 +41,7 @@ setGlobalOptions({
     STRIPE_WEBHOOK_SECRET,
     STRIPE_PUBLISHABLE_KEY,
     STRIPE_API_VERSION,
+    STRIPE_CONFIG,
     // B2 secrets
     B2_CONFIG,
     // Vault scanning secrets

@@ -2490,7 +2490,7 @@ __metadata:
 
 "@dynasty/vault-sdk@file:../../../packages/vault-sdk::locator=dynastyweb%40workspace%3Aapps%2Fweb%2Fdynastyweb":
   version: 0.1.0
-  resolution: "@dynasty/vault-sdk@file:../../../packages/vault-sdk#../../../packages/vault-sdk::hash=76ab7a&locator=dynastyweb%40workspace%3Aapps%2Fweb%2Fdynastyweb"
+  resolution: "@dynasty/vault-sdk@file:../../../packages/vault-sdk#../../../packages/vault-sdk::hash=be1e50&locator=dynastyweb%40workspace%3Aapps%2Fweb%2Fdynastyweb"
   dependencies:
     "@tanstack/react-query": "npm:^5.61.5"
     axios: "npm:^1.9.0"
@@ -2515,7 +2515,7 @@ __metadata:
       optional: true
     react-native:
       optional: true
-  checksum: 10c0/9637d8561ba382dd586ddd824efae41a198a6443d628d2fee0ca6ff8a5189da734c3633893178a4d356991501cd1ec31bd9b280730d4e14662023bc55c2fec78
+  checksum: 10c0/b194b6e683607a64e11048bb7ac9f82d246719f5b988f13ff3bf657b79817744d16228ef606549d85ccd29839a1c56e6e4c05f985172b3b11405fd5f9c0d878a
   languageName: node
   linkType: hard
 
@@ -2535,6 +2535,8 @@ __metadata:
     eslint: "npm:^9.29.0"
     firebase: "npm:^11.9.1"
     jest: "npm:^30.0.0"
+    react: "npm:^19.1.0"
+    react-dom: "npm:^19.1.0"
     rimraf: "npm:^6.0.1"
     ts-jest: "npm:^29.3.4"
     typescript: "npm:^5.8.3"
