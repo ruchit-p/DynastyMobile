@@ -1,17 +1,70 @@
 import {SubscriptionPlan, SubscriptionTier} from "../types/subscription";
 import {StripePriceMapping} from "../types/stripe";
+import {defineSecret} from "firebase-functions/params";
 
 /**
  * Stripe Product and Price mapping configuration
  *
- * IMPORTANT: These IDs must match your Stripe dashboard products/prices
+ * IMPORTANT: These IDs are loaded from the STRIPE_CONFIG secret
  *
  * Setup Instructions:
  * 1. Create products in Stripe Dashboard for each plan/tier
  * 2. Create prices for each product (monthly and optionally yearly)
- * 3. Update the IDs below with your actual Stripe IDs
+ * 3. Run: firebase functions:secrets:set STRIPE_CONFIG < stripe-config.json
  * 4. Deploy to production only after verifying in test mode
  */
+
+/**
+ * Stripe Configuration Secret
+ * Contains all product and price IDs in a single JSON secret
+ */
+const stripeConfig = defineSecret("STRIPE_CONFIG");
+
+/**
+ * Get Stripe configuration from secret
+ * Cached after first access for performance
+ */
+let cachedConfig: any = null;
+
+function getStripeConfig(): any {
+  if (cachedConfig) {
+    return cachedConfig;
+  }
+  
+  try {
+    const configValue = stripeConfig.value();
+    if (!configValue) {
+      throw new Error("STRIPE_CONFIG secret not configured");
+    }
+    
+    cachedConfig = JSON.parse(configValue);
+    return cachedConfig;
+  } catch (error) {
+    console.error("Failed to parse STRIPE_CONFIG:", error);
+    // Return fallback config for development
+    return {
+      products: {
+        free: "prod_free_placeholder",
+        individualPlus: "prod_individual_plus",
+        family2_5TB: "prod_family_2_5tb",
+        family7_5TB: "prod_family_7_5tb",
+        family12TB: "prod_family_12tb",
+        addonStorage: "prod_addon_storage",
+      },
+      prices: {
+        free: "price_free",
+        individualPlusMonthly: "price_individual_plus_monthly",
+        family2_5TBMonthly: "price_family_2_5tb_monthly",
+        family7_5TBMonthly: "price_family_7_5tb_monthly",
+        family12TBMonthly: "price_family_12tb_monthly",
+        addon1TBMonthly: "price_addon_1tb_monthly",
+        addon2TBMonthly: "price_addon_2tb_monthly",
+        addon5TBMonthly: "price_addon_5tb_monthly",
+        addon20TBMonthly: "price_addon_20tb_monthly",
+      },
+    };
+  }
+}
 
 // Storage allocations per plan (in GB - converted from TB in pricing matrix)
 export const STORAGE_ALLOCATIONS = {
@@ -175,63 +228,104 @@ export const PLAN_FEATURES = {
 
 /**
  * Stripe Product/Price IDs
- *
- * NOTE: These are placeholder IDs. Replace with your actual Stripe IDs.
- * Test mode IDs start with "price_" and "prod_"
- * Live mode IDs will be different
+ * Loaded from STRIPE_CONFIG secret
  */
 export const STRIPE_PRICE_MAPPING: StripePriceMapping = {
-  // Free plan (no Stripe product needed)
+  // Free plan
   free: {
-    productId: "prod_free_placeholder",
-    priceId: null,
+    get productId() {
+      return getStripeConfig().products.free;
+    },
+    get priceId() {
+      return getStripeConfig().prices.free;
+    },
   },
 
   // Individual plans
   individual: {
     plus: {
-      productId: process.env.STRIPE_PRODUCT_INDIVIDUAL_PLUS || "prod_individual_plus",
-      priceIdMonthly: process.env.STRIPE_PRICE_INDIVIDUAL_PLUS_MONTHLY || "price_individual_plus_monthly",
-      priceIdYearly: process.env.STRIPE_PRICE_INDIVIDUAL_PLUS_YEARLY || "price_individual_plus_yearly",
+      get productId() {
+        return getStripeConfig().products.individualPlus;
+      },
+      get priceIdMonthly() {
+        return getStripeConfig().prices.individualPlusMonthly;
+      },
+      get priceIdYearly() {
+        return getStripeConfig().prices.individualPlusYearly || getStripeConfig().prices.individualPlusMonthly;
+      },
     },
   },
 
   // Family plan with tiers
   family: {
     family_2_5tb: {
-      productId: process.env.STRIPE_PRODUCT_FAMILY_2_5TB || "prod_family_2_5tb",
-      priceIdMonthly: process.env.STRIPE_PRICE_FAMILY_2_5TB_MONTHLY || "price_family_2_5tb_monthly",
-      priceIdYearly: process.env.STRIPE_PRICE_FAMILY_2_5TB_YEARLY || "price_family_2_5tb_yearly",
+      get productId() {
+        return getStripeConfig().products.family2_5TB;
+      },
+      get priceIdMonthly() {
+        return getStripeConfig().prices.family2_5TBMonthly;
+      },
+      get priceIdYearly() {
+        return getStripeConfig().prices.family2_5TBYearly || getStripeConfig().prices.family2_5TBMonthly;
+      },
     },
     family_7_5tb: {
-      productId: process.env.STRIPE_PRODUCT_FAMILY_7_5TB || "prod_family_7_5tb",
-      priceIdMonthly: process.env.STRIPE_PRICE_FAMILY_7_5TB_MONTHLY || "price_family_7_5tb_monthly",
-      priceIdYearly: process.env.STRIPE_PRICE_FAMILY_7_5TB_YEARLY || "price_family_7_5tb_yearly",
+      get productId() {
+        return getStripeConfig().products.family7_5TB;
+      },
+      get priceIdMonthly() {
+        return getStripeConfig().prices.family7_5TBMonthly;
+      },
+      get priceIdYearly() {
+        return getStripeConfig().prices.family7_5TBYearly || getStripeConfig().prices.family7_5TBMonthly;
+      },
     },
     family_12tb: {
-      productId: process.env.STRIPE_PRODUCT_FAMILY_12TB || "prod_family_12tb",
-      priceIdMonthly: process.env.STRIPE_PRICE_FAMILY_12TB_MONTHLY || "price_family_12tb_monthly",
-      priceIdYearly: process.env.STRIPE_PRICE_FAMILY_12TB_YEARLY || "price_family_12tb_yearly",
+      get productId() {
+        return getStripeConfig().products.family12TB;
+      },
+      get priceIdMonthly() {
+        return getStripeConfig().prices.family12TBMonthly;
+      },
+      get priceIdYearly() {
+        return getStripeConfig().prices.family12TBYearly || getStripeConfig().prices.family12TBMonthly;
+      },
     },
   },
 
-  // Storage addons (Individual Plus only) - updated to match pricing matrix
+  // Storage addons
   addons: {
     storage_1tb: {
-      productId: process.env.STRIPE_PRODUCT_ADDON_1TB || "prod_addon_storage_1tb",
-      priceIdMonthly: process.env.STRIPE_PRICE_ADDON_1TB_MONTHLY || "price_addon_storage_1tb_monthly",
+      get productId() {
+        return getStripeConfig().products.addonStorage;
+      },
+      get priceIdMonthly() {
+        return getStripeConfig().prices.addon1TBMonthly;
+      },
     },
     storage_2tb: {
-      productId: process.env.STRIPE_PRODUCT_ADDON_2TB || "prod_addon_storage_2tb",
-      priceIdMonthly: process.env.STRIPE_PRICE_ADDON_2TB_MONTHLY || "price_addon_storage_2tb_monthly",
+      get productId() {
+        return getStripeConfig().products.addonStorage;
+      },
+      get priceIdMonthly() {
+        return getStripeConfig().prices.addon2TBMonthly;
+      },
     },
     storage_5tb: {
-      productId: process.env.STRIPE_PRODUCT_ADDON_5TB || "prod_addon_storage_5tb",
-      priceIdMonthly: process.env.STRIPE_PRICE_ADDON_5TB_MONTHLY || "price_addon_storage_5tb_monthly",
+      get productId() {
+        return getStripeConfig().products.addonStorage;
+      },
+      get priceIdMonthly() {
+        return getStripeConfig().prices.addon5TBMonthly;
+      },
     },
     storage_20tb: {
-      productId: process.env.STRIPE_PRODUCT_ADDON_20TB || "prod_addon_storage_20tb",
-      priceIdMonthly: process.env.STRIPE_PRICE_ADDON_20TB_MONTHLY || "price_addon_storage_20tb_monthly",
+      get productId() {
+        return getStripeConfig().products.addonStorage;
+      },
+      get priceIdMonthly() {
+        return getStripeConfig().prices.addon20TBMonthly;
+      },
     },
   },
 };

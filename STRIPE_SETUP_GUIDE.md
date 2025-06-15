@@ -21,24 +21,22 @@ For each product, you need to get the price IDs:
 4. Note both monthly and yearly price IDs where applicable
 
 ### 2. Configure Firebase Secrets
+
+#### API Keys (Already Set ✅)
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PUBLISHABLE_KEY`
+
+#### Product/Price Configuration
 ```bash
-# Set your Stripe API keys
-firebase functions:secrets:set STRIPE_SECRET_KEY
-firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
-firebase functions:secrets:set STRIPE_PUBLISHABLE_KEY
+# Set the Stripe configuration as a single JSON secret
+firebase functions:secrets:set STRIPE_CONFIG < stripe-config.json
 
-# Set product IDs
-firebase functions:secrets:set STRIPE_PRODUCT_FREE
-firebase functions:secrets:set STRIPE_PRODUCT_INDIVIDUAL_PLUS
-firebase functions:secrets:set STRIPE_PRODUCT_FAMILY_2_5TB
-firebase functions:secrets:set STRIPE_PRODUCT_FAMILY_7_5TB
-firebase functions:secrets:set STRIPE_PRODUCT_FAMILY_12TB
-
-# Set price IDs (replace with actual price IDs from Stripe)
-firebase functions:secrets:set STRIPE_PRICE_INDIVIDUAL_PLUS_MONTHLY
-firebase functions:secrets:set STRIPE_PRICE_INDIVIDUAL_PLUS_YEARLY
-# ... repeat for all price IDs
+# Or run the setup script
+./setup-stripe-config.sh
 ```
+
+The `stripe-config.json` file contains all product and price IDs in a single, easy-to-manage JSON format.
 
 ### 3. Configure Webhook in Stripe Dashboard
 1. Go to https://dashboard.stripe.com/webhooks

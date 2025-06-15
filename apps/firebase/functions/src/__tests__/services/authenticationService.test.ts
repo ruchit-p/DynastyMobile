@@ -5,27 +5,31 @@
 
 import { HttpsError } from 'firebase-functions/v2/https';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 import * as authModule from '../../auth/modules/authentication';
 import { checkAccountLockout, recordFailedLogin } from '../../auth/modules/account-lockout';
 import { sendEmailUniversal } from '../../auth/config/emailConfig';
 import { generateSecureToken, hashToken } from '../../auth/utils/tokens';
 import { ErrorCode, createError } from '../../utils/errors';
-import { UserDocument } from '../../auth/types/user';
 import { validateRequest } from '../../utils/request-validator';
-import { VALIDATION_SCHEMAS } from '../../config/validation-schemas';
 import { withAuth } from '../../middleware/auth';
-import { SECURITY_CONFIG } from '../../config/security-config';
 import { FRONTEND_URL } from '../../auth/config/secrets';
 
 // Mock dependencies
 jest.mock('firebase-admin/auth');
 jest.mock('firebase-admin/firestore');
-jest.mock('../../auth/modules/account-lockout');
+jest.mock('../../auth/modules/account-lockout', () => ({
+  checkAccountLockout: {
+    run: jest.fn(),
+  },
+  recordFailedLogin: jest.fn(),
+}));
 jest.mock('../../auth/config/emailConfig');
 jest.mock('../../auth/utils/tokens');
 jest.mock('../../utils/request-validator');
-jest.mock('../../middleware/auth');
+jest.mock('../../middleware/auth', () => ({
+  withAuth: jest.fn((handler: any) => handler),
+}));
 jest.mock('../../auth/config/secrets');
 jest.mock('firebase-functions/v2', () => ({
   logger: {
@@ -35,7 +39,9 @@ jest.mock('firebase-functions/v2', () => ({
   },
 }));
 
-// Mock HttpsError
+// Mock HttpsError and onCall
+let mockHandlers: Record<string, any> = {};
+
 jest.mock('firebase-functions/v2/https', () => ({
   HttpsError: class HttpsError extends Error {
     constructor(public code: string, message: string, public details?: any) {
@@ -44,8 +50,13 @@ jest.mock('firebase-functions/v2/https', () => ({
     }
   },
   onCall: jest.fn((options: any, handler: any) => {
-    // Return the handler function directly for testing
-    return typeof options === 'function' ? options : handler;
+    // Extract the actual handler function for testing
+    const fn = typeof options === 'function' ? options : handler;
+    // Create a wrapper that can be called directly in tests
+    const testableHandler = async (request: any) => {
+      return fn(request);
+    };
+    return testableHandler;
   }),
 }));
 
@@ -100,7 +111,7 @@ mockCollection.where.mockReturnValue(mockCollection);
 mockCollection.get.mockResolvedValue(mockQuery);
 mockDoc.ref = mockDoc;
 
-// Skip tests temporarily due to handler function signature issues
+// Skip tests temporarily - need to refactor to test inner functions instead of wrapped cloud functions
 describe.skip('Authentication Service', () => {
   const mockAuth = getAuth();
   
@@ -152,8 +163,7 @@ describe.skip('Authentication Service', () => {
         rawRequest: {},
       };
 
-      const handler = authModule.handleSignIn;
-      const result = await handler(request as any);
+      const result = await authModule.handleSignIn(request as any);
 
       expect(checkAccountLockout.run).toHaveBeenCalledWith({
         data: { email: 'test@example.com' },
@@ -183,8 +193,8 @@ describe.skip('Authentication Service', () => {
         rawRequest: {},
       };
 
-      const handler = authModule.handleSignIn;
-      await expect(handler(request as any)).rejects.toMatchObject({
+      
+      await expect(authModule.handleSignIn(request as any)).rejects.toMatchObject({
         code: ErrorCode.PERMISSION_DENIED,
         message: 'Account locked for 15 minutes',
       });
@@ -206,8 +216,8 @@ describe.skip('Authentication Service', () => {
         rawRequest: {},
       };
 
-      const handler = authModule.handleSignIn;
-      await expect(handler(request as any)).rejects.toMatchObject({
+      
+      await expect(authModule.handleSignIn(request as any)).rejects.toMatchObject({
         code: ErrorCode.PERMISSION_DENIED,
         message: 'Please verify your email before signing in',
       });
@@ -226,8 +236,8 @@ describe.skip('Authentication Service', () => {
         rawRequest: {},
       };
 
-      const handler = authModule.handleSignIn;
-      await expect(handler(request as any)).rejects.toMatchObject({
+      
+      await expect(authModule.handleSignIn(request as any)).rejects.toMatchObject({
         code: ErrorCode.NOT_FOUND,
         message: 'Invalid email or password',
       });
@@ -245,8 +255,8 @@ describe.skip('Authentication Service', () => {
         rawRequest: {},
       };
 
-      const handler = authModule.handleSignIn;
-      await expect(handler(request as any)).rejects.toMatchObject({
+      
+      await expect(authModule.handleSignIn(request as any)).rejects.toMatchObject({
         code: ErrorCode.NOT_FOUND,
         message: 'User profile not found. Please contact support.',
       });
@@ -271,8 +281,8 @@ describe.skip('Authentication Service', () => {
         rawRequest: {},
       };
 
-      const handler = authModule.handleSignUp;
-      const result = await handler(request as any);
+      
+      const result = await authModule.handleSignUp(request as any);
 
       expect(mockAuth.createUser).toHaveBeenCalledWith({
         email: 'newuser@example.com',
@@ -333,8 +343,8 @@ describe.skip('Authentication Service', () => {
         rawRequest: {},
       };
 
-      const handler = authModule.handleSignUp;
-      await expect(handler(request as any)).rejects.toMatchObject({
+      
+      await expect(authModule.handleSignUp(request as any)).rejects.toMatchObject({
         code: ErrorCode.EMAIL_EXISTS,
         message: expect.stringContaining('already exists'),
       });
@@ -362,8 +372,8 @@ describe.skip('Authentication Service', () => {
         rawRequest: {},
       };
 
-      const handler = authModule.handleSignUp;
-      await expect(handler(request as any)).rejects.toMatchObject({
+      
+      await expect(authModule.handleSignUp(request as any)).rejects.toMatchObject({
         code: ErrorCode.INTERNAL,
         message: 'Email service configuration error prevents sending verification email.',
       });
@@ -391,8 +401,8 @@ describe.skip('Authentication Service', () => {
         rawRequest: {},
       };
 
-      const handler = authModule.handleSignUp;
-      const result = await handler(request as any);
+      
+      const result = await authModule.handleSignUp(request as any);
 
       expect(sendEmailUniversal).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -949,8 +959,8 @@ describe.skip('Authentication Service', () => {
         rawRequest: {},
       };
 
-      const handler = authModule.handleSignIn;
-      await expect(handler(request as any)).rejects.toMatchObject({
+      
+      await expect(authModule.handleSignIn(request as any)).rejects.toMatchObject({
         code: ErrorCode.INVALID_ARGUMENT,
         message: 'Invalid email',
       });
@@ -973,8 +983,8 @@ describe.skip('Authentication Service', () => {
         rawRequest: {},
       };
 
-      const handler = authModule.handleSignIn;
-      await expect(handler(request as any)).rejects.toMatchObject({
+      
+      await expect(authModule.handleSignIn(request as any)).rejects.toMatchObject({
         code: ErrorCode.INTERNAL,
         message: 'Invalid email or password', // Generic message for security
       });
@@ -989,8 +999,8 @@ describe.skip('Authentication Service', () => {
         rawRequest: {},
       };
 
-      const handler = authModule.handleSignIn;
-      await expect(handler(request as any)).rejects.toBe(customError);
+      
+      await expect(authModule.handleSignIn(request as any)).rejects.toBe(customError);
     });
   });
 });
