@@ -45,7 +45,7 @@ export interface VirusScanResult {
  */
 export class CloudmersiveService {
   private static instance: CloudmersiveService;
-  private readonly config = getVaultScanConfig();
+  private config: ReturnType<typeof getVaultScanConfig> | undefined;
   private readonly baseUrl = "https://api.cloudmersive.com";
   
   private constructor() {}
@@ -55,6 +55,13 @@ export class CloudmersiveService {
       CloudmersiveService.instance = new CloudmersiveService();
     }
     return CloudmersiveService.instance;
+  }
+
+  private getConfig() {
+    if (!this.config) {
+      this.config = getVaultScanConfig();
+    }
+    return this.config;
   }
 
   /**
@@ -75,11 +82,11 @@ export class CloudmersiveService {
     
     try {
       // Check file size limit
-      if (fileBuffer.length > this.config.maxFileSizeForScanning) {
+      if (fileBuffer.length > this.getConfig().maxFileSizeForScanning) {
         logger.warn("File exceeds scanning size limit", createLogContext({
           fileName,
           fileSize: fileBuffer.length,
-          maxSize: this.config.maxFileSizeForScanning,
+          maxSize: this.getConfig().maxFileSizeForScanning,
           userId,
         }));
         
@@ -116,7 +123,7 @@ export class CloudmersiveService {
       const response = await fetch(`${this.baseUrl}/virus/scan/file/advanced`, {
         method: "POST",
         headers: {
-          "Apikey": this.config.cloudmersiveApiKey,
+          "Apikey": this.getConfig().cloudmersiveApiKey,
         },
         body: formData,
       });
@@ -248,7 +255,7 @@ export class CloudmersiveService {
       const response = await fetch(`${this.baseUrl}/virus/scan/website/advanced`, {
         method: "POST",
         headers: {
-          "Apikey": this.config.cloudmersiveApiKey,
+          "Apikey": this.getConfig().cloudmersiveApiKey,
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams(formData as any),
@@ -325,7 +332,7 @@ export class CloudmersiveService {
       const response = await fetch(`${this.baseUrl}/virus/scan/quota`, {
         method: "POST",
         headers: {
-          "Apikey": this.config.cloudmersiveApiKey,
+          "Apikey": this.getConfig().cloudmersiveApiKey,
         },
       });
 
@@ -365,5 +372,5 @@ export class CloudmersiveService {
   }
 }
 
-// Export singleton instance
-export const cloudmersiveService = CloudmersiveService.getInstance();
+// Export singleton getter to avoid initialization at module load time
+export const getCloudmersiveService = () => CloudmersiveService.getInstance();
