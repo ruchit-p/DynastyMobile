@@ -74,7 +74,7 @@ export class VaultRealtimeService {
     this.unsubscribe(listenerId);
 
     // Build query
-    const vaultRef = collection(this.db, 'vault');
+    const vaultRef = collection(this.db, 'vaultItems');
     let q: Query<DocumentData> = query(vaultRef);
 
     // Add filters
@@ -180,7 +180,7 @@ export class VaultRealtimeService {
     this.unsubscribe(listenerId);
 
     const unsubscribe = onSnapshot(
-      doc(this.db, 'vault', itemId),
+      doc(this.db, 'vaultItems', itemId),
       (snapshot) => {
         if (snapshot.exists()) {
           const item = this.convertFirestoreDocToVaultItem(snapshot.id, snapshot.data());
