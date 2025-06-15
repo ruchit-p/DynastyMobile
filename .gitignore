@@ -48,8 +48,6 @@ package-lock.json
 !.yarn/sdks
 !.yarn/versions
 .pnp.*
-.yarnrc.yml
-yarn.lock
 
 # Empty directories
 logs/
