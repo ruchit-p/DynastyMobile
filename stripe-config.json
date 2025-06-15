@@ -1,0 +1,21 @@
+{
+  "products": {
+    "free": "prod_STTujqN4OfWiE8",
+    "individualPlus": "prod_STTtdOmm3OjPxQ",
+    "family2_5TB": "prod_STTvKJTt5QhTt9",
+    "family7_5TB": "prod_STVDPTdGGXWqhD",
+    "family12TB": "prod_STVGxk4sOSLsw2",
+    "addonStorage": "prod_STV4aalNPp3LEM"
+  },
+  "prices": {
+    "free": "price_1RYWwWDPvUT1MYwpDn5s9ArJ",
+    "individualPlusMonthly": "price_1RYWvPDPvUT1MYwpIiPxdSt7",
+    "family2_5TBMonthly": "price_1RYWxlDPvUT1MYwpYS8Gg7lU",
+    "family7_5TBMonthly": "price_1RYYCvDPvUT1MYwpIQhrdSJE",
+    "family12TBMonthly": "price_1RYYGCDPvUT1MYwpH9O3tl8o",
+    "addon1TBMonthly": "price_1RYY4lDPvUT1MYwpDvLASC1f",
+    "addon2TBMonthly": "price_1RYYBGDPvUT1MYwpASLCGE5I",
+    "addon5TBMonthly": "price_1RYYBGDPvUT1MYwpLoYHJTyf",
+    "addon20TBMonthly": "price_1RYYBGDPvUT1MYwpGIPPZhLa"
+  }
+}
