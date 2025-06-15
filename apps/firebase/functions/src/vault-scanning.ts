@@ -14,7 +14,7 @@ import {createLogContext, formatErrorForLogging} from "./utils/sanitization";
 import {validateRequest} from "./utils/request-validator";
 import {VALIDATION_SCHEMAS} from "./config/validation-schemas";
 import {getCloudmersiveService} from "./services/cloudmersiveService";
-import {quarantineService} from "./services/quarantineService";
+import {getQuarantineService} from "./services/quarantineService";
 import {getVaultScanConfig, CLOUDMERSIVE_API_KEY} from "./config/vaultScanSecrets";
 import {getStorageAdapter} from "./services/storageAdapter";
 
@@ -239,7 +239,7 @@ export const cleanupQuarantinedFiles = onSchedule(
   async () => {
     try {
       logger.info("Starting quarantine cleanup");
-      const result = await quarantineService.cleanupExpiredQuarantinedFiles();
+      const result = await getQuarantineService().cleanupExpiredQuarantinedFiles();
       
       logger.info("Quarantine cleanup completed", {
         filesRemoved: result.cleaned,
@@ -419,7 +419,7 @@ async function processSingleVaultItem(itemId: string, itemData: any) {
     );
 
     // Process scan result and move file
-    const transferResult = await quarantineService.processScanResult(
+    const transferResult = await getQuarantineService().processScanResult(
       itemId,
       itemData.r2StagingKey,
       scanResult,

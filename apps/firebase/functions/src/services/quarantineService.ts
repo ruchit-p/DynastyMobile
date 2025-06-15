@@ -148,14 +148,14 @@ export class QuarantineService {
         vaultItemId,
         stagingKey,
         finalKey,
-        provider: this.config.finalStorageProvider,
+        provider: this.getConfig().finalStorageProvider,
         userId,
       }));
 
       // Download from R2 staging
-      const downloadUrl = await this.storageAdapter.generateDownloadUrl({
+      const downloadUrl = await this.getStorageAdapter().generateDownloadUrl({
         path: stagingKey,
-        bucket: this.config.stagingBucket,
+        bucket: this.getConfig().stagingBucket,
         provider: "r2",
         expiresIn: 300, // 5 minutes
       });
@@ -169,10 +169,10 @@ export class QuarantineService {
       const fileSize = fileBuffer.length;
 
       // Upload to final storage (B2)
-      const uploadUrl = await this.storageAdapter.generateUploadUrl({
+      const uploadUrl = await this.getStorageAdapter().generateUploadUrl({
         path: finalKey,
         bucket: this.getFinalStorageBucket(),
-        provider: this.config.finalStorageProvider,
+        provider: this.getConfig().finalStorageProvider,
         expiresIn: 300,
         contentType: response.headers.get("content-type") || "application/octet-stream",
       });
@@ -190,9 +190,9 @@ export class QuarantineService {
       }
 
       // Delete from staging bucket
-      await this.storageAdapter.deleteFile({
+      await this.getStorageAdapter().deleteFile({
         path: stagingKey,
-        bucket: this.config.stagingBucket,
+        bucket: this.getConfig().stagingBucket,
         provider: "r2",
       });
 
@@ -266,9 +266,9 @@ export class QuarantineService {
       }));
 
       // Download from staging
-      const downloadUrl = await this.storageAdapter.generateDownloadUrl({
+      const downloadUrl = await this.getStorageAdapter().generateDownloadUrl({
         path: stagingKey,
-        bucket: this.config.stagingBucket,
+        bucket: this.getConfig().stagingBucket,
         provider: "r2",
         expiresIn: 300,
       });
@@ -282,9 +282,9 @@ export class QuarantineService {
       const fileSize = fileBuffer.length;
 
       // Upload to quarantine bucket with additional metadata
-      const uploadUrl = await this.storageAdapter.generateUploadUrl({
+      const uploadUrl = await this.getStorageAdapter().generateUploadUrl({
         path: quarantineKey,
-        bucket: this.config.quarantineBucket,
+        bucket: this.getConfig().quarantineBucket,
         provider: "r2",
         expiresIn: 300,
         contentType: response.headers.get("content-type") || "application/octet-stream",
@@ -311,9 +311,9 @@ export class QuarantineService {
       }
 
       // Delete from staging
-      await this.storageAdapter.deleteFile({
+      await this.getStorageAdapter().deleteFile({
         path: stagingKey,
-        bucket: this.config.stagingBucket,
+        bucket: this.getConfig().stagingBucket,
         provider: "r2",
       });
 
@@ -384,7 +384,7 @@ export class QuarantineService {
    * Get final storage bucket name based on configuration
    */
   private getFinalStorageBucket(): string {
-    if (this.config.finalStorageProvider === "b2") {
+    if (this.getConfig().finalStorageProvider === "b2") {
       // Use B2 bucket names (should match existing B2Service configuration)
       return process.env.NODE_ENV === "production" ? "dynastyprod" : "dynastytest";
     } else {
@@ -403,7 +403,7 @@ export class QuarantineService {
       size: fileSize,
     };
 
-    if (this.config.finalStorageProvider === "b2") {
+    if (this.getConfig().finalStorageProvider === "b2") {
       updateData.storageProvider = "b2";
       updateData.b2Key = finalKey;
       updateData.b2Bucket = this.getFinalStorageBucket();
@@ -416,7 +416,7 @@ export class QuarantineService {
       updateData.r2Bucket = this.getFinalStorageBucket();
     }
 
-    await this.db.collection("vaultItems").doc(vaultItemId).update(updateData);
+    await this.getDb().collection("vaultItems").doc(vaultItemId).update(updateData);
   }
 
   /**
@@ -434,7 +434,7 @@ export class QuarantineService {
         quarantinedAt: Timestamp.now(),
         reason: `Threats detected: ${scanResult.threats.join(", ")}`,
         quarantineKey,
-        quarantineBucket: this.config.quarantineBucket,
+        quarantineBucket: this.getConfig().quarantineBucket,
       },
       scanResults: {
         scannedAt: Timestamp.now(),
@@ -444,7 +444,7 @@ export class QuarantineService {
       },
     };
 
-    await this.db.collection("vaultItems").doc(vaultItemId).update(updateData);
+    await this.getDb().collection("vaultItems").doc(vaultItemId).update(updateData);
   }
 
   /**
@@ -472,7 +472,7 @@ export class QuarantineService {
       retentionExpiry: Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // 30 days
     };
 
-    await this.db.collection("quarantinedFiles").add(quarantineItem);
+    await this.getDb().collection("quarantinedFiles").add(quarantineItem);
   }
 
   /**
@@ -481,7 +481,7 @@ export class QuarantineService {
    */
   async cleanupExpiredQuarantinedFiles(): Promise<{cleaned: number; errors: string[]}> {
     try {
-      const expiredQuery = await this.db
+      const expiredQuery = await this.getDb()
         .collection("quarantinedFiles")
         .where("retentionExpiry", "<", Timestamp.now())
         .limit(100)
@@ -495,9 +495,9 @@ export class QuarantineService {
           const quarantineItem = doc.data() as QuarantineItem;
           
           // Delete from quarantine bucket
-          await this.storageAdapter.deleteFile({
+          await this.getStorageAdapter().deleteFile({
             path: quarantineItem.quarantinePath,
-            bucket: this.config.quarantineBucket,
+            bucket: this.getConfig().quarantineBucket,
             provider: "r2",
           });
 
@@ -527,4 +527,5 @@ export class QuarantineService {
 }
 
 // Export singleton instance
-export const quarantineService = QuarantineService.getInstance();
+// Export singleton getter to avoid initialization at module load time
+export const getQuarantineService = () => QuarantineService.getInstance();
