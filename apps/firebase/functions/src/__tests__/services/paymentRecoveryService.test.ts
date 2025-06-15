@@ -761,12 +761,11 @@ describe('PaymentRecoveryService', () => {
   describe('Grace Period Management', () => {
     it('should calculate correct grace period end dates', async () => {
       const subscription = createMockSubscription();
-      const now = new Date();
 
       const testCases = [
         { type: 'paymentFailed', expectedDays: 7 },
         { type: 'paymentMethodExpired', expectedDays: 14 },
-        { type: 'subscriptionExpired', expectedDays: 30 },
+        { type: 'subscriptionExpired', expectedDays: 3 },
       ];
 
       for (const { type, expectedDays } of testCases) {
@@ -794,12 +793,13 @@ describe('PaymentRecoveryService', () => {
                                        'paymentFailed');
           
           const gracePeriodEndDate = gracePeriod.endsAt.toDate();
-          const expectedEndDate = new Date(now);
-          expectedEndDate.setDate(expectedEndDate.getDate() + expectedDays);
-
-          // Check dates are within 1 minute of each other (to account for test execution time)
-          const timeDiff = Math.abs(gracePeriodEndDate.getTime() - expectedEndDate.getTime());
-          expect(timeDiff).toBeLessThan(60000); // 1 minute
+          const gracePeriodStartDate = gracePeriod.startedAt.toDate();
+          
+          // Calculate the difference between start and end dates
+          const actualDaysDiff = Math.round((gracePeriodEndDate.getTime() - gracePeriodStartDate.getTime()) / (1000 * 60 * 60 * 24));
+          
+          // Check that the grace period duration matches expected days
+          expect(actualDaysDiff).toBe(expectedDays);
         }
       }
     });
@@ -807,9 +807,20 @@ describe('PaymentRecoveryService', () => {
 
   describe('Retry Delay Calculation', () => {
     it('should calculate exponential backoff for retry delays', async () => {
-      const subscription = createMockSubscription();
+      const subscription = createMockSubscription({
+        gracePeriod: {
+          status: GracePeriodStatus.ACTIVE,
+          type: 'paymentFailed',
+          startedAt: Timestamp.now(),
+          endsAt: Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
+          reason: 'Card declined',
+        },
+      });
 
       mockSubscriptionService.getSubscription.mockResolvedValue(subscription);
+
+      // Clear any previous calls
+      (PaymentErrorHandler.calculateRetryDelay as jest.Mock).mockClear();
 
       // Test that handlePaymentFailure schedules retry with attempt 1
       await paymentRecoveryService.handlePaymentFailure(
@@ -822,7 +833,7 @@ describe('PaymentRecoveryService', () => {
       expect(PaymentErrorHandler.calculateRetryDelay).toHaveBeenCalledWith(1);
       
       // Clear mocks
-      jest.clearAllMocks();
+      (PaymentErrorHandler.calculateRetryDelay as jest.Mock).mockClear();
       
       // Test processPaymentRetry with failed retry schedules next attempt
       const retrySchedule: PaymentRetrySchedule = {

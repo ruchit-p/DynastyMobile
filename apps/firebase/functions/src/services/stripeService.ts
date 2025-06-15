@@ -52,7 +52,7 @@ export class StripeService {
    */
   async getTotalRevenue(startDate: Date, endDate: Date): Promise<number> {
     const stripe = await this.getStripe();
-    
+
     try {
       // Get all charges for the date range
       const charges = await stripe.charges.list({
@@ -84,7 +84,7 @@ export class StripeService {
    */
   async getActiveSubscriptionsCount(): Promise<number> {
     const stripe = await this.getStripe();
-    
+
     try {
       const subscriptions = await stripe.subscriptions.list({
         status: "active",
@@ -103,7 +103,7 @@ export class StripeService {
    */
   async getCustomer(customerId: string): Promise<Stripe.Customer | null> {
     const stripe = await this.getStripe();
-    
+
     try {
       const customer = await stripe.customers.retrieve(customerId);
       if (customer.deleted) {
@@ -121,7 +121,7 @@ export class StripeService {
    */
   async retrySubscriptionPayment(subscriptionId: string): Promise<Stripe.Invoice> {
     const stripe = await this.getStripe();
-    
+
     try {
       // Get the subscription to find the latest invoice
       const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
@@ -133,26 +133,26 @@ export class StripeService {
       }
 
       const invoice = subscription.latest_invoice as Stripe.Invoice;
-      
+
       // Only attempt to pay if the invoice is not already paid
       if (invoice.status === "open" || invoice.status === "draft") {
         // Finalize the invoice if it's in draft status
         if (invoice.status === "draft" && invoice.id) {
           await stripe.invoices.finalizeInvoice(invoice.id);
         }
-        
+
         // Attempt to pay the invoice
         if (!invoice.id) {
           throw new Error("Invoice has no ID");
         }
         const paidInvoice = await stripe.invoices.pay(invoice.id);
-        
+
         logger.info("Successfully retried subscription payment", {
           subscriptionId,
           invoiceId: paidInvoice.id,
           amountPaid: paidInvoice.amount_paid,
         });
-        
+
         return paidInvoice;
       } else if (invoice.status === "paid") {
         logger.info("Invoice already paid", {
@@ -174,10 +174,10 @@ export class StripeService {
    */
   async cancelSubscription(params: CancelSubscriptionParams): Promise<Stripe.Subscription> {
     const stripe = await this.getStripe();
-    
+
     try {
       const immediately = params.cancelImmediately ?? params.immediately ?? false;
-      
+
       const subscription = await stripe.subscriptions.cancel(
         params.subscriptionId,
         {
@@ -189,13 +189,13 @@ export class StripeService {
           },
         }
       );
-      
+
       logger.info("Subscription cancelled", {
         subscriptionId: params.subscriptionId,
         immediately,
         reason: params.reason,
       });
-      
+
       return subscription;
     } catch (error) {
       logger.error("Failed to cancel subscription", {error, params});
@@ -208,25 +208,25 @@ export class StripeService {
    */
   async updateCustomerPaymentMethod(customerId: string, paymentMethodId: string): Promise<Stripe.Customer> {
     const stripe = await this.getStripe();
-    
+
     try {
       // First attach the payment method to the customer
       await stripe.paymentMethods.attach(paymentMethodId, {
         customer: customerId,
       });
-      
+
       // Then set it as the default payment method
       const customer = await stripe.customers.update(customerId, {
         invoice_settings: {
           default_payment_method: paymentMethodId,
         },
       });
-      
+
       logger.info("Updated customer payment method", {
         customerId,
         paymentMethodId,
       });
-      
+
       return customer;
     } catch (error) {
       logger.error("Failed to update customer payment method", {error, customerId, paymentMethodId});
@@ -239,7 +239,7 @@ export class StripeService {
    */
   async createSubscription(params: CreateSubscriptionParams): Promise<Stripe.Subscription> {
     const stripe = await this.getStripe();
-    
+
     try {
       const subscriptionData: Stripe.SubscriptionCreateParams = {
         customer: params.customerId,
@@ -265,13 +265,13 @@ export class StripeService {
       }
 
       const subscription = await stripe.subscriptions.create(subscriptionData);
-      
+
       logger.info("Created new subscription", {
         subscriptionId: subscription.id,
         customerId: params.customerId,
         priceId: params.priceId,
       });
-      
+
       return subscription;
     } catch (error) {
       logger.error("Failed to create subscription", {error, params});
@@ -284,7 +284,7 @@ export class StripeService {
    */
   async updateSubscription(params: UpdateSubscriptionParams): Promise<Stripe.Subscription> {
     const stripe = await this.getStripe();
-    
+
     try {
       const updateData: Stripe.SubscriptionUpdateParams = {};
 
@@ -292,13 +292,13 @@ export class StripeService {
         // Cancel all existing items and add the new one
         const subscription = await stripe.subscriptions.retrieve(params.subscriptionId);
         updateData.items = [
-          ...subscription.items.data.map(item => ({id: item.id, deleted: true})),
+          ...subscription.items.data.map((item) => ({id: item.id, deleted: true})),
           {price: params.priceId, quantity: params.quantity || 1},
         ];
       } else if (params.quantity !== undefined) {
         // Just update quantity on existing items
         const subscription = await stripe.subscriptions.retrieve(params.subscriptionId);
-        updateData.items = subscription.items.data.map(item => ({
+        updateData.items = subscription.items.data.map((item) => ({
           id: item.id,
           quantity: params.quantity,
         }));
@@ -313,13 +313,13 @@ export class StripeService {
       }
 
       const subscription = await stripe.subscriptions.update(params.subscriptionId, updateData);
-      
+
       logger.info("Updated subscription", {
         subscriptionId: params.subscriptionId,
         priceId: params.priceId,
         quantity: params.quantity,
       });
-      
+
       return subscription;
     } catch (error) {
       logger.error("Failed to update subscription", {error, params});
@@ -332,7 +332,7 @@ export class StripeService {
    */
   async createCheckoutSession(params: CreateCheckoutSessionParams): Promise<Stripe.Checkout.Session> {
     const stripe = await this.getStripe();
-    
+
     try {
       const sessionData: Stripe.Checkout.SessionCreateParams = {
         payment_method_types: ["card"],
@@ -353,13 +353,13 @@ export class StripeService {
       }
 
       const session = await stripe.checkout.sessions.create(sessionData);
-      
+
       logger.info("Created checkout session", {
         sessionId: session.id,
         customerId: params.customerId,
         priceId: params.priceId,
       });
-      
+
       return session;
     } catch (error) {
       logger.error("Failed to create checkout session", {error, params});
@@ -372,7 +372,7 @@ export class StripeService {
    */
   async getSubscription(subscriptionId: string): Promise<Stripe.Subscription | null> {
     const stripe = await this.getStripe();
-    
+
     try {
       const subscription = await stripe.subscriptions.retrieve(subscriptionId);
       return subscription;
@@ -396,7 +396,7 @@ export class StripeService {
       unpaid: SubscriptionStatus.UNPAID,
       paused: SubscriptionStatus.PAUSED,
     };
-    
+
     return statusMap[stripeStatus] || SubscriptionStatus.UNPAID;
   }
 }
