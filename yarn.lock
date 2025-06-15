@@ -2490,7 +2490,7 @@ __metadata:
 
 "@dynasty/vault-sdk@file:../../../packages/vault-sdk::locator=dynastyweb%40workspace%3Aapps%2Fweb%2Fdynastyweb":
   version: 0.1.0
-  resolution: "@dynasty/vault-sdk@file:../../../packages/vault-sdk#../../../packages/vault-sdk::hash=f2e652&locator=dynastyweb%40workspace%3Aapps%2Fweb%2Fdynastyweb"
+  resolution: "@dynasty/vault-sdk@file:../../../packages/vault-sdk#../../../packages/vault-sdk::hash=59da15&locator=dynastyweb%40workspace%3Aapps%2Fweb%2Fdynastyweb"
   dependencies:
     "@tanstack/react-query": "npm:^5.61.5"
     axios: "npm:^1.9.0"
@@ -2515,7 +2515,7 @@ __metadata:
       optional: true
     react-native:
       optional: true
-  checksum: 10c0/8a94c45a20e1b453c0c22985ae94653d1b947e23a0a6b06360fa80dc1c8862738b38a78ae445c6fa811ccbb4fa55339a269451233d981b43c80100b2f6898adc
+  checksum: 10c0/430658d2f67fcf1a99577a202ce46eab223bf7eae20e1661c427b19e3a1c09b84b5930e56732ecc76da999195dac8d490909ad7bb012fd2d648310296e12cf41
   languageName: node
   linkType: hard
 
