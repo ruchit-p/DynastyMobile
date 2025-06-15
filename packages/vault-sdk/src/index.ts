@@ -17,6 +17,9 @@ export * from './platform';
 // Export utility functions
 export * from './utils';
 
+// Export services
+export * from './services';
+
 // Version information
 export const VAULT_SDK_VERSION = '0.1.0';
 

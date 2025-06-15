@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { vaultService, formatFileSize } from '@/services/VaultService';
+import { vaultSDKService as vaultService } from '@/services/VaultSDKService';
+import { formatFileSize } from '@/services/VaultService';
 import type { VaultItem, VaultFolder, UploadProgress } from '@/services/VaultService';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

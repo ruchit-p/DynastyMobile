@@ -34,7 +34,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { VaultItem } from '@/services/VaultService';
-import { vaultService } from '@/services/VaultService';
+import { vaultSDKService as vaultService } from '@/services/VaultSDKService';
 import { Spinner } from '@/components/ui/spinner';
 
 interface ShareLinkManagerProps {

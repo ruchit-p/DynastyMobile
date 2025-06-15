@@ -493,12 +493,58 @@ class VaultSDKService {
   // Folder Operations
 
   async createFolder(name: string, parentId: string | null = null): Promise<VaultFolder> {
+    const createId = `sdk-create-folder-${Date.now()}`;
+    
+    // Start performance monitoring
+    vaultSDKPerformanceMonitor.startOperation(createId, 'create', {
+      folderName: name,
+      parentId,
+      networkType: typeof window !== 'undefined' && 'connection' in navigator ? 
+        (navigator.connection as any)?.effectiveType || 'unknown' : 'unknown'
+    });
+    
     try {
-      // SDK doesn't have folder creation yet, so we'll use a mock implementation
-      // This would use the legacy VaultService for now
-      throw new Error('Folder creation not yet implemented in SDK');
+      const result = await this.apiClient.createFolder({
+        name,
+        parentFolderId: parentId || undefined,
+      });
+      
+      // Show success toast
+      showRateLimitedToast(toast, {
+        title: 'Folder Created',
+        description: `Folder "${name}" created successfully`,
+        variant: 'success',
+      });
+      
+      this.invalidateCache();
+      
+      // End performance monitoring - success
+      vaultSDKPerformanceMonitor.endOperation(createId, true, undefined, {
+        folderId: result.id
+      });
+      
+      // Convert to VaultFolder format for backward compatibility
+      const folder: VaultFolder = {
+        id: result.id,
+        name: result.name,
+        type: 'folder' as const,
+        parentId: result.parentId,
+        path: result.path,
+        createdAt: new Date(result.createdAt),
+        updatedAt: new Date(result.updatedAt),
+        isShared: (result.sharedWith?.length || 0) > 0,
+        sharedWith: result.sharedWith,
+        itemCount: 0, // SDK doesn't provide this yet
+        size: 0, // SDK doesn't provide this yet
+      };
+      
+      return folder;
       
     } catch (error) {
+      // End performance monitoring - failure
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      vaultSDKPerformanceMonitor.endOperation(createId, false, errorMessage);
+      
       this.handleVaultError(error, 'create-folder', {
         folderName: name,
         parentId,
@@ -586,12 +632,63 @@ class VaultSDKService {
       tags?: string[];
     }
   ): Promise<VaultItem[]> {
+    const searchId = `sdk-search-${Date.now()}`;
+    
+    // Start performance monitoring
+    vaultSDKPerformanceMonitor.startOperation(searchId, 'search', {
+      query,
+      hasFilters: !!filters,
+      networkType: typeof window !== 'undefined' && 'connection' in navigator ? 
+        (navigator.connection as any)?.effectiveType || 'unknown' : 'unknown'
+    });
+    
     try {
-      // SDK doesn't have search yet, return empty for now
-      console.warn('Search not yet implemented in SDK');
-      return [];
+      const result = await this.apiClient.searchItems({
+        query,
+        fileTypes: filters?.type === 'file' ? [
+          filters.mimeType?.includes('image') ? 'image' : 
+          filters.mimeType?.includes('video') ? 'video' :
+          filters.mimeType?.includes('audio') ? 'audio' :
+          filters.mimeType?.includes('document') ? 'document' : 'other'
+        ].filter(Boolean) as any : undefined,
+      });
+      
+      // Convert SDK items to legacy format
+      let items = result.items.map(item => this.convertSDKItemToLegacy(item));
+      
+      // Apply client-side filtering
+      if (filters) {
+        if (filters.type) {
+          items = items.filter(item => item.type === filters.type);
+        }
+        if (filters.mimeType) {
+          items = items.filter(item => item.mimeType?.includes(filters.mimeType!));
+        }
+        if (filters.minSize !== undefined) {
+          items = items.filter(item => (item.size || 0) >= filters.minSize!);
+        }
+        if (filters.maxSize !== undefined) {
+          items = items.filter(item => (item.size || 0) <= filters.maxSize!);
+        }
+        if (filters.tags?.length) {
+          items = items.filter(item => 
+            filters.tags!.some(tag => item.tags?.includes(tag))
+          );
+        }
+      }
+      
+      // End performance monitoring - success
+      vaultSDKPerformanceMonitor.endOperation(searchId, true, undefined, {
+        resultCount: items.length
+      });
+      
+      return items;
       
     } catch (error) {
+      // End performance monitoring - failure
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      vaultSDKPerformanceMonitor.endOperation(searchId, false, errorMessage);
+      
       this.handleVaultError(error, 'search-items', {
         query,
         filters,
@@ -756,32 +853,170 @@ class VaultSDKService {
 
   // Backward compatibility methods
 
-  async moveItem(_itemId: string, _newParentId: string | null): Promise<void> {
-    // SDK doesn't support folders yet, so this is a no-op for now
-    void _itemId;
-    void _newParentId;
-    console.warn('Move item not yet implemented in SDK (no folder support)');
+  async moveItem(itemId: string, newParentId: string | null): Promise<void> {
+    const moveId = `sdk-move-${Date.now()}-${itemId}`;
+    
+    // Start performance monitoring
+    vaultSDKPerformanceMonitor.startOperation(moveId, 'move', {
+      itemId,
+      newParentId,
+      networkType: typeof window !== 'undefined' && 'connection' in navigator ? 
+        (navigator.connection as any)?.effectiveType || 'unknown' : 'unknown'
+    });
+    
+    try {
+      await this.apiClient.moveItem({
+        itemId,
+        newParentId: newParentId || undefined,
+      });
+      
+      // Show success toast
+      showRateLimitedToast(toast, {
+        title: 'Item Moved',
+        description: 'Item moved successfully',
+        variant: 'success',
+      });
+      
+      this.invalidateCache();
+      
+      // End performance monitoring - success
+      vaultSDKPerformanceMonitor.endOperation(moveId, true, undefined, {
+        moved: true
+      });
+      
+    } catch (error) {
+      // End performance monitoring - failure
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      vaultSDKPerformanceMonitor.endOperation(moveId, false, errorMessage);
+      
+      this.handleVaultError(error, 'move-item', {
+        itemId,
+        newParentId,
+      });
+      throw error;
+    }
   }
 
-  async restoreFile(_itemId: string): Promise<void> {
-    // SDK doesn't have restore yet
-    void _itemId;
-    console.warn('Restore file not yet implemented in SDK');
+  async restoreFile(itemId: string): Promise<void> {
+    const restoreId = `sdk-restore-${Date.now()}-${itemId}`;
+    
+    // Start performance monitoring
+    vaultSDKPerformanceMonitor.startOperation(restoreId, 'restore', {
+      itemId,
+      networkType: typeof window !== 'undefined' && 'connection' in navigator ? 
+        (navigator.connection as any)?.effectiveType || 'unknown' : 'unknown'
+    });
+    
+    try {
+      await this.apiClient.restoreItem({ itemId });
+      
+      // Show success toast
+      showRateLimitedToast(toast, {
+        title: 'File Restored',
+        description: 'File restored successfully from trash',
+        variant: 'success',
+      });
+      
+      this.invalidateCache();
+      
+      // End performance monitoring - success
+      vaultSDKPerformanceMonitor.endOperation(restoreId, true, undefined, {
+        restored: true
+      });
+      
+    } catch (error) {
+      // End performance monitoring - failure
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      vaultSDKPerformanceMonitor.endOperation(restoreId, false, errorMessage);
+      
+      this.handleVaultError(error, 'restore-file', {
+        itemId,
+      });
+      throw error;
+    }
   }
 
   async getDeletedItems(): Promise<VaultItem[]> {
-    // SDK doesn't have deleted items tracking yet
-    return [];
+    const deletedId = `sdk-deleted-items-${Date.now()}`;
+    
+    // Start performance monitoring
+    vaultSDKPerformanceMonitor.startOperation(deletedId, 'list', {
+      deletedItems: true,
+      networkType: typeof window !== 'undefined' && 'connection' in navigator ? 
+        (navigator.connection as any)?.effectiveType || 'unknown' : 'unknown'
+    });
+    
+    try {
+      const result = await this.apiClient.getDeletedItems();
+      
+      // Convert SDK items to legacy format
+      const items = result.items.map(item => this.convertSDKItemToLegacy(item));
+      
+      // End performance monitoring - success
+      vaultSDKPerformanceMonitor.endOperation(deletedId, true, undefined, {
+        itemCount: items.length
+      });
+      
+      return items;
+      
+    } catch (error) {
+      // End performance monitoring - failure
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      vaultSDKPerformanceMonitor.endOperation(deletedId, false, errorMessage);
+      
+      this.handleVaultError(error, 'get-deleted-items');
+      throw error;
+    }
   }
 
   async cleanupDeletedItems(
-    _olderThanDays: number = 30,
-    _force: boolean = false
+    olderThanDays: number = 30,
+    force: boolean = false
   ): Promise<{ deletedCount: number }> {
-    // SDK doesn't have cleanup yet
-    void _olderThanDays;
-    void _force;
-    return { deletedCount: 0 };
+    const cleanupId = `sdk-cleanup-${Date.now()}`;
+    
+    // Start performance monitoring
+    vaultSDKPerformanceMonitor.startOperation(cleanupId, 'delete', {
+      olderThanDays,
+      force,
+      networkType: typeof window !== 'undefined' && 'connection' in navigator ? 
+        (navigator.connection as any)?.effectiveType || 'unknown' : 'unknown'
+    });
+    
+    try {
+      const result = await this.apiClient.cleanupDeletedItems({
+        olderThanDays,
+      });
+      
+      // Show success toast
+      if (result.deletedCount > 0) {
+        showRateLimitedToast(toast, {
+          title: 'Cleanup Complete',
+          description: `Permanently deleted ${result.deletedCount} item(s)`,
+          variant: 'success',
+        });
+      }
+      
+      this.invalidateCache();
+      
+      // End performance monitoring - success
+      vaultSDKPerformanceMonitor.endOperation(cleanupId, true, undefined, {
+        deletedCount: result.deletedCount
+      });
+      
+      return result;
+      
+    } catch (error) {
+      // End performance monitoring - failure
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      vaultSDKPerformanceMonitor.endOperation(cleanupId, false, errorMessage);
+      
+      this.handleVaultError(error, 'cleanup-deleted-items', {
+        olderThanDays,
+        force,
+      });
+      throw error;
+    }
   }
 
   // Monitoring & Analytics Methods (not yet implemented in SDK)
@@ -861,16 +1096,31 @@ class VaultSDKService {
     });
 
     try {
-      // SDK doesn't have audit logs yet, return empty with note
-      console.warn('Audit logs not yet implemented in SDK - returning empty results');
+      const result = await this.apiClient.getAuditLogs({
+        startDate: options?.startDate?.toISOString(),
+        endDate: options?.endDate?.toISOString(),
+        action: options?.action,
+        itemId: undefined, // SDK uses itemId, not userId for filtering
+        limit: options?.limit,
+      });
+      
+      // Convert to expected format
+      const logs = result.logs.map(log => ({
+        id: log.id,
+        timestamp: new Date(log.timestamp),
+        userId: log.userId,
+        action: log.action,
+        resourceId: log.itemId || '',
+        metadata: log.metadata,
+      }));
       
       // End performance monitoring - success
       vaultSDKPerformanceMonitor.endOperation(auditId, true, undefined, {
         auditQuery: true,
-        resultCount: 0
+        resultCount: logs.length
       });
 
-      return [];
+      return logs;
     } catch (error) {
       // End performance monitoring - failure
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -891,16 +1141,31 @@ class VaultSDKService {
     });
 
     try {
-      // SDK doesn't have share link access yet
-      console.warn('Share link access not yet implemented in SDK');
+      const result = await this.apiClient.accessShareLink({
+        shareId,
+        password,
+      });
       
-      // End performance monitoring - success (but no result)
+      if (!result) {
+        // End performance monitoring - not found
+        vaultSDKPerformanceMonitor.endOperation(accessId, true, undefined, {
+          shareAccess: true,
+          found: false
+        });
+        return null;
+      }
+      
+      // Convert to legacy format
+      const item = this.convertSDKItemToLegacy(result);
+      
+      // End performance monitoring - success
       vaultSDKPerformanceMonitor.endOperation(accessId, true, undefined, {
         shareAccess: true,
-        found: false
+        found: true,
+        itemId: item.id
       });
 
-      return null;
+      return item;
     } catch (error) {
       // End performance monitoring - failure
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -921,20 +1186,21 @@ class VaultSDKService {
     });
 
     try {
-      // SDK doesn't have share revocation yet
-      console.warn('Share revocation not yet implemented in SDK');
+      await this.apiClient.revokeShareLink({ shareId });
       
-      // Show warning toast
+      // Show success toast
       showRateLimitedToast(toast, {
-        title: 'Feature Not Available',
-        description: 'Share revocation not yet supported in SDK version',
-        variant: 'destructive',
+        title: 'Share Link Revoked',
+        description: 'Share link has been revoked successfully',
+        variant: 'success',
       });
-
-      // End performance monitoring - failure (not implemented)
-      vaultSDKPerformanceMonitor.endOperation(revokeId, false, 'not-implemented');
       
-      throw new Error('Share revocation not yet implemented in SDK');
+      this.invalidateCache();
+      
+      // End performance monitoring - success
+      vaultSDKPerformanceMonitor.endOperation(revokeId, true, undefined, {
+        revoked: true
+      });
     } catch (error) {
       // End performance monitoring - failure
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -961,25 +1227,25 @@ class VaultSDKService {
     });
 
     try {
-      // SDK doesn't have system stats yet
-      console.warn('System vault stats not yet implemented in SDK');
+      const result = await this.apiClient.getSystemStats({});
       
-      const defaultStats = {
-        totalUsers: 0,
-        totalItems: 0,
-        totalStorage: 0,
-        encryptedItems: 0,
-        sharedItems: 0,
-        deletedItems: 0
+      // Return the stats in the expected format
+      const stats = {
+        totalUsers: result.totalUsers,
+        totalItems: result.totalItems,
+        totalStorage: result.totalStorage,
+        encryptedItems: result.encryptedItems,
+        sharedItems: result.sharedItems,
+        deletedItems: result.deletedItems,
       };
 
       // End performance monitoring - success
       vaultSDKPerformanceMonitor.endOperation(statsId, true, undefined, {
         systemStats: true,
-        placeholder: true
+        ...stats
       });
 
-      return defaultStats;
+      return stats;
     } catch (error) {
       // End performance monitoring - failure
       const errorMessage = error instanceof Error ? error.message : String(error);

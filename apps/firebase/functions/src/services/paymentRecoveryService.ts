@@ -76,7 +76,7 @@ export class PaymentRecoveryService {
       const gracePeriodConfig = GRACE_PERIOD_CONFIG[gracePeriodType];
 
       // Set subscription to grace period
-      await this.setGracePeriod(subscription, gracePeriodConfig, failureRecord);
+      await this.setGracePeriod(subscription, gracePeriodConfig, failureRecord, gracePeriodType);
 
       // Schedule retry
       await this.schedulePaymentRetry(subscription, failureRecord, gracePeriodConfig);
@@ -431,7 +431,8 @@ export class PaymentRecoveryService {
   private async setGracePeriod(
     subscription: Subscription,
     config: typeof GRACE_PERIOD_CONFIG[keyof typeof GRACE_PERIOD_CONFIG],
-    failureRecord: PaymentFailureRecord
+    failureRecord: PaymentFailureRecord,
+    gracePeriodType: keyof typeof GRACE_PERIOD_CONFIG
   ): Promise<void> {
     const gracePeriodEndDate = new Date();
     gracePeriodEndDate.setDate(gracePeriodEndDate.getDate() + config.durationDays);
@@ -439,7 +440,7 @@ export class PaymentRecoveryService {
     await this.db.collection("subscriptions").doc(subscription.id).update({
       gracePeriod: {
         status: GracePeriodStatus.ACTIVE,
-        type: this.determineGracePeriodType(failureRecord),
+        type: gracePeriodType,
         startedAt: Timestamp.now(),
         endsAt: Timestamp.fromDate(gracePeriodEndDate),
         reason: failureRecord.errorMessage,
