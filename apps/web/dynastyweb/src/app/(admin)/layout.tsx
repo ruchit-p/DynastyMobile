@@ -34,7 +34,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   const verifyAdminAccess = async () => {
     if (!currentUser) {
-      router.push('/login');
+      router.push('/admin/login');
       return;
     }
 
@@ -72,7 +72,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       await adminSecurity.logAdminAction('ADMIN_LOGOUT');
       adminSecurity.clearCache();
       await signOut();
-      router.push('/login');
+      router.push('/admin/login');
     } catch (error) {
       console.error('Sign out error:', error);
       toast({
