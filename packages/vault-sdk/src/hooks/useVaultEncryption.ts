@@ -79,10 +79,6 @@ export function useVaultEncryption(
       gcTime: 15 * 60 * 1000, // 15 minutes
       refetchOnWindowFocus: true,
       ...options,
-      onError: (error) => {
-        handleError(error, 'Get encryption status');
-        options?.onError?.(error);
-      },
     });
   };
 
@@ -103,10 +99,6 @@ export function useVaultEncryption(
       staleTime: 10 * 60 * 1000, // 10 minutes
       gcTime: 30 * 60 * 1000, // 30 minutes
       ...options,
-      onError: (error) => {
-        handleError(error, 'Get encryption metadata');
-        options?.onError?.(error);
-      },
     });
   };
 
@@ -132,10 +124,6 @@ export function useVaultEncryption(
       staleTime: 60 * 60 * 1000, // 1 hour
       gcTime: 4 * 60 * 60 * 1000, // 4 hours
       ...options,
-      onError: (error) => {
-        handleError(error, 'Get key rotation status');
-        options?.onError?.(error);
-      },
     });
   };
 
@@ -147,9 +135,13 @@ export function useVaultEncryption(
    * Sets up vault encryption for the first time
    */
   const useSetupEncryption = () => {
-    return useMutation({
+    return useMutation<
+      { success: boolean; encryptionEnabled: boolean },
+      VaultError,
+      EncryptionSetupOptions
+    >({
       mutationFn: withVaultErrorHandling(
-        async (options: EncryptionSetupOptions) => {
+        async (_options: EncryptionSetupOptions) => {
           // Note: This would need to be implemented in the API client
           // For now, return success
           return { success: true, encryptionEnabled: true };
@@ -163,7 +155,7 @@ export function useVaultEncryption(
         // Invalidate all vault items as they may now show encryption status
         queryClient.invalidateQueries({ queryKey: vaultQueryKeys.items() });
       },
-      onError: (error) => {
+      onError: (error: VaultError) => {
         handleError(error, 'Setup encryption');
       },
     });
@@ -173,7 +165,11 @@ export function useVaultEncryption(
    * Disables vault encryption (with confirmation)
    */
   const useDisableEncryption = () => {
-    return useMutation({
+    return useMutation<
+      { success: boolean; encryptionEnabled: boolean },
+      VaultError,
+      { confirmDisable: boolean; password?: string }
+    >({
       mutationFn: withVaultErrorHandling(
         async (confirmation: { confirmDisable: boolean; password?: string }) => {
           if (!confirmation.confirmDisable) {
@@ -193,7 +189,7 @@ export function useVaultEncryption(
         // Invalidate all vault items
         queryClient.invalidateQueries({ queryKey: vaultQueryKeys.items() });
       },
-      onError: (error) => {
+      onError: (error: VaultError) => {
         handleError(error, 'Disable encryption');
       },
     });
@@ -207,13 +203,17 @@ export function useVaultEncryption(
    * Stores encryption metadata for a vault item
    */
   const useStoreEncryptionMetadata = () => {
-    return useMutation({
+    return useMutation<
+      { success: boolean },
+      VaultError,
+      { itemId: string; encryptionMetadata: VaultEncryptionMetadata }
+    >({
       mutationFn: withVaultErrorHandling(
         (request: { itemId: string; encryptionMetadata: VaultEncryptionMetadata }) =>
           apiClient.storeEncryptionMetadata(request),
         'storeVaultItemEncryptionMetadata'
       ),
-      onSuccess: (data, variables) => {
+      onSuccess: (_data, variables) => {
         // Update the cached metadata
         queryClient.setQueryData(
           vaultEncryptionQueryKeys.encryptionMetadata(variables.itemId),
@@ -223,7 +223,7 @@ export function useVaultEncryption(
         // Invalidate the item to show it's encrypted
         queryClient.invalidateQueries({ queryKey: vaultQueryKeys.item(variables.itemId) });
       },
-      onError: (error) => {
+      onError: (error: VaultError) => {
         handleError(error, 'Store encryption metadata');
       },
     });
@@ -237,7 +237,11 @@ export function useVaultEncryption(
    * Rotates encryption keys
    */
   const useRotateKeys = () => {
-    return useMutation({
+    return useMutation<
+      any,
+      VaultError,
+      KeyRotationOptions | undefined
+    >({
       mutationFn: withVaultErrorHandling(
         async (options: KeyRotationOptions = {}) => {
           // Generate new key ID
@@ -271,7 +275,7 @@ export function useVaultEncryption(
           exact: false 
         });
       },
-      onError: (error) => {
+      onError: (error: VaultError) => {
         handleError(error, 'Rotate encryption keys');
       },
     });
@@ -285,7 +289,11 @@ export function useVaultEncryption(
    * Encrypts multiple unencrypted items
    */
   const useBulkEncryptItems = () => {
-    return useMutation({
+    return useMutation<
+      { success: boolean; encryptedCount: number },
+      VaultError,
+      { itemIds: string[]; encryptionMetadata: VaultEncryptionMetadata }
+    >({
       mutationFn: withVaultErrorHandling(
         async (request: { itemIds: string[]; encryptionMetadata: VaultEncryptionMetadata }) => {
           // Encrypt each item individually
@@ -311,7 +319,7 @@ export function useVaultEncryption(
         },
         'bulkEncryptItems'
       ),
-      onSuccess: (data, variables) => {
+      onSuccess: (_data, variables) => {
         // Invalidate encryption status
         queryClient.invalidateQueries({ queryKey: vaultEncryptionQueryKeys.encryptionStatus() });
         
@@ -324,7 +332,7 @@ export function useVaultEncryption(
         // Invalidate items list
         queryClient.invalidateQueries({ queryKey: vaultQueryKeys.items() });
       },
-      onError: (error) => {
+      onError: (error: VaultError) => {
         handleError(error, 'Bulk encrypt items');
       },
     });

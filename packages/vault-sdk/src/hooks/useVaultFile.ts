@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import axios, { type AxiosProgressEvent, type CancelTokenSource } from 'axios';
 
 import { VaultApiClient } from '../api/VaultApiClient';
@@ -10,7 +10,7 @@ import {
   VaultError,
   VaultErrorCode,
 } from '../types/Vault';
-import { withVaultErrorHandling, createVaultError } from '../utils/errors';
+import { createVaultError, isVaultError } from '../utils/errors';
 import { vaultQueryKeys } from './useVault';
 
 /**
@@ -51,7 +51,7 @@ export interface FileUploadOptions {
 export interface FileDownloadOptions {
   onProgress?: (progress: DownloadProgress) => void;
   timeout?: number;
-  responseType?: 'blob' | 'arrayBuffer';
+  responseType?: 'blob' | 'arraybuffer';
 }
 
 /**
@@ -88,13 +88,18 @@ function calculateProgress(event: AxiosProgressEvent, startTime: number) {
   const speed = elapsed > 0 ? loaded / elapsed : 0;
   const remaining = speed > 0 && total > loaded ? (total - loaded) / speed : undefined;
 
-  return {
+  const progress: UploadProgress = {
     loaded,
     total,
     percentage,
     speed,
-    timeRemaining: remaining,
   };
+
+  if (remaining !== undefined) {
+    progress.timeRemaining = remaining;
+  }
+
+  return progress;
 }
 
 /**
@@ -218,10 +223,12 @@ export function useVaultFileUpload(apiClient: VaultApiClient) {
         return vaultItem;
 
       } catch (error) {
-        const vaultError = error instanceof VaultError ? error : createVaultError(
-          VaultErrorCode.UNKNOWN_ERROR,
-          error instanceof Error ? error.message : 'Upload failed'
-        );
+        const vaultError = isVaultError(error)
+          ? error
+          : createVaultError(
+              VaultErrorCode.UNKNOWN_ERROR,
+              error instanceof Error ? error.message : 'Upload failed'
+            );
 
         setUploadState({
           isUploading: false,
@@ -318,10 +325,12 @@ export function useVaultFileDownload(apiClient: VaultApiClient) {
         return result;
 
       } catch (error) {
-        const vaultError = error instanceof VaultError ? error : createVaultError(
-          VaultErrorCode.UNKNOWN_ERROR,
-          error instanceof Error ? error.message : 'Download failed'
-        );
+        const vaultError = isVaultError(error)
+          ? error
+          : createVaultError(
+              VaultErrorCode.UNKNOWN_ERROR,
+              error instanceof Error ? error.message : 'Download failed'
+            );
 
         setDownloadState({
           isDownloading: false,
