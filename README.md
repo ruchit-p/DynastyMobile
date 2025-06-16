@@ -1,8 +1,6 @@
-# Dynasty Mobile
+# Dynasty
 
 > A secure, cross-platform family history application for preserving memories and connecting generations.
-
-![Dynasty Logo](./apps/mobile/assets/images/dynasty.png)
 
 ## 🏛️ Overview
 
@@ -12,8 +10,8 @@ Dynasty is a comprehensive family history platform that allows families to secur
 
 - 🔐 **End-to-End Encryption** - Signal Protocol implementation for secure messaging
 - 🌳 **Interactive Family Tree** - High-performance visualization with 1000+ member support
-- 📸 **Secure Vault** - Zero-knowledge encrypted file storage with Backblaze B2
-- 💬 **Encrypted Messaging** - Private family conversations with message reactions and voice notes
+- 📸 **Secure Vault** - Zero-knowledge encrypted file storage with Cloudflare R2
+- 💬 **Encrypted Messaging** - Private family conversations with message reactions
 - 📅 **Family Events** - Shared calendar with RSVP management
 - 📖 **Family Stories** - Preserve and share family history with rich media
 - 🌐 **Cross-Platform** - iOS, Android, and Web support
@@ -21,16 +19,18 @@ Dynasty is a comprehensive family history platform that allows families to secur
 
 ## 🏗️ Architecture
 
-Dynasty uses a monorepo architecture with three main applications:
+Dynasty uses a monorepo architecture managed with Yarn workspaces:
 
 ```
 DynastyMobile/
 ├── apps/
-│   ├── mobile/          # React Native (Expo) app
-│   ├── web/dynastyweb/  # Next.js web application
-│   └── firebase/        # Firebase Functions backend
-├── docs/                # Documentation
-└── scripts/            # Automation scripts
+│   ├── mobile/              # React Native (Expo) app
+│   ├── web/dynastyweb/      # Next.js web application
+│   └── firebase/functions/  # Firebase Functions backend
+├── packages/
+│   └── vault-sdk/          # Shared encryption SDK
+├── docs/                   # Documentation
+└── scripts/               # Automation scripts
 ```
 
 ### Technology Stack
@@ -52,18 +52,19 @@ DynastyMobile/
 
 #### Backend
 
-- **Functions**: Firebase Functions (TypeScript)
+- **Functions**: Firebase Functions v2 (TypeScript)
 - **Database**: Firebase Firestore
-- **Storage**: Backblaze B2 (S3-compatible)
+- **Storage**: Cloudflare R2 (S3-compatible)
 - **Email**: AWS SES
+- **SMS**: AWS End User Messaging (Pinpoint SMS Voice v2)
 - **Authentication**: Firebase Auth with custom security rules
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js 20.x or higher
-- Yarn (recommended package manager)
+- Node.js 20.19.2 or higher
+- Yarn 1.22.22 (required package manager)
 - iOS Simulator (for iOS development)
 - Android Studio (for Android development)
 - Firebase CLI
@@ -80,9 +81,6 @@ DynastyMobile/
 2. **Install dependencies**
 
    ```bash
-   # Install root dependencies
-   yarn install
-
    # Install all workspace dependencies
    yarn
    ```
@@ -110,32 +108,27 @@ DynastyMobile/
 
 ### Development
 
-#### Mobile App
+##### Start Development
 
 ```bash
-cd apps/mobile
-yarn start                # Start Expo development server
-yarn ios                  # Run on iOS simulator
-yarn android              # Run on Android emulator
-yarn test                 # Run tests
-```
+# From root directory:
+yarn web         # Start Next.js web app
+yarn mobile      # Start React Native mobile app
 
-#### Web App
-
-```bash
-cd apps/web/dynastyweb
-yarn dev                  # Start Next.js development server
-yarn build                # Build for production
-yarn test                 # Run tests
-```
-
-#### Firebase Functions
-
-```bash
+# Firebase functions with emulators:
 cd apps/firebase/functions
-yarn serve             # Start Firebase emulators
-yarn deploy            # Deploy to Firebase
-yarn test                  # Run tests
+yarn emulators   # Start Firebase emulators
+```
+
+#### Build & Deploy
+
+```bash
+# Web app
+yarn build:web        # Build Next.js for production
+
+# Firebase functions
+yarn build:functions  # Build functions
+yarn deploy           # Deploy to Firebase
 ```
 
 ## 🔒 Security
@@ -165,16 +158,13 @@ For detailed security documentation, see [docs/security/README.md](./docs/securi
 Dynasty maintains high test coverage across all platforms:
 
 ```bash
-# Run all tests
-yarn test
+# Run specific platform tests from root:
+yarn test:firebase    # Test Firebase functions
+yarn test:web        # Test web app
+yarn test:mobile     # Test mobile app
 
 # Run tests with coverage
-yarn test:coverage
-
-# Run specific platform tests
-cd apps/mobile && yarn test
-cd apps/web/dynastyweb && yarn test
-yarn test:firebase
+cd apps/web/dynastyweb && yarn test:coverage
 ```
 
 ## 🚢 Deployment
@@ -203,26 +193,28 @@ vercel --prod                  # Deploy to production
 
 ```bash
 cd apps/firebase/functions
-yarn deploy                 # Deploy all functions
-yarn deploy:production      # Deploy with production config
+yarn deploy                    # Deploy all functions
+./scripts/deploy-production.sh # Deploy with production secrets
 ```
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md) for details.
+We welcome contributions! Please follow these guidelines:
 
 ### Development Workflow
 
-1. Create a feature branch from `dev`
+1. Create a feature branch from `main`
 2. Make your changes
 3. Write/update tests
-4. Submit a pull request to `dev`
+4. Run linting: `yarn lint`
+5. Submit a pull request to `main`
 
-Use our automated workflow:
+### Code Quality
 
-```bash
-yarn feature "feature-name" "feat: your commit message"
-```
+- TypeScript for all new code
+- ESLint for code quality
+- Prettier for formatting
+- Jest for testing
 
 ## 📄 License
 
@@ -237,4 +229,4 @@ Dynasty is proprietary software. All rights reserved.
 
 ---
 
-For more information, visit [mydynastyapp.com](https://mydynastyapp.com)# Test change
+For more information, visit [mydynastyapp.com](https://mydynastyapp.com)

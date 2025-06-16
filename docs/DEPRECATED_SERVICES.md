@@ -1,6 +1,6 @@
 # Deprecated Services
 
-> Last Updated: January 2025
+> Last Updated: June 2025
 
 This document tracks services that have been removed or replaced in the Dynasty codebase.
 
@@ -54,26 +54,25 @@ This document tracks services that have been removed or replaced in the Dynasty 
 - Email templates automatically converted to SES format
 - MFA email support added (not available in SendGrid)
 
-## 🔄 Services Being Replaced
+### Twilio SMS (Removed: January 2025)
 
-### Cloudflare R2 (Transitioning: January 2025)
+**What it was:** SMS delivery service for notifications and authentication.
 
-**Status:** Code still references R2, but transitioning to Backblaze B2
+**Why removed:**
+- Migrated to AWS End User Messaging (Pinpoint SMS Voice v2)
+- Better integration with existing AWS infrastructure
+- More reliable delivery with 10-digit long codes
+- Cost optimization
 
-**What it is:** Object storage service for vault files and media.
+**What replaced it:** AWS End User Messaging
 
-**Why changing:**
-- Backblaze B2 offers more competitive pricing
-- Better integration with our backup strategy
-- Simplified billing and management
+**Removed packages:**
+- `twilio`
 
-**What's replacing it:** Backblaze B2
-
-**Migration status:**
-- Configuration ready for B2
-- Same S3-compatible APIs (minimal code changes)
-- Bucket names remain the same
-- Update `B2_CONFIG` secret to complete migration
+**Migration notes:**
+- All SMS functions now use AWS SDK
+- Enhanced security with SNS webhook validation
+- Improved error handling and delivery tracking
 
 ## 📋 Configuration Updates Required
 
@@ -103,9 +102,8 @@ grep -r "fingerprint" --include="*.ts" --include="*.tsx" --include="*.js"
 # Search for SendGrid references
 grep -r "sendgrid" --include="*.ts" --include="*.tsx" --include="*.js"
 
-# Search for R2 references (when transitioning to B2)
-grep -r "r2\." --include="*.ts" --include="*.tsx" --include="*.js"
-grep -r "cloudflarestorage" --include="*.ts" --include="*.tsx" --include="*.js"
+# Search for Twilio references
+grep -r "twilio" --include="*.ts" --include="*.tsx" --include="*.js"
 ```
 
 ## ⚠️ Important Notes
@@ -114,6 +112,17 @@ grep -r "cloudflarestorage" --include="*.ts" --include="*.tsx" --include="*.js"
 2. **Update all documentation** when removing services
 3. **Test thoroughly** after removing dependencies
 4. **Keep this file updated** when deprecating new services
+
+## 🌟 Current Services
+
+### Active Third-Party Services
+- **Email**: AWS SES
+- **SMS**: AWS End User Messaging (Pinpoint SMS Voice v2)
+- **Storage**: Cloudflare R2
+- **Payments**: Stripe
+- **Authentication**: Firebase Auth
+- **Database**: Firebase Firestore
+- **Hosting**: Vercel (Web), Firebase Hosting
 
 ---
 
