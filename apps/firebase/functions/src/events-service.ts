@@ -1,6 +1,11 @@
 import {onCall} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
-import {getFirestore, Timestamp, FieldValue} from "firebase-admin/firestore";
+import {
+  getFirestore,
+  Timestamp,
+  FieldValue,
+  DocumentReference,
+} from "firebase-admin/firestore";
 import {getStorage} from "firebase-admin/storage";
 import {logger} from "firebase-functions/v2";
 import {DEFAULT_REGION, FUNCTION_TIMEOUT, DEFAULT_MEMORY} from "./common";
@@ -193,22 +198,32 @@ async function enrichEventListOptimized(
   // Batch fetch RSVP data for the user
   const rsvpDataMap = new Map<string, EventInvitation>();
   if (eventIds.length > 0) {
-    const rsvpPromises = eventIds.map(async (eventId) => {
+    const refPairs = eventIds.map((eventId) => ({
+      eventId,
+      ref: db
+        .collection("events")
+        .doc(eventId)
+        .collection("rsvps")
+        .doc(uid) as DocumentReference,
+    }));
+
+    for (let i = 0; i < refPairs.length; i += 100) {
+      const batch = refPairs.slice(i, i + 100);
       try {
-        const rsvpDoc = await db
-          .collection("events")
-          .doc(eventId)
-          .collection("rsvps")
-          .doc(uid)
-          .get();
-        if (rsvpDoc.exists) {
-          rsvpDataMap.set(eventId, rsvpDoc.data() as EventInvitation);
-        }
+        const snapshots = await db.getAll(
+          ...batch.map((p) => p.ref)
+        );
+        snapshots.forEach((snap, idx) => {
+          if (snap.exists) {
+            const eventId = batch[idx].eventId;
+            rsvpDataMap.set(eventId, snap.data() as EventInvitation);
+          }
+        });
       } catch (err) {
-        logger.warn(`Could not fetch RSVP for event ${eventId}:`, err);
+        const ids = batch.map((p) => p.eventId).join(", ");
+        logger.warn(`Could not fetch RSVPs for events [${ids}]:`, err);
       }
-    });
-    await Promise.all(rsvpPromises);
+    }
   }
 
   // Enrich events
