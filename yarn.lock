@@ -15281,7 +15281,7 @@ __metadata:
     firebase-admin: "npm:^13.4.0"
     firebase-functions: "npm:^6.0.1"
     firebase-functions-test: "npm:^3.4.1"
-    glob: "npm:^10.3.10"
+    glob: "npm:^11.0.3"
     jest: "npm:^30.0.0"
     jsonwebtoken: "npm:^9.0.2"
     libsodium-wrappers: "npm:^0.7.15"
