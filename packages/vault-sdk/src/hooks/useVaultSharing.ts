@@ -49,12 +49,16 @@ export function useVaultSharing(
    * Shares a vault item with users
    */
   const useShareItem = () => {
-    return useMutation({
+    return useMutation<
+      { success: boolean },
+      VaultError,
+      ShareVaultItemRequest
+    >({
       mutationFn: withVaultErrorHandling(
         (request: ShareVaultItemRequest) => apiClient.shareItem(request),
         'shareVaultItem'
       ),
-      onSuccess: (data, variables) => {
+      onSuccess: (_data, variables) => {
         // Invalidate the item to refresh permissions
         queryClient.invalidateQueries({ queryKey: vaultQueryKeys.item(variables.itemId) });
         
@@ -64,7 +68,7 @@ export function useVaultSharing(
         // Invalidate sharing-related queries
         queryClient.invalidateQueries({ queryKey: vaultSharingQueryKeys.myShares() });
       },
-      onError: (error) => {
+      onError: (error: VaultError) => {
         handleError(error, 'Share item');
       },
     });
@@ -74,12 +78,16 @@ export function useVaultSharing(
    * Updates permissions for a shared vault item
    */
   const useUpdateItemPermissions = () => {
-    return useMutation({
+    return useMutation<
+      { success: boolean },
+      VaultError,
+      UpdateVaultItemPermissionsRequest
+    >({
       mutationFn: withVaultErrorHandling(
         (request: UpdateVaultItemPermissionsRequest) => apiClient.updateItemPermissions(request),
         'updateVaultItemPermissions'
       ),
-      onSuccess: (data, variables) => {
+      onSuccess: (_data, variables) => {
         // Invalidate the item to refresh permissions
         queryClient.invalidateQueries({ queryKey: vaultQueryKeys.item(variables.itemId) });
         
@@ -89,7 +97,7 @@ export function useVaultSharing(
         // Invalidate sharing queries
         queryClient.invalidateQueries({ queryKey: vaultSharingQueryKeys.myShares() });
       },
-      onError: (error) => {
+      onError: (error: VaultError) => {
         handleError(error, 'Update item permissions');
       },
     });
@@ -99,12 +107,16 @@ export function useVaultSharing(
    * Revokes access to a shared vault item
    */
   const useRevokeItemAccess = () => {
-    return useMutation({
+    return useMutation<
+      { success: boolean },
+      VaultError,
+      { itemId: string; userId: string }
+    >({
       mutationFn: withVaultErrorHandling(
         (request: { itemId: string; userId: string }) => apiClient.revokeItemAccess(request),
         'revokeVaultItemAccess'
       ),
-      onSuccess: (data, variables) => {
+      onSuccess: (_data, variables) => {
         // Invalidate the item to refresh permissions
         queryClient.invalidateQueries({ queryKey: vaultQueryKeys.item(variables.itemId) });
         
@@ -114,7 +126,7 @@ export function useVaultSharing(
         // Invalidate sharing queries
         queryClient.invalidateQueries({ queryKey: vaultSharingQueryKeys.myShares() });
       },
-      onError: (error) => {
+      onError: (error: VaultError) => {
         handleError(error, 'Revoke item access');
       },
     });
@@ -128,7 +140,11 @@ export function useVaultSharing(
    * Creates a public share link for a vault item
    */
   const useCreateShareLink = () => {
-    return useMutation({
+    return useMutation<
+      VaultShareLink,
+      VaultError,
+      CreateVaultShareLinkRequest
+    >({
       mutationFn: withVaultErrorHandling(
         (request: CreateVaultShareLinkRequest) => apiClient.createShareLink(request),
         'createVaultShareLink'
@@ -145,7 +161,7 @@ export function useVaultSharing(
         // Invalidate the item to show it has share links
         queryClient.invalidateQueries({ queryKey: vaultQueryKeys.item(variables.itemId) });
       },
-      onError: (error) => {
+      onError: (error: VaultError) => {
         handleError(error, 'Create share link');
       },
     });
@@ -155,12 +171,16 @@ export function useVaultSharing(
    * Accesses a vault item via share link
    */
   const useAccessShareLink = () => {
-    return useMutation({
+    return useMutation<
+      VaultItem,
+      VaultError,
+      { shareId: string; password?: string }
+    >({
       mutationFn: withVaultErrorHandling(
         (request: { shareId: string; password?: string }) => apiClient.accessShareLink(request),
         'accessVaultShareLink'
       ),
-      onError: (error) => {
+      onError: (error: VaultError) => {
         handleError(error, 'Access share link');
       },
     });
@@ -191,10 +211,6 @@ export function useVaultSharing(
       staleTime: 5 * 60 * 1000, // 5 minutes
       gcTime: 15 * 60 * 1000, // 15 minutes
       ...options,
-      onError: (error) => {
-        handleError(error, 'Get share links');
-        options?.onError?.(error);
-      },
     });
   };
 
@@ -246,7 +262,11 @@ export function useVaultSharing(
    * Shares multiple items with the same users and permissions
    */
   const useBulkShareItems = () => {
-    return useMutation({
+    return useMutation<
+      { success: boolean; sharedCount: number },
+      VaultError,
+      { itemIds: string[]; userIds: string[]; permissions: string }
+    >({
       mutationFn: async (request: { itemIds: string[]; userIds: string[]; permissions: string }) => {
         return withVaultErrorHandling(async () => {
           // Share each item individually
@@ -282,7 +302,7 @@ export function useVaultSharing(
           queryClient.invalidateQueries({ queryKey: vaultQueryKeys.item(itemId) });
         });
       },
-      onError: (error) => {
+      onError: (error: VaultError) => {
         handleError(error, 'Bulk share items');
       },
     });
