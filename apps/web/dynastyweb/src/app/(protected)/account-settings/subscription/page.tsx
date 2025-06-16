@@ -366,7 +366,7 @@ export default function SubscriptionPage() {
           />
           <div className="flex justify-between text-sm text-gray-600">
             <span>{storagePercentage.toFixed(0)}% used</span>
-            <span>{((totalStorageGB * 1024 * 1024 * 1024 - storageData?.usedBytes || 0) / (1024 * 1024 * 1024)).toFixed(1)} GB available</span>
+            <span>{((totalStorageGB * 1024 * 1024 * 1024 - (storageData?.usedBytes ?? 0)) / (1024 * 1024 * 1024)).toFixed(1)} GB available</span>
           </div>
           
           {/* Storage breakdown if available */}
@@ -411,7 +411,7 @@ export default function SubscriptionPage() {
               <AlertCircle className="h-4 w-4 text-orange-600" />
               <AlertTitle className="text-orange-800">Storage Almost Full</AlertTitle>
               <AlertDescription className="text-orange-700">
-                You&apos;re using {storagePercentage.toFixed(0)}% of your storage. Only {((totalStorageGB * 1024 * 1024 * 1024 - storageData?.usedBytes || 0) / (1024 * 1024 * 1024)).toFixed(1)} GB remaining. 
+                You&apos;re using {storagePercentage.toFixed(0)}% of your storage. Only {((totalStorageGB * 1024 * 1024 * 1024 - (storageData?.usedBytes ?? 0)) / (1024 * 1024 * 1024)).toFixed(1)} GB remaining.
                 <Button 
                   variant="link" 
                   className="h-auto p-0 text-orange-700 underline ml-1"
