@@ -2490,7 +2490,7 @@ __metadata:
 
 "@dynasty/vault-sdk@file:../../../packages/vault-sdk::locator=dynastyweb%40workspace%3Aapps%2Fweb%2Fdynastyweb":
   version: 0.1.0
-  resolution: "@dynasty/vault-sdk@file:../../../packages/vault-sdk#../../../packages/vault-sdk::hash=75f885&locator=dynastyweb%40workspace%3Aapps%2Fweb%2Fdynastyweb"
+  resolution: "@dynasty/vault-sdk@file:../../../packages/vault-sdk#../../../packages/vault-sdk::hash=64743a&locator=dynastyweb%40workspace%3Aapps%2Fweb%2Fdynastyweb"
   dependencies:
     "@tanstack/react-query": "npm:^5.61.5"
     axios: "npm:^1.9.0"
@@ -2515,7 +2515,7 @@ __metadata:
       optional: true
     react-native:
       optional: true
-  checksum: 10c0/468e88fb884b2cce043bdc549ab1eff48c7c2b76dbba3e24b38c63907d0725879fadc4ccb66ba31be4c8cfab68317b41fa0a46c49c661f872d8390728a62d045
+  checksum: 10c0/92ce32e744d7edb3dc8d6eb2e1b2f283bb24e7ba53f0c8d58e99b4c588fc929a545713e4613ef5d372ba7bd679307f38a52c04b2dde5ba7511360753c8a5703a
   languageName: node
   linkType: hard
 
@@ -12968,6 +12968,7 @@ __metadata:
     eslint-config-next: "npm:^15.2.0"
     fake-indexeddb: "npm:^6.0.0"
     firebase: "npm:^11.3.1"
+    firebase-admin: "npm:^13.4.0"
     ics: "npm:^3.8.1"
     identity-obj-proxy: "npm:^3.0.0"
     isomorphic-dompurify: "npm:^2.25.0"

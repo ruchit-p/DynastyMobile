@@ -1,7 +1,7 @@
 {
-  "buildCommand": "yarn build",
+  "buildCommand": "cd ../../.. && yarn workspace @dynasty/vault-sdk build && cd apps/web/dynastyweb && yarn build",
   "outputDirectory": ".next",
-  "installCommand": "yarn workspaces focus dynastyweb --production",
+  "installCommand": "cd ../../.. && yarn install --frozen-lockfile",
   "framework": "nextjs",
   "build": {
     "env": {

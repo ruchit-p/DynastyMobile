@@ -1,5 +1,5 @@
 {
-    "installCommand": "corepack enable && corepack prepare yarn@4.9.2 --activate && yarn workspaces focus dynastyweb --production",
+    "installCommand": "corepack enable && corepack prepare yarn@4.9.2 --activate && yarn install",
     "buildCommand": "yarn build",
     "framework": "nextjs"
 }

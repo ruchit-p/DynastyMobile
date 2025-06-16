@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "build": "turbo run build --filter=dynastyweb",
+    "build:vercel": "yarn workspace @dynasty/vault-sdk build && yarn workspace dynastyweb build",
     "build:all": "turbo run build",
     "build:functions": "turbo run build --filter=functions",
     "build:web": "turbo run build --filter=dynastyweb",
