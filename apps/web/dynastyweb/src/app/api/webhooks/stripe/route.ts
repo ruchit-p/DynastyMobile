@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     // Initialize Stripe at runtime
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: "2025-05-28.basil",
+      apiVersion: "2025-05-28",
     })
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
     // Security: Verify HTTPS in production
