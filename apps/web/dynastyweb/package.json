@@ -70,6 +70,7 @@
     "cmdk": "^1.1.1",
     "country-data-list": "^1.4.0",
     "critters": "^0.0.23",
+    "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
     "firebase": "^11.3.1",
     "ics": "^3.8.1",
@@ -93,8 +94,10 @@
     "react-window": "^1.8.8",
     "recharts": "^2.15.3",
     "relatives-tree": "^3.2.1",
+    "stripe": "^14.0.0",
     "swiper": "^11.2.8",
     "tailwind-merge": "^3.0.1",
+    "tailwindcss": "^3.4.1",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.8.3",
     "workbox-window": "^7.3.0",
@@ -130,8 +133,7 @@
     "jest-environment-jsdom": "^30.0.0",
     "jest-extended": "^6.0.0",
     "playwright": "^1.53.0",
-    "postcss": "^8",
-    "tailwindcss": "^3.4.1"
+    "postcss": "^8"
   },
   "overrides": {
     "glob": "^10.4.5"
