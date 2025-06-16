@@ -1,62 +1,73 @@
-# Dynasty R2 Production Deployment Checklist
+# Dynasty Production Deployment Checklist
 
-## ✅ Completed Setup
-- [x] R2 credentials configured
-- [x] CORS policy applied to dynastydev bucket
-- [x] Upload/download operations tested
-- [x] File management (exists, delete) working
-- [x] Firestore metadata integration
-- [x] Cost optimization implemented
-- [x] Security headers configured
+## ✅ Pre-Deployment Requirements
+
+- [x] Firebase project created
+- [x] Cloudflare R2 buckets configured
+- [x] AWS SES account setup
+- [x] AWS SMS (End User Messaging) configured
+- [x] Stripe account connected
+- [x] Security keys generated
+- [x] Rate limiting configured
 
 ## 🚀 Production Deployment Steps
 
-### 1. Create Production Bucket
-```bash
-# In Cloudflare Dashboard:
-# 1. Create new bucket: "dynastyprod"
-# 2. Apply the same CORS policy
-```
+### 1. Configure External Services
 
-### 2. Generate All Security Keys ✅ COMPLETED
-```bash
-./scripts/generate-all-secrets.sh
+#### Cloudflare R2
+- Create bucket: `dynastyprod`
+- Generate API credentials
+- Note: CORS not required (using signed URLs)
 
-# Deployment scripts created:
-# - deploy-production-secrets.sh
-# - verify-production-config.sh  
-# - gradual-rollout-deploy.sh
-```
+#### AWS Services
+- **SES**: Verify domain, create templates
+- **SMS**: Configure phone pool with 10-digit long code
+- Create IAM user with required permissions
 
-### 3. Set Firebase Production Environment Variables ✅ AUTOMATED
+### 2. Set Production Secrets
+
 ```bash
-# Use automated deployment script
+# Copy and configure production environment
+cp .env.production.template .env.production
+# Edit with your API keys and configuration
+
+# Deploy secrets to Firebase
 ./scripts/deploy-production-secrets.sh
-
-# This sets all required configuration:
-# - External service keys (AWS SES, Twilio, R2)
-# - Environment configuration (URLs, feature flags)
-
-# Manual configuration (for reference):
-# firebase functions:config:set \
-#   security.jwt_secret="GENERATED_KEY" \
-#   ses.region="us-east-1" \
-#   ses.from_email="noreply@mydynastyapp.com" \
-#   ... (see .env.production.template for full list)
 ```
 
-### 4. Deploy Functions (Gradual Rollout) ✅ AUTOMATED
+### 3. Required Secrets
+
 ```bash
-# Use automated gradual rollout script
+# Core Infrastructure
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+AWS_REGION
+AWS_SMS_PHONE_POOL_ID
+AWS_SMS_CONFIGURATION_SET_NAME
+
+# Storage
+R2_SECRETS={"accountId":"...","accessKeyId":"...","secretAccessKey":"..."}
+
+# Security
+VAULT_ENCRYPTION_KEY
+JWT_SECRET
+STRIPE_WEBHOOK_SECRET
+
+# Application
+FRONTEND_URL=https://mydynastyapp.com
+```
+
+### 4. Deploy Functions
+
+```bash
+# Verify configuration
+./scripts/verify-production-config.sh
+
+# Deploy with gradual rollout
 ./scripts/gradual-rollout-deploy.sh
 
-# This handles:
-# - Health checks after each deployment  
-# - Rollback capability if issues arise
-# - Progress monitoring and reporting
-
-# Manual deployment (for reference):
-# firebase deploy --only functions --project production
+# Or standard deployment
+firebase deploy --only functions --project dynasty-prod
 ```
 
 ### 5. Monitor Performance
@@ -65,78 +76,61 @@
 - Track error rates
 - Verify CORS is working in production
 
-### 6. Mobile App Configuration
-Ensure your mobile app uses the production Firebase project:
-```javascript
-// In your mobile app config
-const config = {
-  apiUrl: 'https://us-central1-dynasty-prod.cloudfunctions.net',
-  // ... other config
-};
-```
+### 6. Configure Applications
 
-### 6. CDN Setup (Optional but Recommended)
-1. Enable Cloudflare CDN for R2 bucket
-2. Configure cache rules
-3. Set up custom domain (e.g., cdn.mydynastyapp.com)
+#### Web App (Vercel)
+- Set environment variables in Vercel dashboard
+- Configure production domain
+- Enable analytics
 
-### 7. Backup Strategy
-- Enable Cloudflare R2 backup
-- Set up daily Firestore exports
-- Test disaster recovery procedures
+#### Mobile Apps
+- Update Firebase configuration
+- Update API endpoints
+- Submit to app stores
 
-### 8. Security Final Check
-- [ ] Verify CORS only includes production domains
-- [ ] Remove all localhost origins from production
-- [ ] Enable rate limiting on Firebase Functions
-- [ ] Set up monitoring alerts
+### 7. Security Checklist
+
+- [ ] CORS origins set to production domains only
+- [ ] Rate limiting enabled (10 req/min auth, 5/hour password)
+- [ ] Secrets rotated from development
+- [ ] Monitoring alerts configured
+- [ ] Backup strategy implemented
 
 ## 📊 Post-Deployment Monitoring
 
-### Key Metrics to Track:
-1. **R2 Operation Success Rate**: Should be >99.9%
-2. **Average Latency**: Target <200ms for uploads
-3. **Error Rate**: Should be <0.1%
-4. **Cost Savings**: Monitor R2 vs Firebase Storage costs
+### Key Metrics
+- Function execution time and errors
+- Authentication success rates
+- Storage operation performance
+- Email/SMS delivery rates
+- Subscription webhook processing
 
-### Rollback Plan:
-If issues arise:
+### Rollback Plan
 ```bash
-# Immediate rollback
-firebase functions:config:set r2.migration_percentage="0"
-firebase deploy --only functions --project production
+# Quick rollback to previous version
+firebase functions:delete FUNCTION_NAME --force
+firebase deploy --only functions:FUNCTION_NAME --project dynasty-prod
 ```
 
-## 🎉 Success Criteria
-- [ ] All uploads/downloads working in production
-- [ ] No increase in error rates
-- [ ] Performance meets or exceeds Firebase Storage
-- [ ] Cost reduction visible in billing
+## 🎉 Go-Live Checklist
 
-## 📞 Support Contacts
-- Cloudflare R2 Support: support.cloudflare.com
-- Firebase Support: firebase.google.com/support
-- Your DevOps Team: [Add contact]
+- [ ] All functions deployed successfully
+- [ ] Authentication flows tested
+- [ ] Email delivery verified
+- [ ] SMS delivery tested
+- [ ] Storage operations working
+- [ ] Stripe webhooks active
+- [ ] Monitoring dashboard configured
+- [ ] Team notified of deployment
+
+## 📞 Support Resources
+
+- **Firebase Console**: console.firebase.google.com
+- **Cloudflare Dashboard**: dash.cloudflare.com
+- **AWS Console**: console.aws.amazon.com
+- **Stripe Dashboard**: dashboard.stripe.com
 
 ---
 
-Last Updated: January 25, 2025
-Ready for Production: ✅ YES
-
-## 🔒 Security Checklist
-
-- [ ] ALLOWED_ORIGINS configured for production domains
-- [ ] Mobile app User-Agent strings documented
-- [ ] Web client integration tested
-
-### Additional Security
-- [ ] All environment variables set
-- [ ] Sensitive keys not in code
-- [ ] Rate limiting configured
-- [ ] PBKDF2 iterations verified (210,000)
-- [ ] CORS properly restricted
-
-### Testing
-> test
-- [ ] Verify mobile app exemption
-- [ ] Check error handling
+*Last Updated: June 2025*
+*Status: Production Ready*

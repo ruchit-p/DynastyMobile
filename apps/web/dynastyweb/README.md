@@ -1,15 +1,15 @@
-# Dynasty - Your Family's Legacy, Beautifully Preserved
+# Dynasty Web
 
-Dynasty is a comprehensive family history platform that allows users to create, share, and preserve their family legacy through digital family trees and history books.
+Next.js web application for Dynasty - Your Family's Legacy, Beautifully Preserved.
 
 ## 🌟 Features
 
-- **Family Tree Visualization**: Build and visualize your family connections across generations
-- **Digital History Book**: Document stories, photos, and memories in a beautiful digital format
-- **Collaborative Sharing**: Collaborate with family members and share your history securely
-- **Time Machine**: Travel through your family's timeline and explore your heritage
-- **User Authentication**: Secure login, registration, and account management
-- **Responsive Design**: Beautiful UI that works on mobile, tablet, and desktop
+- **Family Tree Visualization**: Interactive family tree with relationship mapping
+- **Digital History Book**: Rich media stories with photos, videos, and text
+- **Encrypted Messaging**: Secure family communications with Signal Protocol
+- **Secure Vault**: Zero-knowledge encrypted file storage
+- **Event Management**: Family gatherings with RSVP tracking
+- **Responsive Design**: Optimized for mobile, tablet, and desktop
 
 ## 🚀 Tech Stack
 

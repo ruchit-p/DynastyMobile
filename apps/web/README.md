@@ -1,209 +1,138 @@
-# Dynasty - Secure Family History Platform
+# Dynasty Web Application
 
-Dynasty is a comprehensive web application that allows families to document, share, and preserve their history across generations. It features a secure, end-to-end encrypted messaging system, family tree builder, and story archiving capabilities.
+The Next.js web application for Dynasty - a secure family history platform for documenting, sharing, and preserving family memories across generations.
 
-## Core Features
+## Features
 
-- **End-to-End Encrypted Messaging**: Communicate securely with family members with no server access to message content
-- **Family Tree Builder**: Document family relationships and history
-- **Story Archive**: Preserve family stories, photos, and memories
-- **Event Management**: Create and organize family gatherings and events
-- **Multi-device Support**: Seamless experience across mobile and desktop
+- 🔐 **End-to-End Encrypted Messaging** - Secure family communications
+- 🌳 **Interactive Family Tree** - Visual family relationship mapping
+- 📖 **Digital History Book** - Rich media stories and memories
+- 📅 **Event Management** - Family gatherings with RSVP tracking
+- 📁 **Secure Vault** - Encrypted file storage and sharing
+- 💳 **Subscriptions** - Premium features with Stripe integration
 
-## Technologies
+## Tech Stack
 
-- **Frontend**: Next.js, React, TypeScript, Tailwind CSS
-- **Backend**: Firebase (Authentication, Firestore, Storage, Functions)
-- **Encryption**: Web Crypto API, Double Ratchet Algorithm
+- **Framework**: Next.js 14 with App Router
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS + shadcn/ui components
+- **State Management**: React Context API
+- **Backend**: Firebase (Auth, Firestore, Functions)
 - **Deployment**: Vercel
 
-## End-to-End Encrypted Messaging
-
-The Dynasty messaging system provides secure, private communication between family members with the following security features:
-
-- **Forward Secrecy**: Past messages remain secure even if keys are compromised
-- **Post-Compromise Security**: Future messages remain secure after temporary compromise
-- **Multi-Device Support**: Access your messages securely across all your devices
-- **Verified Communications**: Only authorized family members can access messages
-
-### Messaging Architecture
-
-The messaging system combines client-side encryption with Firebase for a secure yet scalable solution:
-
-1. **Local Encryption**: All message content is encrypted/decrypted locally on device
-2. **Firebase Backend**: Handles message delivery without accessing plaintext
-3. **Device Key Management**: Each device maintains its own encryption keys
-4. **Secure Sessions**: Encrypted sessions between device pairs ensure message privacy
-
-For technical details, see [Messaging Implementation](./dynastyweb/src/docs/MessagingFeature.md).
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js (v16+)
-- Firebase account
-- Git
+- Node.js 20.19.2+
+- Yarn 1.22.22
+- Firebase project
 
-### Installation
+### Setup
 
-1. Clone the repository:
-   ```
-   git clone https://github.com/your-username/dynasty.git
-   ```
-
-2. Install dependencies for both frontend and backend:
-   ```
-   # Install frontend dependencies
-   cd dynastyweb
-   npm install
-
-   # Install backend dependencies
-   cd ../dynastyfirebase
-   npm install
+1. Clone the repository and install dependencies:
+   ```bash
+   # From project root
+   yarn install
    ```
 
-3. Set up environment variables:
-   - Create `.env.local` in the `dynastyweb` directory with your Firebase config:
-   ```
-   NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
-   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-domain.firebaseapp.com
-   NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
-   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-bucket.appspot.com
-   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
-   NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
-   NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your-measurement-id
+2. Configure environment:
+   ```bash
+   cd apps/web/dynastyweb
+   cp .env.example .env.local
+   # Edit .env.local with your Firebase config
    ```
 
-4. Start the development servers:
-   ```
-   # Start Firebase emulators
-   cd dynastyfirebase
-   npm run emulators
-
-   # In another terminal, start the frontend
-   cd dynastyweb
-   npm run dev
+3. Start development:
+   ```bash
+   # From project root
+   yarn web
    ```
 
-5. Open your browser and navigate to `http://localhost:3000`
+4. Open [http://localhost:3000](http://localhost:3000)
 
-## Development Workflow
+## Project Structure
 
-### File Structure
+```
+dynastyweb/
+├── src/
+│   ├── app/          # Next.js app router pages
+│   ├── components/   # React components
+│   ├── context/      # Context providers
+│   ├── hooks/        # Custom hooks
+│   ├── lib/          # Utilities & Firebase setup
+│   ├── services/     # API services
+│   └── utils/        # Helper functions
+├── public/           # Static assets
+└── __tests__/        # Test files
+```
 
-- `/dynastyweb` - Next.js frontend application
-  - `/src/app` - Next.js app router pages and layouts
-  - `/src/components` - Reusable React components
-  - `/src/lib` - Utilities, API clients, and helpers
-  - `/src/context` - React context providers
-  - `/src/hooks` - Custom React hooks
+## Key Routes
 
-- `/dynastyfirebase` - Firebase backend
-  - `/functions` - Cloud Functions
-  - `/firestore.rules` - Firestore security rules
-  - `/storage.rules` - Firebase Storage security rules
+- `/` - Landing page
+- `/login` - User authentication
+- `/signup` - New user registration
+- `/feed` - User dashboard (protected)
+- `/family-tree` - Interactive family tree (protected)
+- `/history-book` - Digital family stories (protected)
+- `/messages` - Encrypted messaging (protected)
+- `/vault` - Secure file storage (protected)
+- `/account-settings` - Profile management (protected)
 
-### Setting Up Messaging
+## Development
 
-To use the end-to-end encrypted messaging feature:
+```bash
+# Run development server
+yarn dev
 
-1. Include the `EncryptionProvider` in your app:
-   ```jsx
-   import { EncryptionProvider } from '@/context/EncryptionContext';
+# Run tests
+yarn test
+yarn test:coverage
 
-   function MyApp({ Component, pageProps }) {
-     return (
-       <EncryptionProvider>
-         <Component {...pageProps} />
-       </EncryptionProvider>
-     );
-   }
-   ```
+# Lint code
+yarn lint
 
-2. Initialize encryption for a user after authentication:
-   ```jsx
-   import { useEncryption } from '@/context/EncryptionContext';
+# Build for production
+yarn build
 
-   function SetupEncryption() {
-     const { initializeUserEncryption } = useEncryption();
-     
-     const handleSetup = async (password) => {
-       const success = await initializeUserEncryption(password);
-       if (success) {
-         console.log('Encryption initialized!');
-       }
-     };
-     
-     return (
-       <button onClick={() => handleSetup('secure-password')}>
-         Set up encrypted messaging
-       </button>
-     );
-   }
-   ```
-
-3. Send an encrypted message:
-   ```jsx
-   import { useEncryption } from '@/context/EncryptionContext';
-   import { sendMessage, createChat } from '@/lib/api/messaging';
-
-   function SendMessage() {
-     const { encryptMessageForUser } = useEncryption();
-     
-     const handleSend = async (recipientId, message) => {
-       // Create or get existing chat
-       const chatResult = await createChat([recipientId], 'individual');
-       if (!chatResult.success) return;
-       
-       // Encrypt message for recipient
-       const encryptedContent = await encryptMessageForUser(recipientId, message);
-       if (!encryptedContent) return;
-       
-       // Send the encrypted message
-       await sendMessage(chatResult.chatId, encryptedContent);
-     };
-     
-     return (
-       <button onClick={() => handleSend('user123', 'Hello, encrypted world!')}>
-         Send Encrypted Message
-       </button>
-     );
-   }
-   ```
-
-## Connecting with UI Design
-
-Once you've implemented the messaging backend, you can connect it with your UI design:
-
-1. Create UI components for the chat interface
-2. Integrate the encryption and messaging APIs with the UI
-3. Test the end-to-end flow with multiple users and devices
+# Start production server
+yarn start
+```
 
 ## Deployment
 
-### Frontend Deployment
+The app is configured for automatic deployment via Vercel:
 
-The frontend can be deployed to Vercel:
-
-```
-cd dynastyweb
-vercel
+```bash
+# Manual deployment
+vercel --prod
 ```
 
-### Backend Deployment
+## Environment Variables
 
-To deploy Firebase functions:
+Required environment variables:
 
+```env
+# Firebase Configuration
+NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+# Optional
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+NEXT_PUBLIC_USE_FIREBASE_EMULATOR
+NEXT_PUBLIC_ENVIRONMENT
 ```
-cd dynastyfirebase
-firebase deploy
-```
 
-## License
+## Security
 
-[MIT License](LICENSE)
+- Content Security Policy (CSP) configured
+- Input validation and XSS protection
+- Secure authentication flows
+- Environment-specific configurations
 
-## Contact
-
-For questions or support, please reach out to [your-email@example.com](mailto:your-email@example.com). 
+For more details, see the [main project README](../../../README.md). 

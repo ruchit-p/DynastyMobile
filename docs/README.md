@@ -5,75 +5,68 @@ Welcome to the Dynasty project documentation. This guide will help you navigate 
 ## 📚 Documentation Structure
 
 ### [Architecture](./architecture/)
-System design, data flow, and architectural decisions for the Dynasty platform.
+System design and architectural overview.
 
-- [System Overview](./architecture/system-overview.md) - High-level architecture
-- [Data Flow](./architecture/data-flow.md) - How data moves through the system
-- [Security Architecture](./architecture/security-architecture.md) - Security design principles
-- [Technology Stack](./architecture/technology-stack.md) - Technology choices and rationale
+- [Architecture Overview](./architecture/README.md) - High-level system architecture
 
 ### [API Reference](./api-reference/)
-Complete API documentation for all services and endpoints.
+API documentation and endpoint reference.
 
-- [Firebase Functions](./api-reference/firebase-functions.md) - All cloud functions
-- [Authentication](./api-reference/authentication.md) - Auth endpoints and methods
-- [Messaging](./api-reference/messaging.md) - Chat and messaging APIs
-- [Vault](./api-reference/vault.md) - File storage and management
-- [Stories & Events](./api-reference/stories-events.md) - Content creation APIs
+- [API Overview](./api-reference/README.md) - API structure and authentication
 
 ### [Developer Guides](./guides/)
-How-to guides and tutorials for common tasks.
+How-to guides for developers.
 
 - [Getting Started](./guides/getting-started.md) - Developer onboarding
-- [Deployment](./guides/deployment.md) - Deploy to production
-- [Testing](./guides/testing.md) - Testing strategies and commands
-- [Troubleshooting](./guides/troubleshooting.md) - Common issues and solutions
-- [Contributing](./guides/contributing.md) - Contribution guidelines
+- [Error Handling](./guides/error_handling.md) - Error handling patterns
 
 ### [Features](./features/)
-In-depth documentation for each major feature.
+Feature-specific documentation.
 
-- **[Authentication](./features/authentication/)** - User authentication system
-- **[Messaging](./features/messaging/)** - E2E encrypted chat system
-- **[Stories](./features/stories/)** - Family story creation and sharing
-- **[Vault](./features/vault/)** - Secure file storage
+- **[Authentication](./features/authentication/)** - Authentication flows and overview
+- **[Messaging](./features/messaging/)** - E2E encrypted chat system and schema
 
 ### [Security](./security/)
-Security documentation and best practices.
+Security documentation and audit reports.
 
-- [Security Overview](./security/README.md) - Security principles
-- [Audit Report](./security/audit-report.md) - Latest security audit
-- [Encryption](./security/encryption.md) - Encryption methods and implementation
-- [Best Practices](./security/best-practices.md) - Security guidelines
+- [Security Overview](./security/README.md) - Security principles and metrics
+- [Security Audit Report](./security/SECURITY_AUDIT_REPORT.md) - Comprehensive audit findings
+- [Authentication Audit](./security/AUTHENTICATION_SECURITY_AUDIT.md) - Auth security analysis
+- [Signal Protocol Audit](./security/SIGNAL_PROTOCOL_SECURITY_AUDIT.md) - E2E encryption audit
+- [Encryption Methods](./security/encryption.md) - Encryption implementation details
 
 ### [Infrastructure](./infrastructure/)
-Infrastructure setup and configuration.
+Infrastructure documentation.
 
-- [Firebase Setup](./infrastructure/firebase-setup.md) - Firebase configuration
-- [Cloudflare R2](./infrastructure/cloudflare-r2.md) - Object storage setup
-- [Monitoring](./infrastructure/monitoring.md) - Logging and monitoring
+- [Cloudflare R2 Migration](./infrastructure/CLOUDFLARE_R2_MIGRATION_PLAN.md) - R2 storage migration
+- [R2 Testing Guide](./infrastructure/R2_TESTING_GUIDE.md) - Testing R2 integration
 
 ### [Implementations](./implementations/)
-Completed implementation documentation.
+Completed feature implementations.
 
 - [Signal Protocol](./implementations/SIGNAL_PROTOCOL_IMPLEMENTATION_COMPLETE.md) - Signal Protocol implementation
-- [E2EE](./implementations/E2EE_IMPLEMENTATION_COMPLETE_SUMMARY.md) - End-to-end encryption
-- [Libsignal Native](./implementations/LIBSIGNAL_NATIVE_IMPLEMENTATION.md) - Native libsignal implementation
-- [Fingerprint](./implementations/FINGERPRINT_IMPLEMENTATION_SUMMARY.md) - Device fingerprinting
+- [E2EE Summary](./implementations/E2EE_IMPLEMENTATION_COMPLETE_SUMMARY.md) - End-to-end encryption
+- [Libsignal Native](./implementations/LIBSIGNAL_NATIVE_IMPLEMENTATION.md) - Native libsignal integration
 
 ### [Summaries](./summaries/)
-Feature analyses and test coverage summaries.
+Analyses and coverage reports.
 
-- [Dynasty Feature Parity](./summaries/DYNASTY_FEATURE_PARITY_ANALYSIS.md) - Feature parity analysis
-- [Messaging Feature Parity](./summaries/MESSAGING_FEATURE_PARITY_ANALYSIS.md) - Messaging parity analysis
-- [Test Coverage](./summaries/TEST_COVERAGE_SUMMARY.md) - Test coverage summary
+- [Dynasty Feature Parity](./summaries/DYNASTY_FEATURE_PARITY_ANALYSIS.md) - Feature comparison analysis
+- [Messaging Feature Parity](./summaries/MESSAGING_FEATURE_PARITY_ANALYSIS.md) - Messaging feature analysis
+- [Test Coverage](./summaries/TEST_COVERAGE_SUMMARY.md) - Test coverage metrics
+
+### [Migration](./migration/)
+Migration guides and plans.
+
+- [Backblaze B2 Migration](./migration/BACKBLAZE_B2_MIGRATION.md) - Storage migration guide
+- [Libsignal Migration Plan](./migration/LIBSIGNAL_MIGRATION_PLAN.md) - Signal Protocol migration
 
 ## 🚀 Quick Links
 
-- [CHANGELOG](../CHANGELOG.md) - Version history and updates
-- [Mobile App README](../apps/mobile/README.md) - Mobile app specific docs
-- [Web App README](../apps/web/dynastyweb/README.md) - Web app specific docs
-- [Firebase Functions README](../apps/firebase/functions/README.md) - Backend docs
+- [Main Project README](../README.md) - Project overview
+- [Web App README](../apps/web/README.md) - Web application docs
+- [Firebase Backend README](../apps/firebase/README.md) - Backend documentation
+- [Production Deployment Guide](../apps/firebase/functions/README_PRODUCTION_READY.md) - Production setup
 
 ## 📖 Documentation Standards
 
@@ -114,4 +107,4 @@ See [Contributing Guide](./guides/contributing.md) for documentation standards a
 
 ---
 
-*Last Updated: January 2025*
+*Last Updated: June 2025*
