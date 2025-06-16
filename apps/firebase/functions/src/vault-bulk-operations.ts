@@ -154,18 +154,31 @@ async function executeBulkDelete(
     const batchIds = itemIds.slice(i, i + MAX_BATCH_SIZE);
 
     try {
-      // Get items to verify ownership and collect storage info
-      const itemsSnapshot = await db.collection("vaultItems")
-        .where(admin.firestore.FieldPath.documentId(), "in", batchIds)
-        .where("ownerId", "==", userId)
-        .where("isDeleted", "==", false)
-        .get();
+      const itemRefs = batchIds.map((id) => db.collection("vaultItems").doc(id));
+      const itemDocs = await db.getAll(...itemRefs);
 
       const batch = db.batch();
       const storageDeletePromises: Promise<void>[] = [];
 
-      for (const doc of itemsSnapshot.docs) {
+      const foundIds: string[] = [];
+
+      for (const doc of itemDocs) {
         const data = doc.data();
+
+        if (
+          !doc.exists ||
+          !data ||
+          data.ownerId !== userId ||
+          data.isDeleted !== false
+        ) {
+          result.failedItems.push({
+            itemId: doc.id,
+            error: "Item not found or not owned by user",
+          });
+          continue;
+        }
+
+        foundIds.push(doc.id);
 
         // Soft delete in Firestore
         batch.update(doc.ref, {
@@ -200,7 +213,6 @@ async function executeBulkDelete(
       });
 
       // Mark items that weren't found as failed
-      const foundIds = itemsSnapshot.docs.map((doc) => doc.id);
       const notFoundIds = batchIds.filter((id) => !foundIds.includes(id));
 
       for (const id of notFoundIds) {
@@ -249,16 +261,30 @@ async function executeBulkRestore(
     const batchIds = itemIds.slice(i, i + MAX_BATCH_SIZE);
 
     try {
-      // Get deleted items to verify ownership
-      const itemsSnapshot = await db.collection("vaultItems")
-        .where(admin.firestore.FieldPath.documentId(), "in", batchIds)
-        .where("ownerId", "==", userId)
-        .where("isDeleted", "==", true)
-        .get();
+      const itemRefs = batchIds.map((id) => db.collection("vaultItems").doc(id));
+      const itemDocs = await db.getAll(...itemRefs);
 
       const batch = db.batch();
+      const foundIds: string[] = [];
 
-      for (const doc of itemsSnapshot.docs) {
+      for (const doc of itemDocs) {
+        const data = doc.data();
+
+        if (
+          !doc.exists ||
+          !data ||
+          data.ownerId !== userId ||
+          data.isDeleted !== true
+        ) {
+          result.failedItems.push({
+            itemId: doc.id,
+            error: "Item not found or not deleted",
+          });
+          continue;
+        }
+
+        foundIds.push(doc.id);
+
         // Restore item
         batch.update(doc.ref, {
           isDeleted: false,
@@ -273,7 +299,6 @@ async function executeBulkRestore(
       await batch.commit();
 
       // Mark items that weren't found as failed
-      const foundIds = itemsSnapshot.docs.map((doc) => doc.id);
       const notFoundIds = batchIds.filter((id) => !foundIds.includes(id));
 
       for (const id of notFoundIds) {
@@ -327,17 +352,29 @@ async function executeBulkShare(
   }
 
   try {
-    // Verify all items exist and are owned by user
-    const itemsSnapshot = await db.collection("vaultItems")
-      .where(admin.firestore.FieldPath.documentId(), "in", itemIds)
-      .where("ownerId", "==", userId)
-      .where("isDeleted", "==", false)
-      .get();
+    const itemRefs = itemIds.map((id) => db.collection("vaultItems").doc(id));
+    const itemDocs = await db.getAll(...itemRefs);
 
     const batch = db.batch();
-    // const sharePromises: Promise<void>[] = [];
+    const foundIds: string[] = [];
 
-    for (const doc of itemsSnapshot.docs) {
+    for (const doc of itemDocs) {
+      const data = doc.data();
+
+      if (
+        !doc.exists ||
+        !data ||
+        data.ownerId !== userId ||
+        data.isDeleted !== false
+      ) {
+        result.failedItems.push({
+          itemId: doc.id,
+          error: "Item not found or not owned by user",
+        });
+        continue;
+      }
+
+      foundIds.push(doc.id);
       for (const target of shareTargets) {
         // Create share record
         const shareRef = db.collection("vaultShares").doc();
@@ -368,7 +405,6 @@ async function executeBulkShare(
     await batch.commit();
 
     // Mark items that weren't found as failed
-    const foundIds = itemsSnapshot.docs.map((doc) => doc.id);
     const notFoundIds = itemIds.filter((id) => !foundIds.includes(id));
 
     for (const id of notFoundIds) {
@@ -500,13 +536,27 @@ async function executeBulkMove(
     const batch = db.batch();
 
     // Verify and move items
-    const itemsSnapshot = await db.collection("vaultItems")
-      .where(admin.firestore.FieldPath.documentId(), "in", itemIds)
-      .where("ownerId", "==", userId)
-      .where("isDeleted", "==", false)
-      .get();
+    const itemRefs = itemIds.map((id) => db.collection("vaultItems").doc(id));
+    const itemDocs = await db.getAll(...itemRefs);
+    const foundIds: string[] = [];
 
-    for (const doc of itemsSnapshot.docs) {
+    for (const doc of itemDocs) {
+      const data = doc.data();
+
+      if (
+        !doc.exists ||
+        !data ||
+        data.ownerId !== userId ||
+        data.isDeleted !== false
+      ) {
+        result.failedItems.push({
+          itemId: doc.id,
+          error: "Item not found or not owned by user",
+        });
+        continue;
+      }
+
+      foundIds.push(doc.id);
       batch.update(doc.ref, {
         parentId: targetFolderId,
         updatedAt: Timestamp.now(),
@@ -519,7 +569,6 @@ async function executeBulkMove(
     await batch.commit();
 
     // Mark items that weren't found as failed
-    const foundIds = itemsSnapshot.docs.map((doc) => doc.id);
     const notFoundIds = itemIds.filter((id) => !foundIds.includes(id));
 
     for (const id of notFoundIds) {
