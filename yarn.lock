@@ -2490,7 +2490,7 @@ __metadata:
 
 "@dynasty/vault-sdk@file:../../../packages/vault-sdk::locator=dynastyweb%40workspace%3Aapps%2Fweb%2Fdynastyweb":
   version: 0.1.0
-  resolution: "@dynasty/vault-sdk@file:../../../packages/vault-sdk#../../../packages/vault-sdk::hash=3e1756&locator=dynastyweb%40workspace%3Aapps%2Fweb%2Fdynastyweb"
+  resolution: "@dynasty/vault-sdk@file:../../../packages/vault-sdk#../../../packages/vault-sdk::hash=75f885&locator=dynastyweb%40workspace%3Aapps%2Fweb%2Fdynastyweb"
   dependencies:
     "@tanstack/react-query": "npm:^5.61.5"
     axios: "npm:^1.9.0"
@@ -2515,7 +2515,7 @@ __metadata:
       optional: true
     react-native:
       optional: true
-  checksum: 10c0/38fff25457725a8a15a66ab3d37dc23c13a69ea1d718b137cb3956d02aac76392e27f9847baf65489d2d001a6fdc16da00004f25f17e8235f4f7bb144c2dc37d
+  checksum: 10c0/468e88fb884b2cce043bdc549ab1eff48c7c2b76dbba3e24b38c63907d0725879fadc4ccb66ba31be4c8cfab68317b41fa0a46c49c661f872d8390728a62d045
   languageName: node
   linkType: hard
 
@@ -9410,7 +9410,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:*, @types/node@npm:>=12.12.47, @types/node@npm:>=13.7.0, @types/node@npm:^24":
+"@types/node@npm:*, @types/node@npm:>=12.12.47, @types/node@npm:>=13.7.0, @types/node@npm:>=8.1.0, @types/node@npm:^24":
   version: 24.0.1
   resolution: "@types/node@npm:24.0.1"
   dependencies:
@@ -12962,6 +12962,7 @@ __metadata:
     country-data-list: "npm:^1.4.0"
     critters: "npm:^0.0.23"
     cross-env: "npm:^7.0.3"
+    crypto-js: "npm:^4.2.0"
     date-fns: "npm:^4.1.0"
     eslint: "npm:^9.29.0"
     eslint-config-next: "npm:^15.2.0"
@@ -12994,6 +12995,7 @@ __metadata:
     react-window: "npm:^1.8.8"
     recharts: "npm:^2.15.3"
     relatives-tree: "npm:^3.2.1"
+    stripe: "npm:^14.0.0"
     swiper: "npm:^11.2.8"
     tailwind-merge: "npm:^3.0.1"
     tailwindcss: "npm:^3.4.1"
@@ -23738,6 +23740,16 @@ __metadata:
     "@types/node":
       optional: true
   checksum: 10c0/7edef67ca27bd4e84ac24eae4e10fa1d712392c08eec62aa6748c78241ebccc2a057651716a619fcaac1b70c5f08ba5fc5adf255d67462d5a441e3a96c0dc6c5
+  languageName: node
+  linkType: hard
+
+"stripe@npm:^14.0.0":
+  version: 14.25.0
+  resolution: "stripe@npm:14.25.0"
+  dependencies:
+    "@types/node": "npm:>=8.1.0"
+    qs: "npm:^6.11.0"
+  checksum: 10c0/3f98230d537bdcb9e31775576743e9f2e2137d45021b3a59afe5af17dc54397e8f27bab7abce6fbb81545f69dc73f4c1325c987d2e0c88c2149e135c783d14ff
   languageName: node
   linkType: hard
 
