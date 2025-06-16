@@ -1,48 +1,5 @@
 {
-  "buildCommand": "cd ../../.. && yarn workspace @dynasty/vault-sdk build && cd apps/web/dynastyweb && yarn build",
-  "outputDirectory": ".next",
-  "installCommand": "cd ../../.. && yarn install --frozen-lockfile",
-  "framework": "nextjs",
-  "build": {
-    "env": {
-      "NODE_ENV": "production"
-    }
-  },
-  "functions": {
-    "app/api/**/*.ts": {
-      "maxDuration": 30
-    }
-  },
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, POST, PUT, DELETE, OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization"
-        }
-      ]
-    }
-  ],
-  "redirects": [
-    {
-      "source": "/home",
-      "destination": "/",
-      "permanent": true
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/api/storage/:path*",
-      "destination": "/api/storage/:path*"
-    }
-  ]
+    "installCommand": "cd ../../.. && corepack enable && corepack prepare yarn@4.9.2 --activate && YARN_ENABLE_IMMUTABLE_INSTALLS=false yarn install",
+    "buildCommand": "cd ../../.. && yarn workspace @dynasty/vault-sdk build && yarn workspace dynastyweb build",
+    "framework": "nextjs"
 }
