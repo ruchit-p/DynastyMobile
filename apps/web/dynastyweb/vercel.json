@@ -1,7 +1,7 @@
 {
   "buildCommand": "yarn build",
   "outputDirectory": ".next",
-  "installCommand": "yarn install --frozen-lockfile",
+  "installCommand": "yarn workspaces focus dynastyweb --production",
   "framework": "nextjs",
   "build": {
     "env": {
