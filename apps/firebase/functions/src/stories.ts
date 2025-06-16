@@ -259,16 +259,15 @@ async function batchEnrichStoriesWithUserInfo(db: FirebaseFirestore.Firestore, s
     return Promise.all(stories.map((story) => enrichStoryWithUserInfo(db, story)));
   }
 }
-
 /**
- * Recursively handles cascade deletion of child comments when a parent comment is deleted
+ * Handles cascade deletion of child comments iteratively using breadth-first traversal.
+ * This avoids deep recursion while still deleting all descendants.
  *
  * @param db Firestore database instance
  * @param parentCommentId ID of the comment whose children should be deleted
  * @param storyId ID of the story (for updating comment counts)
  * @param batch Firestore batch to add operations to
- * @param currentDepth Current recursion depth (to prevent infinite loops)
- * @param maxDepth Maximum allowed recursion depth
+ * @param maxDepth Maximum allowed traversal depth
  * @returns Promise<number> Number of comments scheduled for deletion
  */
 async function handleCascadeCommentDeletion(
@@ -276,70 +275,58 @@ async function handleCascadeCommentDeletion(
   parentCommentId: string,
   storyId: string,
   batch: FirebaseFirestore.WriteBatch,
-  currentDepth: number = 0,
   maxDepth: number = 10
 ): Promise<number> {
   try {
-    // Prevent infinite recursion
-    if (currentDepth > maxDepth) {
-      logger.warn(
-        `Maximum recursion depth (${maxDepth}) reached for comment deletion. Stopping cascade for ${parentCommentId}`
-      );
-      return 0;
-    }
-
-    // Find all direct child comments of the parent
-    const childCommentsQuery = await db
-      .collection("comments")
-      .where("parentCommentId", "==", parentCommentId)
-      .where("isDeleted", "==", false) // Only process non-deleted children
-      .get();
-
-    if (childCommentsQuery.empty) {
-      logger.info(
-        `No child comments found for parent comment ${parentCommentId} at depth ${currentDepth}`
-      );
-      return 0;
-    }
-
-    logger.info(
-      `Found ${childCommentsQuery.size} child comments to cascade delete for parent ${parentCommentId} at depth ${currentDepth}`
-    );
-
+    const queue: Array<{ id: string; depth: number }> = [
+      { id: parentCommentId, depth: 0 }
+    ];
     let totalDeleted = 0;
 
-    // Process each child comment
-    for (const childDoc of childCommentsQuery.docs) {
-      const childCommentId = childDoc.id;
+    while (queue.length > 0) {
+      const { id, depth } = queue.shift()!;
+      if (depth >= maxDepth) {
+        logger.warn(
+          `Maximum traversal depth (${maxDepth}) reached while deleting children of ${id}`
+        );
+        continue;
+      }
 
-      // Recursively handle grandchildren first (depth-first deletion)
-      const childrenDeleted = await handleCascadeCommentDeletion(
-        db,
-        childCommentId,
-        storyId,
-        batch,
-        currentDepth + 1,
-        maxDepth
-      );
+      const childCommentsQuery = await db
+        .collection('comments')
+        .where('parentCommentId', '==', id)
+        .where('isDeleted', '==', false)
+        .get();
 
-      // Mark this child comment as deleted
-      batch.update(childDoc.ref, {
-        isDeleted: true,
-        text: "[deleted]",
-        updatedAt: Timestamp.now(),
-      });
-
-      // Decrement the story's comment count for each deleted child
-      const storyRef = db.collection("stories").doc(storyId);
-      batch.update(storyRef, {
-        commentsCount: FieldValue.increment(-1),
-      });
-
-      totalDeleted += 1 + childrenDeleted;
+      if (childCommentsQuery.empty) {
+        continue;
+      }
 
       logger.info(
-        `Scheduled cascade deletion for child comment ${childCommentId} (depth: ${currentDepth})`
+        `Found ${childCommentsQuery.size} child comments to cascade delete for parent ${id} at depth ${depth}`
       );
+
+      for (const childDoc of childCommentsQuery.docs) {
+        const childId = childDoc.id;
+        queue.push({ id: childId, depth: depth + 1 });
+
+        batch.update(childDoc.ref, {
+          isDeleted: true,
+          text: '[deleted]',
+          updatedAt: Timestamp.now(),
+        });
+
+        const storyRef = db.collection('stories').doc(storyId);
+        batch.update(storyRef, {
+          commentsCount: FieldValue.increment(-1),
+        });
+
+        totalDeleted += 1;
+
+        logger.info(
+          `Scheduled cascade deletion for child comment ${childId} (depth: ${depth})`
+        );
+      }
     }
 
     logger.info(
@@ -347,13 +334,11 @@ async function handleCascadeCommentDeletion(
     );
     return totalDeleted;
   } catch (error) {
-    logger.error(
-      `Error during cascade comment deletion for parent ${parentCommentId} at depth ${currentDepth}:`,
-      error
-    );
+    logger.error(`Error during cascade comment deletion for parent ${parentCommentId}:`, error);
     throw createError(ErrorCode.INTERNAL, `Failed to cascade delete child comments: ${error}`);
   }
 }
+
 
 // MARK: - Cloud Functions
 
@@ -969,17 +954,15 @@ export const deleteStory = onCall(
       // Note: This should ideally be a batched write or a separate cleanup process for very active stories.
       // For now, direct deletion for simplicity.
 
-      const likesRef = db.collection("likes").where("storyId", "==", storyId);
-      // const likesSnapshot = await likesRef.get();
-      // const batch = db.batch();
-      // likesSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
-      const likesDeletedCount = await commitDeletionsInBatches(db, likesRef);
-      logger.info(`Deleted ${likesDeletedCount} likes for story ${storyId}.`);
+      const likesRef = db.collection('likes').where('storyId', '==', storyId);
+      const commentsRef = db.collection('comments').where('storyId', '==', storyId);
 
-      const commentsRef = db.collection("comments").where("storyId", "==", storyId);
-      // const commentsSnapshot = await commentsRef.get();
-      // commentsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
-      const commentsDeletedCount = await commitDeletionsInBatches(db, commentsRef);
+      // Delete likes and comments concurrently for faster execution
+      const [likesDeletedCount, commentsDeletedCount] = await Promise.all([
+        commitDeletionsInBatches(db, likesRef),
+        commitDeletionsInBatches(db, commentsRef),
+      ]);
+      logger.info(`Deleted ${likesDeletedCount} likes for story ${storyId}.`);
       logger.info(`Deleted ${commentsDeletedCount} comments for story ${storyId}.`);
 
       // await batch.commit();
