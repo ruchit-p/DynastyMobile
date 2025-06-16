@@ -2488,37 +2488,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@dynasty/vault-sdk@file:../../../packages/vault-sdk::locator=dynastyweb%40workspace%3Aapps%2Fweb%2Fdynastyweb":
-  version: 0.1.0
-  resolution: "@dynasty/vault-sdk@file:../../../packages/vault-sdk#../../../packages/vault-sdk::hash=64743a&locator=dynastyweb%40workspace%3Aapps%2Fweb%2Fdynastyweb"
-  dependencies:
-    "@tanstack/react-query": "npm:^5.61.5"
-    axios: "npm:^1.9.0"
-    firebase: "npm:^11.9.1"
-    zod: "npm:^3.25.64"
-  peerDependencies:
-    "@react-native-firebase/app": ^22.1.0
-    "@react-native-firebase/firestore": ^22.1.0
-    "@react-native-firebase/functions": ^22.2.1
-    "@react-native-firebase/storage": ^22.1.0
-    react: ">=18.0.0"
-    react-dom: ">=18.0.0"
-    react-native: ">=0.70.0"
-  peerDependenciesMeta:
-    "@react-native-firebase/app":
-      optional: true
-    "@react-native-firebase/firestore":
-      optional: true
-    "@react-native-firebase/functions":
-      optional: true
-    "@react-native-firebase/storage":
-      optional: true
-    react-native:
-      optional: true
-  checksum: 10c0/92ce32e744d7edb3dc8d6eb2e1b2f283bb24e7ba53f0c8d58e99b4c588fc929a545713e4613ef5d372ba7bd679307f38a52c04b2dde5ba7511360753c8a5703a
-  languageName: node
-  linkType: hard
-
 "@dynasty/vault-sdk@workspace:packages/vault-sdk":
   version: 0.0.0-use.local
   resolution: "@dynasty/vault-sdk@workspace:packages/vault-sdk"
@@ -12904,7 +12873,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "dynastyweb@workspace:apps/web/dynastyweb"
   dependencies:
-    "@dynasty/vault-sdk": "file:../../../packages/vault-sdk"
+    "@dynasty/vault-sdk": "workspace:packages/vault-sdk"
     "@eslint/eslintrc": "npm:^3"
     "@next/bundle-analyzer": "npm:^15.3.3"
     "@opentelemetry/api": "npm:^1.9.0"
