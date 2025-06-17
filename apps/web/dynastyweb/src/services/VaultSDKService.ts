@@ -643,15 +643,15 @@ class VaultSDKService {
       const result = await this.apiClient.searchItems({
         query,
         fileTypes: filters?.type === 'file' ? [
-          filters.mimeType?.includes('image') ? 'image' : 
+          filters.mimeType?.includes('image') ? 'image' :
           filters.mimeType?.includes('video') ? 'video' :
           filters.mimeType?.includes('audio') ? 'audio' :
           filters.mimeType?.includes('document') ? 'document' : 'other'
         ].filter(Boolean) as any : undefined,
       });
-      
+
       // Convert SDK items to legacy format
-      let items = result.items.map(item => this.convertSDKItemToLegacy(item));
+      let items = result.map(item => this.convertSDKItemToLegacy(item));
       
       // Apply client-side filtering
       if (filters) {
@@ -945,9 +945,9 @@ class VaultSDKService {
     
     try {
       const result = await this.apiClient.getDeletedItems();
-      
+
       // Convert SDK items to legacy format
-      const items = result.items.map(item => this.convertSDKItemToLegacy(item));
+      const items = result.map(item => this.convertSDKItemToLegacy(item));
       
       // End performance monitoring - success
       vaultSDKPerformanceMonitor.endOperation(deletedId, true, undefined, {
