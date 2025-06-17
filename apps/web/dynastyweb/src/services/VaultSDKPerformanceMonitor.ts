@@ -11,7 +11,18 @@ import { cacheService } from './CacheService';
 // Performance metric interfaces
 export interface VaultOperationMetric {
   operationId: string;
-  operation: 'upload' | 'download' | 'delete' | 'share' | 'encrypt' | 'decrypt' | 'list';
+  operation:
+    | 'upload'
+    | 'download'
+    | 'delete'
+    | 'share'
+    | 'encrypt'
+    | 'decrypt'
+    | 'list'
+    | 'create'
+    | 'search'
+    | 'move'
+    | 'restore';
   startTime: number;
   endTime: number;
   duration: number;
