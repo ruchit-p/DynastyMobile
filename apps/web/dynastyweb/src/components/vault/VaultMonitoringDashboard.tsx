@@ -168,7 +168,7 @@ export default function VaultMonitoringDashboard({ isAdmin = false }: { isAdmin?
         if (isAdmin) {
           try {
             // System stats always use legacy service for now
-            const sysStats = await vaultSDKService.getSystemVaultStats();
+            const sysStats = await vaultService.getSystemVaultStats();
             setSystemStats(sysStats);
             if (useSDK) {
               limitations.push('System statistics using legacy service');
