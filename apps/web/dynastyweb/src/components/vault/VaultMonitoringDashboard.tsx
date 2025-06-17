@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { vaultSDKService } from '@/services/VaultSDKService';
+import { vaultService } from '@/services/VaultService';
 import { useFeatureFlags } from '@/lib/feature-flags';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
