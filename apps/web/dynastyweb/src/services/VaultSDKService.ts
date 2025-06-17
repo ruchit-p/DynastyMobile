@@ -527,15 +527,12 @@ class VaultSDKService {
       const folder: VaultFolder = {
         id: result.id,
         name: result.name,
-        type: 'folder' as const,
         parentId: result.parentId,
         path: result.path,
         createdAt: new Date(result.createdAt),
         updatedAt: new Date(result.updatedAt),
-        isShared: (result.sharedWith?.length || 0) > 0,
-        sharedWith: result.sharedWith,
         itemCount: 0, // SDK doesn't provide this yet
-        size: 0, // SDK doesn't provide this yet
+        totalSize: 0, // SDK doesn't provide this yet
       };
       
       return folder;
