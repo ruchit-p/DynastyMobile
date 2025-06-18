@@ -125,6 +125,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/react-window": "^1.8.8",
+    "autoprefixer": "^10",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
     "eslint": "^9.29.0",
