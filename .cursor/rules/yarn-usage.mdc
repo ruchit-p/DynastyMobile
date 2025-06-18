@@ -1,0 +1,67 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Yarn Package Manager Usage Rule
+
+This rule defines the correct usage of the Yarn package-manager in the Dynasty **monorepo**. Follow these guidelines whenever you need to install, remove, or run packages.
+
+## 1. Yarn v4 Workspaces
+
+1. The root `package.json` specifies `"packageManager": "yarn@4`", therefore **Yarn (v4+) must be used instead of npm**.
+2. The repository is organised as [Yarn workspaces](https://yarnpkg.com/features/workspaces). Each app or package lives inside its own workspace directory declared under the `workspaces` field in the root `package.json`.
+
+## 2. Installing Dependencies
+
+* **Global rule**: Use `yarn install` from the repository root to install all workspace dependencies.
+* **Per-workspace installs**: Use `yarn workspace <workspace-name> add <package>` (or `add -D` for dev dependencies).
+  * Example (web app):
+    ```bash
+    yarn workspace dynastyweb add autoprefixer
+    ```
+  * Example (mobile app dev dependency):
+    ```bash
+    yarn workspace mobile add -D eslint-plugin-react-hooks
+    ```
+* **Never** use `npm install`, `npm add`, or `pnpm` commands. Mixing package managers may corrupt the `yarn.lock` file.
+
+## 3. Running Scripts
+
+* Use the root‐level convenience script aliases whenever they exist (e.g., `yarn web`, `yarn mobile`).
+* To run a script that only exists in a single workspace, invoke it through `yarn workspace`:
+  ```bash
+  yarn workspace dynastyweb build
+  ```
+
+## 4. Adding or Removing Packages
+
+1. Add a runtime dependency:
+   ```bash
+   yarn workspace <workspace-name> add <package>@<version>
+   ```
+2. Add a development dependency:
+   ```bash
+   yarn workspace <workspace-name> add -D <package>@<version>
+   ```
+3. Remove a package:
+   ```bash
+   yarn workspace <workspace-name> remove <package>
+   ```
+
+## 5. Lockfile Commit Policy
+
+* The `yarn.lock` file at the repository root **must always** be committed with any dependency change.
+* Do **NOT** manually edit `yarn.lock`.
+
+## 6. Common Pitfalls
+
+| Pitfall                             | Correct Approach                                         |
+| ----------------------------------- | -------------------------------------------------------- |
+| Running `npm install` in a workspace | Use `yarn install` (root) or `yarn workspace <w> add`    |
+| Editing dependencies in sub-package  | Always work through Yarn workspaces                      |
+| Forgetting to commit `yarn.lock`     | Stage and commit `yarn.lock` with dependency changes     |
+
+---
+
+Adhering to this rule ensures deterministic builds and prevents workspace resolution issues across the Dynasty code-base.
