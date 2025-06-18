@@ -74,13 +74,13 @@ const Navbar = () => {
       onMouseMove={handleMouseMove}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
-      className={`fixed top-4 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-6xl z-50 transition-all duration-300 
-                  bg-white/50 backdrop-blur-lg shadow-xl rounded-xl 
+      className={`fixed top-4 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-7xl z-50 transition-all duration-300 
+                  bg-white/90 backdrop-blur-md shadow-lg rounded-2xl border border-white/20
                   ${isScrolled ? 'py-3' : 'py-4'}`}
     >
       {/* Shine Effect Element */}
       <div
-        className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none transition-opacity duration-300"
+        className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none transition-opacity duration-300"
         style={{
           background: isHovering 
             ? `radial-gradient(circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 25%)`
@@ -89,15 +89,15 @@ const Navbar = () => {
         }}
       />
 
-      <div className="container mx-auto px-6 flex items-center justify-between relative z-10"> {/* Added relative z-10 for content to be above shine */}
+      <div className="container mx-auto px-6 lg:px-8 flex items-center justify-between relative z-10">
         <div className="flex items-center">
-          <Link href="/" className="flex items-center">
+          <Link href="/" className="flex items-center space-x-3">
             <Image 
               src="/dynasty.png" 
               alt="Dynasty Logo" 
-              width={40} 
-              height={40} 
-              className="mr-2"
+              width={42} 
+              height={42} 
+              className="rounded-lg"
               priority
               style={{ height: 'auto' }}
             />
@@ -113,7 +113,7 @@ const Navbar = () => {
           {currentUser ? (
             <Button 
               onClick={() => router.push(currentUser.emailVerified ? '/family-tree' : '/verify-email')}
-              className="bg-dynasty-green hover:bg-dynasty-green-dark text-white"
+              className="bg-dynasty-green hover:bg-dynasty-green-dark text-white h-11 px-6 rounded-full font-semibold transition-all duration-300 shadow-md hover:shadow-lg"
             >
               Go to Dashboard
             </Button>
@@ -122,7 +122,7 @@ const Navbar = () => {
               <NavLink href="/login">Sign In</NavLink>
               <Button 
                 onClick={handleStartClick} 
-                className="bg-dynasty-green hover:bg-dynasty-green-dark text-white"
+                className="bg-dynasty-green hover:bg-dynasty-green-dark text-white h-11 px-6 rounded-full font-semibold transition-all duration-300 shadow-md hover:shadow-lg"
               >
                 Start Free
               </Button>
@@ -137,7 +137,7 @@ const Navbar = () => {
             size="icon"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             aria-label="Toggle menu"
-            className="text-dynasty-green hover:text-dynasty-green-dark"
+            className="text-dynasty-green hover:text-dynasty-green-dark hover:bg-dynasty-green/5"
           >
             {isMobileMenuOpen ? <X /> : <Menu />}
           </Button>
@@ -148,14 +148,14 @@ const Navbar = () => {
       {isMobileMenuOpen && (
         <div 
           ref={mobileMenuRef}
-          className="absolute top-full left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] mt-2 bg-white/90 backdrop-blur-lg rounded-xl border border-white/20 shadow-xl animate-fade-in overflow-hidden transition-all duration-300"
+          className="absolute top-full left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] mt-2 bg-white/95 backdrop-blur-md rounded-2xl border border-white/20 shadow-xl animate-fade-in overflow-hidden transition-all duration-300"
           onMouseMove={handleMouseMove}
           onMouseEnter={() => setIsHovering(true)}
           onMouseLeave={() => setIsHovering(false)}
         >
           {/* Shine Effect for Mobile Menu */}
           <div
-            className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none transition-opacity duration-300"
+            className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none transition-opacity duration-300"
             style={{
               background: isHovering 
                 ? `radial-gradient(circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 25%)`
@@ -164,7 +164,7 @@ const Navbar = () => {
             }}
           />
           
-          <div className="px-6 py-5 flex flex-col space-y-5 relative z-10">
+          <div className="px-6 py-6 flex flex-col space-y-4 relative z-10">
             <MobileNavLink 
               href="#features" 
               onClick={() => setIsMobileMenuOpen(false)}
@@ -184,7 +184,7 @@ const Navbar = () => {
                   setIsMobileMenuOpen(false);
                   router.push(currentUser.emailVerified ? '/family-tree' : '/verify-email');
                 }}
-                className="bg-dynasty-green hover:bg-dynasty-green-dark text-white w-full"
+                className="bg-dynasty-green hover:bg-dynasty-green-dark text-white w-full h-12 rounded-full font-semibold"
               >
                 Go to Dashboard
               </Button>
@@ -201,7 +201,7 @@ const Navbar = () => {
                     setIsMobileMenuOpen(false);
                     handleStartClick();
                   }}
-                  className="bg-dynasty-green hover:bg-dynasty-green-dark text-white w-full"
+                  className="bg-dynasty-green hover:bg-dynasty-green-dark text-white w-full h-12 rounded-full font-semibold"
                 >
                   Start Free
                 </Button>
