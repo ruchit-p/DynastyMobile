@@ -91,8 +91,8 @@ body {
   overflow-x: hidden;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  color: var(--text-color);
-  background: var(--background-color);
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
 }
 
 /* MARK: - Typography */
@@ -109,9 +109,9 @@ p {
 
 /* MARK: - Links */
 a {
-  color: var(--primary-color);
+  color: hsl(var(--primary));
   text-decoration: none;
-  transition: color var(--transition-speed) ease;
+  transition: color 0.2s ease;
 }
 
 a:hover {
@@ -155,7 +155,7 @@ a:hover {
 }
 
 .rounded {
-  border-radius: var(--border-radius);
+  border-radius: var(--radius);
 }
 
 .shadow {
@@ -163,7 +163,7 @@ a:hover {
 }
 
 .transition {
-  transition: all var(--transition-speed) ease;
+  transition: all 0.2s ease;
 }
 
 /* MARK: - Custom Family Tree Styles */
@@ -203,7 +203,7 @@ a:hover {
 .family-node {
   position: absolute;
   cursor: pointer;
-  transition: all var(--transition-speed) ease;
+  transition: all 0.2s ease;
 }
 
 .node-card {
@@ -213,7 +213,7 @@ a:hover {
   border-radius: 4px;
   background: white;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  transition: all var(--transition-speed) ease;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -242,17 +242,17 @@ a:hover {
 .node-id {
   font-weight: 500;
   font-size: 0.875rem;
-  color: var(--text-color);
+  color: hsl(var(--foreground));
 }
 
 .node-gender {
   font-size: 0.75rem;
-  color: var(--secondary-color);
+  color: hsl(var(--muted-foreground));
 }
 
 .node-subtree-indicator {
   font-size: 0.75rem;
-  color: var(--primary-color);
+  color: hsl(var(--primary));
   font-weight: 500;
 }
 
