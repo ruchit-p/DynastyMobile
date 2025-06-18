@@ -38,6 +38,14 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 145 78% 20%; /* Deep Forest Green for sidebar ring */
+
+    /* Legacy CSS variable aliases */
+    --text-color: hsl(var(--foreground));
+    --background-color: hsl(var(--background));
+    --primary-color: hsl(var(--primary));
+    --secondary-color: hsl(var(--secondary, var(--primary)));
+    --border-radius: var(--radius);
+    --transition-speed: 200ms;
   }
 
   .dark {
@@ -75,6 +83,14 @@
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 145 60% 25%; /* Adjusted sidebar ring for dark mode */
+
+    /* Legacy CSS variable aliases */
+    --text-color: hsl(var(--foreground));
+    --background-color: hsl(var(--background));
+    --primary-color: hsl(var(--primary));
+    --secondary-color: hsl(var(--secondary, var(--primary)));
+    --border-radius: var(--radius);
+    --transition-speed: 200ms;
   }
 }
 
