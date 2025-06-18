@@ -160,7 +160,7 @@ const HeroSection = () => {
           </div>
         ))}
       </div>
-      <div className="absolute inset-0 bg-black/50 z-[1]"></div> {/* Increased overlay opacity for better general contrast */}
+      <div className="absolute inset-0 bg-black/40 z-[1]"></div>
       {/* END MARK: Image Slideshow */}
       
       {/* Decorative elements - Removed as they might conflict with the slideshow. 
@@ -170,12 +170,12 @@ const HeroSection = () => {
       */}
       
       {/* Content */}
-      <div className="container mx-auto px-6 py-24 pt-32 relative z-10">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-20 relative z-10">
         <div className="max-w-4xl mx-auto text-center">
           <div 
-            className={`inline-block mb-3 px-3 py-1 rounded-full border transition-colors duration-500 ${
+            className={`inline-block mb-6 px-4 py-2 rounded-full border transition-colors duration-500 ${
               currentTextTheme === 'light' 
-                ? 'bg-white/10 border-white/30' 
+                ? 'bg-white/10 border-white/30 backdrop-blur-sm' 
                 : 'bg-dynasty-gold/10 border-dynasty-gold/20'
             }`}
           >
@@ -188,21 +188,19 @@ const HeroSection = () => {
           
           <h1 
             ref={headingRef} 
-            className={`text-4xl md:text-5xl lg:text-6xl font-bold mb-6 opacity-0 text-balance transition-colors duration-500 ${textColorClass}`}
-            style={{ textShadow: currentTextTheme === 'light' ? '0 2px 4px rgba(0,0,0,0.5)' : '0 1px 2px rgba(0,0,0,0.1)' }}
+            className={`text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-8 opacity-0 leading-tight transition-colors duration-500 ${textColorClass}`}
+            style={{ textShadow: currentTextTheme === 'light' ? '0 2px 8px rgba(0,0,0,0.7)' : '0 1px 2px rgba(0,0,0,0.1)' }}
           >
-            Your Family&apos;s Story, Beautifully Preserved with <span 
-              className="text-dynasty-green "
+            Your Family&apos;s Story,<br />
+            Beautifully Preserved<br />
+            with <span 
+              className="text-dynasty-green"
               style={
                 currentTextTheme === 'light'
                   ? {
-                      WebkitTextStrokeWidth: '3px',
-                      WebkitTextStrokeColor: 'rgba(255,255,255,0.7)', // White border with 0.7 opacity
-                      paintOrder: 'stroke fill' as React.CSSProperties['paintOrder'], // Ensures stroke is behind fill
-                      textShadow: 'none', // Remove any previous text shadow for this case
+                      textShadow: '0 2px 8px rgba(0,0,0,0.7), 0 0 0 rgba(255,255,255,0.3)',
                     }
                   : {
-                      // Subtle dark outline for green text on light background (dark theme)
                       textShadow: '-1px -1px 0 rgba(0,0,0,0.15), 1px -1px 0 rgba(0,0,0,0.15), -1px 1px 0 rgba(0,0,0,0.15), 1px 1px 0 rgba(0,0,0,0.15)',
                     }
               }
@@ -211,18 +209,18 @@ const HeroSection = () => {
           
           <p 
             ref={subheadingRef}
-            className={`text-lg md:text-xl mb-8 opacity-0 max-w-2xl mx-auto text-balance transition-colors duration-500 ${subTextColorClass}`}
-            style={{ textShadow: currentTextTheme === 'light' ? '0 1px 3px rgba(0,0,0,0.5)' : 'none' }}
+            className={`text-lg sm:text-xl md:text-2xl mb-10 opacity-0 max-w-3xl mx-auto leading-relaxed transition-colors duration-500 ${subTextColorClass}`}
+            style={{ textShadow: currentTextTheme === 'light' ? '0 1px 4px rgba(0,0,0,0.6)' : 'none' }}
           >
-            Create, share, and preserve your family&apos;s legacy with Dynasty - the digital family tree and history
-            book platform for future generations.
+            Create, share, and preserve your family&apos;s legacy with Dynasty - the
+            digital family tree and history book platform for future generations.
           </p>
           
           <div ref={ctaRef} className="opacity-0">
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
               <Button 
                 onClick={handleStartClick}
-                className="bg-dynasty-green hover:bg-dynasty-green-dark text-white h-12 px-8 rounded-full text-lg flex items-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg"
+                className="bg-dynasty-green hover:bg-dynasty-green-dark text-white h-14 px-10 rounded-full text-lg font-semibold flex items-center gap-2 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"
               >
                 {currentUser ? 'Go to Dashboard' : 'Start Your Dynasty'}
                 <ArrowRight className="h-5 w-5" />
@@ -232,21 +230,21 @@ const HeroSection = () => {
                 <Button 
                   variant="outline" 
                   onClick={() => router.push('/login')}
-                  className="border-dynasty-neutral h-12 px-8 rounded-full text-lg text-dynasty-neutral-darkest hover:bg-dynasty-neutral-light hover:text-dynasty-neutral-darkest transition-all duration-300"
+                  className="border-2 border-white/30 bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 hover:border-white/50 h-14 px-10 rounded-full text-lg font-semibold transition-all duration-300"
                 >
                   Log In
                 </Button>
               )}
             </div>
             
-            <div className={`mt-8 text-sm transition-colors duration-500 ${subTextColorClass}`}>
+            <div className={`text-sm transition-colors duration-500 ${subTextColorClass}`} style={{ textShadow: currentTextTheme === 'light' ? '0 1px 3px rgba(0,0,0,0.5)' : 'none' }}>
               <span>No credit card required · Free forever plan available</span>
             </div>
           </div>
         </div>
         
         {/* Abstract decoration */}
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-6xl h-1 bg-gradient-to-r from-transparent via-dynasty-gold/30 to-transparent"></div>
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-full max-w-6xl h-px bg-gradient-to-r from-transparent via-dynasty-gold/40 to-transparent"></div>
       </div>
     </section>
   );
