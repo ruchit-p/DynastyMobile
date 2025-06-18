@@ -29,3 +29,6 @@ if (process.env.NODE_ENV !== 'development' && process.env.NEXT_PUBLIC_SENTRY_DSN
     debug: false,
   });
 }
+
+// Export the router transition hook to instrument navigations
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
