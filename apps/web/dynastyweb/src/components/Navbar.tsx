@@ -63,7 +63,7 @@ export default function Navbar({ user }: NavbarProps) {
   const lastName = firestoreUser?.lastName || null
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 dark:supports-[backdrop-filter]:bg-gray-900/70 transition-all duration-300 shadow-sm">
       <div className="container flex h-16 items-center px-2 sm:px-4">
         {/* Logo */}
         <Link href="/feed" className="flex items-center gap-2 mr-3 sm:mr-6">
@@ -75,7 +75,7 @@ export default function Navbar({ user }: NavbarProps) {
             priority
             style={{ width: '32px', height: 'auto' }}
           />
-          <span className="text-xl font-bold text-[#0A5C36] hidden sm:inline-block">Dynasty</span>
+          <span className="text-xl font-bold text-[#0A5C36] hidden sm:inline-block transition-transform duration-200 hover:scale-105">Dynasty</span>
         </Link>
 
         {/* Current Page Title - Only visible on mobile */}
@@ -88,52 +88,72 @@ export default function Navbar({ user }: NavbarProps) {
           <Link
             href="/feed"
             className={cn(
-              "flex items-center gap-2 text-sm font-medium hover:text-[#0A5C36]", 
-              pathname?.includes('/feed') ? "text-[#0A5C36]" : "text-gray-600"
+              "flex items-center gap-2 text-sm font-medium transition-all duration-200 relative group", 
+              pathname?.includes('/feed') ? "text-[#0A5C36]" : "text-gray-600 hover:text-[#0A5C36]"
             )}
           >
-            <Home className="h-4 w-4" />
-            Feed
+            <Home className="h-4 w-4 transition-transform duration-200 group-hover:scale-110" />
+            <span>Feed</span>
+            <span className={cn(
+              "absolute -bottom-1 left-0 w-full h-0.5 bg-[#0A5C36] transition-transform duration-200 origin-left",
+              pathname?.includes('/feed') ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+            )} />
           </Link>
           <Link
             href="/family-tree"
             className={cn(
-              "flex items-center gap-2 text-sm font-medium hover:text-[#0A5C36]", 
-              pathname?.includes('/family-tree') ? "text-[#0A5C36]" : "text-gray-600"
+              "flex items-center gap-2 text-sm font-medium transition-all duration-200 relative group", 
+              pathname?.includes('/family-tree') ? "text-[#0A5C36]" : "text-gray-600 hover:text-[#0A5C36]"
             )}
           >
-            <Users className="h-4 w-4" />
-            Family Tree
+            <Users className="h-4 w-4 transition-transform duration-200 group-hover:scale-110" />
+            <span>Family Tree</span>
+            <span className={cn(
+              "absolute -bottom-1 left-0 w-full h-0.5 bg-[#0A5C36] transition-transform duration-200 origin-left",
+              pathname?.includes('/family-tree') ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+            )} />
           </Link>
           <Link
             href="/history-book"
             className={cn(
-              "flex items-center gap-2 text-sm font-medium hover:text-[#0A5C36]", 
-              pathname?.includes('/history-book') ? "text-[#0A5C36]" : "text-gray-600"
+              "flex items-center gap-2 text-sm font-medium transition-all duration-200 relative group", 
+              pathname?.includes('/history-book') ? "text-[#0A5C36]" : "text-gray-600 hover:text-[#0A5C36]"
             )}
           >
-            <BookOpen className="h-4 w-4" />
-            History Book
+            <BookOpen className="h-4 w-4 transition-transform duration-200 group-hover:scale-110" />
+            <span>History Book</span>
+            <span className={cn(
+              "absolute -bottom-1 left-0 w-full h-0.5 bg-[#0A5C36] transition-transform duration-200 origin-left",
+              pathname?.includes('/history-book') ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+            )} />
           </Link>
           <Link
             href="/events"
             className={cn(
-              "flex items-center gap-2 text-sm font-medium hover:text-[#0A5C36]", 
-              pathname?.includes('/events') ? "text-[#0A5C36]" : "text-gray-600"
+              "flex items-center gap-2 text-sm font-medium transition-all duration-200 relative group", 
+              pathname?.includes('/events') ? "text-[#0A5C36]" : "text-gray-600 hover:text-[#0A5C36]"
             )}
           >
-            <Calendar className="h-4 w-4" />
-            Events
+            <Calendar className="h-4 w-4 transition-transform duration-200 group-hover:scale-110" />
+            <span>Events</span>
+            <span className={cn(
+              "absolute -bottom-1 left-0 w-full h-0.5 bg-[#0A5C36] transition-transform duration-200 origin-left",
+              pathname?.includes('/events') ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+            )} />
           </Link>
           <Link
             href="/vault"
             className={cn(
-              "flex items-center gap-2 text-sm font-medium hover:text-[#0A5C36]", 
-              pathname?.includes('/vault') ? "text-[#0A5C36]" : "text-gray-600"
+              "flex items-center gap-2 text-sm font-medium transition-all duration-200 relative group", 
+              pathname?.includes('/vault') ? "text-[#0A5C36]" : "text-gray-600 hover:text-[#0A5C36]"
             )}
           >
-            <Lock className="h-4 w-4" />
-            Vault
+            <Lock className="h-4 w-4 transition-transform duration-200 group-hover:scale-110" />
+            <span>Vault</span>
+            <span className={cn(
+              "absolute -bottom-1 left-0 w-full h-0.5 bg-[#0A5C36] transition-transform duration-200 origin-left",
+              pathname?.includes('/vault') ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+            )} />
           </Link>
         </div>
 
@@ -142,7 +162,7 @@ export default function Navbar({ user }: NavbarProps) {
           {/* Create Menu Dropdown */}
           <DropdownMenu open={isCreateMenuOpen} onOpenChange={setIsCreateMenuOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-600 hover:text-[#0A5C36]">
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-600 hover:text-[#0A5C36] transition-all duration-200 hover:scale-110 hover:rotate-90">
                 <Plus className="h-5 w-5" />
                 <span className="sr-only">Create New</span>
               </Button>
@@ -168,7 +188,7 @@ export default function Navbar({ user }: NavbarProps) {
           {/* Profile Dropdown */}
           <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative h-8 w-8 rounded-full">
+              <Button variant="ghost" size="icon" className="relative h-8 w-8 rounded-full ring-2 ring-transparent hover:ring-[#0A5C36]/20 transition-all duration-200">
                 <Image
                   src={profilePicture || "/avatar.svg"}
                   alt="Profile picture"
