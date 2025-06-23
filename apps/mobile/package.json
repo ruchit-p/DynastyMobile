@@ -39,7 +39,7 @@
     "@react-native-firebase/remote-config": "^22.2.0",
     "@react-native-firebase/storage": "^22.1.0",
     "@react-native-google-signin/google-signin": "^14.0.0",
-    "@react-native-picker/picker": "^2.11.0",
+    "@react-native-picker/picker": "^2.11.1",
     "@react-navigation/bottom-tabs": "^7.3.10",
     "@react-navigation/elements": "^2.4.3",
     "@react-navigation/native": "^7.1.6",
