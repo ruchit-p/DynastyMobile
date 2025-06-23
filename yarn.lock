@@ -2508,7 +2508,7 @@ __metadata:
     rimraf: "npm:^6.0.1"
     ts-jest: "npm:^29.3.4"
     typescript: "npm:^5.8.3"
-    zod: "npm:^3.25.64"
+    zod: "npm:^3.25.67"
   peerDependencies:
     "@react-native-firebase/app": ^22.1.0
     "@react-native-firebase/firestore": ^22.1.0
@@ -13189,7 +13189,7 @@ __metadata:
     typescript: "npm:^5.8.3"
     workbox-window: "npm:^7.3.0"
     xss: "npm:^1.0.15"
-    zod: "npm:^3.25.56"
+    zod: "npm:^3.25.67"
   languageName: unknown
   linkType: soft
 
@@ -15583,7 +15583,7 @@ __metadata:
     ts-jest: "npm:^29.3.4"
     typescript: "npm:^5.8.3"
     winston: "npm:^3.16.0"
-    zod: "npm:^3.25.63"
+    zod: "npm:^3.25.67"
   languageName: unknown
   linkType: soft
 
@@ -19806,7 +19806,7 @@ __metadata:
     readable-stream: "npm:^4.7.0"
     relatives-tree: "npm:^3.2.2"
     typescript: "npm:~5.8.3"
-    zod: "npm:^3.25.64"
+    zod: "npm:^3.25.67"
   languageName: unknown
   linkType: soft
 
@@ -26119,9 +26119,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"zod@npm:^3.25.56, zod@npm:^3.25.63, zod@npm:^3.25.64":
-  version: 3.25.64
-  resolution: "zod@npm:3.25.64"
-  checksum: 10c0/00d76093a999e377e4ffd037fa7185e861c35917e8c4272f514115c206a0654995168f57fb71708b11e0a9243206d988b7f63b543404e1796402e50d346a6bd7
+"zod@npm:^3.25.67":
+  version: 3.25.67
+  resolution: "zod@npm:3.25.67"
+  checksum: 10c0/80a0cab3033272c4ab9312198081f0c4ea88e9673c059aa36dc32024906363729db54bdb78f3dc9d5529bd1601f74974d5a56c0a23e40c6f04a9270c9ff22336
   languageName: node
   linkType: hard
