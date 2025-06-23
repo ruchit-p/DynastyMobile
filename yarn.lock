@@ -7363,10 +7363,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-native/normalize-colors@npm:0.79.3":
-  version: 0.79.3
-  resolution: "@react-native/normalize-colors@npm:0.79.3"
-  checksum: 10c0/2a7e1c1a2fa902408535888573a1b65cc3360e7ca1bdb8ad770c9f6977283cceb2cfd2aa9c552517c529f289a6b6d601160023cc71a31d4566da08c1410d50d9
+"@react-native/normalize-colors@npm:0.79.4":
+  version: 0.79.4
+  resolution: "@react-native/normalize-colors@npm:0.79.4"
+  checksum: 10c0/ab69bc3a1c9cba64b78dec68e010c36a2da844ab4c890d03b38ffae909dee1fa920184d2400dc9dd3e6ecd6a6ca7f3a357434412e9e288ae966be5bef19fa1eb
   languageName: node
   linkType: hard
 
@@ -14613,11 +14613,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"expo-system-ui@npm:~5.0.7":
-  version: 5.0.8
-  resolution: "expo-system-ui@npm:5.0.8"
+"expo-system-ui@npm:~5.0.9":
+  version: 5.0.9
+  resolution: "expo-system-ui@npm:5.0.9"
   dependencies:
-    "@react-native/normalize-colors": "npm:0.79.3"
+    "@react-native/normalize-colors": "npm:0.79.4"
     debug: "npm:^4.3.2"
   peerDependencies:
     expo: "*"
@@ -14626,7 +14626,7 @@ __metadata:
   peerDependenciesMeta:
     react-native-web:
       optional: true
-  checksum: 10c0/ee88daa49f98e34e2cde2020b0dd6296c5aa26f8eb4fb60bd779bdd274fc34051e7c853a4785f4bd3e5e776377d821c28d7dd8dd7d9625d4f062bfe58e0fff73
+  checksum: 10c0/d3d3ae89c2d78e6c84229b6da16e62eca759712e02c237827be2641a40eaf9abf80fe46d599c2714e0fbf82d8720f3f9542d4cb665408d8f0b279b9a4984d620
   languageName: node
   linkType: hard
 
@@ -19770,7 +19770,7 @@ __metadata:
     expo-splash-screen: "npm:~0.30.9"
     expo-status-bar: "npm:~2.2.3"
     expo-symbols: "npm:~0.4.5"
-    expo-system-ui: "npm:~5.0.7"
+    expo-system-ui: "npm:~5.0.9"
     expo-task-manager: "npm:~13.1.5"
     expo-video: "npm:^2.1.9"
     expo-web-browser: "npm:~14.1.6"
