@@ -2495,14 +2495,14 @@ __metadata:
     "@tanstack/react-query": "npm:^5.61.5"
     "@testing-library/dom": "npm:^10.4.0"
     "@testing-library/react": "npm:^16.3.0"
-    "@types/jest": "npm:^29.5.14"
+    "@types/jest": "npm:^30.0.0"
     "@types/react": "npm:^19.1.8"
     "@typescript-eslint/eslint-plugin": "npm:^8.34.0"
     "@typescript-eslint/parser": "npm:^8.0.0"
     axios: "npm:^1.9.0"
     eslint: "npm:^9.29.0"
     firebase: "npm:^11.9.1"
-    jest: "npm:^30.0.0"
+    jest: "npm:^30.0.2"
     react: "npm:^19.1.0"
     react-dom: "npm:^19.1.0"
     rimraf: "npm:^6.0.1"
@@ -9503,16 +9503,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/jest@npm:^29.5.14":
-  version: 29.5.14
-  resolution: "@types/jest@npm:29.5.14"
-  dependencies:
-    expect: "npm:^29.0.0"
-    pretty-format: "npm:^29.0.0"
-  checksum: 10c0/18e0712d818890db8a8dab3d91e9ea9f7f19e3f83c2e50b312f557017dc81466207a71f3ed79cf4428e813ba939954fa26ffa0a9a7f153181ba174581b1c2aed
-  languageName: node
-  linkType: hard
-
 "@types/jest@npm:^30.0.0":
   version: 30.0.0
   resolution: "@types/jest@npm:30.0.0"
@@ -13070,7 +13060,7 @@ __metadata:
     eslint-plugin-react: "npm:^7.34.1"
     eslint-plugin-react-hooks: "npm:^5.2.0"
     firebase-tools: "npm:^13.13.2"
-    jest: "npm:^30.0.0"
+    jest: "npm:^30.0.2"
     npm-run-all: "npm:^4.1.5"
     prettier: "npm:^3.3.2"
     react: "npm:19"
@@ -13157,7 +13147,7 @@ __metadata:
     ics: "npm:^3.8.1"
     identity-obj-proxy: "npm:^3.0.0"
     isomorphic-dompurify: "npm:^2.25.0"
-    jest: "npm:^30.0.0"
+    jest: "npm:^30.0.2"
     jest-environment-jsdom: "npm:^30.0.0"
     jest-extended: "npm:^6.0.0"
     js-cookie: "npm:^3.0.5"
@@ -14118,7 +14108,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"expect@npm:^29.0.0, expect@npm:^29.7.0":
+"expect@npm:^29.7.0":
   version: 29.7.0
   resolution: "expect@npm:29.7.0"
   dependencies:
@@ -15555,7 +15545,7 @@ __metadata:
     "@jest/globals": "npm:^30.0.0"
     "@notionhq/client": "npm:^3.1.3"
     "@types/dotenv": "npm:^6.1.1"
-    "@types/jest": "npm:^29.5.14"
+    "@types/jest": "npm:^30.0.0"
     "@types/jsonwebtoken": "npm:^9.0.10"
     "@types/stripe": "npm:^8.0.416"
     "@typescript-eslint/eslint-plugin": "npm:^8.34.0"
@@ -15574,7 +15564,7 @@ __metadata:
     firebase-functions: "npm:^6.0.1"
     firebase-functions-test: "npm:^3.4.1"
     glob: "npm:^11.0.3"
-    jest: "npm:^30.0.0"
+    jest: "npm:^30.0.2"
     jsonwebtoken: "npm:^9.0.2"
     libsodium-wrappers: "npm:^0.7.15"
     lru-cache: "npm:^11.1.0"
@@ -19776,7 +19766,7 @@ __metadata:
     expo-web-browser: "npm:~14.1.6"
     firebase: "npm:^11.9.1"
     glob: "npm:^11.0.3"
-    jest: "npm:^30.0.0"
+    jest: "npm:^30.0.2"
     jest-expo: "npm:~53.0.7"
     moment: "npm:^2.30.1"
     patch-package: "npm:^8.0.0"
@@ -21194,7 +21184,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pretty-format@npm:^29.0.0, pretty-format@npm:^29.0.3, pretty-format@npm:^29.7.0":
+"pretty-format@npm:^29.0.3, pretty-format@npm:^29.7.0":
   version: 29.7.0
   resolution: "pretty-format@npm:29.7.0"
   dependencies:

@@ -124,7 +124,7 @@
     "eslint": "^9.29.0",
     "eslint-config-expo": "~9.2.0",
     "glob": "^11.0.3",
-    "jest": "^30.0.0",
+    "jest": "^30.0.2",
     "jest-expo": "~53.0.7",
     "patch-package": "^8.0.0",
     "react-test-renderer": "19.1.0",
