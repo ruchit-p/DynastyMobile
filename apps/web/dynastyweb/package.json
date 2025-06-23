@@ -93,7 +93,7 @@
     "react-responsive-carousel": "^3.2.23",
     "react-virtualized-auto-sizer": "^1.0.7",
     "react-window": "^1.8.8",
-    "recharts": "^2.15.3",
+    "recharts": "^3.0.0",
     "relatives-tree": "^3.2.1",
     "stripe": "^18.2.1",
     "swiper": "^11.2.8",
