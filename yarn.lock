@@ -7434,7 +7434,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-navigation/elements@npm:^2.4.3, @react-navigation/elements@npm:^2.4.4":
+"@react-navigation/elements@npm:^2.4.4":
   version: 2.4.4
   resolution: "@react-navigation/elements@npm:2.4.4"
   dependencies:
@@ -7450,6 +7450,26 @@ __metadata:
     "@react-native-masked-view/masked-view":
       optional: true
   checksum: 10c0/8cc16bee58a1f3a5bd633d4e541cc1e9c9a9a0f55896ab22e0f5bc9a722a062f483cb03af18f8be2739b1571f4144051f099af6af1c0370be7b9b1ebdf005b31
+  languageName: node
+  linkType: hard
+
+"@react-navigation/elements@npm:^2.5.1":
+  version: 2.5.1
+  resolution: "@react-navigation/elements@npm:2.5.1"
+  dependencies:
+    color: "npm:^4.2.3"
+    use-latest-callback: "npm:^0.2.4"
+    use-sync-external-store: "npm:^1.5.0"
+  peerDependencies:
+    "@react-native-masked-view/masked-view": ">= 0.2.0"
+    "@react-navigation/native": ^7.1.14
+    react: ">= 18.2.0"
+    react-native: "*"
+    react-native-safe-area-context: ">= 4.0.0"
+  peerDependenciesMeta:
+    "@react-native-masked-view/masked-view":
+      optional: true
+  checksum: 10c0/eaa53c576ae386bf4106985393475d56431f1bbd8d3cfba892d70bc3eee885d93fce05cc583114d5889ce4e50492b36576db4b76d26caa0a2aab5b89667168c9
   languageName: node
   linkType: hard
 
@@ -19724,7 +19744,7 @@ __metadata:
     "@react-native-google-signin/google-signin": "npm:^14.0.0"
     "@react-native-picker/picker": "npm:^2.11.0"
     "@react-navigation/bottom-tabs": "npm:^7.3.10"
-    "@react-navigation/elements": "npm:^2.4.3"
+    "@react-navigation/elements": "npm:^2.5.1"
     "@react-navigation/native": "npm:^7.1.6"
     "@react-navigation/stack": "npm:^7.3.1"
     "@sentry/react-native": "npm:^6.14.0"
