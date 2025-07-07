@@ -13166,7 +13166,7 @@ __metadata:
     lightgallery: "npm:^2.8.3"
     lucide-react: "npm:^0.517.0"
     next: "npm:^15.2.0"
-    playwright: "npm:^1.53.0"
+    playwright: "npm:^1.53.2"
     postcss: "npm:^8"
     react: "npm:^19.1.0"
     react-circle-flags: "npm:^0.0.23"
@@ -20994,7 +20994,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"playwright@npm:1.53.0, playwright@npm:^1.53.0":
+"playwright-core@npm:1.53.2":
+  version: 1.53.2
+  resolution: "playwright-core@npm:1.53.2"
+  bin:
+    playwright-core: cli.js
+  checksum: 10c0/cd9434736687600943e749313e3d6166ef5d8614e64e74f440099f3a1b0fe56a9a462921c0ca9264aebc7bfc4ffeaec3fddf1c30731c0d60de3211d796f1be44
+  languageName: node
+  linkType: hard
+
+"playwright@npm:1.53.0":
   version: 1.53.0
   resolution: "playwright@npm:1.53.0"
   dependencies:
@@ -21006,6 +21015,21 @@ __metadata:
   bin:
     playwright: cli.js
   checksum: 10c0/8d995114808b92f2005bd12ff5e494cdc3fa2d484f4d85a3e54be1fb99e88ae3e34b24792d83bb987462c73e553a0fa37a2a70264afbf67894b51c1498cf5a11
+  languageName: node
+  linkType: hard
+
+"playwright@npm:^1.53.2":
+  version: 1.53.2
+  resolution: "playwright@npm:1.53.2"
+  dependencies:
+    fsevents: "npm:2.3.2"
+    playwright-core: "npm:1.53.2"
+  dependenciesMeta:
+    fsevents:
+      optional: true
+  bin:
+    playwright: cli.js
+  checksum: 10c0/4620bdb2bd341916cae50721336f628abc9d0b1a097fd74a93127feed8dede52be4fb789ac0d17aefac74e5d43a5832b1b79a0d3c2af5abc5a82491b72ebcf92
   languageName: node
   linkType: hard
 
