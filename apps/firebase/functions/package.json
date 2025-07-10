@@ -58,7 +58,7 @@
     "@types/jest": "^29.5.14",
     "@types/stripe": "^8.0.416",
     "@typescript-eslint/eslint-plugin": "^8.34.0",
-    "@typescript-eslint/parser": "^7.1.0",
+    "@typescript-eslint/parser": "^8.36.0",
     "cross-env": "^7.0.3",
     "esbuild": "^0.25.5",
     "eslint": "^9.29.0",
