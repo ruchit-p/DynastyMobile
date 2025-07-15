@@ -46,7 +46,7 @@
     "@react-navigation/stack": "^7.3.1",
     "@sentry/react-native": "^6.14.0",
     "@shopify/flash-list": "1.8.3",
-    "@signalapp/libsignal-client": "^0.74.1",
+    "@signalapp/libsignal-client": "^0.76.4",
     "@tanstack/react-query": "^5.32.0",
     "date-fns": "^4.1.0",
     "expo": "~53.0.11",
