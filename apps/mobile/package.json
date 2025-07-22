@@ -84,7 +84,7 @@
     "expo-task-manager": "~13.1.5",
     "expo-video": "^2.1.9",
     "expo-web-browser": "~14.1.6",
-    "firebase": "^11.9.1",
+    "firebase": "^12.0.0",
     "moment": "^2.30.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
