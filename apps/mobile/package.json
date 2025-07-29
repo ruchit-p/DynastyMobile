@@ -86,7 +86,7 @@
     "expo-web-browser": "~14.1.6",
     "firebase": "^11.9.1",
     "moment": "^2.30.1",
-    "react": "19.1.0",
+    "react": "19.1.1",
     "react-dom": "19.1.0",
     "react-native": "0.80.0",
     "react-native-calendars": "^1.1312.0",
