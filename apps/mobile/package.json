@@ -110,7 +110,7 @@
     "react-native-webview": "13.15.0",
     "readable-stream": "^4.7.0",
     "relatives-tree": "^3.2.2",
-    "zod": "^3.25.64"
+    "zod": "^4.0.13"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
