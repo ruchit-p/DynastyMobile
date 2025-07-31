@@ -59,7 +59,7 @@
     "@types/stripe": "^8.0.416",
     "@typescript-eslint/eslint-plugin": "^8.34.0",
     "@typescript-eslint/parser": "^7.1.0",
-    "cross-env": "^7.0.3",
+    "cross-env": "^10.0.0",
     "esbuild": "^0.25.5",
     "eslint": "^9.29.0",
     "eslint-config-google": "^0.14.0",
