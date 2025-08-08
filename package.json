@@ -1,6 +1,7 @@
 {
   "name": "dynasty-monorepo",
-  "private": true,
+  "private": false,
+  "license": "MIT",
   "packageManager": "yarn@4.9.2",
   "workspaces": [
     "apps/web/dynastyweb",

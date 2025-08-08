@@ -1,0 +1,36 @@
+name: OSS Safety Checks
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          curl -sSL https://raw.githubusercontent.com/gitleaks/gitleaks/master/install.sh | bash
+      - name: Run gitleaks
+        run: |
+          ./gitleaks detect --no-banner --redact --report-format sarif --report-path gitleaks.sarif || true
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gitleaks.sarif
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: corepack enable && corepack prepare yarn@4.9.2 --activate
+      - run: yarn install --immutable
+      - run: yarn lint
+

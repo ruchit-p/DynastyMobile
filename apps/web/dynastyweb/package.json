@@ -1,7 +1,8 @@
 {
   "name": "dynastyweb",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
+  "license": "MIT",
   "scripts": {
     "dev": "SENTRY_SUPPRESS_TURBOPACK_WARNING=1 next dev --turbopack",
     "dev:webpack": "next dev",
