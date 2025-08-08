@@ -150,3 +150,9 @@ dev-server*.log
 
 # Turbo cache
 .turbo/
+
+# Do not commit production Stripe or Firebase service configs
+stripe-config.json
+stripe-production-config.env
+stripe-config.example.json
+stripe-production-config.example.env

@@ -9,31 +9,32 @@ echo "🔐 Adding missing CI/CD secrets to GitHub..."
 
 # Staging Firebase Configuration
 echo "📱 Adding Staging Firebase secrets..."
-gh secret set STAGING_FIREBASE_API_KEY --body "AIzaSyAvRL15x_wgVJ_dyZMbFUo4R4t7sf-DRrE"
-gh secret set STAGING_FIREBASE_AUTH_DOMAIN --body "dynasty-dev-1b042.firebaseapp.com"
-gh secret set STAGING_FIREBASE_PROJECT_ID --body "dynasty-dev-1b042"
-gh secret set STAGING_FIREBASE_STORAGE_BUCKET --body "dynasty-dev-1b042.firebasestorage.app"
-gh secret set STAGING_FIREBASE_MESSAGING_SENDER_ID --body "564885144308"
-gh secret set STAGING_FIREBASE_APP_ID --body "1:564885144308:web:f0681c962b7e44f58494a1"
-gh secret set STAGING_FIREBASE_MEASUREMENT_ID --body "G-9LS70Z5CQB"
+echo "ℹ️  This script uses placeholders. Replace with your own values before running."
+gh secret set STAGING_FIREBASE_API_KEY --body "<REPLACE_WITH_STAGING_API_KEY>"
+gh secret set STAGING_FIREBASE_AUTH_DOMAIN --body "<REPLACE_WITH_STAGING_AUTH_DOMAIN>"
+gh secret set STAGING_FIREBASE_PROJECT_ID --body "<REPLACE_WITH_STAGING_PROJECT_ID>"
+gh secret set STAGING_FIREBASE_STORAGE_BUCKET --body "<REPLACE_WITH_STAGING_STORAGE_BUCKET>"
+gh secret set STAGING_FIREBASE_MESSAGING_SENDER_ID --body "<REPLACE_WITH_STAGING_SENDER_ID>"
+gh secret set STAGING_FIREBASE_APP_ID --body "<REPLACE_WITH_STAGING_APP_ID>"
+gh secret set STAGING_FIREBASE_MEASUREMENT_ID --body "<REPLACE_WITH_STAGING_MEASUREMENT_ID>"
 
 # Staging Firebase Config as JSON
 echo "📦 Adding Staging Firebase Config..."
 STAGING_FIREBASE_CONFIG='{
-  "apiKey": "AIzaSyAvRL15x_wgVJ_dyZMbFUo4R4t7sf-DRrE",
-  "authDomain": "dynasty-dev-1b042.firebaseapp.com",
-  "projectId": "dynasty-dev-1b042",
-  "storageBucket": "dynasty-dev-1b042.firebasestorage.app",
-  "messagingSenderId": "564885144308",
-  "appId": "1:564885144308:web:f0681c962b7e44f58494a1",
-  "measurementId": "G-9LS70Z5CQB"
+  "apiKey": "<REPLACE_WITH_STAGING_API_KEY>",
+  "authDomain": "<REPLACE_WITH_STAGING_AUTH_DOMAIN>",
+  "projectId": "<REPLACE_WITH_STAGING_PROJECT_ID>",
+  "storageBucket": "<REPLACE_WITH_STAGING_STORAGE_BUCKET>",
+  "messagingSenderId": "<REPLACE_WITH_STAGING_SENDER_ID>",
+  "appId": "<REPLACE_WITH_STAGING_APP_ID>",
+  "measurementId": "<REPLACE_WITH_STAGING_MEASUREMENT_ID>"
 }'
 gh secret set STAGING_FIREBASE_CONFIG --body "$STAGING_FIREBASE_CONFIG"
 
 # Cloudflare Configuration
 echo "☁️  Adding Cloudflare secrets..."
-gh secret set CLOUDFLARE_ZONE_ID --body "c6888647cc8fee50ae4ffccebc74924c"
-gh secret set CLOUDFLARE_API_TOKEN --body "7lNmQ07nzUKQumw986giZdOZwcKBIGTr4BKQiZmr"
+gh secret set CLOUDFLARE_ZONE_ID --body "<REPLACE_WITH_CLOUDFLARE_ZONE_ID>"
+gh secret set CLOUDFLARE_API_TOKEN --body "<REPLACE_WITH_CLOUDFLARE_API_TOKEN>"
 
 # Fix Production Firebase naming issue
 echo "🔧 Fixing Production Firebase secret naming..."

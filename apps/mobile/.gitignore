@@ -80,9 +80,11 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-# Firebase service files
+# Firebase service files (must not be committed)
 GoogleService-Info.plist
 google-services.json
+GoogleService-Info.example.plist
+google-services.example.json
 
 # Google Play service account
 google-play-service-account.json

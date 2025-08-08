@@ -90,20 +90,25 @@ DynastyMobile/
    Create environment files based on the examples:
 
    ```bash
-   # Mobile app
+   # Mobile app environment
    cp apps/mobile/.env.example apps/mobile/.env
+   # Mobile Firebase configs (place your own real files; examples provided)
+   cp apps/mobile/GoogleService-Info.example.plist apps/mobile/GoogleService-Info.plist
+   cp apps/mobile/google-services.example.json apps/mobile/google-services.json
 
-   # Web app
+   # Web app environment
    cp apps/web/dynastyweb/.env.example apps/web/dynastyweb/.env.local
 
-   # Firebase functions
+   # Firebase functions environment
    cp apps/firebase/functions/.env.example apps/firebase/functions/.env
    ```
 
 4. **Configure Firebase**
    - Create a Firebase project
    - Download service account credentials
-   - Place `google-services.json` (Android) and `GoogleService-Info.plist` (iOS) in the mobile app
+   - Place `google-services.json` (Android) and `GoogleService-Info.plist` (iOS) in the mobile app (see example files)
+   
+   - Stripe config: use examples `stripe-config.example.json` and `stripe-production-config.example.env` as templates. Do not commit real keys.
    - Update Firebase configuration in environment files
 
 ### Development
@@ -218,7 +223,7 @@ We welcome contributions! Please follow these guidelines:
 
 ## 📄 License
 
-Dynasty is proprietary software. All rights reserved.
+This project is licensed under the MIT License - see the `LICENSE` file for details.
 
 ## 🙏 Acknowledgments
 

@@ -5,13 +5,13 @@ importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-comp
 // Note: Service worker can't access process.env directly, 
 // so config must be passed via query params or postMessage
 let firebaseConfig = {
-  apiKey: "AIzaSyA_uNpQElWXQXcIPDuVgzAgiGNqgT-31W4",
-  authDomain: "dynasty-eba63.firebaseapp.com", 
-  projectId: "dynasty-eba63",
-  storageBucket: "dynasty-eba63.firebasestorage.app",
-  messagingSenderId: "613996380558",
-  appId: "1:613996380558:web:e92ddd147ebc530768e4df",
-  measurementId: "G-KDHWY1R09Z",
+  apiKey: "__REPLACE_WITH_ENV__", // placeholder; provide via postMessage or query params
+  authDomain: "__REPLACE_WITH_ENV__",
+  projectId: "__REPLACE_WITH_ENV__",
+  storageBucket: "__REPLACE_WITH_ENV__",
+  messagingSenderId: "__REPLACE_WITH_ENV__",
+  appId: "__REPLACE_WITH_ENV__",
+  measurementId: "__REPLACE_WITH_ENV__",
 };
 
 // Initialize the Firebase app in the service worker
@@ -68,3 +68,15 @@ self.addEventListener('notificationclick', function(event) {
     })
   );
 }); 
+
+// Optional: allow overriding config via postMessage from the app at runtime
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SET_FIREBASE_CONFIG' && event.data.config) {
+    try {
+      firebaseConfig = event.data.config
+      firebase.initializeApp(firebaseConfig)
+    } catch (e) {
+      console.error('Failed to set Firebase config in SW', e)
+    }
+  }
+});
