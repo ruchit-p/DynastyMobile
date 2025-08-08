@@ -1,0 +1,40 @@
+# Regex replacements for git-filter-repo --replace-text
+# Format: <regex>==><replacement>
+
+# Google API keys
+AIza[0-9A-Za-z_\-]{20,}==>AIzaREDACTED
+
+# Stripe keys
+sk_(live|test)_[0-9A-Za-z]{10,}==>sk_REDACTED
+pk_(live|test)_[0-9A-Za-z]{10,}==>pk_REDACTED
+whsec_[0-9A-Za-z]{8,}==>whsec_REDACTED
+
+# GitHub tokens
+ghp_[0-9A-Za-z]{20,}==>ghp_REDACTED
+github_pat_[0-9A-Za-z_]{10,}==>github_pat_REDACTED
+
+# Slack tokens
+xox[a-zA-Z]-[0-9A-Za-z\-]+==>xoxREDACTED
+
+# AWS keys
+AKIA[0-9A-Z]{16}==>AKIAREDACTED
+ASIA[0-9A-Z]{16}==>ASIAREDACTED
+
+# Bearer tokens in curl headers
+Authorization:\s*Bearer\s+[A-Za-z0-9._\-]+==>Authorization: Bearer REDACTED
+
+# Cloudflare R2 / Backblaze B2 / Twilio / Sentry / Google Places
+(R2_SECRET_ACCESS_KEY=)[^\s"']+==>$1REDACTED
+(B2_APPLICATION_KEY=)[^\s"']+==>$1REDACTED
+(B2_SECRET_ACCESS_KEY=)[^\s"']+==>$1REDACTED
+(TWILIO_AUTH_TOKEN=)[^\s"']+==>$1REDACTED
+(TWILIO_ACCOUNT_SID=)[^\s"']+==>$1REDACTED
+(SENTRY_DSN=)[^\s"']+==>$1REDACTED
+(GOOGLE_PLACES_API_KEY=)[^\s"']+==>$1REDACTED
+
+# Generic common env names
+(JWT_SECRET(_KEY)?=)[^\n\r]+==>$1REDACTED
+(SESSION_SECRET(_KEY)?=)[^\n\r]+==>$1REDACTED
+(WEBHOOK_SECRET=)[^\n\r]+==>$1REDACTED
+(API_KEY(_SALT)?=)[^\n\r]+==>$1REDACTED
+

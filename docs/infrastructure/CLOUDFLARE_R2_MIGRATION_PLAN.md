@@ -41,10 +41,8 @@ Firebase Storage integration through:
 ## Cloudflare R2 Configuration
 
 ### Account Details
-- **Account ID**: `c6889114b3f2b097475be8a5c7628cd0`
-- **S3 Endpoint**: `https://c6889114b3f2b097475be8a5c7628cd0.r2.cloudflarestorage.com`
-- **Access Key ID**: `cdb99385ea7cf192465c18504e48e83b`
-- **Secret Access Key**: `d1425674db3dd6a7610b752594c1c02019493d20e4541cfa630e11e953f79367`
+- Replace with your own R2 account values (do not commit real credentials)
+- Example placeholders shown below
 
 ## Migration Strategy
 
@@ -73,7 +71,7 @@ export class R2Service {
   
   constructor() {
     this.s3Client = new S3Client({
-      endpoint: "https://c6889114b3f2b097475be8a5c7628cd0.r2.cloudflarestorage.com",
+      endpoint: process.env.R2_ENDPOINT,
       region: "auto",
       credentials: {
         accessKeyId: process.env.R2_ACCESS_KEY_ID,

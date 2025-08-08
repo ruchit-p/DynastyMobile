@@ -9,11 +9,11 @@ This guide walks you through testing the R2 integration with Dynasty Mobile.
 2. **Environment Variables**: Add these to your Firebase Functions `.env` file:
 
 ```bash
-# R2 Configuration
-R2_ACCOUNT_ID=c6889114b3f2b097475be8a5c7628cd0
-R2_ACCESS_KEY_ID=cdb99385ea7cf192465c18504e48e83b
-R2_SECRET_ACCESS_KEY=d1425674db3dd6a7610b752594c1c02019493d20e4541cfa630e11e953f79367
-R2_ENDPOINT=https://c6889114b3f2b097475be8a5c7628cd0.r2.cloudflarestorage.com
+# R2 Configuration (placeholders)
+R2_ACCOUNT_ID=__REPLACE_WITH_R2_ACCOUNT_ID__
+R2_ACCESS_KEY_ID=__REPLACE_WITH_R2_ACCESS_KEY_ID__
+R2_SECRET_ACCESS_KEY=__REPLACE_WITH_R2_SECRET_ACCESS_KEY__
+R2_ENDPOINT=__REPLACE_WITH_R2_ENDPOINT__
 R2_BASE_BUCKET=dynasty
 
 # Enable R2 features
