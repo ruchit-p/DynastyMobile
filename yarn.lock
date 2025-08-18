@@ -5204,12 +5204,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@next/bundle-analyzer@npm:^15.3.3":
-  version: 15.3.3
-  resolution: "@next/bundle-analyzer@npm:15.3.3"
+"@next/bundle-analyzer@npm:^15.4.6":
+  version: 15.4.6
+  resolution: "@next/bundle-analyzer@npm:15.4.6"
   dependencies:
     webpack-bundle-analyzer: "npm:4.10.1"
-  checksum: 10c0/18210d6e65f3a8e384b0bb474bc2ad844dd87934b172b53bc4c0765ceba61080b5fd4ceec5f8174941decc01a9d3bdefad9a0408434cecd5533553bd41d27851
+  checksum: 10c0/b27ffc9ba9e9d22db56de8c24bb3cdaefa6b9106d53145bbedebb1a85f9740325d0acc8e8fcb8e4e26042ecb1793fa630480307eb5655dd203df660c4f3361eb
   languageName: node
   linkType: hard
 
@@ -13087,7 +13087,7 @@ __metadata:
   dependencies:
     "@dynasty/vault-sdk": "workspace:packages/vault-sdk"
     "@eslint/eslintrc": "npm:^3"
-    "@next/bundle-analyzer": "npm:^15.3.3"
+    "@next/bundle-analyzer": "npm:^15.4.6"
     "@opentelemetry/api": "npm:^1.9.0"
     "@opentelemetry/context-async-hooks": "npm:^1.30.1"
     "@opentelemetry/core": "npm:^2.0.1"
