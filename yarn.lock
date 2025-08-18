@@ -19783,7 +19783,7 @@ __metadata:
     react: "npm:19.1.0"
     react-dom: "npm:19.1.0"
     react-native: "npm:0.80.0"
-    react-native-calendars: "npm:^1.1312.0"
+    react-native-calendars: "npm:^1.1313.0"
     react-native-device-info: "npm:^14.0.4"
     react-native-gesture-handler: "npm:~2.26.0"
     react-native-get-random-values: "npm:^1.11.0"
@@ -21697,9 +21697,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-calendars@npm:^1.1312.0":
-  version: 1.1312.1
-  resolution: "react-native-calendars@npm:1.1312.1"
+"react-native-calendars@npm:^1.1313.0":
+  version: 1.1313.0
+  resolution: "react-native-calendars@npm:1.1313.0"
   dependencies:
     hoist-non-react-statics: "npm:^3.3.1"
     lodash: "npm:^4.17.15"
@@ -21713,7 +21713,7 @@ __metadata:
   dependenciesMeta:
     moment:
       optional: true
-  checksum: 10c0/acac94774e1b53f8cb3c5fa30cbc6e0a37cf352afbfe81c8ae3fd4cccb5dc47dafcfb0baec99dc2b2d4d2279c6fc8503b1909c94e4bd61939e61ef6372a9cbae
+  checksum: 10c0/a1c7325755ebac65bfed8224c1308ab430fa5dea43c95fed027eb23745b075f6ec1906cce18d95a3f5dcd127860aebebddb3a040408a281071e3f6d0cd19c5b9
   languageName: node
   linkType: hard
 
