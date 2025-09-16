@@ -126,7 +126,7 @@
     "eslint-config-expo": "~9.2.0",
     "glob": "^11.0.3",
     "jest": "^30.0.0",
-    "jest-expo": "~53.0.7",
+    "jest-expo": "~54.0.11",
     "patch-package": "^8.0.0",
     "react-test-renderer": "19.1.0",
     "typescript": "~5.8.3"
