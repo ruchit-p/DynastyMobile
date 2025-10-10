@@ -19,7 +19,7 @@ jobs:
         run: |
           ./gitleaks detect --no-banner --redact --report-format sarif --report-path gitleaks.sarif || true
       - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: gitleaks.sarif
 
