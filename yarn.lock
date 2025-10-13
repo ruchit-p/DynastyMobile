@@ -13181,7 +13181,7 @@ __metadata:
     react-window: "npm:^1.8.8"
     recharts: "npm:^2.15.3"
     relatives-tree: "npm:^3.2.1"
-    stripe: "npm:^18.2.1"
+    stripe: "npm:^19.1.0"
     swiper: "npm:^11.2.8"
     tailwind-merge: "npm:^3.0.1"
     tailwindcss: "npm:^4.1.10"
@@ -15579,7 +15579,7 @@ __metadata:
     libsodium-wrappers: "npm:^0.7.15"
     lru-cache: "npm:^11.1.0"
     rimraf: "npm:^6.0.1"
-    stripe: "npm:^18.2.1"
+    stripe: "npm:^19.1.0"
     ts-jest: "npm:^29.3.4"
     typescript: "npm:^5.8.3"
     winston: "npm:^3.16.0"
@@ -24002,7 +24002,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"stripe@npm:*, stripe@npm:^18.2.1":
+"stripe@npm:*":
   version: 18.2.1
   resolution: "stripe@npm:18.2.1"
   dependencies:
@@ -24013,6 +24013,20 @@ __metadata:
     "@types/node":
       optional: true
   checksum: 10c0/7edef67ca27bd4e84ac24eae4e10fa1d712392c08eec62aa6748c78241ebccc2a057651716a619fcaac1b70c5f08ba5fc5adf255d67462d5a441e3a96c0dc6c5
+  languageName: node
+  linkType: hard
+
+"stripe@npm:^19.1.0":
+  version: 19.1.0
+  resolution: "stripe@npm:19.1.0"
+  dependencies:
+    qs: "npm:^6.11.0"
+  peerDependencies:
+    "@types/node": ">=16"
+  peerDependenciesMeta:
+    "@types/node":
+      optional: true
+  checksum: 10c0/d1f6412373962a585f877af6b5933a000573dad1b0c5fe3937633ccb7117764ad46c8fb565431d846ac08f32811c150ffdce3a273717905a983e416ea131091f
   languageName: node
   linkType: hard
 
