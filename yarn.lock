@@ -8860,16 +8860,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@stripe/react-stripe-js@npm:^3.7.0":
-  version: 3.7.0
-  resolution: "@stripe/react-stripe-js@npm:3.7.0"
+"@stripe/react-stripe-js@npm:^5.2.0":
+  version: 5.2.0
+  resolution: "@stripe/react-stripe-js@npm:5.2.0"
   dependencies:
     prop-types: "npm:^15.7.2"
   peerDependencies:
-    "@stripe/stripe-js": ">=1.44.1 <8.0.0"
+    "@stripe/stripe-js": ">=8.0.0 <9.0.0"
     react: ">=16.8.0 <20.0.0"
     react-dom: ">=16.8.0 <20.0.0"
-  checksum: 10c0/663e9176b0a710632abe64bb7efca63a22d8cf690942a4507d57ba1d4fb6328cd08e3cf9040ea95348540c47ed8dbc5250982b150b38eb9564861dc0ecd83d72
+  checksum: 10c0/b9b52fef86da035d200c874f1b0f6459a4dfed3fe9fdfca46dece28f428063d615d9c8a0fec9dcba9d28fff2ec44157e2cc0cc0c5704e994cc04fa6554c6d9d2
   languageName: node
   linkType: hard
 
@@ -13114,7 +13114,7 @@ __metadata:
     "@radix-ui/react-toast": "npm:^1.2.6"
     "@radix-ui/react-tooltip": "npm:^1.1.8"
     "@sentry/nextjs": "npm:^9.3.0"
-    "@stripe/react-stripe-js": "npm:^3.7.0"
+    "@stripe/react-stripe-js": "npm:^5.2.0"
     "@stripe/stripe-js": "npm:^7.3.1"
     "@tailwindcss/forms": "npm:^0.5.10"
     "@tailwindcss/postcss": "npm:^4.1.10"
