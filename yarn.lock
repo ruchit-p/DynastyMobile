@@ -7090,12 +7090,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-native-firebase/firestore@npm:^22.1.0":
-  version: 22.2.1
-  resolution: "@react-native-firebase/firestore@npm:22.2.1"
+"@react-native-firebase/firestore@npm:^23.4.1":
+  version: 23.4.1
+  resolution: "@react-native-firebase/firestore@npm:23.4.1"
+  dependencies:
+    react-native-url-polyfill: "npm:2.0.0"
   peerDependencies:
-    "@react-native-firebase/app": 22.2.1
-  checksum: 10c0/e3437a2b7539bad02b3ac89162f83cbf2a7d877a85734dee155e412ba0eff2837b0f26c71625ff43f4417874edf1d058de0de0a92378790882b6ebe56ab22507
+    "@react-native-firebase/app": 23.4.1
+  checksum: 10c0/76ef2dc6705b7c6a3018eef468e9b887559728e8163495fbd5a578213cd5cd10263157d6c626be19f3cbcbb351951697ed48d4d11b2ebf1fb3fa9167b1e1e020
   languageName: node
   linkType: hard
 
@@ -19716,7 +19718,7 @@ __metadata:
     "@react-native-firebase/app": "npm:^22.1.0"
     "@react-native-firebase/auth": "npm:^22.1.0"
     "@react-native-firebase/crashlytics": "npm:^22.1.0"
-    "@react-native-firebase/firestore": "npm:^22.1.0"
+    "@react-native-firebase/firestore": "npm:^23.4.1"
     "@react-native-firebase/functions": "npm:^22.2.1"
     "@react-native-firebase/messaging": "npm:^22.2.1"
     "@react-native-firebase/remote-config": "npm:^22.2.0"
@@ -21991,6 +21993,17 @@ __metadata:
   version: 1.0.5
   resolution: "react-native-swipe-gestures@npm:1.0.5"
   checksum: 10c0/33bb8bd402de82ed751a8f1913fe7e02ddc533edb7178bf9e499387b93d0d14154cef120f273c554bb988ad1ba87165b80be213611cb92af8875f2380ec7878b
+  languageName: node
+  linkType: hard
+
+"react-native-url-polyfill@npm:2.0.0":
+  version: 2.0.0
+  resolution: "react-native-url-polyfill@npm:2.0.0"
+  dependencies:
+    whatwg-url-without-unicode: "npm:8.0.0-3"
+  peerDependencies:
+    react-native: "*"
+  checksum: 10c0/a48e6978f5a2c9e225bb93cc5f9985a8ac0fe7d8122105bcd88ef8d8420a3b33a67ce5d2bda2b606bf5fa94af9f6d04efce354580b60900e7c967fd2ebdc42cf
   languageName: node
   linkType: hard
 
