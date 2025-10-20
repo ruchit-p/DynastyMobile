@@ -7099,12 +7099,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-native-firebase/functions@npm:^22.2.1":
-  version: 22.2.1
-  resolution: "@react-native-firebase/functions@npm:22.2.1"
+"@react-native-firebase/functions@npm:^23.4.1":
+  version: 23.4.1
+  resolution: "@react-native-firebase/functions@npm:23.4.1"
   peerDependencies:
-    "@react-native-firebase/app": 22.2.1
-  checksum: 10c0/3ceea33665068162dd33bf7d767490d4a6786846ed157f608abeba58fdb8cafd3c9d784767b7e0baef1175fe4fb712cda6f2b4a8e1bedba8d113c91a44ee6dfc
+    "@react-native-firebase/app": 23.4.1
+  checksum: 10c0/5512a70a8c9ffbcfff965a0a07b61dea85aff452387db0ed83f6ef4291b4f74f51ba66a8b5be57b312787b99ddbac94c47be846c90230464d988eb8f2d9f5d8b
   languageName: node
   linkType: hard
 
@@ -19717,7 +19717,7 @@ __metadata:
     "@react-native-firebase/auth": "npm:^22.1.0"
     "@react-native-firebase/crashlytics": "npm:^22.1.0"
     "@react-native-firebase/firestore": "npm:^22.1.0"
-    "@react-native-firebase/functions": "npm:^22.2.1"
+    "@react-native-firebase/functions": "npm:^23.4.1"
     "@react-native-firebase/messaging": "npm:^22.2.1"
     "@react-native-firebase/remote-config": "npm:^22.2.0"
     "@react-native-firebase/storage": "npm:^22.1.0"
