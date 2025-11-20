@@ -53,7 +53,7 @@
   },
   "devDependencies": {
     "@eslint/config-array": "^0.20.1",
-    "@eslint/object-schema": "^2.1.6",
+    "@eslint/object-schema": "^3.0.0",
     "@jest/globals": "^30.0.0",
     "@types/jest": "^29.5.14",
     "@types/stripe": "^8.0.416",
